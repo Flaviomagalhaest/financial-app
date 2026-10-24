@@ -1,7 +1,7 @@
 # Ciclo de vida do lançamento futuro
 
 Type: grilling
-Status: open
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono)
 Modelo recomendado: Opus
