@@ -41,8 +41,32 @@ _Avoid_: compartilhado, comum
 ### Futuro
 
 **Recorrência**:
-Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento.
-_Avoid_: repetição, fixo, assinatura
+Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz).
+_Avoid_: repetição, despesa fixa, gasto fixo, assinatura
+
+**Parcelamento**:
+Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela.
+_Avoid_: compra parcelada, financiamento
+
+**Parcela**:
+Lançamento que é uma das N partes de um parcelamento (ex.: 3/10).
+_Avoid_: prestação
+
+**Automático**:
+Recorrência de valor fixo ou parcelamento cujos previstos viram realizados sozinhos na data, sem confirmação.
+_Avoid_: débito automático, efetivação automática
+
+**Confirmação**:
+O ato de alguém do casal dizer que um previsto aconteceu, ajustando valor, data ou conta se precisar; o previsto vira realizado.
+_Avoid_: efetivação, baixa
+
+**Atrasado**:
+Previsto que pede confirmação e cuja data já passou sem ela; continua previsto até ser confirmado ou excluído.
+_Avoid_: vencido, pendente
+
+**Contas da semana**:
+Lista dos previstos que pedem confirmação, atrasados ou com data nos próximos 7 dias, despesas e receitas.
+_Avoid_: agenda, a pagar
 
 ### Planejamento
 
