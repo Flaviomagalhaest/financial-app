@@ -1,7 +1,7 @@
 # Limites do app web instalável no iPhone e no Android
 
 Type: research
-Status: open
+Status: claimed
 Blocked by: 13
 Skills: `research` (AFK, em sub-agente)
 Modelo recomendado: Sonnet
