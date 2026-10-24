@@ -16,7 +16,9 @@ O que só uma medição ou um teste real responde, porque a fonte oficial não d
 ## Checklist
 
 - [ ] Segundos da primeira conexão no DSQL após Idle/Inactive, e o auto-pause (0 ACU) do Aurora Serverless v2 em sa-east-1 (a doc não lista por região; retomada documentada de ~15 s, 30 s+ após 24 h pausado)
-- [ ] Build de release do Expo (local, `--configuration Release`) com conta Apple gratuita: funciona? (só o development build está documentado)
-- [ ] Alcance do sideload de APK no Brasil: a FAQ do Android diz que ainda não é afetado, a página de conta limitada (2026-10-23) diz que pacote não registrado deixa de instalar; reconferir antes de fechar a plataforma
-- [ ] Efeito real de desligar "Abrir como App Web" no iOS 26 sobre a perda de dados do PWA, e se o ITP de 7 dias atinge conteúdo local num WKWebView de Capacitor
+- [ ] Efeito real de desligar "Abrir como App Web" no iOS 26 sobre a perda de dados do PWA, e se o ITP de 7 dias atinge conteúdo local num WKWebView de Capacitor (o plano B da [Plataforma do cliente](08-plataforma-do-cliente.md))
 - [ ] Resultado em `## Answer`; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
+
+## Comments
+
+- O [ticket 08](08-plataforma-do-cliente.md) escolheu PWA, sem app nativo: saíram deste ticket o build de release do Expo com conta Apple gratuita e o alcance do sideload de APK no Brasil, que só pesavam em Expo ou Capacitor fora da loja.
