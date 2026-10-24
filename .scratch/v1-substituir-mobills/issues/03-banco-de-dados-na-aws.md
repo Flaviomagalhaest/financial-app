@@ -1,7 +1,7 @@
 # Banco de dados na AWS para dois usuários e histórico longo
 
 Type: research
-Status: open
+Status: claimed
 Blocked by: 13
 Skills: `research` (AFK, em sub-agente)
 Modelo recomendado: Sonnet
