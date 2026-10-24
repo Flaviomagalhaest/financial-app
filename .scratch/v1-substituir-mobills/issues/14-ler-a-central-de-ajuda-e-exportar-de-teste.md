@@ -6,6 +6,7 @@ Blocked by: —
 Skills: nenhuma de tipo; tarefa HITL (o dono abre a central de ajuda num navegador e faz a exportação de teste); apoio: `research` para consolidar o que o dono trouxer
 Modelo recomendado: Sonnet
 Effort recomendado: medium
+Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add3630d2d39b514227657b
 Origem: pesquisa de [O que o Mobills exporta](01-o-que-o-mobills-exporta.md), que não leu a central de ajuda (Cloudflare) nem a tela de exportação (exige a conta do dono)
 
 ## Question

@@ -5,6 +5,7 @@ Blocked by: —
 Skills: nenhuma; HITL (o dono cria as etiquetas no Trello)
 Modelo recomendado: Sonnet
 Effort recomendado: low
+Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2ec91a1d6da4b206b5d2
 Origem: traçado do mapa [V1 que substitui o Mobills](../../v1-substituir-mobills/map.md); o conector do Trello desta sessão cria e move cards, mas não cria etiquetas
 
 ## Problema

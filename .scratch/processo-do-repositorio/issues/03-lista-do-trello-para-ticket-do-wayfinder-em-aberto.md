@@ -5,6 +5,7 @@ Blocked by: —
 Skills: `writing-for-agents` (se a regra do `AGENTS.md` mudar)
 Modelo recomendado: Sonnet
 Effort recomendado: low
+Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2ecafe9d913e232d5cb4
 Origem: traçado do mapa [V1 que substitui o Mobills](../../v1-substituir-mobills/map.md)
 
 ## Problema

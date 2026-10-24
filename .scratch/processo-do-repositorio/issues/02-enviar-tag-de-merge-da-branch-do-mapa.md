@@ -5,6 +5,7 @@ Blocked by: —
 Skills: nenhuma; HITL (o dono envia a tag de uma máquina com permissão)
 Modelo recomendado: Sonnet
 Effort recomendado: low
+Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2ec9df6d8301abf586ce
 Origem: traçado do mapa [V1 que substitui o Mobills](../../v1-substituir-mobills/map.md); a sessão na nuvem enviou as branches, mas o envio de tags caiu com desconexão
 
 ## Problema

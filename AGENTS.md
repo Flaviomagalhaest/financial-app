@@ -33,8 +33,8 @@ Toda pendência conhecida, débito técnico, decisão de produto em aberto, valo
 
 O quadro **Financial App** (https://trello.com/b/SNRQ3kKH/financial-app) mostra os tickets de `.scratch/` para acompanhamento. O repo continua sendo a fonte de verdade: o que vale é o arquivo do ticket. Sempre que uma sessão criar, alterar, reabrir ou fechar um ticket, ela atualiza o card correspondente no Trello **na mesma sessão**, antes de responder.
 
-- **Localizar o card**: pela linha `Arquivo:` da descrição (o caminho do ticket no repo). Não há id de card gravado no repo.
-- **Descrição**: cabeçalho com `Feature`, `Skills`, `Modelo recomendado` e `Effort recomendado`, `Status`, `Blocked by` e `Arquivo`; depois uma linha `---` e a **cópia exata** do arquivo do ticket, incluindo `## Comments`. Se passar de 16.384 caracteres, o restante vai em comentários, em partes, e a descrição diz isso. Ao mudar o ticket, copie o arquivo de novo.
+- **Localizar o card**: pela linha `Trello:` do ticket, que guarda o ARI do card (`ari:cloud:trello::card/...`). Não é preciso listar o quadro para achar o card. Se um ticket não tiver a linha, busque o card com `trelloSearch` (`search_cards`, com `boardIds` do quadro) pelo caminho do ticket, e grave o ARI no ticket antes de qualquer outra mudança.
+- **Descrição**: cabeçalho com `Feature`, `Skills`, `Modelo recomendado` e `Effort recomendado`, `Status`, `Blocked by` e `Arquivo`; depois uma linha `---` e a **cópia exata** do arquivo do ticket, incluindo `## Comments`, **sem** a linha `Trello:` (o id só existe depois que o card é criado). Se passar de 16.384 caracteres, o restante vai em comentários, em partes, e a descrição diz isso. Ao mudar o ticket, copie o arquivo de novo.
 - **Título**: `NN: título do ticket`, sem prefixo de feature.
 - **Etiqueta**: uma etiqueta por feature de `.scratch/`, com o nome legível da feature. Quando um ticket inicia uma feature nova e a etiqueta dela ainda não existe no quadro, a sessão cria a etiqueta antes de criar o card. Nenhum outro ticket recebe etiqueta.
 - **Lista**, pelo `Status:`:
@@ -43,7 +43,14 @@ O quadro **Financial App** (https://trello.com/b/SNRQ3kKH/financial-app) mostra 
   - `claimed` → DOING;
   - `resolved`, `done`, `wontfix` → FINISHED.
   - Ticket com `Blocked by` apontando para ticket ainda aberto vai para BLOCKED, mesmo que o status o mandasse para TODO ou WAITING. Quando o bloqueio acaba, volta para a lista do status.
-- **Ticket novo**: crie o card na lista certa, com a etiqueta da feature (criada antes, se ainda não existir: veja Etiqueta acima). **Ticket fechado sem card**: não crie; se o card existir, mova para FINISHED.
+- **Ticket novo, nesta ordem**:
+  1. crie o card com `trelloWriteCard` (`create`) na lista certa, com a etiqueta da feature (criada antes, se ainda não existir: veja Etiqueta acima);
+  2. pegue o id do card (o ARI) da resposta da criação;
+  3. grave a linha `Trello: <ARI>` no cabeçalho do ticket, logo abaixo de `Effort recomendado:`;
+  4. só então faça o commit do ticket.
+
+  Se o card não puder ser criado (sem conector Trello na sessão), o ticket não é commitado: diga na resposta que falta o card e qual ticket está pendente.
+- **Ticket fechado sem card**: não crie; se o card existir, mova para FINISHED.
 - **Não criar** listas, etiquetas, quadros nem cards além do descrito aqui sem pedido do dono.
 - **Sem conector Trello na sessão**: não marque como feito. Diga na resposta que o Trello ficou para trás e qual ticket precisa de sincronização.
 

@@ -11,6 +11,7 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 - Every open issue carries `Skills:`, `Modelo recomendado:` and `Effort recomendado:` lines near the top (the skills to invoke by name, and the model and effort to start the session with); see `AGENTS.md`
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 - Every ticket also has a card on the Trello board "Financial App" (https://trello.com/b/SNRQ3kKH/financial-app), kept in sync by the rule "Trello espelha o tracker" in `AGENTS.md`
+- The ticket records its card's ARI in a `Trello: ari:cloud:trello::card/...` line near the top, written right after the card is created and before the ticket is committed
 
 ## When a skill says "publish to the issue tracker"
 

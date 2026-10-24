@@ -6,6 +6,7 @@ Blocked by: 14
 Skills: `research` (AFK, em sub-agente)
 Modelo recomendado: Sonnet
 Effort recomendado: medium
+Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2e6b9e6abcd8c135ad24
 Origem: traçado do [mapa V1 que substitui o Mobills](../map.md)
 
 ## Question
