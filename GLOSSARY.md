@@ -27,6 +27,13 @@ _Avoid_: compartilhado, comum
 **Fatura**:
 As compras de um cartão entre dois fechamentos, pagas de uma vez no vencimento.
 
+**Fechamento**:
+Data em que a fatura deixa de receber compras; uma compra feita no próprio dia do fechamento já vai para a fatura seguinte. Cada fatura tem o seu, que nasce do dia de fechamento padrão do cartão.
+
+**Vencimento**:
+Data limite para pagar a fatura. Cada fatura tem o seu, que nasce do dia de vencimento padrão do cartão.
+_Avoid_: data de pagamento (o pagamento pode ser feito antes ou depois)
+
 **Transferência**:
 Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal.
 
