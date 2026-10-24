@@ -36,14 +36,14 @@ O quadro **Financial App** (https://trello.com/b/SNRQ3kKH/financial-app) mostra 
 - **Localizar o card**: pela linha `Arquivo:` da descrição (o caminho do ticket no repo). Não há id de card gravado no repo.
 - **Descrição**: cabeçalho com `Feature`, `Skills`, `Modelo recomendado` e `Effort recomendado`, `Status`, `Blocked by` e `Arquivo`; depois uma linha `---` e a **cópia exata** do arquivo do ticket, incluindo `## Comments`. Se passar de 16.384 caracteres, o restante vai em comentários, em partes, e a descrição diz isso. Ao mudar o ticket, copie o arquivo de novo.
 - **Título**: `NN: título do ticket`, sem prefixo de feature.
-- **Etiqueta**: nenhuma etiqueta é criada no quadro por iniciativa da sessão, mesmo ao começar uma feature nova. Se o dono pediu a etiqueta da feature e ela já existe no quadro, use-a; caso contrário, o ticket fica sem etiqueta e a resposta avisa o dono que a etiqueta precisa ser criada.
+- **Etiqueta**: uma etiqueta por feature de `.scratch/`, com o nome legível da feature. Quando um ticket inicia uma feature nova e a etiqueta dela ainda não existe no quadro, a sessão cria a etiqueta antes de criar o card. Nenhum outro ticket recebe etiqueta.
 - **Lista**, pelo `Status:`:
   - `ready-for-agent` → TODO;
   - `needs-triage`, `needs-info`, `ready-for-human` → WAITING;
   - `claimed` → DOING;
   - `resolved`, `done`, `wontfix` → FINISHED.
   - Ticket com `Blocked by` apontando para ticket ainda aberto vai para BLOCKED, mesmo que o status o mandasse para TODO ou WAITING. Quando o bloqueio acaba, volta para a lista do status.
-- **Ticket novo**: crie o card na lista certa, com a etiqueta da feature só se ela já existir no quadro (veja Etiqueta acima). **Ticket fechado sem card**: não crie; se o card existir, mova para FINISHED.
+- **Ticket novo**: crie o card na lista certa, com a etiqueta da feature (criada antes, se ainda não existir: veja Etiqueta acima). **Ticket fechado sem card**: não crie; se o card existir, mova para FINISHED.
 - **Não criar** listas, etiquetas, quadros nem cards além do descrito aqui sem pedido do dono.
 - **Sem conector Trello na sessão**: não marque como feito. Diga na resposta que o Trello ficou para trás e qual ticket precisa de sincronização.
 
