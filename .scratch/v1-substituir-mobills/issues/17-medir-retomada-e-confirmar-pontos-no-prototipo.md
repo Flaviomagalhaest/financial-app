@@ -1,0 +1,22 @@
+# Medir a retomada do banco e confirmar pontos que as fontes não cobrem
+
+Type: prototype
+Status: ready-for-human
+Blocked by: —
+Skills: `prototype`; apoio: `run`; HITL (precisa de um cluster na conta AWS do dono e de iPhone/Android reais)
+Modelo recomendado: Sonnet
+Effort recomendado: medium
+Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add3e0067e047c256a82146
+Origem: lacunas remanescentes de [Reconferir as lacunas das pesquisas de plataforma e de banco](15-reconferir-lacunas-das-pesquisas.md) (achados na branch `research/lacunas-plataforma-e-banco`)
+
+## Question
+
+O que só uma medição ou um teste real responde, porque a fonte oficial não diz?
+
+## Checklist
+
+- [ ] Segundos da primeira conexão no DSQL após Idle/Inactive, e o auto-pause (0 ACU) do Aurora Serverless v2 em sa-east-1 (a doc não lista por região; retomada documentada de ~15 s, 30 s+ após 24 h pausado)
+- [ ] Build de release do Expo (local, `--configuration Release`) com conta Apple gratuita: funciona? (só o development build está documentado)
+- [ ] Alcance do sideload de APK no Brasil: a FAQ do Android diz que ainda não é afetado, a página de conta limitada (2026-10-23) diz que pacote não registrado deixa de instalar; reconferir antes de fechar a plataforma
+- [ ] Efeito real de desligar "Abrir como App Web" no iOS 26 sobre a perda de dados do PWA, e se o ITP de 7 dias atinge conteúdo local num WKWebView de Capacitor
+- [ ] Resultado em `## Answer`; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
