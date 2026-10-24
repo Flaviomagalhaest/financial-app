@@ -1,6 +1,6 @@
 # Criar as etiquetas das features no Trello
 
-Status: ready-for-human
+Status: done
 Blocked by: —
 Skills: nenhuma; HITL (o dono cria as etiquetas no Trello)
 Modelo recomendado: Sonnet
@@ -13,6 +13,6 @@ O `AGENTS.md` pede uma etiqueta por feature de `.scratch/`, criada pela sessão 
 
 ## Checklist
 
-- [ ] Dono cria no quadro Financial App a etiqueta "V1 que substitui o Mobills"
-- [ ] Dono cria a etiqueta "Processo do repositório"
-- [ ] Uma sessão aplica cada etiqueta aos cards da sua feature (cards 01 a 12 da V1; cards 01 a 03 deste processo)
+- [x] Dono cria no quadro Financial App a etiqueta "V1 que substitui o Mobills"
+- [x] Dono cria a etiqueta "Processo do repositório"
+- [x] Uma sessão aplica cada etiqueta aos cards da sua feature (cards 01 a 13 da V1; cards 01 a 03 deste processo)
