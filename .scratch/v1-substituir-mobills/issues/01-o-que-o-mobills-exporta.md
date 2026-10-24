@@ -2,7 +2,7 @@
 
 Type: research
 Status: open
-Blocked by: —
+Blocked by: 13
 Skills: `research` (AFK, em sub-agente)
 Modelo recomendado: Sonnet
 Effort recomendado: medium
