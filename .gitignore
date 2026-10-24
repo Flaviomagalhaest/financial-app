@@ -1,0 +1,31 @@
+# Dependências
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+*.pyc
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+
+# Build e cache
+dist/
+build/
+.expo/
+.pytest_cache/
+.aws-sam/
+cdk.out/
+.terraform/
+*.tfstate*
+
+# Editor e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/settings.local.json
