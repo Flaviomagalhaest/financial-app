@@ -1,6 +1,6 @@
 # Enviar a tag de merge da branch do mapa
 
-Status: ready-for-human
+Status: done
 Blocked by: —
 Skills: nenhuma; HITL (o dono envia a tag de uma máquina com permissão)
 Modelo recomendado: Sonnet
@@ -13,5 +13,5 @@ O `AGENTS.md` pede a tag `merged/<branch>` em toda branch mesclada na `main`. A 
 
 ## Checklist
 
-- [ ] Dono cria e envia a tag no último commit da branch: `git fetch origin && git tag merged/claude/great-bohr-z1cqpa origin/claude/great-bohr-z1cqpa && git push origin merged/claude/great-bohr-z1cqpa`
-- [ ] Conferir que a tag aparece em `git ls-remote --tags origin`
+- [x] Dono cria e envia a tag no último commit da branch: `git fetch origin && git tag merged/claude/great-bohr-z1cqpa origin/claude/great-bohr-z1cqpa && git push origin merged/claude/great-bohr-z1cqpa`
+- [x] Conferir que a tag aparece em `git ls-remote --tags origin`
