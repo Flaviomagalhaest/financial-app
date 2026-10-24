@@ -1,6 +1,6 @@
 # Lista do Trello para ticket do wayfinder em aberto
 
-Status: ready-for-human
+Status: done
 Blocked by: —
 Skills: `writing-for-agents` (se a regra do `AGENTS.md` mudar)
 Modelo recomendado: Sonnet
@@ -15,6 +15,10 @@ No traçado, a sessão usou: `open` sem bloqueio vai para TODO; `open` com bloqu
 
 ## Checklist
 
-- [ ] Dono decide a lista de `open` (TODO para todos, ou WAITING para os HITL)
-- [ ] Regra registrada no `AGENTS.md`, na seção "Trello espelha o tracker"
-- [ ] Cards da V1 movidos, se a decisão mudar a lista atual
+- [x] Dono decide a lista de `open` (TODO para todos, ou WAITING para os HITL)
+- [x] Regra registrada no `AGENTS.md`, na seção "Trello espelha o tracker"
+- [x] Cards da V1 movidos, se a decisão mudar a lista atual
+
+## Answer
+
+O dono decidiu: todo ticket `open` do wayfinder vai para TODO, inclusive os que esperam o dono. Os que têm `Blocked by` aberto vão para BLOCKED. Regra registrada em `AGENTS.md`, na seção "Trello espelha o tracker". Os cards da V1 já estavam nessas listas, então nenhum foi movido.

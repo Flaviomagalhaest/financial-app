@@ -39,6 +39,7 @@ O quadro **Financial App** (https://trello.com/b/SNRQ3kKH/financial-app) mostra 
 - **Etiqueta**: uma etiqueta por feature de `.scratch/`, com o nome legível da feature. Quando um ticket inicia uma feature nova e a etiqueta dela ainda não existe no quadro, a sessão cria a etiqueta antes de criar o card. Nenhum outro ticket recebe etiqueta.
 - **Lista**, pelo `Status:`:
   - `ready-for-agent` → TODO;
+  - `open` (ticket do wayfinder, sem papel de triage) → TODO, inclusive quando o próximo passo é do dono;
   - `needs-triage`, `needs-info`, `ready-for-human` → WAITING;
   - `claimed` → DOING;
   - `resolved`, `done`, `wontfix` → FINISHED.
