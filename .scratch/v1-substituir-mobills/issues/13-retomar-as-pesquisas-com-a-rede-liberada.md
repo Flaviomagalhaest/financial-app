@@ -1,7 +1,7 @@
 # Retomar as pesquisas com a rede liberada
 
 Type: task
-Status: open
+Status: claimed
 Blocked by: —
 Skills: `wayfinder` (passo 5 de "Chart the map") e `research` (um sub-agente por ticket de pesquisa); HITL só se a rede continuar bloqueada (o dono libera)
 Modelo recomendado: Sonnet
