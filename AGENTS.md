@@ -14,12 +14,12 @@ Layout single-context (um `GLOSSARY.md` e `docs/adr/` na raiz). Veja `docs/agent
 
 ## Sessões em paralelo
 
-Várias sessões do agente podem trabalhar ao mesmo tempo, mas **cada uma no seu `git worktree`, com branch própria**. Na mesma pasta elas dividem os arquivos e o índice do git, e uma leva o trabalho da outra no commit. Na pasta principal, só se faz o merge (passo 4).
+Várias sessões do agente podem trabalhar ao mesmo tempo, mas **cada uma no seu `git worktree`, com branch própria**. Na mesma pasta elas dividem os arquivos e o índice do git, e uma leva o trabalho da outra no commit. Na pasta principal não se commita: a `main` só muda por merge de PR (veja "Integração por PR").
 
-1. **Reserve o ticket na `main`**: troque o `Status:` dele para `claimed` e faça um commit só com esse arquivo, antes de criar o worktree. Um `claimed` feito dentro da branch só aparece para as outras sessões depois do merge.
-2. **Crie o worktree** ao lado da pasta principal: `git worktree add ../financial-app-<NN> -b ticket-<NN> main`. Ele começa sem as dependências instaladas: instale-as antes de rodar qualquer verificação.
+1. **Reserve o ticket por PR**: na pasta principal, `git switch -c reserva-<NN> main`, troque o `Status:` dele para `claimed`, faça um commit só com esse arquivo, envie com `git push -u origin reserva-<NN>` e abra o PR para `main` (veja "Integração por PR"). Um `claimed` só aparece para as outras sessões depois do merge, então espere o merge antes de criar o worktree.
+2. **Crie o worktree** depois do merge da reserva, a partir da `main` atualizada, ao lado da pasta principal: `git fetch origin main && git worktree add ../financial-app-<NN> -b ticket-<NN> origin/main`. Ele começa sem as dependências instaladas: instale-as antes de rodar qualquer verificação.
 3. **Faça commits na branch**, com `git add <caminhos explícitos>` e `git diff --cached --stat` antes do `git commit`. Nunca `git add -A` nem `git commit -a`.
-4. **Integre ao terminar**: na branch, `git rebase main` e as verificações; na pasta principal, `git merge --ff-only ticket-<NN>`. Se a `main` andou, repita o `rebase` e as verificações. Se o merge recusar por mudanças não commitadas de outra sessão, espere ou avise essa sessão: não use `stash`, `checkout` nem `reset` nos arquivos dela. Depois, `git worktree remove ../financial-app-<NN>` e `git branch -d ticket-<NN>`.
+4. **Integre por PR**: na branch, `git fetch origin main && git rebase origin/main` e as verificações; depois `git push -u origin ticket-<NN>` e abra o PR para `main` (veja "Integração por PR"). O dono mescla. Depois do merge, na pasta principal: `git worktree remove ../financial-app-<NN>`, `git branch -D ticket-<NN>` e `git branch -D reserva-<NN>`. O `-d` recusa, porque o squash deixa a branch fora do histórico da `main`.
 
 Não reescreva o histórico da `main` (`rebase`, `reset`, `commit --amend` de commits já feitos): as outras sessões têm commits em cima dele.
 
@@ -54,11 +54,15 @@ O quadro **Financial App** (https://trello.com/b/SNRQ3kKH/financial-app) mostra 
 - **Não criar** listas, etiquetas, quadros nem cards além do descrito aqui sem pedido do dono.
 - **Sem conector Trello na sessão**: não marque como feito. Diga na resposta que o Trello ficou para trás e qual ticket precisa de sincronização.
 
-## Branches mescladas recebem tag
+## Integração por PR
 
-Quando uma branch é mesclada na `main`, a sessão que fez o merge cria a tag `merged/<branch>` apontando para o último commit dela (sem o prefixo `origin/`) e envia a tag: `git tag merged/<branch> <commit>` e `git push origin merged/<branch>`. Assim o dono acha as branches que pode apagar listando as tags `merged/*`. A sessão **não apaga** a branch remota: quem apaga é o dono.
+A `main` não recebe push direto de branch de trabalho: ela muda só por PR mesclado com **squash**, e quem mescla é o dono. Quando a sessão termina uma branch de trabalho ou de reserva:
 
-Branches que não entram na `main` de propósito (`prototipo/*`, `research/*`, `rascunho/*` e as de tickets ainda não mesclados) não recebem tag.
+- o PR vai para `main` com título `NN: título do ticket` e corpo vazio (não precisa preencher);
+- a branch remota é apagada ao mesclar, pela configuração do repositório "Automatically delete head branches", que o dono mantém; a sessão não apaga a branch remota;
+- não se cria tag `merged/<branch>`: o PR já registra a branch e o commit mesclado.
+
+Branches que não entram na `main` de propósito (`prototipo/*`, `research/*`, `rascunho/*`) não abrem PR.
 
 ## Commits sem autoria de agente
 
@@ -70,9 +74,9 @@ As skills `code-review` e `implement` devem rodar a revisão com os sub-agentes 
 
 ## Sessões na nuvem (Claude Code web/celular)
 
-Tudo de que o fluxo precisa está neste repositório: o mapa e os tickets (`.scratch/`), as decisões (`docs/adr/`, `GLOSSARY.md`) e as skills (`.claude/skills/`: `wayfinder`, `implement`, `triage`, `tdd`, `research` etc.). Uma sessão na nuvem trabalha num clone só dela, então não precisa de `git worktree`; o resto do processo vale:
+Tudo de que o fluxo precisa está neste repositório: o mapa e os tickets (`.scratch/`), as decisões (`docs/adr/`, `GLOSSARY.md`) e as skills (`.claude/skills/`: `wayfinder`, `implement`, `triage`, `tdd`, `research` etc.). Uma sessão na nuvem trabalha num clone só dela, então não usa `git worktree`. Os passos são os da seção "Sessões em paralelo", com estas diferenças:
 
-1. **Reserve o ticket**: troque o `Status:` para `claimed`, faça um commit só com esse arquivo e envie para a `main` (`git push origin main`) antes de trabalhar, para as outras sessões verem.
-2. **Trabalhe numa branch `ticket-<NN>`**, com `git add <caminhos explícitos>` (nunca `git add -A`).
-3. **Integre ao terminar**: `git rebase main`, as verificações do projeto, `git merge --ff-only` na `main` e `git push origin main`. Se a sessão não puder enviar para a `main`, envie a branch `ticket-<NN>` e diga na resposta que falta o merge.
+1. **Reserve** numa branch `reserva-<NN>` criada a partir da `main`, com PR, como no passo 1 acima.
+2. **Trabalhe** numa branch `ticket-<NN>` criada a partir de `origin/main` depois do merge da reserva, com `git add <caminhos explícitos>` (nunca `git add -A`).
+3. **Integre por PR**, como no passo 4 acima. Se a sessão não puder enviar a branch ou abrir o PR, diga na resposta que falta o PR.
 4. As skills de `.claude/skills/` são a cópia do projeto: se uma mudar, mude aqui e não numa cópia local.
