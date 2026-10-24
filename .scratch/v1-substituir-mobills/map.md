@@ -32,7 +32,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 
 **Funcionalidades complementares aceitas na v1:**
 
-- Lançamento: funciona sem internet e sincroniza depois; favoritos e "repetir último"; atalho na tela inicial do celular que abre direto o novo lançamento; sugestão automática de tags pelo histórico da descrição.
+- Lançamento: funciona sem internet e sincroniza depois; favoritos e "repetir último"; atalho no ícone do Android que abre direto o novo lançamento (no iPhone não há atalho, ver [Plataforma do cliente](issues/08-plataforma-do-cliente.md)); sugestão automática de tags pelo histórico da descrição.
 - Futuro: parcelamento com antecipação de parcelas e quitação do restante; recorrência com ou sem fim, mudando o valor daqui para frente ou só em um mês, sem mexer no resto; o previsto vira realizado quando acontece, com a lista do que venceu sem confirmação ("contas da semana").
 - Planejamento: copiar do mês anterior ou de um modelo padrão; "quanto ainda posso gastar", contando o já gasto e o já previsto; aviso no momento de lançar (ex.: "Alimentação: 82% do planejado").
 - Cartão: a compra cai na fatura certa pelos dias de fechamento e vencimento; limite comprometido pelas parcelas futuras; vários cartões e cartão adicional.
@@ -49,6 +49,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - Conta AWS nova, filha de uma conta de governança (AWS Organizations), no free tier com US$ 120 de crédito.
 - Custo-alvo de US$ 0 a 1 por mês no uso normal, com teto de US$ 5 e alerta de orçamento na AWS.
 - Sem domínio próprio: o endereço padrão da AWS basta para dois usuários.
+- A primeira etapa da spec instala o app nos dois celulares (iPhone e Android) e testa o funcionamento sem internet, antes de construir em cima da PWA ([Plataforma do cliente](issues/08-plataforma-do-cliente.md)).
 - Os dados reais do Mobills nunca entram no repositório; os tickets guardam só contagens e a forma dos dados.
 
 ## Decisions so far
@@ -56,6 +57,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - [Limites do app web instalável no iPhone e no Android](issues/02-limites-do-app-web-instalavel.md): PWA instalada no iPhone é isenta do apagamento de 7 dias, mas sem atalho de ícone nem Background Sync; Expo e Capacitor exigem Mac e, para ficar fora do perfil de 7 dias, Apple Developer (US$ 99/ano). Achados na branch `research/app-web-instalavel`.
 - [Banco de dados na AWS para dois usuários e histórico longo](issues/03-banco-de-dados-na-aws.md): o volume é pequeno (13 a 61 MB) e DSQL e DynamoDB custam de 0 a ~US$ 1 por mês; Aurora Serverless v2 com pausa custa US$ 3 a 7 e RDS, US$ 14 a 29; o DSQL já tem foreign keys. Achados na branch `research/banco-de-dados-aws`.
 - [Reconferir as lacunas das pesquisas de plataforma e de banco](issues/15-reconferir-lacunas-das-pesquisas.md): nada derruba uma opção sozinho; dados só no aparelho são arriscados em PWA e Capacitor (servidor como fonte de verdade); Expo e Capacitor no iPhone sem conta paga pedem reinstalação a cada 7 dias e Mac; DSQL não tem PITR; retomada do banco e sideload no Brasil ficam para o [ticket 17](issues/17-medir-retomada-e-confirmar-pontos-no-prototipo.md). Achados na branch `research/lacunas-plataforma-e-banco`.
+- [Plataforma do cliente](issues/08-plataforma-do-cliente.md): o app é uma PWA em React + TypeScript, uma base de código para web, Android e iPhone, sem loja, sem Apple Developer e sem Mac. No iPhone, sem atalho no ícone e com a fila offline enviada só com o app aberto; no Android, atalho "Novo lançamento" no toque longo. Capacitor é o plano B; a primeira etapa da spec valida a instalação e o offline nos dois celulares. [ADR 0005](../../docs/adr/0005-app-web-instalavel-em-vez-de-app-nativo.md).
 - [Em que mês conta uma compra no cartão](issues/06-em-que-mes-conta-uma-compra-no-cartao.md): compra no cartão conta no mês da fatura (o mês do fechamento), no planejamento, nas tags, no resumo e na projeção mês a mês; só o saldo da conta segue o pagamento real. Uma fatura por mês por cartão; estorno conta na fatura em que aparece. [ADR 0003](../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md).
 - [Ciclo de vida do lançamento futuro](issues/05-ciclo-de-vida-do-lancamento-futuro.md): o compromisso futuro é um lançamento **previsto** que vira **realizado**; recorrência e parcelamento são regras que geram lançamentos (a compra parcelada não é lançamento). Confirmação manual por padrão; recorrência de valor fixo e parcelamento podem ser automáticos. Mudanças valem daqui para frente ou só num mês, sem mexer em realizados; receitas seguem as mesmas regras. [ADR 0004](../../docs/adr/0004-previsto-e-situacao-do-lancamento.md).
 
