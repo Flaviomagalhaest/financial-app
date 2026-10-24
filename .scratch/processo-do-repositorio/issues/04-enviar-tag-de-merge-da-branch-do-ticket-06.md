@@ -1,6 +1,6 @@
 # Enviar a tag de merge da branch do ticket 06
 
-Status: ready-for-human
+Status: wontfix
 Blocked by: —
 Skills: nenhuma; HITL (o dono envia a tag de uma máquina com permissão)
 Modelo recomendado: Sonnet
@@ -16,3 +16,7 @@ O `AGENTS.md` pede a tag `merged/<branch>` em toda branch mesclada na `main`. A 
 
 - [ ] Dono cria e envia a tag no último commit da branch: `git fetch origin && git tag merged/claude/stoic-allen-813fm9 origin/claude/stoic-allen-813fm9 && git push origin merged/claude/stoic-allen-813fm9`
 - [ ] Conferir que a tag aparece em `git ls-remote --tags origin`
+
+## Resolução
+
+Fechado sem enviar a tag. A regra de integração do `AGENTS.md` ("Integração por PR") não cria mais tag `merged/<branch>`: o PR mesclado com squash já registra a branch e o commit. Nenhuma pendência ficou em aberto.
