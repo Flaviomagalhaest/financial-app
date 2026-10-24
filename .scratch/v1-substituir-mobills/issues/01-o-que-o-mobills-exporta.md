@@ -1,7 +1,7 @@
 # O que o Mobills exporta
 
 Type: research
-Status: open
+Status: claimed
 Blocked by: 13
 Skills: `research` (AFK, em sub-agente)
 Modelo recomendado: Sonnet
