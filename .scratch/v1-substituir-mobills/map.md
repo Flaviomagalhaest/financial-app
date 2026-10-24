@@ -56,11 +56,12 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - [Limites do app web instalável no iPhone e no Android](issues/02-limites-do-app-web-instalavel.md): PWA instalada no iPhone é isenta do apagamento de 7 dias, mas sem atalho de ícone nem Background Sync; Expo e Capacitor exigem Mac e, para ficar fora do perfil de 7 dias, Apple Developer (US$ 99/ano). Achados na branch `research/app-web-instalavel`.
 - [Banco de dados na AWS para dois usuários e histórico longo](issues/03-banco-de-dados-na-aws.md): o volume é pequeno (13 a 61 MB) e DSQL e DynamoDB custam de 0 a ~US$ 1 por mês; Aurora Serverless v2 com pausa custa US$ 3 a 7 e RDS, US$ 14 a 29; o DSQL já tem foreign keys. Achados na branch `research/banco-de-dados-aws`.
 - [Em que mês conta uma compra no cartão](issues/06-em-que-mes-conta-uma-compra-no-cartao.md): compra no cartão conta no mês da fatura (o mês do fechamento), no planejamento, nas tags, no resumo e na projeção mês a mês; só o saldo da conta segue o pagamento real. Uma fatura por mês por cartão; estorno conta na fatura em que aparece. [ADR 0003](../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md).
+- [Ciclo de vida do lançamento futuro](issues/05-ciclo-de-vida-do-lancamento-futuro.md): o compromisso futuro é um lançamento **previsto** que vira **realizado**; recorrência e parcelamento são regras que geram lançamentos (a compra parcelada não é lançamento). Confirmação manual por padrão; recorrência de valor fixo e parcelamento podem ser automáticos. Mudanças valem daqui para frente ou só num mês, sem mexer em realizados; receitas seguem as mesmas regras. [ADR 0004](../../docs/adr/0004-previsto-e-situacao-do-lancamento.md).
 
 ## Not yet specified
 
 - **Sincronização offline e conflitos:** como um lançamento feito sem internet chega ao servidor e o que acontece quando os dois editam o mesmo lançamento. Depende da plataforma e do banco.
-- **Importação do Mobills:** como as categorias, tags, contas, cartões, faturas e parcelas de lá viram os conceitos daqui, e como é o dia da virada (onde se lança durante a transição).
+- **Importação do Mobills:** como as categorias, tags, contas, cartões, faturas e parcelas de lá viram os conceitos daqui, e como é o dia da virada (onde se lança durante a transição). O pendente/efetivado do Mobills vira previsto/realizado, e as parcelas de lá precisam ser reagrupadas em parcelamentos.
 - **Projeção de saldo:** a regra que junta saldo atual, previstos e planejamento, mês a mês.
 - **Planejamento com várias tags:** sobre o que um item planejado incide e como "quanto ainda posso gastar" conta um lançamento com mais de uma tag.
 - **Sugestão automática de tags:** de onde vem a sugestão e como ela aprende com o uso.
@@ -82,3 +83,5 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - Dívida com juros calculada pelo app (tabela Price ou SAC): dívidas entram como parcelamento ou recorrência, com os valores já conhecidos.
 - Sobra do planejamento que passa para o mês seguinte (envelope acumulado): fica para depois da v1.
 - Histórico completo de alterações de um lançamento: na v1 basta saber quem criou e quem alterou por último.
+- Recorrência por dia útil ("5º dia útil", "fim de semana vai para segunda") e calendário de feriados: na v1 a recorrência tem dia fixo e a data real se ajusta na confirmação.
+- Estimativa que aprende (o previsto da conta de luz usar o último valor confirmado): na v1 o previsto usa o valor da regra.
