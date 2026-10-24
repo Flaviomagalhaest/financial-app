@@ -55,6 +55,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 
 - [Limites do app web instalável no iPhone e no Android](issues/02-limites-do-app-web-instalavel.md): PWA instalada no iPhone é isenta do apagamento de 7 dias, mas sem atalho de ícone nem Background Sync; Expo e Capacitor exigem Mac e, para ficar fora do perfil de 7 dias, Apple Developer (US$ 99/ano). Achados na branch `research/app-web-instalavel`.
 - [Banco de dados na AWS para dois usuários e histórico longo](issues/03-banco-de-dados-na-aws.md): o volume é pequeno (13 a 61 MB) e DSQL e DynamoDB custam de 0 a ~US$ 1 por mês; Aurora Serverless v2 com pausa custa US$ 3 a 7 e RDS, US$ 14 a 29; o DSQL já tem foreign keys. Achados na branch `research/banco-de-dados-aws`.
+- [Em que mês conta uma compra no cartão](issues/06-em-que-mes-conta-uma-compra-no-cartao.md): compra no cartão conta no mês da fatura (o mês do fechamento), no planejamento, nas tags, no resumo e na projeção mês a mês; só o saldo da conta segue o pagamento real. Uma fatura por mês por cartão; estorno conta na fatura em que aparece. [ADR 0003](../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md).
 
 ## Not yet specified
 

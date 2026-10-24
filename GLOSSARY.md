@@ -34,6 +34,18 @@ Data em que a fatura deixa de receber compras; uma compra feita no próprio dia 
 Data limite para pagar a fatura. Cada fatura tem o seu, que nasce do dia de vencimento padrão do cartão.
 _Avoid_: data de pagamento (o pagamento pode ser feito antes ou depois)
 
+**Mês da fatura**:
+Mês em que a fatura e cada compra dela contam no planejamento, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim. Cada cartão tem uma fatura por mês.
+_Avoid_: competência, mês de referência
+
+**Saldo anterior**:
+Parte de uma fatura que não foi paga e passa para a fatura seguinte; não é compra nova e não conta de novo.
+_Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
+
+**Estorno**:
+Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original e com as mesmas tags.
+_Avoid_: reembolso, devolução
+
 **Transferência**:
 Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal.
 
