@@ -1,7 +1,7 @@
 # Em que mês conta uma compra no cartão
 
 Type: grilling
-Status: open
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono)
 Modelo recomendado: Opus
