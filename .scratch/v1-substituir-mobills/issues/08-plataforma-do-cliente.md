@@ -1,7 +1,7 @@
 # Plataforma do cliente
 
 Type: grilling
-Status: open
+Status: claimed
 Blocked by: 02
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono)
 Modelo recomendado: Opus
