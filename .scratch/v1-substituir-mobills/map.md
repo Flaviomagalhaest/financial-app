@@ -64,6 +64,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - [Fluxo de lançamento rápido](issues/10-fluxo-de-lancamento-rapido.md): valor primeiro, num teclado na tela; conta e categorias em fileiras de toque logo abaixo; descrição com sugestão pelo histórico, tags, pessoa, data, parcelado e recorrente numa folha de detalhes opcional; "repetir último" com o lançamento vazio; aviso de planejamento com o antes e o depois e a escolha do item trocável com um toque; contas da semana num aviso da tela inicial, com confirmar em um toque. Favoritos ([ticket 19](issues/19-onde-ficam-os-favoritos.md)): fileira acima do teclado e grade na tela inicial, com a mesma lista; o favorito preenche tudo com o último valor como padrão, editável, e "Salvar" confirma; viram favorito à mão (⭐) ou por sugestão dos mais usados. Protótipos nas branches `prototipo/lancamento-rapido` e `prototipo/favoritos`.
 - [Dashboards e fechamento do mês](issues/11-dashboards-e-fechamento-do-mes.md): a v1 é um app com abas (Hoje, Mês, Cartões, Histórico, Futuro), com "ainda dá para gastar" em destaque, o fechamento do mês em texto corrido, a comparação por categoria contra o mês anterior e o mesmo mês do ano passado, e o cartão numa linha que abre as compras. Sem pizza: barras e listas bastam. A projeção de saldo mostra duas linhas, só com os previstos e com o que falta do planejamento. Protótipo na branch `prototipo/dashboards`.
 - [Exportar o Mobills e medir o histórico](issues/07-exportar-o-mobills-e-medir-o-historico.md): o histórico real tem cerca de 11 mil linhas em 7 anos e 8 meses (6.283 transações com 1 conta só, 0 subcategorias, 4 tags e 311 pendentes, e 4.742 compras em 219 faturas de 7 pastas de cartão), na ordem de poucos MB. As compras de cartão estão no export geral e nas faturas (somar duplica); a fatura traz a data real da compra e o cartão, e o geral traz tags e `(n/total)`.
+- [Banco de dados e região](issues/09-banco-de-dados-e-regiao.md): Aurora DSQL em sa-east-1 (São Paulo), com o app inteiro nessa região e só os serviços globais em us-east-1; a SCP da organização foi alterada para liberar sa-east-1. O histórico mora numa tabela só, sem agregados nem partições, com o mês em que cada lançamento conta gravado nele, e é guardado para sempre. Sem PITR no DSQL: o backup é a exportação completa diária do app num S3 com versões, 90 dias e Object Lock, na mesma conta. O schema fica no subconjunto do DSQL. [ADR 0007](../../docs/adr/0007-aurora-dsql-em-sao-paulo.md).
 
 ## Not yet specified
 
@@ -72,7 +73,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - **Sugestão automática de categorias e tags:** de onde vem a sugestão e como ela aprende com o uso.
 - **Limite comprometido do cartão:** como mostrar quanto do limite as parcelas futuras ocupam.
 - **Busca e filtros salvos:** o que se busca e o que um filtro salvo guarda.
-- **Exportação:** formato e conteúdo do CSV e do backup.
+- **Exportação:** formato e conteúdo do CSV e do backup. A exportação completa também é o backup diário ([Banco de dados e região](issues/09-banco-de-dados-e-regiao.md)), então precisa poder ser importada de volta num banco novo.
 
 ## Out of scope
 
@@ -90,3 +91,4 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - Histórico completo de alterações de um lançamento: na v1 basta saber quem criou e quem alterou por último.
 - Recorrência por dia útil ("5º dia útil", "fim de semana vai para segunda") e calendário de feriados: na v1 a recorrência tem dia fixo e a data real se ajusta na confirmação.
 - Estimativa que aprende (o previsto da conta de luz usar o último valor confirmado): na v1 o previsto usa o valor da regra.
+- Cópia do backup fora da AWS (Drive ou similar): na v1 o backup fica num S3 da mesma conta, com Object Lock, e o "exportar tudo" do app permite baixar uma cópia à mão.
