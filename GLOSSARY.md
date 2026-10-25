@@ -7,7 +7,7 @@ App de finanças pessoais do Flávio e da esposa: registra o dinheiro que entra 
 ### Lançamentos
 
 **Lançamento**:
-Registro de um valor que entra ou sai do dinheiro do casal, ou que vai entrar ou sair, com data, descrição e tags.
+Registro de um valor que entra ou sai do dinheiro do casal, ou que vai entrar ou sair, com data, descrição, categorias e tags.
 _Avoid_: transação, movimentação
 
 **Despesa**:
@@ -26,16 +26,20 @@ _Avoid_: pendente, agendado, compromisso
 Situação do lançamento que já aconteceu; só ele mexe no saldo da conta.
 _Avoid_: efetivado, pago, confirmado
 
+**Categoria**:
+Classificação permanente de um lançamento, de uma lista plana que o casal mantém, separada para despesas, receitas e transferências (ex.: "alimentação", "viagem"); toda despesa e receita tem uma ou mais, a transferência pode ter, e é sobre elas que funcionam o planejamento e as estatísticas.
+_Avoid_: subcategoria, grupo
+
 **Tag**:
-Rótulo livre que classifica um lançamento; um lançamento pode ter várias ao mesmo tempo (ex.: "família" e "alimentação").
+Rótulo pontual que marca os lançamentos de um projeto ou evento (ex.: "novo ap", a reforma do apartamento novo); um lançamento pode ter nenhuma ou várias, e tag não entra no planejamento.
 _Avoid_: etiqueta, marcador
 
-**Tag de pessoa**:
-Tag com o nome do Flávio ou da esposa, que diz de quem é o lançamento; cada lançamento tem no máximo uma.
-_Avoid_: dono, responsável, quem gastou
+**Pessoa**:
+O Flávio ou a esposa, quando o lançamento é de um deles; cada lançamento tem no máximo uma.
+_Avoid_: tag de pessoa, dono, responsável, quem gastou
 
 **Conjunto**:
-Lançamento sem tag de pessoa: é do casal (mercado, internet, gasolina, rendimento da poupança do casal).
+Lançamento sem pessoa: é do casal (mercado, internet, gasolina, rendimento da poupança do casal).
 _Avoid_: compartilhado, comum
 
 ### Futuro
@@ -71,11 +75,11 @@ _Avoid_: agenda, a pagar
 ### Planejamento
 
 **Planejamento**:
-O quanto o casal se propõe a gastar num mês, item a item; não é lançamento e não mexe em saldo.
+O quanto o casal se propõe a gastar ou guardar num mês, item a item; não é lançamento e não mexe em saldo.
 _Avoid_: orçamento, meta
 
 **Item do planejamento**:
-Uma linha do planejamento do mês, com um valor (ex.: R$ 1.000 em alimentação), comparada com os lançamentos realizados e previstos do mês.
+Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: R$ 1.000 em alimentação), comparada com os lançamentos realizados e previstos do mês que contam nele; cada lançamento conta em no máximo um item, mesmo tendo várias categorias.
 _Avoid_: teto, limite, meta
 
 ### Contas e cartões
@@ -91,7 +95,7 @@ Data limite para pagar a fatura. Cada fatura tem o seu, que nasce do dia de venc
 _Avoid_: data de pagamento (o pagamento pode ser feito antes ou depois)
 
 **Mês da fatura**:
-Mês em que a fatura e cada compra dela contam no planejamento, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim. Cada cartão tem uma fatura por mês.
+Mês em que a fatura e cada compra dela contam no planejamento, nas categorias, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim. Cada cartão tem uma fatura por mês.
 _Avoid_: competência, mês de referência
 
 **Saldo anterior**:
@@ -99,11 +103,11 @@ Parte de uma fatura que não foi paga e passa para a fatura seguinte; não é co
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
 
 **Estorno**:
-Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original e com as mesmas tags.
+Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original e com as mesmas categorias e tags.
 _Avoid_: reembolso, devolução
 
 **Transferência**:
-Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal.
+Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal, mas pode ter categoria e contar no planejamento (ex.: guardar na reserva).
 
 **Pagamento de fatura**:
-Transferência de uma conta para um cartão que quita a fatura; não conta como saída, porque as compras da fatura já são lançamentos.
+Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
