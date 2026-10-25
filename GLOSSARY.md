@@ -82,6 +82,16 @@ _Avoid_: orçamento, meta
 Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: R$ 1.000 em alimentação), comparada com os lançamentos realizados e previstos do mês que contam nele; cada lançamento conta em no máximo um item, mesmo tendo várias categorias.
 _Avoid_: teto, limite, meta
 
+### Consulta
+
+**Fechamento do mês**:
+Resumo de um mês que já passou: receitas, despesas, sobra, o que foi guardado, os itens do planejamento que passaram do planejado e a comparação com o mês anterior e com o mesmo mês do ano anterior. Não confundir com o **fechamento** da fatura.
+_Avoid_: balanço, extrato do mês
+
+**Projeção de saldo**:
+Estimativa da soma das contas no fim de cada mês que vem, em duas linhas: o saldo de hoje mais os previstos, e a mesma linha descontando o que ainda falta de cada item do planejamento.
+_Avoid_: previsão de saldo, fluxo de caixa
+
 ### Contas e cartões
 
 **Fatura**:
