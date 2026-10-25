@@ -25,7 +25,7 @@ Decidir com os custos e limitações de [Banco de dados na AWS para dois usuári
 
 ## Answer
 
-Decidido com o dono em 2026-10-25. [ADR 0007](../../../docs/adr/0007-aurora-dsql-em-sao-paulo.md).
+Decidido com o dono em 2026-10-25. [ADR 0009](../../../docs/adr/0009-aurora-dsql-em-sao-paulo.md).
 
 **Banco: Aurora DSQL.** É a única opção com SQL (somas e `GROUP BY` no banco) e custo perto de zero: US$ 0 na franquia de 100 mil DPU e 1 GB por mês, que nenhum outro projeto da organização usa, e US$ 0,10 a 0,29 por mês sem ela, em sa-east-1. O DynamoDB não soma nem agrupa e dividiria a franquia com o outro projeto; o Aurora Serverless v2 com pausa custa US$ 3 a 7 por mês e leva 15 s ou mais para voltar. A escolha é revista se o [ticket 17](17-medir-retomada-e-confirmar-pontos-no-prototipo.md) medir mais de 5 s na primeira conexão depois do cluster parado.
 
