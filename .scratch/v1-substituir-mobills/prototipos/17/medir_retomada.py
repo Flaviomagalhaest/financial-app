@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Mede os segundos da primeira conexão + SELECT 1 depois de um período ocioso.
 
-Uso (credenciais AWS reais do dono, região sa-east-1):
+Uso (credenciais AWS reais do dono; região us-east-2 por padrão,
+troque com MEDIR_REGIAO=sa-east-1):
   pip install boto3 'psycopg[binary]'
   python3 medir_retomada.py dsql   <endpoint-do-cluster>
   python3 medir_retomada.py aurora <endpoint> <usuario> <senha> [banco]
@@ -9,12 +10,12 @@ Uso (credenciais AWS reais do dono, região sa-east-1):
 Rode uma vez com o banco quente (linha de base) e depois depois de esperar:
   Aurora: o tempo de auto-pause configurado (5 min mínimo) e 24 h pausado.
   DSQL:   30 min, 2 h e 24 h sem conexões.
-Cada execução imprime uma linha CSV: motor,ocioso_informado,segundos_conexao,segundos_select.
+Cada execução imprime uma linha CSV: motor,regiao,ocioso_informado,segundos_conexao,segundos_select.
 """
-import sys, time
+import os, sys, time
 import boto3, psycopg
 
-REGION = "sa-east-1"
+REGION = os.environ.get("MEDIR_REGIAO", "us-east-2")
 
 
 def conectar(args):
@@ -34,4 +35,4 @@ with conectar(sys.argv[1:]) as con:
     t1 = time.perf_counter()
     con.execute("select 1").fetchone()
     t2 = time.perf_counter()
-print(f"{sys.argv[1]},{ociosidade},{t1 - t0:.2f},{t2 - t1:.2f}")
+print(f"{sys.argv[1]},{REGION},{ociosidade},{t1 - t0:.2f},{t2 - t1:.2f}")
