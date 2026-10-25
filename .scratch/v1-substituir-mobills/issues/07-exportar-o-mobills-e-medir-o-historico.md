@@ -26,3 +26,4 @@ Os números servem a [Banco de dados e região](09-banco-de-dados-e-regiao.md) e
 ## Comments
 
 - O dono já exportou 3 meses de teste (jul-set); falta o **histórico completo** para medir. Colunas e tipos estão no `## Answer` do [ticket 01](01-o-que-o-mobills-exporta.md). Para medir, são dois arquivos: todas as transações e só cartão (o geral não separa o cartão). Falta saber o limite de período por exportação ([ticket 18](18-importacao-do-mobills-cartao-e-datas.md)); se houver, exportar por trechos.
+- Há um terceiro modo de exportação, por fatura de cartão e por mês (detalhes no `## Answer` do [ticket 01](01-o-que-o-mobills-exporta.md)). Para medir o histórico basta o export geral; as faturas mensais só entram para as datas de compra (decisão no [ticket 18](18-importacao-do-mobills-cartao-e-datas.md)), então não exporte fatura por fatura antes dessa decisão.

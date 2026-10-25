@@ -30,6 +30,11 @@ Decidir:
 
 - [ ] Dono lê a central de ajuda (`https://ajuda.mobills.com.br`, navegador) e informa: o plano exigido para exportar, o limite de período por exportação e se há backup completo ou exportação de contas e cartões
 - [ ] Dono exporta o histórico completo (todas as transações e só cartão), por trechos se houver limite, fora do repositório; o [ticket 07](07-exportar-o-mobills-e-medir-o-historico.md) mede
+- [ ] Dono diz quantos cartões tem (ativos e antigos) e até que mês quer a data real da compra, para fixar quantas exportações por fatura valem o esforço
 - [ ] Se a exportação não bastar para o histórico, avaliar o pedido de portabilidade pela LGPD ao encarregado de dados do Mobills
 - [ ] Decisão sobre os pontos acima registrada em `## Answer`
 - [ ] `GLOSSARY.md` atualizado (termos: data da compra x data da fatura, se ainda não estiverem) e o ponto "Importação do Mobills" do mapa movido para "Decisions so far"
+
+## Comments
+
+- O dono achou um terceiro modo: **exportar a fatura de cada cartão, mês a mês**, que traz a data real da compra e identifica o cartão (pelo nome do arquivo), mas perde `Tags`, `Situação`, `Conta` e o sufixo de parcela `(n/total)` (detalhes no `## Answer` do [ticket 01](01-o-que-o-mobills-exporta.md)). Isso muda a decisão: em vez de pedir a data à mão, a importação pode juntar o export geral (tags, parcelas `n/total`, não-cartão) com as faturas mensais (data da compra, cartão), cruzando por descrição, valor e categoria. O custo é um arquivo por cartão e por mês; a decisão é até quantos meses vale exportar assim (por exemplo só as parceladas ativas e o ano corrente) e o que fazer com o restante (data do vencimento da fatura).
