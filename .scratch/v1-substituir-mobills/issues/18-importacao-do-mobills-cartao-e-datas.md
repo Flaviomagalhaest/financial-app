@@ -31,9 +31,9 @@ Decidir:
 - [ ] Dono lê a central de ajuda (`https://ajuda.mobills.com.br`, navegador) e informa: o plano exigido para exportar, o limite de período por exportação e se há backup completo ou exportação de contas e cartões
 - [ ] Dono exporta o histórico completo (todas as transações e só cartão), por trechos se houver limite, fora do repositório; o [ticket 07](07-exportar-o-mobills-e-medir-o-historico.md) mede
 - [ ] Dono diz quantos cartões tem (ativos e antigos) e até que mês quer a data real da compra, para fixar quantas exportações por fatura valem o esforço
-- [ ] Dono confirma quantos cartões tem: o histórico mostra **7 pastas** (o dono esperava 6). O cartão 6 tem **1 fatura só** (202609) com 127 compras de 2025-06 a 2026-10, e o cartão 7 tem 5 faturas (202605 a 202609): confirmar se são cartões distintos, se o cartão 6 foi exportado de outro modo e se falta fatura
-- [ ] Dono explica o que o rótulo `AAAAMM` da fatura significa na tela (mês do fechamento ou do vencimento?): há compra de 2026-10-04 no arquivo 202609, e o export geral põe as compras de cartão no último dia do mês
-- [ ] Agente cruza, localmente, as compras de cartão do export geral com as faturas, para saber se as faturas cobrem todo o cartão do geral (cerca de 4.742 contra 5.967 despesas) e o que sobra no geral sem fatura; um script do tipo `medir-historico`, com saída só de contagens
+- [x] Dono confirma quantos cartões tem: **7 cartões distintos**, os cartões 6 e 7 são novos (por isso poucas faturas)
+- [x] Rótulo `AAAAMM` da fatura: a compra de 2026-10-04 no arquivo 202609 era uma transação de R$ 0,02 (ajuste de fatura), que o dono mandou desconsiderar; o deslocamento entre o rótulo e o mês do geral sai do cruzamento abaixo
+- [ ] Dono roda o `cruzar-historico` (script local, não versionado, saída só de contagens) e cola o resultado, e o agente grava aqui o que o cruzamento mostrou: o dono cruza, localmente, as compras de cartão do export geral com as faturas, para saber se as faturas cobrem todo o cartão do geral (cerca de 4.742 contra 5.967 despesas) e o que sobra no geral sem fatura
 - [ ] Se a exportação não bastar para o histórico, avaliar o pedido de portabilidade pela LGPD ao encarregado de dados do Mobills
 - [ ] Decisão sobre os pontos acima registrada em `## Answer`
 - [ ] `GLOSSARY.md` atualizado (termos: data da compra x data da fatura, se ainda não estiverem) e o ponto "Importação do Mobills" do mapa movido para "Decisions so far"
