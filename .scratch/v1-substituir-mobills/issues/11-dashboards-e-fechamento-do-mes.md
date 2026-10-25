@@ -19,5 +19,21 @@ Pelo [ticket 04](04-categoria-unica-ou-so-tags.md), um lançamento pode ter vár
 
 ## Checklist
 
-- [ ] Protótipo descartável numa branch `prototipo/dashboards`, com dados fictícios (nunca os reais do Mobills)
+- [x] Protótipo descartável numa branch `prototipo/dashboards`, com dados fictícios (nunca os reais do Mobills)
+- [ ] O dono e a esposa navegam as três variações e respondem às perguntas do `README.md` do protótipo
 - [ ] Ponteiro para a branch e veredito (a pergunta e o que ela decidiu) em `## Answer`
+
+## Comments
+
+**2026-10-25, protótipo pronto para a reação do casal.** Branch `prototipo/dashboards`, pasta `.scratch/v1-substituir-mobills/prototipos/11/`: `dashboards.html` (abre com dois cliques) e `README.md` (como abrir e o que observar). Também publicado como página privada do dono: https://claude.ai/artifact/9V4EcQKeNwRnguNraGRpDd (`#A`, `#B`, `#C` no fim do endereço).
+
+Três variações, trocadas pela barra preta no rodapé:
+
+- **A, Painel do mês:** uma página rolando, com fechamento (meses passados), resumo, itens do planejamento, "a escolher", cartões numa linha que abre as compras, barras por categoria, tag e pessoa, comparação com o mês anterior e com o mesmo mês do ano passado, 12 meses, anos e projeção de saldo.
+- **B, App com abas:** Hoje ("ainda dá para gastar", a escolher, atrasados, fatura), Mês (fechamento em texto corrido, itens, ranking com os lançamentos numa folha), Cartões, Histórico (uma métrica por vez) e Futuro.
+- **C, Planilha do ano:** categorias, tags, pessoas ou cartões por 12 meses mais 3 futuros (ou por ano, 2019 a 2026), células coloridas contra o planejado e lançamentos ao clicar.
+
+A e B têm o experimento da pizza por natureza do gasto (grupo exclusivo); C não tem pizza. A projeção mostra duas regras lado a lado ("só com os previstos" e "previstos + planejamento"), porque a regra ainda está em aberto no mapa.
+
+Falta: o dono e a esposa reagirem; depois, o veredito (variação escolhida ou mistura, se a pizza faz falta, regra da projeção) vai em `## Answer`.
+
