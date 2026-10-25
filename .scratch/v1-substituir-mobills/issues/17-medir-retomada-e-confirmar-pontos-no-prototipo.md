@@ -21,4 +21,5 @@ O que só uma medição ou um teste real responde, porque a fonte oficial não d
 
 ## Comments
 
+- Sessão na nuvem: as variáveis `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` do ambiente são placeholders do proxy (o STS devolve `InvalidClientTokenId`), então nada foi medido. Ficaram preparados, em `../prototipos/17/`, o script `medir_retomada.py` (DSQL e Aurora Serverless v2, sa-east-1, imprime uma linha CSV por medição) e o `roteiro-ios.md` (iOS 26: "Abrir como App Web" e ITP de 7 dias). O dono roda ambos e preenche `## Answer`; o ticket continua `ready-for-human`.
 - O [ticket 08](08-plataforma-do-cliente.md) escolheu PWA, sem app nativo: saíram deste ticket o build de release do Expo com conta Apple gratuita e o alcance do sideload de APK no Brasil, que só pesavam em Expo ou Capacitor fora da loja.
