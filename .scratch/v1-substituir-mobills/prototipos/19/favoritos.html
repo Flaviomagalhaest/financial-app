@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Favoritos no lançamento</title>
+<!--
+  PROTÓTIPO DESCARTÁVEL do ticket 19 (onde ficam os favoritos). Dados fictícios, nada é salvo.
+  Pergunta: na tela de novo lançamento da variante A (valor primeiro), onde ficam os favoritos,
+  o que um favorito preenche e como um lançamento vira favorito?
+  Três variantes de LUGAR (barra de baixo, ou #A #B #C no endereço):
+    A. Fileira acima do teclado   B. Grade na tela inicial   C. Os dois
+  Dois seletores abaixo do celular: "O favorito preenche" e "Como vira favorito".
+  Rodar: abrir no navegador, de preferência com largura de celular.
+-->
+<style>
+:root{--bg:#eef1f0;--phone:#fff;--surface:#f4f6f5;--line:#dde3e0;--fg:#17211d;--muted:#5f6d67;--accent:#14715a;--accent-soft:#dcefe8;--on-accent:#fff;--over:#b3261e;--income:#1d5fa8;--proto:#2a1f4a;--on-proto:#f1edff;--star:#c98a00;--shadow:0 10px 30px rgba(20,40,32,.14)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1412;--phone:#161d1a;--surface:#1e2723;--line:#2c3833;--fg:#e7eeea;--muted:#9aaba3;--accent:#45c39d;--accent-soft:#1d3a31;--on-accent:#08130f;--over:#ff8a80;--income:#7fb2ec;--proto:#d9d0ff;--on-proto:#1d1636;--star:#f0b45a;--shadow:0 10px 30px rgba(0,0,0,.5);color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.35 "Manrope",system-ui,sans-serif;padding:12px max(16px,env(safe-area-inset-left)) 96px}
+button,input{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.topo{max-width:420px;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.selo{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--proto)}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--proto);color:var(--on-proto)}
+.phone{max-width:420px;margin:0 auto;background:var(--phone);border-radius:26px;box-shadow:var(--shadow);min-height:720px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.screen{display:flex;flex-direction:column;gap:12px;padding:16px;flex:1}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bar h1{font-size:18px;margin:0;font-weight:800}
+.rotulo{font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted);margin:0}
+.dica{font-size:12px;color:var(--muted);margin:0}
+.icon{border:0;background:var(--surface);width:36px;height:36px;border-radius:50%;font-size:18px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chip{border:1px solid var(--line);background:var(--phone);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;white-space:nowrap}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.fav{border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:7px 11px;font-size:13px;font-weight:700;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+.fav small{font-weight:600;color:var(--muted);font-size:11px}
+.fav.rep{border-style:dashed;background:none}
+.valor{font-size:44px;font-weight:800;text-align:center;letter-spacing:-.02em;margin:2px 0 0;color:var(--over)}
+.sub{text-align:center;color:var(--muted);font-size:13px;font-weight:600;min-height:20px}
+.teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:auto}
+.teclado button{border:0;background:var(--surface);border-radius:12px;padding:13px 0;font-size:22px;font-weight:700}
+.salvar{border:0;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:16px;padding:15px;border-radius:14px;width:100%}
+.salvar:disabled{opacity:.4}
+.estrela{border:1px solid var(--line);background:none;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--muted);align-self:center}
+.estrela[aria-pressed=true]{color:var(--star);border-color:var(--star)}
+.grade{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px;text-align:left;display:flex;flex-direction:column;gap:2px;font-weight:700}
+.tile .ic{font-size:20px}.tile small{color:var(--muted);font-weight:600;font-size:12px}
+.fab{margin:0 16px 16px;border:0;background:var(--accent);color:var(--on-accent);font-weight:800;padding:15px;border-radius:14px}
+.nota{background:var(--surface);border-radius:12px;padding:9px 11px;font-size:12px;color:var(--muted)}
+.toast{position:absolute;left:16px;right:16px;bottom:16px;background:var(--fg);color:var(--phone);border-radius:12px;padding:11px 13px;font-size:13px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.toast button{border:0;background:none;color:var(--star);font-weight:800}
+.painel{max-width:420px;margin:14px auto 0;display:flex;flex-direction:column;gap:12px}
+.painel .seg{border-radius:14px}.painel .seg button{border-radius:11px;font-size:12px}
+.painel p.exp{margin:0;font-size:12px;color:var(--muted)}
+pre{margin:0;font-size:11px;background:var(--surface);border-radius:12px;padding:10px;overflow:auto;max-height:200px}
+.sw{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:var(--proto);color:var(--on-proto);border-radius:999px;padding:6px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);font-weight:700;font-size:13px;z-index:9}
+.sw button{border:0;background:rgba(255,255,255,.15);color:inherit;width:34px;height:34px;border-radius:50%}
+</style></head><body>
+<div class="topo"><span class="selo">Protótipo · ticket 19 · favoritos</span><div class="seg" id="entrada"></div></div>
+<div class="phone" id="app"></div>
+<div class="painel">
+  <div><p class="rotulo">O favorito preenche</p><div class="seg" id="modo"></div><p class="exp" id="modoExp"></p></div>
+  <div><p class="rotulo">Como vira favorito</p><div class="seg" id="como"></div><p class="exp" id="comoExp"></p></div>
+  <div id="estado"></div>
+</div>
+<div class="sw" id="sw"></div>
+<script>
+const VAR={A:"Fileira acima do teclado",B:"Grade na tela inicial",C:"Os dois"};
+const CONTAS={nucc:"Nubank cartão",itcc:"Itaú Visa",nu:"Nubank conta",it:"Itaú corrente",cart:"Carteira"};
+const CATS=["Mercado","Restaurante","Carro","Farmácia","Casa","Lazer","Assinaturas"];
+const brl=c=>(c/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// todos os lançamentos do histórico (base dos "mais usados"); fixo = valor que se repete igual
+const HIST=[
+ {id:"pad",ic:"🥖",nome:"Padaria Real",cats:["Mercado"],conta:"cart",valor:1850,fixo:false,vezes:63},
+ {id:"ifd",ic:"🛵",nome:"iFood",cats:["Restaurante"],conta:"nucc",valor:7400,fixo:false,vezes:38},
+ {id:"shl",ic:"⛽",nome:"Posto Shell",cats:["Carro"],conta:"itcc",valor:25000,fixo:false,vezes:22},
+ {id:"net",ic:"🌐",nome:"Internet",cats:["Casa"],conta:"nu",valor:12000,fixo:true,vezes:12},
+ {id:"aca",ic:"🏋️",nome:"Academia",cats:["Lazer"],conta:"nucc",valor:15990,fixo:true,vezes:10},
+ {id:"pda",ic:"🛒",nome:"Pão de Açúcar",cats:["Mercado"],conta:"nucc",valor:23140,fixo:false,vezes:41},
+ {id:"rai",ic:"💊",nome:"Droga Raia",cats:["Farmácia"],conta:"nucc",valor:6790,fixo:false,vezes:15},
+];
+const MODOS={sem:["Tudo menos o valor","Conta, categorias, tags e pessoa. O valor vem do teclado."],com:["Tudo, com o valor","Como o “repetir último”: o último valor daquele favorito já entra."],fixo:["Valor só se for fixo","Internet e academia trazem o valor; padaria e mercado deixam para o teclado."]};
+const COMO={mao:["Marcar à mão (⭐)","A estrela aparece no lançamento e, depois de salvar, o app oferece “favoritar”. Só entra o que vocês marcam."],auto:["Os mais usados","Sem estrela: a fileira mostra sozinha os 5 lançamentos mais repetidos."]};
+const S={v:(location.hash.slice(1)||"A").toUpperCase(),entrada:"android",modo:"sem",como:"mao",tela:"form",
+ favs:["pad","shl","net"],toast:null,salvos:[],d:null,ultimo:{nome:"Pão de Açúcar",cats:["Mercado"],conta:"nucc",valor:23140}};
+if(!VAR[S.v])S.v="A";
+const novo=()=>({valor:0,cats:[],conta:"nucc",nome:"",fav:null});
+S.d=novo();
+const h=id=>HIST.find(x=>x.id===id);
+const ativos=()=>S.como==="mao"?S.favs.map(h):[...HIST].sort((a,b)=>b.vezes-a.vezes).slice(0,5);
+const comLinha=f=>S.modo==="com"||(S.modo==="fixo"&&f.fixo)?brl(f.valor):"valor no teclado";
+const mostraFileira=()=>S.v==="A"||S.v==="C";
+const mostraGrade=()=>S.v==="B"||S.v==="C";
+function usar(id){const f=h(id);const d=S.d;d.cats=[...f.cats];d.conta=f.conta;d.nome=f.nome;d.fav=id;
+ d.valor=(S.modo==="com"||(S.modo==="fixo"&&f.fixo))?f.valor:0;S.tela="form";S.toast=null}
+function fileira(){const l=ativos();
+ return `<p class="rotulo">${S.como==="auto"?"Mais usados":"Favoritos"}</p><div class="chips">
+ <button class="fav rep" data-a="rep"><span>↻ Repetir último</span><small>${esc(S.ultimo.nome)} · ${brl(S.ultimo.valor)}</small></button>
+ ${l.map(f=>`<button class="fav" data-a="fav" data-v="${f.id}"><span>${f.ic} ${esc(f.nome)}</span><small>${comLinha(f)}</small></button>`).join("")}</div>`}
+function grade(){const l=ativos();
+ return `<p class="rotulo">${S.como==="auto"?"Mais usados":"Favoritos"}</p><div class="grade">${l.map(f=>`<button class="tile" data-a="fav" data-v="${f.id}"><span class="ic">${f.ic}</span>${esc(f.nome)}<small>${comLinha(f)}</small></button>`).join("")}</div>`}
+function home(){return `<div class="screen"><div class="bar"><h1>Finanças</h1><span class="dica">out/26</span></div>
+ <div class="nota">Saldo e contas da semana ficam aqui (omitido neste protótipo).</div>
+ ${mostraGrade()?grade():`<div class="nota">Esta variante não tem favoritos na tela inicial.</div>`}
+ </div><button class="fab" data-a="novo">+ Novo lançamento</button>${toast()}`}
+function toast(){return S.toast?`<div class="toast"><span>${S.toast.t}</span>${S.toast.favId?`<button data-a="favoritar" data-v="${S.toast.favId}">⭐ Favoritar</button>`:""}</div>`:""}
+function form(){const d=S.d;const vazio=!d.valor&&!d.cats.length;
+ const mostrarEstrela=S.como==="mao"&&d.cats.length;
+ const id=d.fav||"novo";const eFav=S.favs.includes(d.fav);
+ return `<div class="screen"><div class="bar"><button class="icon" data-a="fechar">×</button><b>Despesa</b><span style="width:36px"></span></div>
+ <div class="valor num">${brl(d.valor)}</div>
+ <div class="sub">${d.nome?esc(d.nome):"+ descrição, tags, pessoa, data"} ${mostrarEstrela&&d.fav?`<button class="estrela" data-a="estrela" aria-pressed="${eFav}">${eFav?"⭐ favorito":"☆ favoritar"}</button>`:""}</div>
+ ${vazio&&mostraFileira()?fileira():""}
+ ${vazio&&!mostraFileira()?`<div class="nota">Esta variante não tem favoritos aqui${S.entrada==="android"?": quem entra pelo atalho do Android não vê os favoritos.":"."}</div><button class="fav rep" data-a="rep"><span>↻ Repetir último</span><small>${esc(S.ultimo.nome)} · ${brl(S.ultimo.valor)}</small></button>`:""}
+ <div class="chips">${Object.entries(CONTAS).map(([k,n])=>`<button class="chip" aria-pressed="${d.conta===k}" data-a="conta" data-v="${k}">${n}</button>`).join("")}</div>
+ <div class="chips">${CATS.map(c=>`<button class="chip" aria-pressed="${d.cats.includes(c)}" data-a="cat" data-v="${c}">${c}</button>`).join("")}</div>
+ <div class="teclado num">${["1","2","3","4","5","6","7","8","9","00","0","⌫"].map(k=>`<button data-a="tec" data-v="${k}">${k}</button>`).join("")}</div>
+ <button class="salvar" data-a="salvar" ${d.valor&&d.cats.length?"":"disabled"}>Salvar</button></div>${toast()}`}
+function seg(el,obj,key){document.getElementById(el).innerHTML=Object.entries(obj).map(([k,[l]])=>`<button data-a="${key}" data-v="${k}" aria-pressed="${S[key]===k}">${l}</button>`).join("")}
+function render(){
+ document.getElementById("app").innerHTML=S.tela==="home"?home():form();
+ document.getElementById("entrada").innerHTML=[["android","Android: atalho do ícone"],["iphone","iPhone: abrir o app"]].map(([v,l])=>`<button data-a="entrada" data-v="${v}" aria-pressed="${S.entrada===v}">${l}</button>`).join("");
+ seg("modo",MODOS,"modo");seg("como",COMO,"como");
+ document.getElementById("modoExp").textContent=MODOS[S.modo][1];
+ document.getElementById("comoExp").textContent=COMO[S.como][1];
+ const ks=Object.keys(VAR);
+ document.getElementById("sw").innerHTML=`<button data-a="var" data-v="-1">←</button><span>${S.v} (${VAR[S.v]})</span><button data-a="var" data-v="1">→</button>`;
+ document.getElementById("estado").innerHTML=`<p class="rotulo">Estado</p><pre>${esc(JSON.stringify({variante:S.v,entrada:S.entrada,preenche:S.modo,viraFavorito:S.como,favoritos:ativos().map(f=>f.nome),rascunho:{...S.d,valor:brl(S.d.valor)},salvos:S.salvos},null,1))}</pre>`}
+function reset(){S.d=novo();S.toast=null;S.tela=S.entrada==="android"?"form":"home"}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,v=b.dataset.v,d=S.d;
+ if(a==="entrada"){S.entrada=v;reset()}
+ else if(a==="modo"||a==="como"){S[a]=v;reset()}
+ else if(a==="var"){const ks=Object.keys(VAR);S.v=ks[(ks.indexOf(S.v)+ +v+ks.length)%ks.length];try{history.replaceState(null,"","#"+S.v)}catch(_){}reset()}
+ else if(a==="novo"){S.d=novo();S.tela="form"}
+ else if(a==="fechar"){reset();S.tela="home"}
+ else if(a==="fav")usar(v);
+ else if(a==="rep"){Object.assign(d,{cats:[...S.ultimo.cats],conta:S.ultimo.conta,valor:S.ultimo.valor,nome:S.ultimo.nome,fav:null})}
+ else if(a==="conta")d.conta=v;
+ else if(a==="cat")d.cats=d.cats.includes(v)?d.cats.filter(x=>x!==v):[...d.cats,v];
+ else if(a==="tec"){d.valor=v==="⌫"?Math.floor(d.valor/10):Math.min(99999999,d.valor*(v==="00"?100:10)+(v==="00"?0:+v))}
+ else if(a==="estrela"){S.favs=S.favs.includes(d.fav)?S.favs.filter(x=>x!==d.fav):[...S.favs,d.fav]}
+ else if(a==="favoritar"){if(!S.favs.includes(v))S.favs.push(v);S.toast={t:"⭐ Favorito criado. Já está na fileira."};}
+ else if(a==="salvar"){S.salvos.unshift({nome:d.nome||d.cats.join(", "),valor:brl(d.valor),conta:CONTAS[d.conta]});
+   const cand=S.como==="mao"&&d.fav&&!S.favs.includes(d.fav)?d.fav:null;
+   const semFav=S.como==="mao"&&!d.fav?"novo":null;
+   S.d=novo();S.tela=S.entrada==="android"?"form":"home";
+   S.toast={t:"Salvo.",favId:cand};
+   if(semFav){S.toast={t:"Salvo. Em “Detalhes” dá para favoritar este lançamento (aqui, simulado)."}}}
+ render()});
+reset();render();
+</script></body></html>
