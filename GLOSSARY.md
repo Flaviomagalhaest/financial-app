@@ -108,6 +108,10 @@ Data em que a fatura deixa de receber compras; uma compra feita no próprio dia 
 Data limite para pagar a fatura. Cada fatura tem o seu, que nasce do dia de vencimento padrão do cartão.
 _Avoid_: data de pagamento (o pagamento pode ser feito antes ou depois)
 
+**Data da compra**:
+Dia em que a compra no cartão foi feita; numa parcela, é o dia da compra do parcelamento, o mesmo em todas as parcelas. Não decide em que mês a compra conta: quem decide é o mês da fatura.
+_Avoid_: data da fatura, data do lançamento
+
 **Mês da fatura**:
 Mês em que a fatura e cada compra dela contam no planejamento, nas categorias, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim. Cada cartão tem uma fatura por mês.
 _Avoid_: competência, mês de referência
@@ -123,5 +127,19 @@ _Avoid_: reembolso, devolução
 **Transferência**:
 Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal, mas pode ter categoria e contar no planejamento (ex.: guardar na reserva).
 
+**Ajuste de fatura**:
+Diferença entre a soma das compras lançadas numa fatura e o valor real dela (uma compra esquecida ou lançada errada), guardada na própria fatura; não é lançamento, conta no total da fatura e nas despesas do mês, mas não em categoria, tag nem item do planejamento.
+_Avoid_: reajuste, arredondamento, diferença de fatura
+
+**Saldo de abertura**:
+Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é calculado; só os realizados depois dessa data mexem no saldo, e o que veio antes serve às estatísticas.
+_Avoid_: saldo inicial, saldo importado
+
 **Pagamento de fatura**:
 Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
+
+### Importação do Mobills
+
+**Virada**:
+O dia em que o casal para de lançar no Mobills e passa a lançar só no app; a última importação do histórico do Mobills acontece nele, e antes dele a importação pode ser refeita quantas vezes for preciso.
+_Avoid_: migração, corte, go-live

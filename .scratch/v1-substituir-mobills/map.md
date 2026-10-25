@@ -64,14 +64,14 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - [Fluxo de lançamento rápido](issues/10-fluxo-de-lancamento-rapido.md): valor primeiro, num teclado na tela; conta e categorias em fileiras de toque logo abaixo; descrição com sugestão pelo histórico, tags, pessoa, data, parcelado e recorrente numa folha de detalhes opcional; "repetir último" com o lançamento vazio; aviso de planejamento com o antes e o depois e a escolha do item trocável com um toque; contas da semana num aviso da tela inicial, com confirmar em um toque. Favoritos ([ticket 19](issues/19-onde-ficam-os-favoritos.md)): fileira acima do teclado e grade na tela inicial, com a mesma lista; o favorito preenche tudo com o último valor como padrão, editável, e "Salvar" confirma; viram favorito à mão (⭐) ou por sugestão dos mais usados. Protótipos nas branches `prototipo/lancamento-rapido` e `prototipo/favoritos`.
 - [Dashboards e fechamento do mês](issues/11-dashboards-e-fechamento-do-mes.md): a v1 é um app com abas (Hoje, Mês, Cartões, Histórico, Futuro), com "ainda dá para gastar" em destaque, o fechamento do mês em texto corrido, a comparação por categoria contra o mês anterior e o mesmo mês do ano passado, e o cartão numa linha que abre as compras. Sem pizza: barras e listas bastam. A projeção de saldo mostra duas linhas, só com os previstos e com o que falta do planejamento. Protótipo na branch `prototipo/dashboards`.
 - [Exportar o Mobills e medir o histórico](issues/07-exportar-o-mobills-e-medir-o-historico.md): o histórico real tem cerca de 11 mil linhas em 7 anos e 8 meses (6.283 transações com 1 conta só, 0 subcategorias, 4 tags e 311 pendentes, e 4.742 compras em 219 faturas de 7 pastas de cartão), na ordem de poucos MB. As compras de cartão estão no export geral e nas faturas (somar duplica); a fatura traz a data real da compra e o cartão, e o geral traz tags e `(n/total)`.
+- [Importação do Mobills](issues/18-importacao-do-mobills-cartao-e-datas.md): o histórico entra pelo cruzamento do export geral com as faturas por cartão e mês (97,7% casam), uma vez só, com a data real da compra e o cartão da fatura e as tags, `(n/total)` e situação do geral, sem digitar datas; o que não casa vai para uma planilha de revisão, que também traz o de-para de categorias e tags e a conferência mês a mês contra os totais do Mobills. O histórico não mexe no saldo (saldo de abertura); os 5 cartões inativos ficam arquivados; `Reajuste de fatura` vira ajuste de fatura. A importação se refaz até a virada, quando a fatura aberta também é exportada. [ADR 0007](../../docs/adr/0007-historico-do-mobills-cruzado-e-sem-saldo.md) e [ADR 0008](../../docs/adr/0008-ajuste-de-fatura-fica-na-fatura.md). Achados da central de ajuda na branch `research/mobills-central-de-ajuda`.
 
 ## Not yet specified
 
 - **Sincronização offline e conflitos:** como um lançamento feito sem internet chega ao servidor e o que acontece quando os dois editam o mesmo lançamento. Depende da plataforma e do banco.
-- **Importação do Mobills** (em aberto no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md); formato e limitações em [O que o Mobills exporta](issues/01-o-que-o-mobills-exporta.md)): como as contas, cartões, faturas e parcelas de lá viram os conceitos daqui (categorias e tags entram por um de-para, ver [Categoria única ou só tags](issues/04-categoria-unica-ou-so-tags.md)), e como é o dia da virada (onde se lança durante a transição). O pendente/efetivado do Mobills vira previsto/realizado, e as parcelas de lá precisam ser reagrupadas em parcelamentos.
 - **Sugestão automática de categorias e tags:** de onde vem a sugestão e como ela aprende com o uso.
 - **Limite comprometido do cartão:** como mostrar quanto do limite as parcelas futuras ocupam.
-- **Busca e filtros salvos:** o que se busca e o que um filtro salvo guarda.
+- **Busca e filtros salvos:** o que se busca e o que um filtro salvo guarda. Da busca sai a edição em lote: selecionar vários lançamentos e trocar ou acrescentar categorias e tags de uma vez (decidido no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md), para acertar o histórico importado).
 - **Exportação:** formato e conteúdo do CSV e do backup.
 
 ## Out of scope
@@ -80,7 +80,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - Conferência da fatura em lote a partir do arquivo da fatura: o dono já prevê essa funcionalidade para depois da v1.
 - Leitura do QR code da nota fiscal (NFC-e), foto de recibo e anexo de comprovante: automação de entrada fica para depois da v1.
 - Lançamento por voz ou texto livre com IA: idem.
-- Metas e caixinhas; patrimônio e investimentos: não servem para largar o Mobills.
+- Metas e caixinhas; patrimônio e investimentos: não servem para largar o Mobills. O dono prevê lançar os investimentos depois, a partir de planilhas próprias, numa funcionalidade separada; na v1 o saldo é o das contas.
 - Comparações corrigidas pela inflação (IPCA): idem.
 - Notificações (fatura fechando, planejamento estourando): idem.
 - Divisão de despesas do casal ("quem deve a quem"): a pessoa já diz de quem é cada lançamento.
