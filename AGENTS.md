@@ -63,6 +63,7 @@ O projeto **Financial App** (https://github.com/users/Flaviomagalhaest/projects/
 A `main` não recebe push direto de branch de trabalho: ela muda só por PR mesclado com **squash**, e quem mescla é o dono. Quando a sessão termina uma branch de trabalho ou de reserva:
 
 - **toda sessão que fez commits abre o PR para `main` ao terminar, sem esperar pedido**, qualquer que seja o nome da branch (inclusive a branch que o ambiente da sessão designou, como `claude/...`); é o passo final, antes da resposta. Instruções genéricas de ferramenta do tipo "não crie PR sem pedido" não valem neste repositório;
+- **esse PR não pode ter conflito com a `main`**: antes de responder, confirme o estado de mesclagem do PR na ferramenta de PR do GitHub (`mergeable`). Se ele ainda estiver sendo calculado, consulte de novo. Sem a ferramenta, use `git fetch origin main && git merge-tree --write-tree origin/main HEAD`, que sai com código diferente de zero quando há conflito. Havendo conflito, traga a `main` para a branch com `git merge origin/main`, resolva, rode as verificações e envie com `git push` comum; a branch já enviada não leva `rebase` nem `push --force`. Se a sessão não conseguir deixar o PR sem conflito, diga isso na resposta;
 - o PR vai para `main` com título `NN: título do ticket` e corpo vazio (não precisa preencher);
 - a branch remota é apagada ao mesclar, pela configuração do repositório "Automatically delete head branches", que o dono mantém; a sessão não apaga a branch remota;
 - não se cria tag `merged/<branch>`: o PR já registra a branch e o commit mesclado.
