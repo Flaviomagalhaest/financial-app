@@ -23,6 +23,7 @@ Decidir:
 - importar com dois arquivos e cruzar (descrição, valor, categoria, tags) para marcar o cartão, ou outro caminho; o que fazer com a linha ambígua (compra igual, mesmo valor);
 - como e quando o dono informa a data da compra: parceladas ativas e fatura do mês vigente (tela de revisão pós-importação? planilha de datas?), e o que vale para o resto (data do vencimento da fatura, como na [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md): o mês contado é o da fatura, então a data da compra não muda o mês);
 - como reagrupar as parcelas `(n/total)` em parcelamentos ([ADR 0004](../../../docs/adr/0004-previsto-e-situacao-do-lancamento.md)) sem coluna de vínculo, e o que fazer com parcelas futuras que o export não traz;
+- como é o de-para de categorias e tags decidido no [ticket 04](04-categoria-unica-ou-so-tags.md) (cada nome de `Categoria` e de `Tags` do Mobills vira categoria, tag ou é descartado; padrão: mesmo nome e mesmo papel; já decidido: "viagem" e "ilhabela" viram a categoria Viagem, "novo ap" continua tag): tela de revisão ou planilha, e quando o dono revisa;
 - como tratar `Reajuste de fatura` (centavos), `Conta = Carteira` em tudo (contas e cartões não saem), `Situação` só `Paga` e a linha de total/linha em branco no fim de cada aba.
 
 ## Checklist

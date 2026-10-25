@@ -32,12 +32,12 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 
 **Funcionalidades complementares aceitas na v1:**
 
-- Lançamento: funciona sem internet e sincroniza depois; favoritos e "repetir último"; atalho no ícone do Android que abre direto o novo lançamento (no iPhone não há atalho, ver [Plataforma do cliente](issues/08-plataforma-do-cliente.md)); sugestão automática de tags pelo histórico da descrição.
+- Lançamento: funciona sem internet e sincroniza depois; favoritos e "repetir último"; atalho no ícone do Android que abre direto o novo lançamento (no iPhone não há atalho, ver [Plataforma do cliente](issues/08-plataforma-do-cliente.md)); sugestão automática de categorias e tags pelo histórico da descrição.
 - Futuro: parcelamento com antecipação de parcelas e quitação do restante; recorrência com ou sem fim, mudando o valor daqui para frente ou só em um mês, sem mexer no resto; o previsto vira realizado quando acontece, com a lista do que venceu sem confirmação ("contas da semana").
 - Planejamento: copiar do mês anterior ou de um modelo padrão; "quanto ainda posso gastar", contando o já gasto e o já previsto; aviso no momento de lançar (ex.: "Alimentação: 82% do planejado").
 - Cartão: a compra cai na fatura certa pelos dias de fechamento e vencimento; limite comprometido pelas parcelas futuras; vários cartões e cartão adicional.
 - Consulta: fechamento do mês; comparação com o mês anterior, com o mesmo mês do ano passado e ao longo dos anos; busca em todo o histórico com filtros salvos.
-- Casal: tag de pessoa e lançamento conjunto (ver o glossário); quem criou e quem alterou por último cada lançamento.
+- Casal: pessoa e lançamento conjunto (ver o glossário); quem criou e quem alterou por último cada lançamento.
 - Dados: projeção do saldo dos próximos meses; exportação de tudo (CSV ou backup).
 
 **Preferências do dono:**
@@ -60,14 +60,14 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - [Plataforma do cliente](issues/08-plataforma-do-cliente.md): o app é uma PWA em React + TypeScript, uma base de código para web, Android e iPhone, sem loja, sem Apple Developer e sem Mac. No iPhone, sem atalho no ícone e com a fila offline enviada só com o app aberto; no Android, atalho "Novo lançamento" no toque longo. Capacitor é o plano B; a primeira etapa da spec valida a instalação e o offline nos dois celulares. [ADR 0005](../../docs/adr/0005-app-web-instalavel-em-vez-de-app-nativo.md).
 - [Em que mês conta uma compra no cartão](issues/06-em-que-mes-conta-uma-compra-no-cartao.md): compra no cartão conta no mês da fatura (o mês do fechamento), no planejamento, nas tags, no resumo e na projeção mês a mês; só o saldo da conta segue o pagamento real. Uma fatura por mês por cartão; estorno conta na fatura em que aparece. [ADR 0003](../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md).
 - [Ciclo de vida do lançamento futuro](issues/05-ciclo-de-vida-do-lancamento-futuro.md): o compromisso futuro é um lançamento **previsto** que vira **realizado**; recorrência e parcelamento são regras que geram lançamentos (a compra parcelada não é lançamento). Confirmação manual por padrão; recorrência de valor fixo e parcelamento podem ser automáticos. Mudanças valem daqui para frente ou só num mês, sem mexer em realizados; receitas seguem as mesmas regras. [ADR 0004](../../docs/adr/0004-previsto-e-situacao-do-lancamento.md).
+- [Categoria única ou só tags](issues/04-categoria-unica-ou-so-tags.md): o lançamento tem uma ou mais **categorias** (listas planas para despesa, receita e transferência), a **tag** é um rótulo pontual ("novo ap") e a **pessoa** é um campo próprio. Por categoria e por tag, o lançamento conta o valor inteiro em cada uma, sem pizza; no planejamento, conta em no máximo um item, escolhido pelo casal quando há mais de um. As categorias e tags do Mobills entram por um de-para revisado pelo dono. [ADR 0006](../../docs/adr/0006-varias-categorias-e-um-item-do-planejamento.md).
 
 ## Not yet specified
 
 - **Sincronização offline e conflitos:** como um lançamento feito sem internet chega ao servidor e o que acontece quando os dois editam o mesmo lançamento. Depende da plataforma e do banco.
-- **Importação do Mobills** (em aberto no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md); formato e limitações em [O que o Mobills exporta](issues/01-o-que-o-mobills-exporta.md)): como as categorias, tags, contas, cartões, faturas e parcelas de lá viram os conceitos daqui, e como é o dia da virada (onde se lança durante a transição). O pendente/efetivado do Mobills vira previsto/realizado, e as parcelas de lá precisam ser reagrupadas em parcelamentos.
+- **Importação do Mobills** (em aberto no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md); formato e limitações em [O que o Mobills exporta](issues/01-o-que-o-mobills-exporta.md)): como as contas, cartões, faturas e parcelas de lá viram os conceitos daqui (categorias e tags entram por um de-para, ver [Categoria única ou só tags](issues/04-categoria-unica-ou-so-tags.md)), e como é o dia da virada (onde se lança durante a transição). O pendente/efetivado do Mobills vira previsto/realizado, e as parcelas de lá precisam ser reagrupadas em parcelamentos.
 - **Projeção de saldo:** a regra que junta saldo atual, previstos e planejamento, mês a mês.
-- **Planejamento com várias tags:** sobre o que um item planejado incide e como "quanto ainda posso gastar" conta um lançamento com mais de uma tag.
-- **Sugestão automática de tags:** de onde vem a sugestão e como ela aprende com o uso.
+- **Sugestão automática de categorias e tags:** de onde vem a sugestão e como ela aprende com o uso.
 - **Limite comprometido do cartão:** como mostrar quanto do limite as parcelas futuras ocupam.
 - **Busca e filtros salvos:** o que se busca e o que um filtro salvo guarda.
 - **Exportação:** formato e conteúdo do CSV e do backup.
@@ -81,7 +81,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - Metas e caixinhas; patrimônio e investimentos: não servem para largar o Mobills.
 - Comparações corrigidas pela inflação (IPCA): idem.
 - Notificações (fatura fechando, planejamento estourando): idem.
-- Divisão de despesas do casal ("quem deve a quem"): a tag de pessoa já diz de quem é cada lançamento.
+- Divisão de despesas do casal ("quem deve a quem"): a pessoa já diz de quem é cada lançamento.
 - Dividir um lançamento em partes com tags diferentes: o dono não quer se preocupar com isso agora.
 - Dívida com juros calculada pelo app (tabela Price ou SAC): dívidas entram como parcelamento ou recorrência, com os valores já conhecidos.
 - Sobra do planejamento que passa para o mês seguinte (envelope acumulado): fica para depois da v1.
