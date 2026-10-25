@@ -64,7 +64,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 ## Not yet specified
 
 - **Sincronização offline e conflitos:** como um lançamento feito sem internet chega ao servidor e o que acontece quando os dois editam o mesmo lançamento. Depende da plataforma e do banco.
-- **Importação do Mobills:** como as categorias, tags, contas, cartões, faturas e parcelas de lá viram os conceitos daqui, e como é o dia da virada (onde se lança durante a transição). O pendente/efetivado do Mobills vira previsto/realizado, e as parcelas de lá precisam ser reagrupadas em parcelamentos.
+- **Importação do Mobills** (em aberto no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md); formato e limitações em [O que o Mobills exporta](issues/01-o-que-o-mobills-exporta.md)): como as categorias, tags, contas, cartões, faturas e parcelas de lá viram os conceitos daqui, e como é o dia da virada (onde se lança durante a transição). O pendente/efetivado do Mobills vira previsto/realizado, e as parcelas de lá precisam ser reagrupadas em parcelamentos.
 - **Projeção de saldo:** a regra que junta saldo atual, previstos e planejamento, mês a mês.
 - **Planejamento com várias tags:** sobre o que um item planejado incide e como "quanto ainda posso gastar" conta um lançamento com mais de uma tag.
 - **Sugestão automática de tags:** de onde vem a sugestão e como ela aprende com o uso.
