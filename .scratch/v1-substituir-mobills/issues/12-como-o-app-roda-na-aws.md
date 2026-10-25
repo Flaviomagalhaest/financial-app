@@ -1,7 +1,7 @@
 # Como o app roda na AWS
 
 Type: grilling
-Status: open
+Status: claimed
 Blocked by: 08, 09
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono); apoio: `research` se surgir fato a confirmar
 Modelo recomendado: Opus
