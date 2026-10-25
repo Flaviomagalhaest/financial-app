@@ -6,7 +6,7 @@ Blocked by: —
 Skills: `grilling` (HITL: precisa do dono); apoio: `prototype` se a resposta pedir ver na tela
 Modelo recomendado: Sonnet
 Effort recomendado: low
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6ade015ad1cd97589bd51f21
+Issue: #37
 Origem: veredito do [ticket 10](10-fluxo-de-lancamento-rapido.md): o casal escolheu a variante A (valor primeiro), que não tinha favoritos, e pediu para decidir o lugar deles na spec
 
 ## Question

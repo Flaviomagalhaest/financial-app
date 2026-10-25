@@ -6,7 +6,7 @@ Blocked by: 04, 06
 Skills: `prototype` (HITL: o dono e a esposa reagem); apoio: `dataviz`, `run`
 Modelo recomendado: Opus
 Effort recomendado: medium
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2e723e7baad19280d769
+Issue: #29
 Origem: traçado do [mapa V1 que substitui o Mobills](../map.md)
 
 ## Question

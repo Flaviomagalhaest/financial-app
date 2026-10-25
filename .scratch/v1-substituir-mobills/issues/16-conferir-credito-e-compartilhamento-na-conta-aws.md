@@ -6,7 +6,7 @@ Blocked by: —
 Skills: nenhuma de tipo; tarefa HITL (o dono confere no console da conta pagadora e na conta nova); apoio: `research` para consolidar o que o dono trouxer
 Modelo recomendado: Sonnet
 Effort recomendado: low
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add3e003578625326404418
+Issue: #34
 Origem: item "Conta AWS (HITL)" de [Reconferir as lacunas das pesquisas de plataforma e de banco](15-reconferir-lacunas-das-pesquisas.md); lacuna de [Banco de dados na AWS para dois usuários e histórico longo](03-banco-de-dados-na-aws.md) (a FAQ da AWS se contradiz sobre a validade dos créditos)
 
 ## Question

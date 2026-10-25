@@ -6,7 +6,7 @@ Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono); apoio: `research` para a parte da central de ajuda
 Modelo recomendado: Opus
 Effort recomendado: high
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6adde9e3a587346b41debbf6
+Issue: #36
 Origem: exportação de teste do [ticket 14](14-ler-a-central-de-ajuda-e-exportar-de-teste.md); achados no `## Answer` de [O que o Mobills exporta](01-o-que-o-mobills-exporta.md); ponto "Importação do Mobills" do "Not yet specified" do [mapa](../map.md)
 
 ## Question

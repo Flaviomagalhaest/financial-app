@@ -29,30 +29,34 @@ Toda pendência conhecida, débito técnico, decisão de produto em aberto, valo
 
 **Todo ticket aberto traz `Skills:`, `Modelo recomendado:` e `Effort recomendado:`** nas linhas do topo, para o dono saber o que usar antes de abrir uma sessão nele. `Skills:` lista pelo nome as skills a invocar (para o tipo do ticket no mapa, as que o `## Notes` do mapa manda: `prototype`, `grilling` e `domain-modeling`, `research`) e as de apoio (`run`, `artifact-design`, `implement`, `tdd`...), e diz quando o ticket é HITL (precisa do dono). Ao criar um ticket, ao mudar o escopo ou ao reabri-lo, preencha ou confira os três; um ticket sem eles não está pronto.
 
-## Trello espelha o tracker
+## GitHub Projects espelha o tracker
 
-O quadro **Financial App** (https://trello.com/b/SNRQ3kKH/financial-app) mostra os tickets de `.scratch/` para acompanhamento. O repo continua sendo a fonte de verdade: o que vale é o arquivo do ticket. Sempre que uma sessão criar, alterar, reabrir ou fechar um ticket, ela atualiza o card correspondente no Trello **na mesma sessão**, antes de responder.
+O projeto **Financial App** (https://github.com/users/Flaviomagalhaest/projects/3) mostra os tickets de `.scratch/` como um kanban. O repo continua sendo a fonte de verdade: o que vale é o arquivo do ticket. Cada ticket tem uma issue em `Flaviomagalhaest/financial-app`, e a issue entra no projeto. Sempre que uma sessão criar, alterar, reabrir ou fechar um ticket, ela atualiza a issue e a coluna **na mesma sessão**, antes de responder.
 
-- **Localizar o card**: pela linha `Trello:` do ticket, que guarda o ARI do card (`ari:cloud:trello::card/...`). Não é preciso listar o quadro para achar o card. Se um ticket não tiver a linha, busque o card com `trelloSearch` (`search_cards`, com `boardIds` do quadro) pelo caminho do ticket, e grave o ARI no ticket antes de qualquer outra mudança.
-- **Descrição**: cabeçalho com `Feature`, `Skills`, `Modelo recomendado` e `Effort recomendado`, `Status`, `Blocked by` e `Arquivo`; depois uma linha `---` e a **cópia exata** do arquivo do ticket, incluindo `## Comments`, **sem** a linha `Trello:` (o id só existe depois que o card é criado). Se passar de 16.384 caracteres, o restante vai em comentários, em partes, e a descrição diz isso. Ao mudar o ticket, copie o arquivo de novo.
-- **Título**: `NN: título do ticket`, sem prefixo de feature.
-- **Etiqueta**: uma etiqueta por feature de `.scratch/`, com o nome legível da feature. Quando um ticket inicia uma feature nova e a etiqueta dela ainda não existe no quadro, a sessão cria a etiqueta antes de criar o card. Nenhum outro ticket recebe etiqueta.
-- **Lista**, pelo `Status:`:
-  - `ready-for-agent` → TODO;
+- **Localizar a issue**: pela linha `Issue: #N` do ticket (logo abaixo de `Effort recomendado:`). Se faltar, busque a issue pelo título e grave a linha antes de qualquer outra mudança.
+- **Título da issue**: `NN: título do ticket`, sem prefixo de feature.
+- **Corpo da issue**: cabeçalho com `Type`, `Status`, `Blocked by`, `Skills`, `Modelo recomendado` e `Effort recomendado`, copiado do ticket, e o link para o arquivo do ticket em `main`. O corpo não duplica o texto do ticket: o arquivo é a fonte. Ao mudar o cabeçalho do ticket, atualize o da issue.
+- **Rótulo de feature**: um por feature de `.scratch/`, com o nome da pasta (`v1-substituir-mobills`, `processo-do-repositorio`). O GitHub cria o rótulo na primeira issue que o usa. Nenhum outro ticket recebe rótulo de feature.
+- **Outros rótulos**: o papel de triage do `Status:` quando houver (`ready-for-human`, `wontfix`...) e `blocked` enquanto o ticket estiver bloqueado.
+- **Coluna** (campo `Status` do projeto), pelo `Status:` do ticket:
+  - `ready-for-agent`, `open` → TODO;
   - `needs-triage`, `needs-info`, `ready-for-human` → WAITING;
   - `claimed` → DOING;
-  - `resolved`, `done`, `wontfix` → FINISHED.
-  - Ticket com `Blocked by` apontando para ticket ainda aberto vai para BLOCKED, mesmo que o status o mandasse para TODO ou WAITING. Quando o bloqueio acaba, volta para a lista do status.
+  - `resolved`, `done`, `wontfix` → FINISHED, e a issue é fechada (`completed`; `not planned` para `wontfix`).
+  - Ticket com `Blocked by` apontando para ticket ainda aberto vai para BLOCKED, mesmo que o status o mandasse para TODO ou WAITING. Quando o bloqueio acaba, volta para a coluna do status.
+- **Como atualizar**: rode `scripts/sincronizar-projeto.sh [ticket ...]` (precisa do `gh` com escopo `project`). Ele adiciona a issue ao projeto, põe a coluna, abre/fecha a issue e ajusta `blocked`. `--dry-run` só mostra a coluna de cada ticket. Sem `gh` autenticado na sessão, use as ferramentas de issue do GitHub para abrir/fechar a issue e diga na resposta qual coluna o projeto precisa mostrar.
 - **Ticket novo, nesta ordem**:
-  1. crie o card com `trelloWriteCard` (`create`) na lista certa, com a etiqueta da feature (criada antes, se ainda não existir: veja Etiqueta acima);
-  2. pegue o id do card (o ARI) da resposta da criação;
-  3. grave a linha `Trello: <ARI>` no cabeçalho do ticket, logo abaixo de `Effort recomendado:`;
-  4. só então faça o commit do ticket.
+  1. crie a issue (título, corpo, rótulos) e, se o ticket nasce fechado, feche-a;
+  2. pegue o número da resposta;
+  3. grave a linha `Issue: #N` no cabeçalho do ticket, logo abaixo de `Effort recomendado:`;
+  4. coloque a issue no projeto e na coluna certa (script acima);
+  5. só então faça o commit do ticket.
 
-  Se o card não puder ser criado (sem conector Trello na sessão), o ticket não é commitado: diga na resposta que falta o card e qual ticket está pendente.
-- **Ticket fechado sem card**: não crie; se o card existir, mova para FINISHED.
-- **Não criar** listas, etiquetas, quadros nem cards além do descrito aqui sem pedido do dono.
-- **Sem conector Trello na sessão**: não marque como feito. Diga na resposta que o Trello ficou para trás e qual ticket precisa de sincronização.
+  Se a issue não puder ser criada (sem acesso ao GitHub na sessão), o ticket não é commitado: diga na resposta qual ticket está pendente.
+- **Ticket fechado sem issue**: crie a issue já fechada, para o histórico do projeto ficar completo.
+- **Não criar** colunas, campos, projetos nem rótulos além do descrito aqui sem pedido do dono.
+- **Sem acesso ao projeto na sessão**: não marque como feito. Diga na resposta que o projeto ficou para trás e qual ticket precisa de `scripts/sincronizar-projeto.sh`.
+- O Trello deixou de ser usado: não atualize cards, e a linha `Trello:` não existe mais nos tickets.
 
 ## Integração por PR
 
