@@ -15,9 +15,11 @@ O que só uma medição ou um teste real responde, porque a fonte oficial não d
 
 ## Checklist
 
-- [ ] Segundos da primeira conexão no DSQL após Idle/Inactive, e o auto-pause (0 ACU) do Aurora Serverless v2 em sa-east-1 (a doc não lista por região; retomada documentada de ~15 s, 30 s+ após 24 h pausado)
-- [ ] Efeito real de desligar "Abrir como App Web" no iOS 26 sobre a perda de dados do PWA, e se o ITP de 7 dias atinge conteúdo local num WKWebView de Capacitor (o plano B da [Plataforma do cliente](08-plataforma-do-cliente.md))
+- [ ] Segundos da primeira conexão no DSQL (`prototipos/17/medir_retomada.py dsql ...`): linha de base com o banco quente, depois de 2 h e depois de uma noite sem conexões; us-east-2 serve como aproximação
+- [ ] Efeito de desligar "Abrir como App Web" no iOS 26 sobre os dados do PWA, seguindo `prototipos/17/roteiro-ios.md`
 - [ ] Resultado em `## Answer`; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
+
+Fora do escopo (decidido com o dono): o auto-pause do Aurora Serverless v2 (custa mais e retoma em ~15 s segundo a doc; só volta se o DSQL cair), o plano B Capacitor/WKWebView (o [ticket 08](08-plataforma-do-cliente.md) escolheu PWA) e a espera de 24 h. O ITP de 7 dias foi para o [ticket 19](19-itp-de-7-dias-no-pwa-do-ios.md), que não bloqueia este.
 
 ## Comments
 
@@ -25,4 +27,5 @@ O que só uma medição ou um teste real responde, porque a fonte oficial não d
 - Segunda tentativa, com credenciais temporárias reais (conta 255235818791, role `AccountFullAccessRole`): o STS funcionou, mas uma service control policy da organização (`p-hfwxkmnx`) nega `dsql:CreateCluster`, `dsql:TagResource`, `dsql:ListClusters` e `rds:DescribeDBClusters` em sa-east-1. Nenhum recurso foi criado e as credenciais foram apagadas da sessão. Para medir, é preciso uma conta fora dessa SCP (ou a SCP liberar DSQL/RDS em sa-east-1) e credenciais com validade maior que a espera de 24 h do teste.
 - Terceira tentativa, em us-east-2 (a região das credenciais): o DSQL foi criado e ficou ACTIVE, mas a conexão PostgreSQL (porta 5432) expirou após 120 s, porque a sessão na nuvem só sai pelo proxy HTTPS. O cluster foi apagado em seguida; nenhuma medição saiu. A medição precisa rodar de uma máquina do dono com acesso à porta 5432. us-east-2 não é a região do ticket (sa-east-1), e a SCP só liberou us-east-2.
 - Decisão do dono: medir em us-east-2 é aceitável como aproximação do tempo de retomada, que depende pouco da região; a latência de rede do Brasil é outro número e fica no [ticket 09](09-banco-de-dados-e-regiao.md). Vale rodar também em sa-east-1 se a conta e o serviço permitirem, antes de uma eventual migração para lá.
+- Escopo reduzido a pedido do dono: só DSQL (linha de base, 2 h e uma noite) e o teste de "Abrir como App Web"; o ITP de 7 dias (8+ dias de espera) virou o [ticket 19](19-itp-de-7-dias-no-pwa-do-ios.md), para este fechar em um dia e desbloquear o [18](18-comparativo-de-banco-e-regiao.md).
 - O [ticket 08](08-plataforma-do-cliente.md) escolheu PWA, sem app nativo: saíram deste ticket o build de release do Expo com conta Apple gratuita e o alcance do sideload de APK no Brasil, que só pesavam em Expo ou Capacitor fora da loja.

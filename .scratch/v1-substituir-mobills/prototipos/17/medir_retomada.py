@@ -7,9 +7,9 @@ troque com MEDIR_REGIAO=sa-east-1):
   python3 medir_retomada.py dsql   <endpoint-do-cluster>
   python3 medir_retomada.py aurora <endpoint> <usuario> <senha> [banco]
 
-Rode uma vez com o banco quente (linha de base) e depois depois de esperar:
-  Aurora: o tempo de auto-pause configurado (5 min mínimo) e 24 h pausado.
-  DSQL:   30 min, 2 h e 24 h sem conexões.
+Rode uma vez com o banco quente (linha de base) e depois de esperar:
+  DSQL:   2 h e uma noite sem conexões.
+  Aurora: fora do escopo do ticket 17 (só volta se o DSQL cair); o modo existe no script.
 Cada execução imprime uma linha CSV: motor,regiao,ocioso_informado,segundos_conexao,segundos_select.
 """
 import os, sys, time
