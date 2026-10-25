@@ -121,3 +121,9 @@ Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída 
 
 **Pagamento de fatura**:
 Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
+
+### Importação do Mobills
+
+**Virada**:
+O dia em que o casal para de lançar no Mobills e passa a lançar só no app; a última importação do histórico do Mobills acontece nele, e antes dele a importação pode ser refeita quantas vezes for preciso.
+_Avoid_: migração, corte, go-live
