@@ -15,9 +15,11 @@ O que só uma medição ou um teste real responde, porque a fonte oficial não d
 
 ## Checklist
 
-- [ ] Segundos da primeira conexão no DSQL (`prototipos/17/medir_retomada.py dsql ...`): linha de base com o banco quente, depois de 2 h e depois de uma noite sem conexões; us-east-2 serve como aproximação
+- [ ] Segundos da primeira conexão no DSQL (`prototipos/17/medir_retomada.py dsql <endpoint>`) em us-east-2: linha de base com o banco quente, depois de 2 h e depois de uma noite sem conexões. Cada execução também grava `rtt_tcp_ms`, a latência da sua máquina até a região; subtraída de `segundos_conexao`, isola a retomada
+- [ ] Latência de rede do Brasil até us-east-2: o `rtt_tcp_ms` das execuções acima (rode de uma rede no Brasil, a mesma que você usa no dia a dia). Entrega o item de latência do [ticket 09](09-banco-de-dados-e-regiao.md) e alimenta o [18](18-comparativo-de-banco-e-regiao.md); a latência para sa-east-1 vem de um ping/TCP a um endpoint público lá, sem cluster, ou da mesma medição se a SCP for liberada
+- [ ] Só se o administrador da organização liberar o DSQL em sa-east-1 (item de SCP do [ticket 09](09-banco-de-dados-e-regiao.md)): repetir a linha de base e uma espera com `MEDIR_REGIAO=sa-east-1`. Sem a liberação, este item fica de fora
 - [ ] Efeito de desligar "Abrir como App Web" no iOS 26 sobre os dados do PWA, seguindo `prototipos/17/roteiro-ios.md`
-- [ ] Resultado em `## Answer`; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
+- [ ] Números no formato `motor,regiao,ocioso,segundos_conexao,segundos_select,rtt_tcp_ms` em `## Answer`, para o [18](18-comparativo-de-banco-e-regiao.md) consumir; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
 
 Fora do escopo (decidido com o dono): o auto-pause do Aurora Serverless v2 (custa mais e retoma em ~15 s segundo a doc; só volta se o DSQL cair), o plano B Capacitor/WKWebView (o [ticket 08](08-plataforma-do-cliente.md) escolheu PWA) e a espera de 24 h. O ITP de 7 dias foi para o [ticket 19](19-itp-de-7-dias-no-pwa-do-ios.md), que não bloqueia este.
 
@@ -28,4 +30,5 @@ Fora do escopo (decidido com o dono): o auto-pause do Aurora Serverless v2 (cust
 - Terceira tentativa, em us-east-2 (a região das credenciais): o DSQL foi criado e ficou ACTIVE, mas a conexão PostgreSQL (porta 5432) expirou após 120 s, porque a sessão na nuvem só sai pelo proxy HTTPS. O cluster foi apagado em seguida; nenhuma medição saiu. A medição precisa rodar de uma máquina do dono com acesso à porta 5432. us-east-2 não é a região do ticket (sa-east-1), e a SCP só liberou us-east-2.
 - Decisão do dono: medir em us-east-2 é aceitável como aproximação do tempo de retomada, que depende pouco da região; a latência de rede do Brasil é outro número e fica no [ticket 09](09-banco-de-dados-e-regiao.md). Vale rodar também em sa-east-1 se a conta e o serviço permitirem, antes de uma eventual migração para lá.
 - Escopo reduzido a pedido do dono: só DSQL (linha de base, 2 h e uma noite) e o teste de "Abrir como App Web"; o ITP de 7 dias (8+ dias de espera) virou o [ticket 19](19-itp-de-7-dias-no-pwa-do-ios.md), para este fechar em um dia e desbloquear o [18](18-comparativo-de-banco-e-regiao.md).
+- Atualizado após o [ticket 09](09-banco-de-dados-e-regiao.md) ganhar as pendências de SCP, de custo por região e de latência: o script passou a gravar a latência TCP (`rtt_tcp_ms`), de modo que as mesmas execuções do DSQL entregam a retomada e a latência Brasil–us-east-2. A pesquisa do [ticket 03](03-banco-de-dados-na-aws.md) diz que o DSQL existe em sa-east-1; o que impede a medição lá é a SCP.
 - O [ticket 08](08-plataforma-do-cliente.md) escolheu PWA, sem app nativo: saíram deste ticket o build de release do Expo com conta Apple gratuita e o alcance do sideload de APK no Brasil, que só pesavam em Expo ou Capacitor fora da loja.
