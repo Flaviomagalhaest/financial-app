@@ -1,8 +1,9 @@
 name: Sincronizar projeto
 
+# Na main, espelha todos os tickets (acerta qualquer desvio).
+# Nas outras branches, só os tickets que a branch mudou, para a coluna andar antes do merge.
 on:
   push:
-    branches: [main]
     paths:
       - ".scratch/**/issues/*.md"
       - "scripts/sincronizar-projeto.sh"
@@ -16,16 +17,35 @@ permissions:
 
 jobs:
   sincronizar:
+    if: ${{ !github.event.deleted }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Espelhar os tickets no projeto
         env:
           # PAT com escopos `project` e `repo` (o GITHUB_TOKEN não alcança projetos de usuário)
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+          ANTES: ${{ github.event.before }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::falta o secret PROJECT_TOKEN (veja o ticket 07)"
             exit 1
           fi
-          scripts/sincronizar-projeto.sh
+          if [ "$BRANCH" = main ]; then
+            scripts/sincronizar-projeto.sh
+            exit 0
+          fi
+          # Push anterior da branch; no primeiro push (ou à mão), compara com a main
+          if [ -z "$ANTES" ] || [ "$ANTES" = 0000000000000000000000000000000000000000 ] \
+            || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+            ANTES=$(git merge-base origin/main HEAD)
+          fi
+          mapfile -t tickets < <(git diff --name-only --diff-filter=AM "$ANTES" HEAD -- '.scratch/*/issues/*.md')
+          if [ ${#tickets[@]} -eq 0 ]; then
+            echo "nenhum ticket mudou nesta branch"
+            exit 0
+          fi
+          scripts/sincronizar-projeto.sh "${tickets[@]}"
