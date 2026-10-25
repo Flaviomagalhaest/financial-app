@@ -29,8 +29,8 @@ Decidir:
 ## Checklist
 
 - [ ] Dono lê a central de ajuda (`https://ajuda.mobills.com.br`, navegador) e informa: o plano exigido para exportar, o limite de período por exportação e se há backup completo ou exportação de contas e cartões
-- [ ] Dono exporta o histórico completo (todas as transações e só cartão), por trechos se houver limite, fora do repositório; o [ticket 07](07-exportar-o-mobills-e-medir-o-historico.md) mede
-- [ ] Dono diz quantos cartões tem (ativos e antigos) e até que mês quer a data real da compra, para fixar quantas exportações por fatura valem o esforço
+- [x] Dono exporta o histórico completo (todas as transações e só cartão), por trechos se houver limite, fora do repositório; o [ticket 07](07-exportar-o-mobills-e-medir-o-historico.md) mede
+- [x] Dono diz quantos cartões tem (ativos e antigos) e até que mês quer a data real da compra, para fixar quantas exportações por fatura valem o esforço (exportou todas as faturas de todos os cartões, medidas no ticket 07)
 - [x] Dono confirma quantos cartões tem: **7 cartões distintos**, os cartões 6 e 7 são novos (por isso poucas faturas)
 - [x] Rótulo `AAAAMM` da fatura: a compra de 2026-10-04 no arquivo 202609 era uma transação de R$ 0,02 (ajuste de fatura), que o dono mandou desconsiderar; o deslocamento entre o rótulo e o mês do geral sai do cruzamento abaixo
 - [ ] Dono roda o `cruzar-historico` (script local, não versionado, saída só de contagens) e cola o resultado, e o agente grava aqui o que o cruzamento mostrou: o dono cruza, localmente, as compras de cartão do export geral com as faturas, para saber se as faturas cobrem todo o cartão do geral (cerca de 4.742 contra 5.967 despesas) e o que sobra no geral sem fatura
