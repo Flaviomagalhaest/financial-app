@@ -17,6 +17,6 @@ O projeto veio do template Kanban (colunas Backlog/Ready/In progress/In review/D
 - [ ] No projeto, renomear/criar as opções do campo **Status** para: `TODO`, `WAITING`, `DOING`, `BLOCKED`, `FINISHED` (nessa ordem, como no Trello)
 - [ ] Em Settings → Workflows, ativar "Auto-add to project" com o filtro `repo:Flaviomagalhaest/financial-app is:issue` e ligar o projeto ao repositório (aba Projects do repo)
 - [ ] Em Workflows, "Item closed" → `FINISHED` e "Item reopened" → `TODO`; desligar "Item added to project" → Backlog, se existir
-- [ ] `gh auth refresh -s project` e rodar `scripts/sincronizar-projeto.sh` na raiz do repo
+- [ ] Sincronizar o projeto: pelo workflow (ticket 07) ou, com o `gh` instalado, `gh auth refresh -s project` e `scripts/sincronizar-projeto.sh`
 - [ ] Conferir o kanban: 6 em WAITING, 2 em BLOCKED (09 e 12 da V1), os demais em FINISHED
 - [ ] Remover o quadro do Trello, se não for mais necessário

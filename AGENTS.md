@@ -44,7 +44,7 @@ O projeto **Financial App** (https://github.com/users/Flaviomagalhaest/projects/
   - `claimed` → DOING;
   - `resolved`, `done`, `wontfix` → FINISHED, e a issue é fechada (`completed`; `not planned` para `wontfix`).
   - Ticket com `Blocked by` apontando para ticket ainda aberto vai para BLOCKED, mesmo que o status o mandasse para TODO ou WAITING. Quando o bloqueio acaba, volta para a coluna do status.
-- **Como atualizar**: rode `scripts/sincronizar-projeto.sh [ticket ...]` (precisa do `gh` com escopo `project`). Ele adiciona a issue ao projeto, põe a coluna, abre/fecha a issue e ajusta `blocked`. `--dry-run` só mostra a coluna de cada ticket. Sem `gh` autenticado na sessão, use as ferramentas de issue do GitHub para abrir/fechar a issue e diga na resposta qual coluna o projeto precisa mostrar.
+- **Como atualizar**: o workflow `.github/workflows/sincronizar-projeto.yml` roda `scripts/sincronizar-projeto.sh` a cada push na `main` que mude um ticket, então a coluna se acerta sozinha depois do merge do PR. A sessão não precisa rodar nada, mas as issues devem estar criadas e com `Issue: #N` no ticket antes do commit. Para forçar uma sincronização, rode o workflow à mão (`workflow_dispatch`) ou rode `scripts/sincronizar-projeto.sh [ticket ...]` (precisa do `gh` com escopo `project`). Ele adiciona a issue ao projeto, põe a coluna, abre/fecha a issue e ajusta `blocked`. `--dry-run` só mostra a coluna de cada ticket. Sem `gh` autenticado na sessão, use as ferramentas de issue do GitHub para abrir/fechar a issue e diga na resposta qual coluna o projeto precisa mostrar.
 - **Ticket novo, nesta ordem**:
   1. crie a issue (título, corpo, rótulos) e, se o ticket nasce fechado, feche-a;
   2. pegue o número da resposta;
