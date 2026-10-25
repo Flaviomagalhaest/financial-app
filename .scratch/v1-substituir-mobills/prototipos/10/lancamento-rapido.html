@@ -1,0 +1,665 @@
+<title>Lançamento rápido</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<!--
+  PROTÓTIPO DESCARTÁVEL do ticket 10 (fluxo de lançamento rápido). Dados fictícios, nada é salvo.
+  Três variantes da tela de novo lançamento, trocadas pela barra de baixo (ou #A, #B, #C no fim do endereço):
+    A. Valor primeiro: teclado numérico na tela, categoria e conta em fileiras de toque, o resto em "Detalhes".
+    B. Descrição primeiro: digita "o que foi" e o histórico preenche categoria, conta, tags e pessoa numa frase editável.
+    C. Atalhos: a tela inicial é contas da semana + favoritos (dois toques); o lançamento do zero é um passo a passo.
+  O seletor "Entrada" simula o atalho do ícone no Android (abre direto o novo lançamento) e o iPhone (abre o app).
+  Rodar: abrir este arquivo no navegador (de preferência com a largura de um celular).
+-->
+<style>
+/* Layout: um "celular" centrado com o app; por fora, só a barra do protótipo e o painel de estado. */
+:root {
+  --bg: #eef1f0;
+  --phone: #ffffff;
+  --surface: #f4f6f5;
+  --line: #dde3e0;
+  --fg: #17211d;
+  --muted: #5f6d67;
+  --accent: #14715a;
+  --accent-soft: #dcefe8;
+  --on-accent: #ffffff;
+  --income: #1d5fa8;
+  --income-soft: #e1ecf8;
+  --warn: #a35d00;
+  --warn-soft: #fbefd9;
+  --over: #b3261e;
+  --over-soft: #fbe3e1;
+  --proto: #2a1f4a;
+  --on-proto: #f1edff;
+  --shadow: 0 10px 30px rgba(20, 40, 32, .14);
+  --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1412; --phone: #161d1a; --surface: #1e2723; --line: #2c3833; --fg: #e7eeea; --muted: #9aaba3;
+  --accent: #45c39d; --accent-soft: #1d3a31; --on-accent: #08130f; --income: #7fb2ec; --income-soft: #1b2c40;
+  --warn: #f0b45a; --warn-soft: #3a2c14; --over: #ff8a80; --over-soft: #3d1d1b; --proto: #d9d0ff; --on-proto: #1d1636;
+  --shadow: 0 10px 30px rgba(0,0,0,.5); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1412; --phone: #161d1a; --surface: #1e2723; --line: #2c3833; --fg: #e7eeea; --muted: #9aaba3;
+  --accent: #45c39d; --accent-soft: #1d3a31; --on-accent: #08130f; --income: #7fb2ec; --income-soft: #1b2c40;
+  --warn: #f0b45a; --warn-soft: #3a2c14; --over: #ff8a80; --over-soft: #3d1d1b; --proto: #d9d0ff; --on-proto: #1d1636;
+  --shadow: 0 10px 30px rgba(0,0,0,.5); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 96px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.topo { max-width: 420px; margin: 0 auto 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.selo { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--proto); }
+.entrada { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.entrada button { border: 0; background: none; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.entrada button[aria-pressed="true"] { background: var(--proto); color: var(--on-proto); }
+
+.phone { max-width: 420px; margin: 0 auto; background: var(--phone); border-radius: 26px; box-shadow: var(--shadow);
+  min-height: 720px; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.screen { display: flex; flex-direction: column; gap: 14px; padding: 16px; flex: 1; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bar h1 { font-size: 18px; margin: 0; font-weight: 800; }
+.bar .mes { font-size: 13px; color: var(--muted); font-weight: 600; }
+.icon { border: 0; background: var(--surface); width: 36px; height: 36px; border-radius: 50%; font-size: 18px; line-height: 1; }
+.rotulo { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; color: var(--muted); margin: 0; }
+.dica { font-size: 12px; color: var(--muted); margin: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips.rolar { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chip { border: 1px solid var(--line); background: var(--phone); border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.chip.sug { border-style: dashed; border-color: var(--accent); }
+.chip.tag::before { content: "#"; opacity: .6; margin-right: 1px; }
+.seg { display: flex; background: var(--surface); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { flex: 1; border: 0; background: none; padding: 8px 6px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--phone); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.seg.tipo button[aria-pressed="true"][data-v="despesa"] { color: var(--over); }
+.seg.tipo button[aria-pressed="true"][data-v="receita"] { color: var(--income); }
+
+.salvar { border: 0; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: 16px; padding: 15px; border-radius: 14px; width: 100%; }
+.salvar:disabled { opacity: .4; cursor: default; }
+.link { border: 0; background: none; color: var(--accent); font-weight: 700; padding: 4px 0; font-size: 14px; }
+.campo { width: 100%; border: 1px solid var(--line); background: var(--phone); border-radius: 12px; padding: 11px 12px; font-size: 15px; }
+.campo.grande { font-size: 20px; font-weight: 700; }
+.linha { display: flex; gap: 8px; align-items: center; }
+.linha > * { min-width: 0; }
+
+/* aviso de planejamento */
+.aviso { border-radius: 14px; padding: 10px 12px; background: var(--accent-soft); display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
+.aviso.warn { background: var(--warn-soft); }
+.aviso.over { background: var(--over-soft); }
+.aviso.neutro { background: var(--surface); color: var(--muted); }
+.aviso b { font-weight: 800; }
+.medidor { height: 6px; background: color-mix(in srgb, var(--fg) 12%, transparent); border-radius: 3px; position: relative; overflow: hidden; }
+.medidor i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 3px; }
+.medidor i.novo { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.aviso.warn .medidor i { background: var(--warn); } .aviso.warn .medidor i.novo { background: color-mix(in srgb, var(--warn) 45%, transparent); }
+.aviso.over .medidor i { background: var(--over); } .aviso.over .medidor i.novo { background: color-mix(in srgb, var(--over) 45%, transparent); }
+.escolha { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.escolha button { border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent); background: transparent; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+.escolha button[aria-pressed="true"] { background: var(--fg); color: var(--phone); border-color: var(--fg); }
+.fatura { font-size: 12px; color: var(--muted); }
+
+/* A: teclado */
+.valorA { font-size: 44px; font-weight: 800; text-align: center; letter-spacing: -.02em; margin: 4px 0 0; }
+.valorA.despesa { color: var(--over); } .valorA.receita { color: var(--income); }
+.descA { text-align: center; border: 0; background: none; color: var(--muted); font-size: 14px; font-weight: 600; }
+.teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.teclado button { border: 0; background: var(--surface); border-radius: 12px; padding: 13px 0; font-size: 22px; font-weight: 700; }
+.repetir { border: 1px dashed var(--line); background: none; border-radius: 12px; padding: 9px 12px; font-size: 13px; text-align: left; color: var(--muted); font-weight: 600; }
+.repetir b { color: var(--fg); }
+
+/* B: frase */
+.frase { font-size: 22px; line-height: 1.75; font-weight: 600; margin: 0; }
+.frase button { border: 0; border-bottom: 2px solid var(--accent); background: var(--accent-soft); border-radius: 6px 6px 0 0; padding: 0 6px; font-weight: 800; font-size: inherit; }
+.frase button.vazio { background: var(--warn-soft); border-color: var(--warn); }
+.frase button.aberto { background: var(--accent); color: var(--on-accent); }
+.picker { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); }
+.sugestoes { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.sugestoes button { border: 0; border-bottom: 1px solid var(--line); background: var(--phone); text-align: left; padding: 10px 12px; display: flex; justify-content: space-between; gap: 10px; }
+.sugestoes button:last-child { border-bottom: 0; }
+.sugestoes small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+/* listas e cartões */
+.lista { display: flex; flex-direction: column; }
+.item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.item:last-child { border-bottom: 0; }
+.item .txt { flex: 1; min-width: 0; }
+.item .txt div { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .txt small { color: var(--muted); font-size: 12px; }
+.item .v { font-weight: 800; font-size: 14px; }
+.item .v.despesa { color: var(--over); } .item .v.receita { color: var(--income); }
+.mini { border: 1px solid var(--line); background: var(--phone); border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.mini.forte { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.badge { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--surface); color: var(--muted); }
+.badge.atrasado { background: var(--over-soft); color: var(--over); }
+.badge.hoje { background: var(--warn-soft); color: var(--warn); }
+.caixa { border: 1px solid var(--line); border-radius: 16px; padding: 4px 12px; }
+.ajuste { display: flex; gap: 8px; padding: 0 0 10px; flex-wrap: wrap; }
+.ajuste .campo { flex: 1 1 120px; padding: 8px 10px; }
+
+.banner { border: 0; text-align: left; width: 100%; background: var(--warn-soft); border-radius: 14px; padding: 11px 12px; display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 14px; }
+.fab { position: absolute; right: 18px; bottom: 18px; border: 0; background: var(--accent); color: var(--on-accent); border-radius: 18px; padding: 15px 20px; font-weight: 800; font-size: 15px; box-shadow: var(--shadow); }
+
+/* C: grade de atalhos, folha de baixo, passo a passo */
+.grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile { border: 1px solid var(--line); background: var(--phone); border-radius: 16px; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; min-height: 82px; }
+.tile .ic { font-size: 20px; }
+.tile b { font-size: 13px; }
+.tile small { color: var(--muted); font-size: 11px; }
+.tile.novo { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.tile.novo small { color: inherit; opacity: .8; }
+.cartoes { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.cc { flex: 0 0 210px; border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.cc .v { font-size: 20px; font-weight: 800; }
+.veu { position: absolute; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: flex-end; }
+.folha { background: var(--phone); width: 100%; border-radius: 22px 22px 0 0; padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: 92%; overflow-y: auto; }
+.pegador { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto; }
+.passos { display: flex; gap: 5px; }
+.passos i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.passos i.on { background: var(--accent); }
+.pergunta { font-size: 24px; font-weight: 800; margin: 6px 0 0; text-wrap: balance; }
+.opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opcoes button { border: 1px solid var(--line); background: var(--phone); border-radius: 14px; padding: 14px 12px; text-align: left; font-weight: 700; font-size: 14px; }
+.opcoes button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.opcoes button small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.resumo { background: var(--surface); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.resumo div { display: flex; justify-content: space-between; gap: 10px; }
+.resumo span:first-child { color: var(--muted); }
+.resumo span:last-child { font-weight: 700; text-align: right; }
+.empurra { flex: 1; }
+
+.toast { position: absolute; left: 12px; right: 12px; bottom: 14px; background: var(--fg); color: var(--phone); border-radius: 14px; padding: 12px 14px; font-size: 13px; font-weight: 600; z-index: 5; }
+
+/* painel de estado e barra do protótipo: fora do design avaliado */
+.estado { max-width: 420px; margin: 18px auto 0; font-size: 12px; color: var(--muted); }
+.estado pre { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--fg); }
+.switcher { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  display: flex; align-items: center; gap: 4px; background: var(--proto); color: var(--on-proto); border-radius: 999px; padding: 5px; box-shadow: 0 8px 24px rgba(0,0,0,.3); max-width: calc(100vw - 24px); }
+.switcher button { border: 0; background: color-mix(in srgb, var(--on-proto) 14%, transparent); color: inherit; width: 34px; height: 34px; border-radius: 50%; font-size: 16px; flex: none; }
+.switcher span { font-size: 13px; font-weight: 700; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: no-preference) { .toast, .folha { animation: sobe .18s ease-out; } @keyframes sobe { from { transform: translateY(12px); opacity: .6; } } }
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo · dados fictícios</span>
+  <div class="entrada" id="entrada" role="group" aria-label="Como a jornada começa"></div>
+</div>
+<div class="phone" id="app"></div>
+<div class="estado" id="estado"></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+// ---------- dados fictícios ----------
+const HOJE = "2026-10-25";
+const CONTAS = [
+  { id: "nucc", nome: "Nubank cartão", cartao: true, fecha: 3 },
+  { id: "itcc", nome: "Itaú Visa", cartao: true, fecha: 28 },
+  { id: "nu", nome: "Nubank conta" },
+  { id: "it", nome: "Itaú corrente" },
+  { id: "cart", nome: "Carteira" },
+  { id: "poup", nome: "Poupança" },
+];
+const CATS = {
+  despesa: ["Mercado", "Restaurante", "Carro", "Farmácia", "Casa", "Viagem", "Lazer", "Saúde", "Assinaturas", "Pets"],
+  receita: ["Salário", "Rendimentos", "Extra"],
+};
+const TAGS = ["novo ap", "natal 2026", "aniversário"];
+const PESSOAS = [null, "Flávio", "Esposa"];
+// planejamento por mês (mês da fatura para compras no cartão): valor planejado e já gasto (realizado + previsto), em centavos
+const PLAN = {
+  "2026-10": { Mercado: [100000, 82000], Restaurante: [40000, 31000], Carro: [65000, 42000], Farmácia: [10000, 3500], Viagem: [150000, 90000], Lazer: [30000, 12000] },
+  "2026-11": { Mercado: [100000, 21000], Restaurante: [40000, 6000], Carro: [65000, 0], Farmácia: [10000, 0], Viagem: [80000, 0], Lazer: [30000, 0] },
+};
+// histórico de descrições: base da sugestão automática
+const HIST = [
+  { desc: "Pão de Açúcar", cats: ["Mercado"], tags: [], conta: "nucc", pessoa: null, valor: 23140, vezes: 41 },
+  { desc: "Padaria Real", cats: ["Mercado"], tags: [], conta: "cart", pessoa: null, valor: 1850, vezes: 63 },
+  { desc: "Posto Shell", cats: ["Carro"], tags: [], conta: "itcc", pessoa: "Flávio", valor: 25000, vezes: 22 },
+  { desc: "Droga Raia", cats: ["Farmácia"], tags: [], conta: "nucc", pessoa: "Esposa", valor: 6790, vezes: 15 },
+  { desc: "iFood", cats: ["Restaurante"], tags: [], conta: "nucc", pessoa: null, valor: 7400, vezes: 38 },
+  { desc: "Restaurante em Paraty", cats: ["Restaurante", "Viagem"], tags: [], conta: "itcc", pessoa: null, valor: 18000, vezes: 2 },
+  { desc: "Leroy Merlin", cats: ["Casa"], tags: ["novo ap"], conta: "itcc", pessoa: null, valor: 54990, vezes: 6 },
+  { desc: "Petz", cats: ["Pets"], tags: [], conta: "nucc", pessoa: null, valor: 15990, vezes: 9 },
+  { desc: "Salário Flávio", cats: ["Salário"], tags: [], conta: "it", pessoa: "Flávio", valor: 850000, vezes: 24, tipo: "receita" },
+];
+const FAVS = [
+  { ic: "🥖", desc: "Padaria Real" }, { ic: "⛽", desc: "Posto Shell" }, { ic: "🛵", desc: "iFood" }, { ic: "🛒", desc: "Pão de Açúcar" },
+];
+const CONTAS_SEMANA = [
+  { id: "luz", desc: "Conta de luz", tipo: "despesa", cats: ["Casa"], valor: 18000, data: "2026-10-22", conta: "it", estimado: true },
+  { id: "sal", desc: "Salário Flávio", tipo: "receita", cats: ["Salário"], valor: 850000, data: "2026-10-25", conta: "it", estimado: true, pessoa: "Flávio" },
+  { id: "net", desc: "Internet", tipo: "despesa", cats: ["Casa"], valor: 12000, data: "2026-10-28", conta: "nu", estimado: false },
+  { id: "seg", desc: "Seguro do carro 4/12", tipo: "despesa", cats: ["Carro"], valor: 21450, data: "2026-10-30", conta: "it", estimado: false },
+];
+
+// ---------- estado ----------
+const VARIANTES = { A: "Valor primeiro", B: "Descrição primeiro", C: "Atalhos e passo a passo" };
+const S = {
+  variant: lerVariante(), entrada: "android",
+  screen: "form", d: null, aberto: null, detalhes: false, passo: 0, fav: null, ajustando: null, mostraSemana: false,
+  salvos: [], ultimo: { ...HIST[0], data: "2026-10-24" }, escolhas: { "Restaurante|Viagem": "Viagem" },
+  semana: CONTAS_SEMANA.map(c => ({ ...c })), toast: null, novaTag: "", txt: {},
+};
+function lerVariante() {
+  const q = new URLSearchParams(location.search).get("variant");
+  const h = location.hash.replace("#", "");
+  const v = (h || q || "A").toUpperCase();
+  return VARIANTES[v] ? v : "A";
+}
+function rascunho(base = {}) {
+  return { tipo: "despesa", valor: 0, desc: "", conta: "itcc", cats: [], tags: [], pessoa: null, data: HOJE, item: null,
+    modo: "avista", parcelas: 3, parcelaEhTotal: true, cada: 1, unidade: "mês", fim: "", valorFixo: false, automatico: false, sugerido: false, ...base };
+}
+function reiniciar() {
+  S.d = rascunho(); S.txt = {}; S.aberto = null; S.detalhes = false; S.passo = 0; S.fav = null; S.ajustando = null; S.mostraSemana = false;
+  // atalho do Android abre direto o novo lançamento; no iPhone a jornada começa ao abrir o app
+  S.screen = S.entrada === "android" ? "form" : "home";
+}
+
+// ---------- regras ----------
+const conta = id => CONTAS.find(c => c.id === id);
+const brl = c => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const dt = s => new Date(s + "T12:00:00");
+function rotuloData(s) {
+  if (s === HOJE) return "hoje";
+  if (s === "2026-10-24") return "ontem";
+  const d = dt(s); return `${DIAS[d.getDay()]} ${String(d.getDate()).padStart(2, "0")}/${MESES[d.getMonth()]}`;
+}
+const nomeMes = m => { const [y, mm] = m.split("-"); return `${MESES[+mm - 1]}/${y.slice(2)}`; };
+// ADR 0003: compra no cartão conta no mês da fatura (o do fechamento); compra no próprio dia do fechamento vai para a seguinte
+function mesDe(d) {
+  const x = dt(d.data), c = conta(d.conta);
+  let y = x.getFullYear(), m = x.getMonth();
+  if (c && c.cartao && x.getDate() >= c.fecha) { m += 1; if (m > 11) { m = 0; y += 1; } }
+  return `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+function faturaTxt(d) {
+  const c = conta(d.conta); if (!c || !c.cartao) return "";
+  const m = mesDe(d); const mm = +m.split("-")[1] - 1;
+  return `Fatura de ${MESES[mm]} do ${c.nome} (fecha ${String(c.fecha).padStart(2, "0")}/${MESES[mm]})`;
+}
+const valorNoMes = d => d.modo === "parcelado" && d.parcelaEhTotal ? Math.round(d.valor / d.parcelas) : d.valor;
+// ADR 0006: conta em no máximo um item; com dois ou mais, vem a última escolha para aquele conjunto de categorias
+function plano(d) {
+  const mes = mesDe(d), p = PLAN[mes] || {};
+  const comItem = d.tipo === "despesa" ? d.cats.filter(c => p[c]) : [];
+  let esc = null;
+  if (comItem.length === 1) esc = comItem[0];
+  if (comItem.length > 1) {
+    const chave = [...comItem].sort().join("|");
+    esc = d.item && comItem.includes(d.item) ? d.item : (comItem.includes(S.escolhas[chave]) ? S.escolhas[chave] : comItem[0]);
+  }
+  return { mes, p, comItem, esc };
+}
+function sugerir(txt, tipo) {
+  const t = txt.trim().toLowerCase(); if (t.length < 2) return [];
+  return HIST.filter(h => (h.tipo || "despesa") === tipo && h.desc.toLowerCase().split(" ").some(w => w.startsWith(t))).sort((a, b) => b.vezes - a.vezes).slice(0, 4);
+}
+function aplicar(h, manterValor) {
+  const d = S.d;
+  Object.assign(d, { desc: h.desc, cats: [...h.cats], tags: [...h.tags], conta: h.conta, pessoa: h.pessoa, tipo: h.tipo || "despesa", sugerido: true });
+  if (!manterValor || !d.valor) d.valor = h.valor;
+}
+function catsOrdenadas(d) {
+  // categorias mais usadas primeiro (fictício); as sugeridas pela descrição sobem para o começo
+  const base = CATS[d.tipo];
+  const sug = d.desc ? (sugerir(d.desc, d.tipo)[0]?.cats || []) : [];
+  return [...new Set([...sug, ...base])];
+}
+function resumoModo(d) {
+  if (d.modo === "parcelado") {
+    const p = d.parcelaEhTotal ? Math.round(d.valor / d.parcelas) : d.valor;
+    const tot = d.parcelaEhTotal ? d.valor : d.valor * d.parcelas;
+    return `${d.parcelas}x de ${brl(p)} (total ${brl(tot)}), 1ª em ${nomeMes(mesDe(d))}`;
+  }
+  if (d.modo === "recorrente") {
+    const cada = d.cada === 1 ? (d.unidade === "mês" ? "Todo mês" : "Toda semana") : `A cada ${d.cada} ${d.unidade === "mês" ? "meses" : "semanas"}`;
+    return `${cada}, ${d.fim ? "até " + nomeMes(d.fim) : "sem fim"} · valor ${d.valorFixo ? "fixo" : "estimado"}${d.valorFixo && d.automatico ? " · vira realizado sozinho" : " · pede confirmação"}`;
+  }
+  return "";
+}
+function salvar() {
+  const d = S.d, pl = plano(d), v = valorNoMes(d);
+  if (pl.esc && S.d.tipo === "despesa") PLAN[pl.mes][pl.esc][1] += v;
+  if (pl.comItem.length > 1) S.escolhas[[...pl.comItem].sort().join("|")] = pl.esc;
+  const reg = {
+    situacao: d.data > HOJE ? "previsto" : "realizado", tipo: d.tipo, valor: brl(d.valor), descricao: d.desc || "(sem descrição)",
+    conta: conta(d.conta).nome, categorias: d.cats, tags: d.tags, pessoa: d.pessoa || "conjunto", data: d.data,
+    mesQueConta: nomeMes(pl.mes), itemDoPlanejamento: pl.esc || "nenhum (só o total do mês)",
+    regra: d.modo === "avista" ? null : resumoModo(d), variante: S.variant,
+  };
+  S.salvos.unshift(reg);
+  S.ultimo = { desc: d.desc || "(sem descrição)", cats: [...d.cats], tags: [...d.tags], conta: d.conta, pessoa: d.pessoa, valor: d.valor, tipo: d.tipo, data: d.data };
+  const pct = pl.esc ? Math.round(PLAN[pl.mes][pl.esc][1] / PLAN[pl.mes][pl.esc][0] * 100) : null;
+  avisar(`Salvo: ${brl(d.valor)} ${d.desc ? "em " + d.desc : ""}${pl.esc ? ` · ${pl.esc} em ${pct}% do planejado` : ""}`);
+  reiniciar(); S.screen = "home";
+}
+function confirmar(id) {
+  const c = S.semana.find(x => x.id === id);
+  S.semana = S.semana.filter(x => x.id !== id);
+  S.salvos.unshift({ situacao: "realizado (confirmado das contas da semana)", tipo: c.tipo, valor: brl(c.valor), descricao: c.desc, conta: conta(c.conta).nome, categorias: c.cats, data: c.data, variante: S.variant });
+  S.ajustando = null;
+  avisar(`Confirmado: ${c.desc}, ${brl(c.valor)} (${rotuloData(c.data)}). Virou realizado.`);
+}
+let tt;
+function avisar(t) { S.toast = t; clearTimeout(tt); tt = setTimeout(() => { S.toast = null; render(); }, 3200); }
+
+// ---------- pedaços compartilhados ----------
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pr = b => `aria-pressed="${b}"`;
+// campo de valor: mantém o que a pessoa digitou; senão mostra o valor do estado
+const vt = (id, c) => esc(S.txt[id] ?? (c ? (c / 100).toFixed(2).replace(".", ",") : ""));
+function tipoSeg() {
+  return `<div class="seg tipo">${["despesa", "receita"].map(t => `<button data-a="tipo" data-v="${t}" ${pr(S.d.tipo === t)}>${t === "despesa" ? "Despesa" : "Receita"}</button>`).join("")}</div>`;
+}
+function chipsCats(rolar) {
+  const d = S.d, sug = d.desc ? (sugerir(d.desc, d.tipo)[0]?.cats || []) : [];
+  return `<div class="chips ${rolar ? "rolar" : ""}">${catsOrdenadas(d).map(c => `<button class="chip ${sug.includes(c) && !d.cats.includes(c) ? "sug" : ""}" data-a="cat" data-v="${c}" ${pr(d.cats.includes(c))}>${c}</button>`).join("")}</div>`;
+}
+function chipsConta(rolar) {
+  return `<div class="chips ${rolar ? "rolar" : ""}">${CONTAS.map(c => `<button class="chip" data-a="conta" data-v="${c.id}" ${pr(S.d.conta === c.id)}>${c.cartao ? "💳 " : ""}${c.nome}</button>`).join("")}</div>`;
+}
+function chipsTags() {
+  const todas = [...new Set([...TAGS, ...S.d.tags])];
+  return `<div class="chips">${todas.map(t => `<button class="chip tag" data-a="tag" data-v="${esc(t)}" ${pr(S.d.tags.includes(t))}>${esc(t)}</button>`).join("")}</div>
+  <div class="linha"><input class="campo" id="novaTag" data-in="novaTag" placeholder="Nova tag" value="${esc(S.novaTag)}"><button class="mini" data-a="addTag">Criar</button></div>`;
+}
+function pessoaSeg() {
+  return `<div class="seg">${PESSOAS.map(p => `<button data-a="pessoa" data-v="${p || ""}" ${pr(S.d.pessoa === p)}>${p || "Conjunto"}</button>`).join("")}</div>`;
+}
+function dataSeg() {
+  const d = S.d;
+  return `<div class="linha"><div class="seg" style="flex:1">${[["hoje", HOJE], ["ontem", "2026-10-24"]].map(([l, v]) => `<button data-a="data" data-v="${v}" ${pr(d.data === v)}>${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}</div>
+  <input class="campo" style="flex:1" type="date" id="data" data-in="data" value="${d.data}"></div>`;
+}
+function modoBloco() {
+  const d = S.d;
+  let extra = "";
+  if (d.modo === "parcelado") extra = `
+    <div class="linha"><button class="icon" data-a="parc" data-v="-1">−</button><b class="num" style="min-width:80px;text-align:center">${d.parcelas} parcelas</b><button class="icon" data-a="parc" data-v="1">+</button></div>
+    <div class="seg"><button data-a="parcTotal" data-v="1" ${pr(d.parcelaEhTotal)}>O valor é o total</button><button data-a="parcTotal" data-v="0" ${pr(!d.parcelaEhTotal)}>O valor é a parcela</button></div>
+    <p class="dica">${resumoModo(d)}</p>`;
+  if (d.modo === "recorrente") extra = `
+    <div class="seg">${[[1, "mês"], [2, "mês"], [12, "mês"], [1, "semana"]].map(([n, u]) => `<button data-a="cada" data-v="${n}|${u}" ${pr(d.cada === n && d.unidade === u)}>${n === 1 ? (u === "mês" ? "Mensal" : "Semanal") : n === 2 ? "Bimestral" : "Anual"}</button>`).join("")}</div>
+    <div class="seg"><button data-a="fixo" data-v="0" ${pr(!d.valorFixo)}>Valor estimado</button><button data-a="fixo" data-v="1" ${pr(d.valorFixo)}>Valor fixo</button></div>
+    ${d.valorFixo ? `<label class="linha dica"><input type="checkbox" id="auto" data-a="auto" ${d.automatico ? "checked" : ""}> Vira realizado sozinho na data (automático)</label>` : `<p class="dica">Estimado pede confirmação: aparece nas contas da semana.</p>`}
+    <div class="linha"><span class="dica">Fim:</span><input class="campo" type="month" id="fim" data-in="fim" value="${d.fim}"><button class="mini" data-a="semFim">Sem fim</button></div>
+    <p class="dica">${resumoModo(d)}</p>`;
+  return `<div class="seg">${[["avista", "Uma vez"], ["parcelado", "Parcelado"], ["recorrente", "Recorrente"]].map(([v, l]) => `<button data-a="modo" data-v="${v}" ${pr(d.modo === v)}>${l}</button>`).join("")}</div>${extra}`;
+}
+function aviso() {
+  const d = S.d, pl = plano(d);
+  const fat = faturaTxt(d) ? `<div class="fatura">${faturaTxt(d)}</div>` : "";
+  if (d.tipo === "receita" || !d.cats.length) return fat ? `<div class="aviso neutro">${fat}</div>` : "";
+  if (!pl.esc) return `<div class="aviso neutro"><div>${d.cats.join(", ")} não tem item no planejamento de ${nomeMes(pl.mes)}: conta só no total do mês.</div>${fat}</div>`;
+  const [plan, gasto] = pl.p[pl.esc], v = valorNoMes(d);
+  const antes = Math.round(gasto / plan * 100), depois = Math.round((gasto + v) / plan * 100);
+  const cls = depois > 100 ? "over" : depois >= 80 ? "warn" : "";
+  const sobra = plan - gasto - v;
+  const escolha = pl.comItem.length > 1 ? `<div class="escolha"><span>Conta no planejamento em:</span>${pl.comItem.map(c => `<button data-a="item" data-v="${c}" ${pr(pl.esc === c)}>${c}</button>`).join("")}</div>` : "";
+  return `<div class="aviso ${cls}">
+    <div><b>${pl.esc}: ${v ? `${antes}% → ${depois}%` : `${antes}%`}</b> do planejado de ${nomeMes(pl.mes)} (${brl(plan)})</div>
+    <div class="medidor"><i class="novo" style="width:${Math.min(depois, 100)}%"></i><i style="width:${Math.min(antes, 100)}%"></i></div>
+    <div class="num">${sobra >= 0 ? `Ainda dá para gastar ${brl(sobra)}` : `Passa ${brl(-sobra)} do planejado`}</div>
+    ${escolha}${fat}</div>`;
+}
+function semanaLista() {
+  if (!S.semana.length) return `<p class="dica">Nada para confirmar nos próximos 7 dias.</p>`;
+  return `<div class="lista">${S.semana.map(c => {
+    const atras = c.data < HOJE, hoje = c.data === HOJE;
+    const aj = S.ajustando === c.id ? `<div class="ajuste">
+      <input class="campo num" inputmode="decimal" id="aj-v-${c.id}" data-in="ajValor" data-v="${c.id}" value="${vt("aj-v-" + c.id, c.valor)}">
+      <input class="campo" type="date" id="aj-d-${c.id}" data-in="ajData" data-v="${c.id}" value="${c.data}"></div>` : "";
+    return `<div><div class="item">
+      <div class="txt"><div>${c.desc}</div><small>${atras ? '<span class="badge atrasado">atrasado</span> ' : hoje ? '<span class="badge hoje">hoje</span> ' : ""}${rotuloData(c.data)} · ${conta(c.conta).nome}${c.estimado ? " · estimado" : ""}</small></div>
+      <span class="v num ${c.tipo}">${brl(c.valor)}</span>
+    </div><div class="linha" style="justify-content:flex-end;padding-bottom:10px">
+      <button class="mini" data-a="ajustar" data-v="${c.id}">${S.ajustando === c.id ? "Fechar" : "Ajustar"}</button>
+      <button class="mini forte" data-a="confirmar" data-v="${c.id}">Confirmar</button></div>${aj}</div>`;
+  }).join("")}</div>`;
+}
+function recentes(comRepetir) {
+  const lst = S.salvos.slice(0, 4);
+  if (!lst.length) return `<p class="dica">Último: ${S.ultimo.desc}, ${brl(S.ultimo.valor)} (${rotuloData(S.ultimo.data)})</p>`;
+  return `<div class="lista">${lst.map(r => `<div class="item"><div class="txt"><div>${esc(r.descricao)}</div><small>${r.categorias?.join(", ") || ""} · ${r.conta}</small></div><span class="v num ${r.tipo}">${r.valor}</span></div>`).join("")}</div>`;
+}
+function repetirBtn() {
+  const u = S.ultimo;
+  return `<button class="repetir" data-a="repetir">↻ Repetir último: <b>${esc(u.desc)}</b>, ${brl(u.valor)} · ${u.cats.join(", ")} · ${conta(u.conta).nome}</button>`;
+}
+const toast = () => S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : "";
+
+// ---------- variante A: valor primeiro ----------
+function A() {
+  const d = S.d;
+  if (S.screen === "home") return `<div class="screen">
+    <div class="bar"><h1>Finanças</h1><span class="mes">out/26</span></div>
+    ${S.semana.length ? `<button class="banner" data-a="verSemana"><span>${S.semana.length} contas da semana para confirmar</span><span>${S.mostraSemana ? "▴" : "▾"}</span></button>` : ""}
+    ${S.mostraSemana ? semanaLista() : ""}
+    <p class="rotulo">Recentes</p>${recentes()}
+    <div class="empurra"></div></div>
+    <button class="fab" data-a="novo">+ Novo lançamento</button>${toast()}`;
+  const sug = d.desc && !d.sugerido ? sugerir(d.desc, d.tipo) : [];
+  return `<div class="screen">
+    <div class="bar"><button class="icon" data-a="fechar" aria-label="Fechar">×</button>${tipoSeg()}<span style="width:36px"></span></div>
+    <div class="valorA num ${d.tipo}">${brl(d.valor)}</div>
+    <button class="descA" data-a="detalhes">${d.desc ? esc(d.desc) : "+ descrição, tags, pessoa, data, parcelas"}${d.tags.length ? " · #" + d.tags.join(" #") : ""}${d.pessoa ? " · " + d.pessoa : ""}${d.data !== HOJE ? " · " + rotuloData(d.data) : ""}${d.modo !== "avista" ? " · " + (d.modo === "parcelado" ? d.parcelas + "x" : "recorrente") : ""}</button>
+    ${!d.valor && !d.cats.length ? repetirBtn() : ""}
+    ${chipsConta(true)}
+    ${chipsCats(true)}
+    ${aviso()}
+    <div class="empurra"></div>
+    <div class="teclado num">${["1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0", "⌫"].map(k => `<button data-a="tecla" data-v="${k}">${k}</button>`).join("")}</div>
+    <button class="salvar" data-a="salvar" ${d.valor && d.cats.length ? "" : "disabled"}>Salvar</button>
+  </div>
+  ${S.detalhes ? `<div class="veu" data-a="fecharDetalhes"><div class="folha" data-pare="1">
+    <div class="pegador"></div>
+    <p class="rotulo">Descrição</p>
+    <input class="campo" id="desc" data-in="desc" placeholder="Ex.: Pão de Açúcar" value="${esc(d.desc)}" autocomplete="off">
+    ${sug.length ? `<div class="sugestoes">${sug.map(h => `<button data-a="aplicarHist" data-v="${esc(h.desc)}"><span>${esc(h.desc)}<small>${h.cats.join(", ")}${h.tags.length ? " · #" + h.tags.join(" #") : ""} · ${conta(h.conta).nome}</small></span><span class="dica">usar</span></button>`).join("")}</div>` : ""}
+    <p class="rotulo">Tags</p>${chipsTags()}
+    <p class="rotulo">Pessoa</p>${pessoaSeg()}
+    <p class="rotulo">Data</p>${dataSeg()}
+    <p class="rotulo">Repete?</p>${modoBloco()}
+    <button class="salvar" data-a="fecharDetalhes">Pronto</button>
+  </div></div>` : ""}${toast()}`;
+}
+
+// ---------- variante B: descrição primeiro ----------
+function B() {
+  const d = S.d;
+  if (S.screen === "home") return `<div class="screen">
+    <div class="bar"><h1>Finanças</h1><span class="mes">out/26</span></div>
+    <input class="campo grande" id="descHome" data-in="descHome" placeholder="O que foi? (ex.: padaria)" autocomplete="off">
+    <p class="rotulo">Favoritos</p>
+    <div class="lista">${FAVS.map(f => { const h = HIST.find(x => x.desc === f.desc); return `<div class="item"><span>${f.ic}</span><div class="txt"><div>${h.desc}</div><small>${h.cats.join(", ")} · ${conta(h.conta).nome}</small></div><button class="mini" data-a="usarFav" data-v="${h.desc}">${brl(h.valor)} ›</button></div>`; }).join("")}</div>
+    ${repetirBtn()}
+    ${S.semana.length ? `<button class="banner" data-a="verSemana"><span>${S.semana.length} contas da semana</span><span>${S.mostraSemana ? "▴" : "▾"}</span></button>` : ""}
+    ${S.mostraSemana ? semanaLista() : ""}
+    <p class="rotulo">Recentes</p>${recentes()}
+  </div>${toast()}`;
+  const sug = !d.sugerido ? sugerir(d.desc, d.tipo) : [];
+  const tok = (k, txt, vazio) => `<button data-a="abrir" data-v="${k}" class="${vazio ? "vazio" : ""} ${S.aberto === k ? "aberto" : ""}">${txt}</button>`;
+  const contaN = conta(d.conta);
+  const frase = d.sugerido || d.valor || d.cats.length ? `<p class="frase">
+      ${d.tipo === "despesa" ? "Gastei" : "Recebi"} ${tok("valor", d.valor ? brl(d.valor) : "R$ ?", !d.valor)}
+      em ${tok("cats", d.cats.length ? d.cats.join(" + ") : "categoria?", !d.cats.length)},
+      no ${tok("conta", contaN.nome)},
+      ${tok("data", rotuloData(d.data))}, ${tok("pessoa", d.pessoa ? "do " + d.pessoa : "do casal")}
+      ${d.tags.length ? tok("tags", "#" + d.tags.join(" #")) : tok("tags", "+ tag")}
+      ${tok("modo", d.modo === "avista" ? "uma vez" : d.modo === "parcelado" ? `em ${d.parcelas}x` : "todo mês")}.
+    </p>` : "";
+  const pickers = {
+    valor: `<input class="campo grande num" inputmode="decimal" id="valorB" data-in="valor" placeholder="0,00" value="${vt("valorB", d.valor)}">`,
+    cats: chipsCats(false) + `<p class="dica">Pode marcar mais de uma.</p>`,
+    conta: chipsConta(false), data: dataSeg(), pessoa: pessoaSeg(), tags: chipsTags(), modo: modoBloco(),
+  };
+  return `<div class="screen">
+    <div class="bar"><button class="icon" data-a="fechar" aria-label="Fechar">×</button>${tipoSeg()}<span style="width:36px"></span></div>
+    <input class="campo grande" id="desc" data-in="desc" placeholder="O que foi?" value="${esc(d.desc)}" autocomplete="off">
+    ${sug.length ? `<div class="sugestoes">${sug.map(h => `<button data-a="aplicarHist" data-v="${esc(h.desc)}"><span>${esc(h.desc)}<small>${h.cats.join(" + ")}${h.tags.length ? " · #" + h.tags.join(" #") : ""} · ${conta(h.conta).nome}${h.pessoa ? " · " + h.pessoa : ""}</small></span><span class="num dica">${brl(h.valor)}</span></button>`).join("")}</div>`
+      : !d.desc && !d.sugerido ? `${repetirBtn()}<p class="dica">Digite e o app completa categoria, conta, tags e pessoa pelo histórico. Toque em qualquer parte da frase para trocar.</p>` : ""}
+    ${frase}
+    ${S.aberto ? `<div class="picker">${pickers[S.aberto]}<button class="link" data-a="abrir" data-v="${S.aberto}">Ok</button></div>` : ""}
+    ${aviso()}
+    <div class="empurra"></div>
+    <button class="salvar" data-a="salvar" ${d.valor && d.cats.length ? "" : "disabled"}>Salvar</button>
+  </div>${toast()}`;
+}
+
+// ---------- variante C: atalhos e passo a passo ----------
+function C() {
+  const d = S.d;
+  if (S.screen === "home") {
+    const tiles = FAVS.map(f => { const h = HIST.find(x => x.desc === f.desc); return `<button class="tile" data-a="abrirFav" data-v="${h.desc}"><span class="ic">${f.ic}</span><b>${h.desc}</b><small class="num">${brl(h.valor)} · ${h.cats[0]}</small></button>`; }).join("");
+    return `<div class="screen">
+      <div class="bar"><h1>Finanças</h1><span class="mes">out/26</span></div>
+      <p class="rotulo">Contas da semana</p>
+      ${S.semana.length ? `<div class="cartoes">${S.semana.map(c => `<div class="cc">
+        <small>${c.data < HOJE ? '<span class="badge atrasado">atrasado</span>' : c.data === HOJE ? '<span class="badge hoje">hoje</span>' : `<span class="badge">${rotuloData(c.data)}</span>`}</small>
+        <b>${c.desc}</b><span class="v num" style="color:var(--${c.tipo === "receita" ? "income" : "over"})">${brl(c.valor)}</span>
+        <small class="dica">${conta(c.conta).nome}${c.estimado ? " · estimado" : ""}</small>
+        ${S.ajustando === c.id ? `<input class="campo num" inputmode="decimal" id="aj-v-${c.id}" data-in="ajValor" data-v="${c.id}" value="${vt("aj-v-" + c.id, c.valor)}"><input class="campo" type="date" id="aj-d-${c.id}" data-in="ajData" data-v="${c.id}" value="${c.data}">` : ""}
+        <div class="linha"><button class="mini" data-a="ajustar" data-v="${c.id}">${S.ajustando === c.id ? "Fechar" : "Ajustar"}</button><button class="mini forte" data-a="confirmar" data-v="${c.id}">Confirmar</button></div>
+      </div>`).join("")}</div>` : `<p class="dica">Nada para confirmar.</p>`}
+      <p class="rotulo">Lançar</p>
+      <div class="grade">${tiles}
+        <button class="tile" data-a="abrirFav" data-v="__ultimo"><span class="ic">↻</span><b>Repetir último</b><small class="num">${esc(S.ultimo.desc)}</small></button>
+        <button class="tile novo" data-a="novo"><span class="ic">+</span><b>Novo</b><small>do zero</small></button>
+      </div>
+      <p class="rotulo">Recentes</p>${recentes()}
+    </div>
+    ${S.fav ? `<div class="veu" data-a="fecharFav"><div class="folha" data-pare="1">
+      <div class="pegador"></div>
+      <div class="bar"><h1>${esc(d.desc)}</h1><button class="link" data-a="favParaPassos">Editar tudo</button></div>
+      <input class="campo grande num" inputmode="decimal" id="valorC" data-in="valor" value="${vt("valorC", d.valor)}">
+      <p class="dica">${d.cats.join(" + ")} · ${conta(d.conta).nome} · ${d.pessoa || "conjunto"} · ${rotuloData(d.data)}${d.tags.length ? " · #" + d.tags.join(" #") : ""}</p>
+      ${aviso()}
+      <button class="salvar" data-a="salvar" ${d.valor ? "" : "disabled"}>Salvar</button>
+    </div></div>` : ""}${toast()}`;
+  }
+  // passo a passo: uma pergunta por tela
+  const passos = ["valor", "categoria", "conta", "revisar"];
+  const p = passos[S.passo];
+  let corpo = "";
+  if (p === "valor") corpo = `${tipoSeg()}<h2 class="pergunta">Quanto?</h2>
+    <input class="campo grande num" inputmode="decimal" id="valorC" data-in="valor" placeholder="0,00" value="${vt("valorC", d.valor)}">
+    <input class="campo" id="desc" data-in="desc" placeholder="Descrição (opcional, ajuda a sugerir)" value="${esc(d.desc)}" autocomplete="off">
+    ${d.desc && !d.sugerido && sugerir(d.desc, d.tipo).length ? `<div class="sugestoes">${sugerir(d.desc, d.tipo).map(h => `<button data-a="aplicarHistC" data-v="${esc(h.desc)}"><span>${esc(h.desc)}<small>${h.cats.join(" + ")} · ${conta(h.conta).nome}</small></span><span class="dica">pular para revisar</span></button>`).join("")}</div>` : ""}`;
+  if (p === "categoria") corpo = `<h2 class="pergunta">Em quê?</h2><p class="dica">Pode marcar mais de uma.</p>
+    <div class="opcoes">${catsOrdenadas(d).map(c => { const pl = (PLAN[mesDe(d)] || {})[c]; return `<button data-a="cat" data-v="${c}" ${pr(d.cats.includes(c))}>${c}<small>${pl ? Math.round(pl[1] / pl[0] * 100) + "% do planejado" : "sem item"}</small></button>`; }).join("")}</div>`;
+  if (p === "conta") corpo = `<h2 class="pergunta">De onde saiu?</h2>
+    <div class="opcoes">${CONTAS.map(c => `<button data-a="contaC" data-v="${c.id}" ${pr(d.conta === c.id)}>${c.cartao ? "💳 " : ""}${c.nome}<small>${c.cartao ? "fecha dia " + c.fecha : "conta"}</small></button>`).join("")}</div>`;
+  if (p === "revisar") corpo = `<h2 class="pergunta">Confere?</h2>
+    <div class="resumo"><div><span>Valor</span><span class="num">${brl(d.valor)}</span></div><div><span>Categorias</span><span>${d.cats.join(" + ") || "—"}</span></div><div><span>Conta</span><span>${conta(d.conta).nome}</span></div>${d.desc ? `<div><span>Descrição</span><span>${esc(d.desc)}</span></div>` : ""}</div>
+    ${aviso()}
+    <p class="rotulo">Pessoa</p>${pessoaSeg()}
+    <p class="rotulo">Data</p>${dataSeg()}
+    <p class="rotulo">Tags</p>${chipsTags()}
+    <p class="rotulo">Repete?</p>${modoBloco()}`;
+  const pode = p === "valor" ? d.valor > 0 : p === "categoria" ? d.cats.length > 0 : true;
+  return `<div class="screen">
+    <div class="bar"><button class="icon" data-a="${S.passo ? "voltar" : "fechar"}" aria-label="Voltar">${S.passo ? "‹" : "×"}</button><div class="passos" style="flex:1">${passos.map((_, i) => `<i class="${i <= S.passo ? "on" : ""}"></i>`).join("")}</div><span style="width:36px"></span></div>
+    ${corpo}
+    <div class="empurra"></div>
+    ${p === "revisar" ? `<button class="salvar" data-a="salvar" ${d.valor && d.cats.length ? "" : "disabled"}>Salvar</button>` : `<button class="salvar" data-a="avancar" ${pode ? "" : "disabled"}>Continuar</button>`}
+  </div>${toast()}`;
+}
+
+// ---------- render ----------
+const app = document.getElementById("app");
+function render() {
+  const ae = document.activeElement, foco = ae && ae.id, pos = ae && ae.selectionStart;
+  app.innerHTML = { A, B, C }[S.variant]();
+  document.getElementById("entrada").innerHTML = [["android", "Android: atalho do ícone"], ["iphone", "iPhone: abrir o app"]].map(([v, l]) => `<button data-a="entrada" data-v="${v}" ${pr(S.entrada === v)}>${l}</button>`).join("");
+  const ks = Object.keys(VARIANTES);
+  document.getElementById("switcher").innerHTML = `<button data-a="var" data-v="-1" aria-label="Variante anterior">←</button><span>${S.variant} (${VARIANTES[S.variant]}) · ${ks.indexOf(S.variant) + 1}/${ks.length}</span><button data-a="var" data-v="1" aria-label="Próxima variante">→</button>`;
+  document.getElementById("estado").innerHTML = `<p class="rotulo">Estado do protótipo</p><pre>${esc(JSON.stringify({
+    tela: S.screen + (S.variant === "C" && S.screen === "form" ? ` (passo ${S.passo + 1}/4)` : ""), rascunho: { ...S.d, valor: brl(S.d.valor), mesQueConta: nomeMes(mesDe(S.d)), item: plano(S.d).esc },
+    ultimaEscolhaDeItem: S.escolhas, salvos: S.salvos,
+  }, null, 1))}</pre>`;
+  if (foco) { const el = document.getElementById(foco); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch (e) {} } }
+}
+function irPara(v) {
+  S.variant = v; try { history.replaceState(null, "", "#" + v); } catch (e) {}
+  reiniciar(); render();
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-a]"); if (!b) return;
+  if (b.classList.contains("veu") && e.target.closest("[data-pare]")) return; // clique dentro da folha não fecha
+  const a = b.dataset.a, v = b.dataset.v, d = S.d;
+  if (["aplicarHist", "aplicarHistC", "repetir", "usarFav", "abrirFav", "novo", "tipo", "confirmar"].includes(a)) S.txt = {};
+  switch (a) {
+    case "var": { const ks = Object.keys(VARIANTES); irPara(ks[(ks.indexOf(S.variant) + +v + ks.length) % ks.length]); return; }
+    case "entrada": S.entrada = v; reiniciar(); break;
+    case "novo": S.d = rascunho(); S.screen = "form"; S.passo = 0; break;
+    case "fechar": reiniciar(); S.screen = "home"; break;
+    case "tipo": d.tipo = v; d.cats = []; d.item = null; d.sugerido = false; if (v === "receita") d.conta = "it"; break;
+    case "tecla": if (v === "⌫") d.valor = Math.floor(d.valor / 10); else if (d.valor < 1e9) d.valor = d.valor * (v === "00" ? 100 : 10) + (v === "00" ? 0 : +v); break;
+    case "cat": d.cats = d.cats.includes(v) ? d.cats.filter(c => c !== v) : [...d.cats, v]; break;
+    case "conta": d.conta = v; break;
+    case "contaC": d.conta = v; S.passo = 3; break;
+    case "tag": d.tags = d.tags.includes(v) ? d.tags.filter(t => t !== v) : [...d.tags, v]; break;
+    case "addTag": if (S.novaTag.trim()) { d.tags = [...new Set([...d.tags, S.novaTag.trim()])]; S.novaTag = ""; } break;
+    case "pessoa": d.pessoa = v || null; break;
+    case "data": d.data = v; break;
+    case "item": d.item = v; break;
+    case "modo": d.modo = v; break;
+    case "parc": d.parcelas = Math.max(2, Math.min(48, d.parcelas + +v)); break;
+    case "parcTotal": d.parcelaEhTotal = v === "1"; break;
+    case "cada": { const [n, u] = v.split("|"); d.cada = +n; d.unidade = u; break; }
+    case "fixo": d.valorFixo = v === "1"; if (!d.valorFixo) d.automatico = false; break;
+    case "auto": d.automatico = b.checked; break;
+    case "semFim": d.fim = ""; break;
+    case "detalhes": S.detalhes = true; break;
+    case "fecharDetalhes": S.detalhes = false; break;
+    case "aplicarHist": aplicar(HIST.find(h => h.desc === v), S.variant === "A"); break;
+    case "aplicarHistC": aplicar(HIST.find(h => h.desc === v), true); S.passo = 3; break;
+    case "repetir": aplicar(S.ultimo, false); d.data = HOJE; if (S.variant === "C") S.passo = 3; S.screen = "form"; break;
+    case "usarFav": S.d = rascunho(); aplicar(HIST.find(h => h.desc === v), false); S.screen = "form"; S.aberto = "valor"; break;
+    case "abrirFav": S.d = rascunho(); aplicar(v === "__ultimo" ? S.ultimo : HIST.find(h => h.desc === v), false); S.fav = v; break;
+    case "fecharFav": S.fav = null; break;
+    case "favParaPassos": S.fav = null; S.screen = "form"; S.passo = 3; break;
+    case "abrir": S.aberto = S.aberto === v ? null : v; break;
+    case "avancar": S.passo = Math.min(3, S.passo + 1); break;
+    case "voltar": S.passo = Math.max(0, S.passo - 1); break;
+    case "verSemana": S.mostraSemana = !S.mostraSemana; break;
+    case "ajustar": S.ajustando = S.ajustando === v ? null : v; break;
+    case "confirmar": confirmar(v); break;
+    case "salvar": salvar(); break;
+  }
+  render();
+});
+const centavos = s => { const n = parseFloat(String(s).replace(/\./g, "").replace(",", ".")); return isNaN(n) ? 0 : Math.round(n * 100); };
+document.addEventListener("input", e => {
+  const el = e.target, k = el.dataset.in; if (!k) return;
+  const d = S.d;
+  if (k === "valor" || k === "ajValor") S.txt[el.id] = el.value;
+  if (k === "desc") { d.desc = el.value; d.sugerido = false; }
+  if (k === "descHome") { S.d = rascunho({ desc: el.value }); S.screen = "form"; }
+  if (k === "valor") d.valor = centavos(el.value);
+  if (k === "data") d.data = el.value || HOJE;
+  if (k === "fim") d.fim = el.value;
+  if (k === "novaTag") { S.novaTag = el.value; return; }
+  if (k === "ajValor") S.semana.find(c => c.id === el.dataset.v).valor = centavos(el.value);
+  if (k === "ajData") S.semana.find(c => c.id === el.dataset.v).data = el.value || HOJE;
+  if (k === "descHome") { render(); const x = document.getElementById("desc"); x.focus(); x.setSelectionRange(x.value.length, x.value.length); return; }
+  render();
+});
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea, [contenteditable]")) return;
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") { const ks = Object.keys(VARIANTES); irPara(ks[(ks.indexOf(S.variant) + (e.key === "ArrowRight" ? 1 : -1) + ks.length) % ks.length]); }
+});
+window.addEventListener("hashchange", () => { const v = lerVariante(); if (v !== S.variant) irPara(v); });
+reiniciar(); render();
+</script>
