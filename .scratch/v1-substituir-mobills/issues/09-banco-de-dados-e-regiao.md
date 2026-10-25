@@ -2,7 +2,7 @@
 
 Type: grilling
 Status: open
-Blocked by: 03, 07
+Blocked by: 03, 07, 18
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono)
 Modelo recomendado: Opus
 Effort recomendado: high
@@ -13,11 +13,11 @@ Origem: traçado do [mapa V1 que substitui o Mobills](../map.md)
 
 Qual banco guarda os dados do app e em que região da AWS?
 
-Decidir com os custos e limitações de [Banco de dados na AWS para dois usuários e histórico longo](03-banco-de-dados-na-aws.md) e com o volume real de [Exportar o Mobills e medir o histórico](07-exportar-o-mobills-e-medir-o-historico.md). Inclui: como o histórico longo é organizado para os dashboards de vários anos continuarem rápidos; retenção e backup; São Paulo ou Virgínia.
+Os números lado a lado vêm do [Comparativo lado a lado de banco e região](18-comparativo-de-banco-e-regiao.md). Decidir com os custos e limitações de [Banco de dados na AWS para dois usuários e histórico longo](03-banco-de-dados-na-aws.md) e com o volume real de [Exportar o Mobills e medir o histórico](07-exportar-o-mobills-e-medir-o-historico.md). Inclui: como o histórico longo é organizado para os dashboards de vários anos continuarem rápidos; retenção e backup; São Paulo ou Virgínia.
 
 ## Checklist
 
-- [ ] Confirmar na lista oficial de regiões se o DSQL existe em sa-east-1 (se não existir, "migrar para sa-east-1" é trocar de banco, não só de região)
+- [ ] Reconfirmar na lista oficial de regiões que o DSQL existe em sa-east-1 (a pesquisa do [ticket 03](03-banco-de-dados-na-aws.md) diz que sim, `dsql.sa-east-1.api.aws`; a SCP da organização é que o bloqueia lá)
 - [ ] Medir a latência real do Brasil para us-east-2 (RTT estimado em 120–150 ms contra 10–30 ms de sa-east-1) e decidir se consultas em lote e cache no cliente bastam
 - [ ] Confirmar no console o prazo do plano gratuito (6 meses ou fim dos créditos) e se o DSQL tem franquia mensal própria
 - [ ] Conta fora de SCP: descobrir se a conta atual (255235818791) é gerenciada por outra organização (AWS Organizations, SCP `p-hfwxkmnx` nega DSQL e RDS em sa-east-1); se for, decidir entre pedir a liberação ao administrador ou usar uma conta própria independente. Atualizar o plano gratuito não remove SCP. Antes de atualizar, conferir em Billing > Credits o saldo e a validade dos créditos (de memória, créditos não usados continuam valendo após passar ao plano pago)
