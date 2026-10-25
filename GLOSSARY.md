@@ -119,6 +119,14 @@ _Avoid_: reembolso, devolução
 **Transferência**:
 Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal, mas pode ter categoria e contar no planejamento (ex.: guardar na reserva).
 
+**Ajuste de fatura**:
+Diferença entre a soma das compras lançadas numa fatura e o valor real dela (uma compra esquecida ou lançada errada), guardada na própria fatura; não é lançamento, conta no total da fatura e nas despesas do mês, mas não em categoria, tag nem item do planejamento.
+_Avoid_: reajuste, arredondamento, diferença de fatura
+
+**Saldo de abertura**:
+Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é calculado; só os realizados depois dessa data mexem no saldo, e o que veio antes serve às estatísticas.
+_Avoid_: saldo inicial, saldo importado
+
 **Pagamento de fatura**:
 Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
 

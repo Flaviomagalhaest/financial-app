@@ -71,7 +71,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - **Importação do Mobills** (em aberto no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md); formato e limitações em [O que o Mobills exporta](issues/01-o-que-o-mobills-exporta.md)): como as contas, cartões, faturas e parcelas de lá viram os conceitos daqui (categorias e tags entram por um de-para, ver [Categoria única ou só tags](issues/04-categoria-unica-ou-so-tags.md)), e como é o dia da virada (onde se lança durante a transição). O pendente/efetivado do Mobills vira previsto/realizado, e as parcelas de lá precisam ser reagrupadas em parcelamentos.
 - **Sugestão automática de categorias e tags:** de onde vem a sugestão e como ela aprende com o uso.
 - **Limite comprometido do cartão:** como mostrar quanto do limite as parcelas futuras ocupam.
-- **Busca e filtros salvos:** o que se busca e o que um filtro salvo guarda.
+- **Busca e filtros salvos:** o que se busca e o que um filtro salvo guarda. Da busca sai a edição em lote: selecionar vários lançamentos e trocar ou acrescentar categorias e tags de uma vez (decidido no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md), para acertar o histórico importado).
 - **Exportação:** formato e conteúdo do CSV e do backup.
 
 ## Out of scope
@@ -80,7 +80,7 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 - Conferência da fatura em lote a partir do arquivo da fatura: o dono já prevê essa funcionalidade para depois da v1.
 - Leitura do QR code da nota fiscal (NFC-e), foto de recibo e anexo de comprovante: automação de entrada fica para depois da v1.
 - Lançamento por voz ou texto livre com IA: idem.
-- Metas e caixinhas; patrimônio e investimentos: não servem para largar o Mobills.
+- Metas e caixinhas; patrimônio e investimentos: não servem para largar o Mobills. O dono prevê lançar os investimentos depois, a partir de planilhas próprias, numa funcionalidade separada; na v1 o saldo é o das contas.
 - Comparações corrigidas pela inflação (IPCA): idem.
 - Notificações (fatura fechando, planejamento estourando): idem.
 - Divisão de despesas do casal ("quem deve a quem"): a pessoa já diz de quem é cada lançamento.
