@@ -1,8 +1,8 @@
 # Banco de dados e região
 
 Type: grilling
-Status: open
-Blocked by: 03, 07
+Status: ready-for-human
+Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono)
 Modelo recomendado: Opus
 Effort recomendado: high
@@ -28,3 +28,4 @@ Decidir com os custos e limitações de [Banco de dados na AWS para dois usuári
 - Estratégia do dono: a conta gratuita está em us-east-2; ao fim dos créditos ou em cerca de 6 meses pode migrar para sa-east-1. Avaliação: o volume é pequeno (2 usuários), então dump/restore basta; os riscos são a latência do Brasil, o DSQL talvez não existir em sa-east-1, recursos presos à região (pool de usuários do Cognito não migra entre regiões; S3, segredos e IAM também) e, se o app tiver mais usuários um dia, a LGPD para dados fora do Brasil (uso exclusivamente pessoal fica fora da lei).
 - Para a migração custar pouco: região e endpoint só em configuração (sem ARN nem hostname no código); migrations versionadas no repositório; `pg_dump` ou exportação periódica guardada fora da AWS; schema no subconjunto que o DSQL aceita (sair dele para o Aurora é fácil, o inverso não); evitar acoplar a autenticação ao Cognito, se possível.
 - A SCP da organização negou DSQL e RDS em sa-east-1 e liberou us-east-2 (veja o [ticket 17](17-medir-retomada-e-confirmar-pontos-no-prototipo.md)); isso não prova que o DSQL não exista em sa-east-1.
+- O [ticket 07](07-exportar-o-mobills-e-medir-o-historico.md) está resolvido: o histórico real tem cerca de 11 mil linhas em 7 anos e 8 meses (6.283 transações e 4.742 compras de cartão, com sobreposição de cerca de 80% das despesas), na ordem de poucos MB. O volume não pesa na escolha do banco.
