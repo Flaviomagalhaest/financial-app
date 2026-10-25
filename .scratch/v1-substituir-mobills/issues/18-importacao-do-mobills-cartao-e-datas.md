@@ -1,7 +1,7 @@
 # Importação do Mobills: separar o cartão, recuperar a data da compra e fechar as lacunas da exportação
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono); apoio: `research` para a parte da central de ajuda
 Modelo recomendado: Opus
