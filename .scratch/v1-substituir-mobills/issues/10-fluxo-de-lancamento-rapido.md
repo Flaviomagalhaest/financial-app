@@ -1,7 +1,7 @@
 # Fluxo de lançamento rápido
 
 Type: prototype
-Status: claimed
+Status: resolved
 Blocked by: 04, 05
 Skills: `prototype` (HITL: o dono e a esposa reagem); apoio: `run`
 Modelo recomendado: Opus
@@ -20,7 +20,24 @@ O app é uma PWA ([ticket 08](08-plataforma-do-cliente.md)): no Android, o toque
 ## Checklist
 
 - [x] Protótipo descartável numa branch `prototipo/lancamento-rapido`, com dados fictícios
-- [ ] Ponteiro para a branch e veredito (a pergunta e o que ela decidiu) em `## Answer`
+- [x] Ponteiro para a branch e veredito (a pergunta e o que ela decidiu) em `## Answer`
+
+## Answer
+
+O casal escolheu a **variante A, valor primeiro**, e aprovou tudo o que ela mostra. Protótipo na branch `prototipo/lancamento-rapido` (`.scratch/v1-substituir-mobills/prototipos/10/lancamento-rapido.html`, commit `50c3dcf`), também publicado em https://claude.ai/artifact/1tatyJxeaPWjusymBge8uT. As variantes B (descrição primeiro, numa frase editável) e C (atalhos na tela inicial e passo a passo) ficam só na branch.
+
+A jornada de registrar um lançamento:
+
+- **Entrada**: no Android, o atalho do ícone abre direto o novo lançamento; no iPhone, o app abre na tela inicial, com um botão "+ Novo lançamento".
+- **Valor primeiro**: a tela abre com o valor em destaque e um teclado numérico próprio na tela (os dígitos entram pelos centavos, com `00` e apagar), e o tipo (despesa ou receita) no topo.
+- **Conta e categorias logo abaixo do valor**, em fileiras de toque que rolam de lado: a conta ou o cartão (um só) e as categorias (uma ou mais). Salvar só libera com valor e pelo menos uma categoria.
+- **"Repetir último"** aparece enquanto o lançamento está vazio e preenche tudo com o último lançamento.
+- **Detalhes numa folha à parte**, opcional: descrição com sugestão pelo histórico (escolher uma sugestão preenche categorias, tags, conta e pessoa e mantém o valor já digitado), tags (com criar nova), pessoa (conjunto, Flávio ou a esposa), data (hoje, ontem ou outra) e "Repete?" (uma vez, parcelado ou recorrente). Parcelado: número de parcelas e se o valor digitado é o total ou a parcela. Recorrente: periodicidade, valor estimado (pede confirmação) ou fixo (pode virar realizado sozinho) e fim opcional. O resumo dos detalhes aparece numa linha embaixo do valor.
+- **Aviso de planejamento** na mesma tela, atualizado a cada toque: o item em que o lançamento conta, com o antes e o depois ("Mercado: 82% → 105% do planejado de out/26"), o quanto ainda dá para gastar ou quanto passa, e, para compra no cartão, a fatura em que cai (o mês que conta, [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md)). Sem item, diz que conta só no total do mês.
+- **Escolha do item do planejamento** dentro do aviso: com duas ou mais categorias com item, "Conta no planejamento em:" mostra os itens com a última escolha para aquele conjunto pré-selecionada, trocável com um toque ([ADR 0006](../../../docs/adr/0006-varias-categorias-e-um-item-do-planejamento.md)).
+- **Contas da semana** num aviso na tela inicial ("3 contas da semana para confirmar"), que abre a lista: cada previsto tem "Confirmar" (um toque, com valor e data preenchidos) e "Ajustar" (abre valor e data para editar antes de confirmar), como o salário ([ADR 0004](../../../docs/adr/0004-previsto-e-situacao-do-lancamento.md)).
+
+Ficou para depois: a variante A não tinha favoritos, e o casal pediu para decidir onde eles ficam na spec: [ticket 19](19-onde-ficam-os-favoritos.md).
 
 ## Comments
 
