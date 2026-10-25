@@ -1,7 +1,7 @@
 # Fluxo de lançamento rápido
 
 Type: prototype
-Status: ready-for-human
+Status: claimed
 Blocked by: 04, 05
 Skills: `prototype` (HITL: o dono e a esposa reagem); apoio: `run`
 Modelo recomendado: Opus
