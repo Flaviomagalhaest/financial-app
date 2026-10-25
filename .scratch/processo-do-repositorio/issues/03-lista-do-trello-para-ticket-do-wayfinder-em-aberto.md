@@ -1,6 +1,6 @@
 # Coluna do projeto para ticket do wayfinder em aberto
 
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `writing-for-agents` (se a regra do `AGENTS.md` mudar)
 Modelo recomendado: Sonnet
@@ -16,6 +16,6 @@ No traçado, a sessão usou: `open` sem bloqueio vai para TODO; `open` com bloqu
 
 ## Checklist
 
-- [ ] Dono decide a coluna de `open` (TODO para todos, ou WAITING para os HITL)
-- [ ] Regra registrada no `AGENTS.md`, na seção "GitHub Projects espelha o tracker"
-- [ ] Issues da V1 movidas no projeto, se a decisão mudar a lista atual
+- [x] Dono decide a coluna de `open`: TODO para todos os tickets `open`; WAITING só para `ready-for-human` (e demais papéis de triage de espera)
+- [x] Regra registrada no `AGENTS.md`, na seção "GitHub Projects espelha o tracker" (`open` → TODO, `ready-for-human` → WAITING, já vigente)
+- [x] Issues da V1 movidas no projeto: nenhuma, porque a decisão mantém a lista atual (o ticket 12 segue em TODO)
