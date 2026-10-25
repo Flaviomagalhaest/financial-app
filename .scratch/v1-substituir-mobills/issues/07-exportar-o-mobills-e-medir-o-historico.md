@@ -1,8 +1,8 @@
 # Exportar o Mobills e medir o histórico
 
 Type: task
-Status: open
-Blocked by: 01
+Status: ready-for-human
+Blocked by: —
 Skills: nenhuma de tipo; tarefa HITL (o dono exporta, o agente mede)
 Modelo recomendado: Sonnet
 Effort recomendado: medium
@@ -22,3 +22,7 @@ Os números servem a [Banco de dados e região](09-banco-de-dados-e-regiao.md) e
 - [ ] Dono exporta os dados seguindo o passo a passo de O que o Mobills exporta
 - [ ] Os arquivos ficam fora do repositório (entregues à sessão ou numa pasta fora do clone); nada deles entra em commit
 - [ ] Agente mede e grava aqui, em `## Answer`, só contagens, nomes de colunas e casos estranhos, sem nenhum dado real
+
+## Comments
+
+- O dono já exportou 3 meses de teste (jul-set); falta o **histórico completo** para medir. Colunas e tipos estão no `## Answer` do [ticket 01](01-o-que-o-mobills-exporta.md). Para medir, são dois arquivos: todas as transações e só cartão (o geral não separa o cartão). Falta saber o limite de período por exportação ([ticket 18](18-importacao-do-mobills-cartao-e-datas.md)); se houver, exportar por trechos.
