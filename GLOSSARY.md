@@ -42,6 +42,10 @@ _Avoid_: tag de pessoa, dono, responsável, quem gastou
 Lançamento sem pessoa: é do casal (mercado, internet, gasolina, rendimento da poupança do casal).
 _Avoid_: compartilhado, comum
 
+**Favorito**:
+Lançamento-modelo que o casal marca (ou aceita da sugestão dos mais usados) para registrar de novo com um toque: preenche conta, categorias, tags, pessoa e o último valor, que é só o padrão e se confirma ao salvar. Aparece numa fileira acima do teclado do novo lançamento e numa grade na tela inicial.
+_Avoid_: atalho, modelo
+
 ### Futuro
 
 **Recorrência**:
