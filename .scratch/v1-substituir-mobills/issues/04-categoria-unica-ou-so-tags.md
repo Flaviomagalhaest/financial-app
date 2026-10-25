@@ -1,7 +1,7 @@
 # Categoria única ou só tags
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono)
 Modelo recomendado: Opus
