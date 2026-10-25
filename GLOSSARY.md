@@ -104,6 +104,10 @@ Data em que a fatura deixa de receber compras; uma compra feita no próprio dia 
 Data limite para pagar a fatura. Cada fatura tem o seu, que nasce do dia de vencimento padrão do cartão.
 _Avoid_: data de pagamento (o pagamento pode ser feito antes ou depois)
 
+**Data da compra**:
+Dia em que a compra no cartão foi feita; numa parcela, é o dia da compra do parcelamento, o mesmo em todas as parcelas. Não decide em que mês a compra conta: quem decide é o mês da fatura.
+_Avoid_: data da fatura, data do lançamento
+
 **Mês da fatura**:
 Mês em que a fatura e cada compra dela contam no planejamento, nas categorias, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim. Cada cartão tem uma fatura por mês.
 _Avoid_: competência, mês de referência
