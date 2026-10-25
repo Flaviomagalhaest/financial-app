@@ -495,6 +495,15 @@ function comparaTabela(k,dim='cat'){
   <tr><td><b>Total de despesas</b></td><td><b>${brl0(T.a)}</b></td><td class="muted">${brl0(T.b)}</td><td>${deltaHTML(T.a,T.b)}</td><td class="muted">${brl0(T.y)}</td><td>${deltaHTML(T.a,T.y)}</td></tr>
   </tbody></table></div><div class="note">${k===MES_ATUAL?'Outubro inclui os previstos. ':''}${aa<PRIMEIRO?'Antes de 2025 os números vêm do histórico importado. ':''}O total conta cada lançamento uma vez; as linhas somam mais.</div>`;
 }
+// versão compacta para o celular (variação B): valor do mês e as duas variações; valores antigos no toque
+function comparaCompacta(k){
+  const ant=addMes(k,-1),aa=addMes(k,-12);
+  const rows=CATS_DESP.map(c=>({c,a:despMes(k,c),b:despMes(ant,c),y:despMes(aa,c)})).filter(r=>r.a||r.b||r.y).sort((x,y)=>y.a-x.a);
+  rows.push({c:'Total de despesas',a:despMes(k),b:despMes(ant),y:despMes(aa),tot:1});
+  return`<table class="tbl"><thead><tr><th>Categoria</th><th>${nm(k)}</th><th>× ${nm(ant)}</th><th>× ${nm(aa)}</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr data-tip="${esc(`<b>${r.c}</b><br>${nm(k,1)}: ${brl0(r.a)}<br>${nm(ant,1)}: ${brl0(r.b)}<br>${nm(aa,1)}: ${brl0(r.y)}`)}"><td>${r.tot?`<b>${r.c}</b>`:r.c}</td><td>${r.tot?`<b>${brl0(r.a)}</b>`:brl0(r.a)}</td><td>${deltaHTML(r.a,r.b)}</td><td>${deltaHTML(r.a,r.y)}</td></tr>`).join('')}
+  </tbody></table><div class="note">Toque numa linha para ver os valores de ${nm(ant)} e ${nm(aa)}. ${k===MES_ATUAL?'Outubro inclui os previstos. ':''}O total conta cada lançamento uma vez.</div>`;
+}
 function evolucao(k){
   const ks=meses12(k);
   return colChart(ks.map(x=>MES[pk(x).m-1]),[
@@ -614,6 +623,7 @@ function bMes(){
   <div class="blk"><h2>Itens do planejamento</h2><div class="scroll"><table class="tbl"><thead><tr><th>Item</th><th>Realizado</th><th>Previsto</th><th>Planejado</th><th>%</th></tr></thead><tbody>
     ${its.map(i=>{const pc=(i.r+i.p)/i.plan;return`<tr><td>${i.cat}</td><td>${brl0(i.r)}</td><td class="muted">${i.p?brl0(i.p):'—'}</td><td>${brl0(i.plan)}</td><td class="${pc>1?'pill-bad':''}">${pc>1?'⚠ ':''}${(pc*100).toFixed(0)}%</td></tr>`}).join('')}
   </tbody></table></div></div>
+  <div class="blk"><h2>Comparação</h2>${comparaCompacta(k)}</div>
   <div class="blk"><div class="row between wrap"><h2>Ranking</h2><div class="seg">${[['cat','Categoria'],['tag','Tag'],['pessoa','Pessoa']].map(([v,l])=>`<button data-act="dim" data-v="${v}" aria-pressed="${S.dim===v}">${l}</button>`).join('')}</div></div>
    <div class="rank">${dimRows.length?dimRows.map((r,i)=>`<button data-act="sheet" data-v="dim:${esc(r.nome)}"><span class="n">${i+1}</span><span><span>${esc(r.nome)}</span><div class="bar" style="width:${(r.r+r.p)/(dimRows[0].r+dimRows[0].p)*100}%"></div></span><b class="num">${brl0(r.r+r.p)}</b></button>`).join(''):'<div class="note">Nenhum lançamento com tag neste mês.</div>'}</div>
    <div class="note">Toque numa linha para ver os lançamentos. ${S.dim==='cat'?`A soma passa do total (${brl0(t.desp.r+t.desp.p)}) porque ${nMulti(k)} ${nMulti(k)>1?'lançamentos têm':'lançamento tem'} mais de uma categoria.`:''}</div>
