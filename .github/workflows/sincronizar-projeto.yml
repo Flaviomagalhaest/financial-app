@@ -1,0 +1,31 @@
+name: Sincronizar projeto
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".scratch/**/issues/*.md"
+      - "scripts/sincronizar-projeto.sh"
+  workflow_dispatch:
+
+concurrency:
+  group: sincronizar-projeto
+
+permissions:
+  contents: read
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Espelhar os tickets no projeto
+        env:
+          # PAT com escopos `project` e `repo` (o GITHUB_TOKEN não alcança projetos de usuário)
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::falta o secret PROJECT_TOKEN (veja o ticket 07)"
+            exit 1
+          fi
+          scripts/sincronizar-projeto.sh

@@ -6,7 +6,7 @@ Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono)
 Modelo recomendado: Opus
 Effort recomendado: high
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2e6d50ea91b1cf63692c
+Issue: #22
 Origem: traçado do [mapa V1 que substitui o Mobills](../map.md)
 
 ## Question

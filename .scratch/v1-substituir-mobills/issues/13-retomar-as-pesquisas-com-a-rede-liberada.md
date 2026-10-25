@@ -6,7 +6,7 @@ Blocked by: —
 Skills: `wayfinder` (passo 5 de "Chart the map") e `research` (um sub-agente por ticket de pesquisa); HITL só se a rede continuar bloqueada (o dono libera)
 Modelo recomendado: Sonnet
 Effort recomendado: medium
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add318ad1cd97589bb4cfbf
+Issue: #31
 Origem: traçado do [mapa V1 que substitui o Mobills](../map.md); a sessão que traçou o mapa parou no passo 5 porque a rede dela recusava as fontes oficiais
 
 ## Question

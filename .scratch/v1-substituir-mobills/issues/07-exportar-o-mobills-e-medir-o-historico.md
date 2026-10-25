@@ -6,7 +6,7 @@ Blocked by: —
 Skills: nenhuma de tipo; tarefa HITL (o dono exporta, o agente mede)
 Modelo recomendado: Sonnet
 Effort recomendado: medium
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2e70c4d860fcf9d6eb6d
+Issue: #25
 Origem: traçado do [mapa V1 que substitui o Mobills](../map.md)
 
 ## Question

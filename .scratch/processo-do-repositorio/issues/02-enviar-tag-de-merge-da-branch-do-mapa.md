@@ -1,11 +1,11 @@
 # Enviar a tag de merge da branch do mapa
 
-Status: ready-for-human
+Status: wontfix
 Blocked by: —
 Skills: nenhuma; HITL (o dono envia a tag de uma máquina com permissão)
 Modelo recomendado: Sonnet
 Effort recomendado: low
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add2ec9df6d8301abf586ce
+Issue: #39
 Origem: traçado do mapa [V1 que substitui o Mobills](../../v1-substituir-mobills/map.md); a sessão na nuvem enviou as branches, mas o envio de tags caiu com desconexão
 
 ## Problema
@@ -16,3 +16,7 @@ O `AGENTS.md` pede a tag `merged/<branch>` em toda branch mesclada na `main`. A 
 
 - [ ] Dono cria e envia a tag no último commit da branch: `git fetch origin && git tag merged/claude/great-bohr-z1cqpa origin/claude/great-bohr-z1cqpa && git push origin merged/claude/great-bohr-z1cqpa`
 - [ ] Conferir que a tag aparece em `git ls-remote --tags origin`
+
+## Comments
+
+A regra de tags `merged/<branch>` foi abandonada (o PR já registra o merge). Fechado como `wontfix`.

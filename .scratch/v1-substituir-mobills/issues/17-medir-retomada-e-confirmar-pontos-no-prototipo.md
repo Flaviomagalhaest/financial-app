@@ -6,7 +6,7 @@ Blocked by: —
 Skills: `prototype`; apoio: `run`; HITL (precisa de um cluster na conta AWS do dono e de iPhone/Android reais)
 Modelo recomendado: Sonnet
 Effort recomendado: medium
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add3e0067e047c256a82146
+Issue: #35
 Origem: lacunas remanescentes de [Reconferir as lacunas das pesquisas de plataforma e de banco](15-reconferir-lacunas-das-pesquisas.md) (achados na branch `research/lacunas-plataforma-e-banco`)
 
 ## Question

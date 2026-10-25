@@ -6,7 +6,7 @@ Blocked by: —
 Skills: `research` (AFK, em sub-agente); a parte da conta AWS é HITL (o dono confere no console da conta pagadora)
 Modelo recomendado: Sonnet
 Effort recomendado: medium
-Trello: ari:cloud:trello::card/workspace/598b72bf7efc694a04666f1f/6add363148111e003c30056e
+Issue: #33
 Origem: lacunas de [Limites do app web instalável no iPhone e no Android](02-limites-do-app-web-instalavel.md) e [Banco de dados na AWS para dois usuários e histórico longo](03-banco-de-dados-na-aws.md)
 
 ## Question
