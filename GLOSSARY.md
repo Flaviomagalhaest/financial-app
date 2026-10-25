@@ -27,7 +27,7 @@ Situação do lançamento que já aconteceu; só ele mexe no saldo da conta.
 _Avoid_: efetivado, pago, confirmado
 
 **Categoria**:
-Classificação permanente de um lançamento, de uma lista que o casal mantém (ex.: "alimentação", "viagem"); todo lançamento tem uma ou mais, e é sobre elas que funcionam o planejamento e as estatísticas.
+Classificação permanente de um lançamento, de uma lista plana que o casal mantém, separada para despesas, receitas e transferências (ex.: "alimentação", "viagem"); toda despesa e receita tem uma ou mais, a transferência pode ter, e é sobre elas que funcionam o planejamento e as estatísticas.
 _Avoid_: subcategoria, grupo
 
 **Tag**:
@@ -75,7 +75,7 @@ _Avoid_: agenda, a pagar
 ### Planejamento
 
 **Planejamento**:
-O quanto o casal se propõe a gastar num mês, item a item; não é lançamento e não mexe em saldo.
+O quanto o casal se propõe a gastar ou guardar num mês, item a item; não é lançamento e não mexe em saldo.
 _Avoid_: orçamento, meta
 
 **Item do planejamento**:
@@ -107,7 +107,7 @@ Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à co
 _Avoid_: reembolso, devolução
 
 **Transferência**:
-Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal.
+Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal, mas pode ter categoria e contar no planejamento (ex.: guardar na reserva).
 
 **Pagamento de fatura**:
-Transferência de uma conta para um cartão que quita a fatura; não conta como saída, porque as compras da fatura já são lançamentos.
+Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
