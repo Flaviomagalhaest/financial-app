@@ -15,7 +15,8 @@ O que só uma medição ou um teste real responde, porque a fonte oficial não d
 
 ## Checklist
 
-- [x] DSQL medido (ver `## Answer`). [ ] Aurora: segundos da primeira conexão no DSQL após Idle/Inactive, e o auto-pause (0 ACU) do Aurora Serverless v2 em sa-east-1 (a doc não lista por região; retomada documentada de ~15 s, 30 s+ após 24 h pausado)
+- [x] Segundos da primeira conexão no DSQL após Idle/Inactive (medido, ver `## Answer`)
+- [ ] Auto-pause (0 ACU) do Aurora Serverless v2 em sa-east-1 (a doc não lista por região; retomada documentada de ~15 s, 30 s+ após 24 h pausado)
 - [ ] Efeito real de desligar "Abrir como App Web" no iOS 26 sobre a perda de dados do PWA, e se o ITP de 7 dias atinge conteúdo local num WKWebView de Capacitor (o plano B da [Plataforma do cliente](08-plataforma-do-cliente.md))
 - [ ] Resultado em `## Answer`; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
 
