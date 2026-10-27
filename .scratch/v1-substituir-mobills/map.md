@@ -6,6 +6,8 @@ Label: wayfinder:map
 
 Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`, com as decisões de produto, modelo de dados e arquitetura na AWS tomadas e nenhum código de produção. A v1 substitui o Mobills: cobre os requisitos obrigatórios, a base de contas e cartões, a importação do histórico do Mobills desde 2019 e as funcionalidades complementares listadas em Notes.
 
+Spec escrita: [spec.md](spec.md).
+
 ## Notes
 
 **Domínio:** finanças pessoais de um casal (Flávio e a esposa). Vocabulário em [GLOSSARY.md](../../GLOSSARY.md); decisões difíceis de reverter em `docs/adr/`.
