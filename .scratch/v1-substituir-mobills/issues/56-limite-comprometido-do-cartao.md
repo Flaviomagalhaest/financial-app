@@ -1,0 +1,21 @@
+# Limite comprometido e disponível do cartão
+
+Type: task
+Status: ready-for-agent
+Blocked by: 55, 46
+Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
+Modelo recomendado: Sonnet
+Effort recomendado: medium
+Issue: #110
+Origem: [spec da v1](../spec.md), etapa 5; histórias de usuário 131, 132, 133
+
+## O que construir
+
+O casal vê quanto do limite já está ocupado, só na aba Cartões, como decidido no ticket 23.
+
+## Checklist
+
+- [ ] Comprometido = fatura aberta + fechadas não pagas + parcelas futuras; disponível = limite menos ele; recorrência não conta; cartão adicional divide o limite do titular
+- [ ] Barra na linha do cartão (só com limite informado) e, no detalhe, as três partes, os parcelamentos em andamento e a lista dos próximos 12 meses
+- [ ] Testes de API com exemplos concretos
+- [ ] Verificações do projeto rodando e PR aberto para `main`
