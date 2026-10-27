@@ -1,0 +1,10 @@
+{
+  "favoritos": { "sugeridos": 3, "usosMinimos": 5 },
+  "sugestao": { "letrasMinimas": 2, "maximoDeSugestoes": 3 },
+  "avisoDeNaoEnviadoHoras": 24,
+  "pareceRepetidoDias": 1,
+  "desfazerEdicaoEmLoteDias": 30,
+  "itensEmDestaqueNaHojePercentual": 80,
+  "horizonteDaRecorrenciaMeses": 24,
+  "contasDaSemanaDias": 7
+}
