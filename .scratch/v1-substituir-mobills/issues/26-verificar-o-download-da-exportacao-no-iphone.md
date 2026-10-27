@@ -2,7 +2,7 @@
 
 Type: task
 Status: open
-Blocked by: —
+Blocked by: 66
 Skills: `run`, `implement` (só depois que o "exportar tudo" existir)
 Modelo recomendado: Sonnet
 Effort recomendado: low
