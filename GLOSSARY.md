@@ -151,3 +151,13 @@ Transferência de uma conta para um cartão que quita a fatura; não conta como 
 **Virada**:
 O dia em que o casal para de lançar no Mobills e passa a lançar só no app; a última importação do histórico do Mobills acontece nele, e antes dele a importação pode ser refeita quantas vezes for preciso.
 _Avoid_: migração, corte, go-live
+
+### Sem internet
+
+**Não enviado**:
+Lançamento, ou mudança num lançamento, feito no aparelho que ainda não chegou ao servidor; já conta no que o próprio aparelho mostra, mas a outra pessoa só o vê depois do envio.
+_Avoid_: pendente, offline, na fila, não sincronizado
+
+**Conflito**:
+Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica.
+_Avoid_: colisão, divergência
