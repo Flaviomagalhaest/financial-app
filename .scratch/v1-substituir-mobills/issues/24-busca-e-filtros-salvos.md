@@ -1,7 +1,7 @@
 # Busca e filtros salvos
 
 Type: grilling
-Status: open
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: precisa do dono); apoio: `prototype` se a resposta pedir ver a tela
 Modelo recomendado: Sonnet
