@@ -158,6 +158,20 @@ _Avoid_: limite restante, saldo do cartão
 **Pagamento de fatura**:
 Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
 
+### Exportação
+
+**Backup**:
+Arquivo `.zip` com um CSV por tabela e um manifesto com a versão do formato, que contém todos os dados do casal e refaz o banco; é gerado todo dia e a pedido.
+_Avoid_: dump, snapshot
+
+**Exportação**:
+Arquivo que o app gera a pedido de um dos dois: o backup completo ou o CSV de lançamentos para abrir numa planilha.
+_Avoid_: download, relatório
+
+**Restauração**:
+Carga de um backup num banco vazio, tudo ou nada, que recusa banco com dados; é também o caminho da carga do histórico do Mobills.
+_Avoid_: importação do backup, merge
+
 ### Importação do Mobills
 
 **Virada**:
