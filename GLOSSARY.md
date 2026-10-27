@@ -143,6 +143,18 @@ _Avoid_: reajuste, arredondamento, diferença de fatura
 Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é calculado; só os realizados depois dessa data mexem no saldo, e o que veio antes serve às estatísticas.
 _Avoid_: saldo inicial, saldo importado
 
+**Limite**:
+Teto de compras de um cartão, informado pelo casal e editável; é opcional, e o cartão adicional divide o limite do titular.
+_Avoid_: crédito, saldo do cartão
+
+**Comprometido**:
+Parte do limite de um cartão já ocupada: as compras da fatura aberta, as faturas fechadas ainda não pagas (com o saldo anterior) e as parcelas futuras dos parcelamentos. Recorrência não conta, porque só o que já foi comprado ocupa o limite.
+_Avoid_: usado, gasto do cartão
+
+**Disponível**:
+O limite menos o comprometido; pagar a fatura, receber um estorno, pagar uma parcela e antecipar ou quitar parcelas o aumentam.
+_Avoid_: limite restante, saldo do cartão
+
 **Pagamento de fatura**:
 Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
 
