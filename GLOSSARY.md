@@ -96,6 +96,14 @@ _Avoid_: teto, limite, meta
 
 ### Consulta
 
+**Filtro salvo**:
+Busca que o casal guarda com nome: os critérios (texto e filtros), a ordenação e o período, relativo ("este mês") ou fixo; é do casal inteiro. Não é um **Favorito**, que é um lançamento-modelo.
+_Avoid_: busca salva, visão
+
+**Edição em lote**:
+Mudança de categorias e tags de vários lançamentos de uma vez, a partir do resultado de uma busca; mostra uma prévia, aplica tudo ou nada e pode ser desfeita por 30 dias. Uma compra parcelada conta como uma só.
+_Avoid_: edição em massa, ação em massa
+
 **Fechamento do mês**:
 Resumo de um mês que já passou: receitas, despesas, sobra, o que foi guardado, os itens do planejamento que passaram do planejado e a comparação com o mês anterior e com o mesmo mês do ano anterior. Não confundir com o **fechamento** da fatura.
 _Avoid_: balanço, extrato do mês
