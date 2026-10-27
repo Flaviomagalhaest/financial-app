@@ -73,8 +73,6 @@ Spec da v1 do app de finanças do casal, pronta para `/to-spec` e `/to-tickets`,
 
 ## Not yet specified
 
-- **Busca e filtros salvos:** o que se busca e o que um filtro salvo guarda. Da busca sai a edição em lote: selecionar vários lançamentos e trocar ou acrescentar categorias e tags de uma vez (decidido no [ticket 18](issues/18-importacao-do-mobills-cartao-e-datas.md), para acertar o histórico importado).
-- **Exportação:** formato e conteúdo do CSV e do backup. A exportação completa também é o backup diário ([Banco de dados e região](issues/09-banco-de-dados-e-regiao.md)), então precisa poder ser importada de volta num banco novo.
 
 ## Out of scope
 
