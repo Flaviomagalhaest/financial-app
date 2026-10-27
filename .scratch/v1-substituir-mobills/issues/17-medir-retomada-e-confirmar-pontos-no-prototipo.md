@@ -1,7 +1,7 @@
 # Medir a retomada do banco e confirmar pontos que as fontes não cobrem
 
 Type: prototype
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `prototype`; apoio: `run`; HITL (precisa de um cluster na conta AWS do dono e de iPhone/Android reais)
 Modelo recomendado: Sonnet
@@ -16,9 +16,9 @@ O que só uma medição ou um teste real responde, porque a fonte oficial não d
 ## Checklist
 
 - [x] Segundos da primeira conexão no DSQL após Idle/Inactive (medido, ver `## Answer`)
-- [ ] Auto-pause (0 ACU) do Aurora Serverless v2 em sa-east-1 (a doc não lista por região; retomada documentada de ~15 s, 30 s+ após 24 h pausado)
-- [ ] Efeito real de desligar "Abrir como App Web" no iOS 26 sobre a perda de dados do PWA, e se o ITP de 7 dias atinge conteúdo local num WKWebView de Capacitor (o plano B da [Plataforma do cliente](08-plataforma-do-cliente.md))
-- [ ] Resultado em `## Answer`; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
+- [x] ~~Auto-pause (0 ACU) do Aurora Serverless v2 em sa-east-1 (a doc não lista por região; retomada documentada de ~15 s, 30 s+ após 24 h pausado)~~ — descartado: o DSQL foi mantido
+- [x] ~~Efeito real de desligar "Abrir como App Web" no iOS 26 sobre a perda de dados do PWA, e se o ITP de 7 dias atinge conteúdo local num WKWebView de Capacitor (o plano B da [Plataforma do cliente](08-plataforma-do-cliente.md))~~ — descartado, vira aviso (ver `## Answer`)
+- [x] Resultado em `## Answer`; dizer se muda [Plataforma do cliente](08-plataforma-do-cliente.md) ou [Banco de dados e região](09-banco-de-dados-e-regiao.md)
 
 ## Answer
 
@@ -32,7 +32,8 @@ Resultado parcial, medido pelo dono em 2026-10-27 com `medir_retomada.py`, clust
 
 - **DSQL não tem retomada perceptível**: a primeira conexão depois de 24 h sem uso levou 1,06 s, contra 0,70 s com o banco quente. Fica bem abaixo do gatilho de 5 s, então o [ticket 09](09-banco-de-dados-e-regiao.md) **não é reaberto** e a escolha do DSQL se mantém. Não mudou nada em [Banco de dados e região](09-banco-de-dados-e-regiao.md).
 - A rodada de 2 h não foi feita; não é necessária, dado que 30 min e 24 h ficaram iguais dentro de ~0,4 s.
-- **Não medidos**: auto-pause do Aurora Serverless v2 (só serve de comparação; o DSQL foi o escolhido) e os testes de iOS 26 (`roteiro-ios.md`: "Abrir como App Web" e ITP de 7 dias). Como o [ticket 08](08-plataforma-do-cliente.md) escolheu PWA, o item de iOS segue pendente com o dono e pode mudar aquela decisão se o PWA perder dados.
+- **Descartado pelo dono (2026-10-27)**: o auto-pause do Aurora Serverless v2 (o DSQL foi mantido) e os testes de iOS 26 (`roteiro-ios.md`: "Abrir como App Web" e ITP de 7 dias). Nenhum muda [Plataforma do cliente](08-plataforma-do-cliente.md) hoje.
+- **Aviso, não pendência**: se o PWA no iPhone perder dados (localStorage, IndexedDB, cache) ou o iOS limpar o app depois de uns dias sem abrir, reabra esta investigação com `prototipos/17/roteiro-ios.md`. O servidor é a fonte de verdade, então a perda local não perde lançamento já sincronizado.
 
 ## Comments
 

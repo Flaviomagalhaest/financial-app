@@ -39,3 +39,5 @@ O app é um **app web instalável (PWA)** em **React + TypeScript**, uma só bas
 Por que não Expo nem Capacitor agora: no iPhone, fora da loja, eles exigem Mac e reinstalação a cada 7 dias, ou US$ 99/ano (uns US$ 8 por mês, acima do teto de US$ 5). A saída web do Expo herdaria os limites da PWA. Gráficos e dashboards têm bibliotecas mais maduras na web.
 
 Efeito no [ticket 17](17-medir-retomada-e-confirmar-pontos-no-prototipo.md): saem o build de release do Expo com conta gratuita e o alcance do sideload de APK no Brasil, que só pesavam num app nativo; ficam o "Abrir como App Web" do iOS 26 e o ITP no WKWebView, que importa para o plano B.
+
+Aviso: os testes de iOS 26 ('Abrir como App Web' e ITP de 7 dias) foram descartados no [ticket 17](17-medir-retomada-e-confirmar-pontos-no-prototipo.md). Se o PWA perder dados no iPhone, retome pelo `roteiro-ios.md` em `../prototipos/17/`.
