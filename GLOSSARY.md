@@ -43,8 +43,16 @@ Lançamento sem pessoa: é do casal (mercado, internet, gasolina, rendimento da 
 _Avoid_: compartilhado, comum
 
 **Favorito**:
-Lançamento-modelo que o casal marca (ou aceita da sugestão dos mais usados) para registrar de novo com um toque: preenche conta, categorias, tags, pessoa e o último valor, que é só o padrão e se confirma ao salvar. Aparece numa fileira acima do teclado do novo lançamento e numa grade na tela inicial.
+Lançamento-modelo que o casal marca (ou aceita dos sugeridos, os mais usados) para registrar de novo com um toque: preenche conta, categorias, tags, pessoa e o último valor, que é só o padrão e se confirma ao salvar. Aparece numa fileira acima do teclado do novo lançamento e numa grade na tela inicial.
 _Avoid_: atalho, modelo
+
+**Sugestão**:
+Categorias, tags, conta e pessoa de um lançamento anterior de descrição parecida, oferecidas enquanto se digita a descrição; escolher uma preenche esses campos e mantém o valor já digitado. Vem da **fonte de sugestão**.
+_Avoid_: autocompletar, recomendação
+
+**Fonte de sugestão**:
+De onde as sugestões vêm; a v1 tem só o histórico de lançamentos do casal, e outras fontes (um modelo, uma IA) podem se somar a ele depois.
+_Avoid_: motor de sugestão
 
 ### Futuro
 
