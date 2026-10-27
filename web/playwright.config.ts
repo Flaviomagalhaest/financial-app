@@ -8,7 +8,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "uv run python -c \"from app.migrations import aplicar_migrations as a; import os; a(os.environ['DATABASE_URL'])\" && uv run uvicorn app.main:create_app --factory --port 8765",
+        "uv run python -m app.migrations && uv run uvicorn app.main:create_app --factory --port 8765",
       cwd: "../backend",
       url: "http://127.0.0.1:8765/api/saude",
       env: { DATABASE_URL: urlDoBanco ?? "" },

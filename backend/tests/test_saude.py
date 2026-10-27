@@ -2,14 +2,14 @@ import psycopg
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.migrations import aplicar_migrations
+from app.migrations import PASTA, aplicar_migrations
 
 
 def test_saude_responde_ok_com_o_banco_migrado(client: TestClient):
     resposta = client.get("/api/saude")
 
     assert resposta.status_code == 200
-    assert resposta.json() == {"status": "ok", "migrations": 1}
+    assert resposta.json() == {"status": "ok", "migrations": len(list(PASTA.glob("*.sql")))}
 
 
 def test_saude_diz_que_o_banco_esta_fora_quando_nao_conecta():
@@ -26,4 +26,4 @@ def test_migrations_reaplicadas_nao_repetem(database_url: str):
 
     with psycopg.connect(database_url) as conn:
         total = conn.execute("SELECT count(*) FROM controle_de_migrations").fetchone()[0]
-    assert total == 1
+    assert total == len(list(PASTA.glob("*.sql")))

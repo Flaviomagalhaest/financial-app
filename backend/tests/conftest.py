@@ -14,6 +14,9 @@ def database_url() -> str:
     if not url:
         pytest.fail("DATABASE_URL não definida: veja o README (scripts/postgres-local.sh)")
     with psycopg.connect(url, autocommit=True) as conn:
+        banco = conn.execute("SELECT current_database()").fetchone()[0]
+        if "financial_app" not in banco:
+            pytest.fail(f"recusado: os testes apagam o schema e '{banco}' não parece de teste")
         conn.execute("DROP SCHEMA public CASCADE")
         conn.execute("CREATE SCHEMA public")
     return url

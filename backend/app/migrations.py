@@ -22,3 +22,9 @@ def aplicar_migrations(database_url: str) -> None:
 
 def total_aplicadas(conn: psycopg.Connection) -> int:
     return conn.execute("SELECT count(*) FROM controle_de_migrations").fetchone()[0]
+
+
+if __name__ == "__main__":
+    from app.config import database_url
+
+    aplicar_migrations(database_url())

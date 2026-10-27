@@ -10,7 +10,7 @@ Python 3.12+ com [uv](https://docs.astral.sh/uv/), Node 22, Postgres 16 (o mesmo
 
 ```sh
 eval "$(scripts/postgres-local.sh)"          # Postgres local sem Docker; exporta DATABASE_URL
-(cd backend && uv sync && uv run python -c "from app.migrations import aplicar_migrations as a; import os; a(os.environ['DATABASE_URL'])")
+(cd backend && uv sync && uv run python -m app.migrations)
 (cd backend && uv run uvicorn app.main:create_app --factory --port 8765)
 (cd web && npm ci && npm run dev)            # /api é repassado para a porta 8765
 ```
