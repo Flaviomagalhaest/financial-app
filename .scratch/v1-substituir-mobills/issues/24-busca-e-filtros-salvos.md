@@ -34,7 +34,7 @@ Decidido com o dono em 2026-10-27. A busca é uma **tela única de resultado**, 
 **Busca**
 - Texto livre (descrição) mais filtros em chips, numa tela só, na aba Histórico, com lupa em qualquer aba. Os atalhos "ver os lançamentos" do ranking do Mês e da aba Cartões abrem essa tela já filtrada.
 - Filtros: descrição, valor (mínimo e máximo), categorias, tags (qualquer das escolhidas; também "sem categoria" e "sem tag"), conta, cartão, **fatura** (cartão e mês da fatura), pessoa (inclui Conjunto), período, situação (previsto ou realizado) e tipo (despesa, receita, transferência). Entre filtros é E, dentro de um filtro é OU.
-- **Período usa a data da compra** na compra no cartão ("março" traz o que foi comprado em março, qualquer que seja a fatura) e a data do lançamento no resto. É uma exceção consciente ao [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md), que vale para planejamento, tags, resumo e projeção ([ADR 0012](../../../docs/adr/0012-busca-por-data-da-compra-e-fatura-a-parte.md)). Quem quer o mês da fatura usa o filtro **Fatura**.
+- **Período usa a data da compra** na compra no cartão ("março" traz o que foi comprado em março, qualquer que seja a fatura) e a data do lançamento no resto. É uma exceção consciente ao [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md), que vale para planejamento, tags, resumo e projeção ([ADR 0013](../../../docs/adr/0013-busca-por-data-da-compra-e-fatura-a-parte.md)). Quem quer o mês da fatura usa o filtro **Fatura**.
 - Cada linha mostra a data da compra e, no cartão, o mês da fatura. Ajuste de fatura não aparece (não é lançamento, [ADR 0008](../../../docs/adr/0008-ajuste-de-fatura-fica-na-fatura.md)); o pagamento de fatura só aparece com o tipo transferência.
 - **Compra parcelada**: o resultado traz uma linha por compra, com a data da compra, o valor **total** e as parcelas (`03/04 - R$ 2.500,00 (10x)`); tocar abre as parcelas, cada uma com o mês da fatura e a situação. Com o filtro **Fatura**, cada parcela é uma linha própria, com o valor e `03/10`.
 - No topo: quantidade, total de despesas, total de receitas e saldo; transferência fora dos totais; previstos somados à parte. A compra parcelada conta pelo valor total, uma vez; com o filtro Fatura, pelo valor da parcela. O filtro de valor segue a mesma regra. Uma linha fixa avisa "período por data da compra; a aba Mês conta pelo mês da fatura" e some com o filtro Fatura, onde os números batem com o Mês.
@@ -52,6 +52,6 @@ Decidido com o dono em 2026-10-27. A busca é uma **tela única de resultado**, 
 - A prévia avisa quantos lançamentos trocam de item do planejamento ([ADR 0006](../../../docs/adr/0006-varias-categorias-e-um-item-do-planejamento.md)) sem bloquear; um lote que deixaria despesa ou receita sem categoria é recusado.
 - Exige internet: não entra na fila e não gera conflito ([ADR 0011](../../../docs/adr/0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md)); o servidor aplica ou recusa o lote inteiro.
 
-**Registrado**: ADR 0012; termos **Filtro salvo** e **Edição em lote** no `GLOSSARY.md`.
+**Registrado**: ADR 0013; termos **Filtro salvo** e **Edição em lote** no `GLOSSARY.md`.
 
 Fica para a spec: o formato exato da prévia, o índice de busca no servidor e o prazo de 30 dias do desfazer, que é valor inicial.
