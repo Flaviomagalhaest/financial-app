@@ -129,6 +129,7 @@ test("contas e categorias: cria, renomeia e arquiva categorias, e a arquivada sa
   await expect(page.getByRole("button", { name: receita })).toBeVisible();
   await page.goto("/#/contas-e-categorias");
   await page.getByRole("button", { name: `Desarquivar ${renomeada}` }).click();
+  await expect(page.getByRole("button", { name: `Arquivar ${renomeada}`, exact: true })).toBeVisible();
   await page.goto("/#/novo");
   await expect(page.getByRole("button", { name: renomeada })).toBeVisible();
 });
