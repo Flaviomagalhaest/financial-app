@@ -1,8 +1,10 @@
-// Guarda a casca do app (HTML, JS, CSS, ícones) para abrir sem internet. O vite.config.ts troca
-// os marcadores abaixo pela lista de arquivos do build; a versão muda a cada build, e o cache
-// antigo sai na ativação. A API (/api) nunca passa por aqui.
+// Guarda a casca do app (HTML, JS, CSS, ícones) para abrir sem internet e, no Android, sobe a
+// fila de lançamentos em segundo plano. O vite.config.ts troca os marcadores abaixo pela lista de
+// arquivos do build e pelo envio da fila (src/dados/segundoPlano.ts, empacotado); a versão muda a
+// cada build, e o cache antigo sai na ativação. A API (/api) nunca passa pelo cache.
 const VERSAO = "__VERSAO__";
 const CASCA = __CASCA__;
+const { enviarEmSegundoPlano } = __SEGUNDO_PLANO__;
 const CACHE = `casca-${VERSAO}`;
 // O servidor pode responder `Vary: Origin`; os arquivos da casca não mudam com isso.
 const SEM_VARY = { ignoreVary: true };
@@ -37,4 +39,10 @@ self.addEventListener("fetch", (evento) => {
     return;
   }
   evento.respondWith(caches.match(request, SEM_VARY).then((guardado) => guardado ?? fetch(request)));
+});
+
+// A tela pede o `sync` quando a fila não sobe; o navegador o dispara quando a rede volta, mesmo
+// com o app fechado, e repete mais tarde se o envio falhar.
+self.addEventListener("sync", (evento) => {
+  if (evento.tag === "enviar-fila") evento.waitUntil(enviarEmSegundoPlano());
 });

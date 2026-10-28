@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ErroDeLogin, mensagemDeFalhaGenerica } from "./cognito";
+import { ErroDeLogin, mensagemDeFalhaGenerica } from "./renovacao";
 import { entrar } from "./sessao";
 
 export function TelaDeLogin({ aviso }: { aviso?: string }) {

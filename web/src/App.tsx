@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api/cliente";
 import { Casca } from "./casca/Casca";
+import { apagarDadosDoAparelho, contarNaoEnviados, iniciarEnvioAutomatico } from "./dados";
+import { AvisoDaFila } from "./lancamentos/AvisoDaFila";
 import { sair, TelaDeLogin, useSessao } from "./login";
 
 type Estado = "verificando" | "no ar" | "sem conexão";
@@ -10,11 +12,6 @@ const textos: Record<Estado, string> = {
   "no ar": "API no ar",
   "sem conexão": "Sem conexão",
 };
-
-/** Lançamentos ainda não enviados neste aparelho; a fila chega no ticket 33. */
-async function contarNaoEnviados(): Promise<number> {
-  return 0;
-}
 
 async function sairDaConta() {
   const naoEnviados = await contarNaoEnviados();
@@ -27,6 +24,8 @@ async function sairDaConta() {
   ) {
     return;
   }
+  // Sair apaga do aparelho a fila e as respostas guardadas, que são do casal.
+  await apagarDadosDoAparelho().catch(() => undefined);
   await sair();
 }
 
@@ -47,12 +46,15 @@ function Inicio({ email }: { email: string }) {
     void verificar();
   }, [verificar]);
 
+  useEffect(() => iniciarEnvioAutomatico(), []);
+
   return (
     <Casca
       email={email}
       onSair={() => void sairDaConta()}
       hoje={
         <>
+          <AvisoDaFila />
           <p data-testid="estado-da-api">{textos[estado]}</p>
           <button onClick={() => void verificar()}>Verificar de novo</button>
         </>

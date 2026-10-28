@@ -2,17 +2,15 @@
 // de acesso de 15 minutos renovado quando precisa. Sem internet, a sessão continua: o app segue
 // usável com o acesso vencido e renova quando a rede volta (ADR 0010).
 import { useSyncExternalStore } from "react";
-import { entrarNoCognito, ErroDeLogin, renovarNoCognito, revogarNoCognito } from "./cognito";
+import { entrarNoCognito } from "./cognito";
 import { configuracaoDoCognito } from "./configuracao";
 import { apagarSessao, guardarSessao, lerSessao, type SessaoGuardada } from "./guarda";
+import { ErroDeLogin, FOLGA_MS, renovarNoCognito, revogarNoCognito, venceEm } from "./renovacao";
 
 export type EstadoDaSessao =
   | { tipo: "carregando" }
   | { tipo: "fora"; aviso?: string }
   | { tipo: "dentro"; email: string };
-
-/** Renova um pouco antes de vencer, para o token não vencer no caminho até a API. */
-const FOLGA_MS = 60_000;
 
 let estado: EstadoDaSessao = { tipo: "carregando" };
 let atual: SessaoGuardada | null = null;
@@ -22,11 +20,6 @@ const ouvintes = new Set<() => void>();
 function mudar(novo: EstadoDaSessao) {
   estado = novo;
   ouvintes.forEach((ouvinte) => ouvinte());
-}
-
-function venceEm(token: string): number {
-  const corpo = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-  return JSON.parse(atob(corpo)).exp * 1000;
 }
 
 function exigirConfiguracao() {
