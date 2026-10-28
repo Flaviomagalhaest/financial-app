@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { renovacoes } from "./cognito-falso";
 import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
 
@@ -121,5 +122,133 @@ test("recusado pelo servidor fica 'não enviado: <motivo>' para corrigir ou desc
   await expect(bom).toHaveCount(1);
   await expect(descartar).toHaveCount(0);
   await aba(page, "Hoje");
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+});
+
+/** O service worker só controla a página depois de uma recarga; aí ela abre sem internet. */
+async function instalarCasca(page: Page) {
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+}
+
+test("sem internet, as telas abertas mostram a última resposta com 'atualizado às' e o cadastro precisa de internet", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await lancar(page, { teclas: ["9", "00"], conta, categoria: mercado, descricao: `Guardado ${s}` });
+  const linha = page.getByRole("listitem").filter({ hasText: `Guardado ${s}` });
+  await expect(linha).not.toContainText("não enviado");
+  await instalarCasca(page);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(linha).toContainText("− R$ 9,00");
+  await expect(page.getByText(/Sem internet: atualizado às \d\d:\d\d/)).toBeVisible();
+
+  await page.goto("/#/cadastro");
+  await expect(page.getByRole("listitem").filter({ hasText: conta })).toBeVisible();
+  const novaConta = page.getByRole("form", { name: "Nova conta" });
+  await expect(novaConta.getByRole("button", { name: "Cadastrar" })).toBeDisabled();
+  await expect(novaConta.getByText("precisa de internet")).toBeVisible();
+
+  await context.setOffline(false);
+  await expect(novaConta.getByRole("button", { name: "Cadastrar" })).toBeEnabled();
+  await expect(page.getByText(/atualizado às/)).toHaveCount(0);
+});
+
+test("sair com lançamentos não enviados pede confirmação e, confirmado, apaga a fila do aparelho", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page, "esposa@teste.com");
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["5"], conta, categoria: mercado, descricao: `Antes de sair ${s}` });
+
+  let mensagem = "";
+  page.once("dialog", (dialogo) => {
+    mensagem = dialogo.message();
+    void dialogo.dismiss();
+  });
+  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect.poll(() => mensagem).toContain("1 lançamento ainda não foi enviado");
+  await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
+
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect(page.getByLabel("Senha")).toBeVisible();
+
+  await context.setOffline(false);
+  await entrar(page, "esposa@teste.com");
+  await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await aba(page, "Hoje");
+  await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await aba(page, "Histórico");
+  await expect(page.getByRole("listitem").filter({ hasText: `Antes de sair ${s}` })).toHaveCount(0);
+});
+
+test("o aviso de não enviado fica em destaque depois de 24 h", async ({ page, context }) => {
+  await page.clock.install();
+  const { s, conta, mercado } = await prepararCasal(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["8"], conta, categoria: mercado, descricao: `Esquecido ${s}` });
+  await aba(page, "Hoje");
+  const aviso = page.getByTestId("nao-enviados");
+  await expect(aviso).toContainText("1 lançamento não enviado");
+  await expect(aviso).not.toContainText("abra com internet para enviar");
+
+  await page.clock.fastForward("23:00:00");
+  await expect(aviso).not.toContainText("abra com internet para enviar");
+  await page.clock.fastForward("01:01:00");
+  await expect(aviso).toContainText("Há mais de 24 h sem enviar: abra com internet para enviar.");
+  await expect(aviso).toHaveClass("aviso");
+});
+
+test("no Android, o service worker sobe a fila em segundo plano, sem o app aberto", async ({ page, context, browser }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await instalarCasca(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["6", "00"], conta, categoria: mercado, descricao: `Segundo plano ${s}` });
+
+  // Fecha o app (a aba sai dele) e a rede volta: quem envia é o `sync` do service worker.
+  const cdp = await context.newCDPSession(page);
+  const registro = new Promise<string>((resolve) =>
+    cdp.on("ServiceWorker.workerRegistrationUpdated", ({ registrations }) => {
+      const nosso = registrations.find((r) => r.scopeURL.startsWith("http://127.0.0.1:4173") && !r.isDeleted);
+      if (nosso) resolve(nosso.registrationId);
+    }),
+  );
+  await cdp.send("ServiceWorker.enable");
+  const registrationId = await registro;
+  // Com o app fechado há tempo, o token de acesso guardado já venceu: o service worker renova.
+  await page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const abrir = indexedDB.open("financial-app-login");
+        abrir.onsuccess = () => {
+          const loja = abrir.result.transaction("sessao", "readwrite").objectStore("sessao");
+          const ler = loja.get("atual");
+          ler.onsuccess = () => (loja.put({ ...ler.result, acessoVenceEm: 0 }, "atual").onsuccess = resolve);
+        };
+        abrir.onerror = reject;
+      }),
+  );
+  const renovadasAntes = await renovacoes();
+  await page.goto("about:blank");
+  await context.setOffline(false);
+  await cdp.send("ServiceWorker.dispatchSyncEvent", { origin: "http://127.0.0.1:4173", registrationId, tag: "enviar-fila", lastChance: false });
+
+  // A outra pessoa, noutro aparelho, já vê o lançamento.
+  const outro = await browser.newContext({ baseURL: "http://127.0.0.1:4173" });
+  const esposa = await outro.newPage();
+  await esposa.goto("/#/historico");
+  await entrar(esposa, "esposa@teste.com");
+  await expect(esposa.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  const linha = esposa.getByRole("listitem").filter({ hasText: `Segundo plano ${s}` });
+  await expect(async () => {
+    await esposa.reload();
+    await expect(linha).toContainText("− R$ 6,00", { timeout: 1000 });
+  }).toPass();
+  await outro.close();
+  expect(await renovacoes()).toBe(renovadasAntes + 1);
+
+  await page.goto("/#/hoje");
+  await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
 });
