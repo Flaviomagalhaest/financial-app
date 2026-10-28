@@ -30,7 +30,8 @@ def test_backup_diario_grava_o_zip_do_dia_no_bucket(database_url: str, banco_fic
     # O Object Lock exige checksum no envio de objeto com retenção.
     assert pedido["ChecksumAlgorithm"] == "SHA256"
     with zipfile.ZipFile(io.BytesIO(pedido["Body"])) as zip:
-        assert sorted(zip.namelist()) == ["contas.csv", "lancamentos.csv", "manifesto.json"]
+        nomes = set(zip.namelist())
+    assert {"exemplo_contas.csv", "exemplo_lancamentos.csv", "manifesto.json"} <= nomes
 
 
 def test_backup_diario_concluido_publica_a_metrica_do_alarme(

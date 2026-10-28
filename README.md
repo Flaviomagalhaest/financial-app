@@ -43,6 +43,10 @@ scripts/usuarios-do-app.sh listar prod
 
 O CI (`.github/workflows/ci.yml`) roda lint, testes, o contrato e o build com um Postgres em container.
 
+## Lançamentos
+
+`backend/app/lancamentos.py` tem contas, categorias e lançamentos simples (valor em centavos inteiros, uma ou mais categorias, id UUID gerado no aparelho). No app, `#/novo` lança, `#/historico` lista, edita e exclui, e `#/cadastro` cria conta e categoria (tela provisória, ticket 74).
+
 ## Contrato (OpenAPI e tipos)
 
 A FastAPI gera o OpenAPI; `openapi.json` fica versionado e o app gera os tipos dele. Depois de mudar uma rota ou um modelo:
