@@ -47,43 +47,23 @@
       }
     },
     "/api/contas": {
-      "get": {
-        "summary": "Listar Contas",
-        "operationId": "listar_contas",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Conta"
-                  },
-                  "type": "array",
-                  "title": "Response Listar Contas"
-                }
-              }
-            }
-          }
-        },
+      "post": {
+        "summary": "Criar Conta",
+        "operationId": "criar_conta",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
-      },
-      "post": {
-        "summary": "Criar Conta",
-        "operationId": "criar_conta",
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/NovaConta"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -106,12 +86,111 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "summary": "Listar Contas",
+        "description": "As arquivadas só vêm com `arquivadas=true`.",
+        "operationId": "listar_contas",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "arquivadas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Arquivadas"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Conta"
+                  },
+                  "title": "Response Listar Contas"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contas/{id}": {
+      "put": {
+        "summary": "Editar Conta",
+        "description": "Arquivar tira a conta das opções e mantém o histórico; desarquivar a devolve.",
+        "operationId": "editar_conta",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoDeConta"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conta"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/categorias": {
@@ -342,6 +421,167 @@
           }
         }
       }
+    },
+    "/api/transferencias": {
+      "get": {
+        "summary": "Listar Transferencias",
+        "operationId": "listar_transferencias",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Transferencia"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Transferencias"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Criar Transferencia",
+        "description": "Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200.",
+        "operationId": "criar_transferencia",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaTransferencia"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transferencia"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/transferencias/{id}": {
+      "put": {
+        "summary": "Editar Transferencia",
+        "operationId": "editar_transferencia",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaTransferencia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transferencia"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Excluir Transferencia",
+        "description": "Idempotente: excluir o que já não existe também dá 204.",
+        "operationId": "excluir_transferencia",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -392,19 +632,104 @@
             ],
             "title": "Tipo"
           },
+          "saldo_abertura_centavos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saldo Abertura Centavos"
+          },
+          "data_abertura": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Abertura"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
             "title": "Id"
+          },
+          "saldo_centavos": {
+            "type": "integer",
+            "title": "Saldo Centavos"
+          },
+          "arquivada": {
+            "type": "boolean",
+            "title": "Arquivada"
           }
         },
         "type": "object",
         "required": [
           "nome",
           "tipo",
-          "id"
+          "id",
+          "saldo_centavos",
+          "arquivada"
         ],
         "title": "Conta"
+      },
+      "EdicaoDeConta": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "corrente",
+              "poupanca",
+              "carteira"
+            ],
+            "title": "Tipo"
+          },
+          "saldo_abertura_centavos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saldo Abertura Centavos"
+          },
+          "data_abertura": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Abertura"
+          },
+          "arquivada": {
+            "type": "boolean",
+            "title": "Arquivada",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome",
+          "tipo"
+        ],
+        "title": "EdicaoDeConta"
       },
       "Eu": {
         "properties": {
@@ -558,6 +883,29 @@
               "carteira"
             ],
             "title": "Tipo"
+          },
+          "saldo_abertura_centavos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saldo Abertura Centavos"
+          },
+          "data_abertura": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Abertura"
           }
         },
         "type": "object",
@@ -566,6 +914,76 @@
           "tipo"
         ],
         "title": "NovaConta"
+      },
+      "NovaTransferencia": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "conta_origem_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Origem Id"
+          },
+          "conta_destino_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Destino Id"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "situacao": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "previsto",
+                  "realizado"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Situacao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "conta_origem_id",
+          "conta_destino_id",
+          "valor_centavos",
+          "data"
+        ],
+        "title": "NovaTransferencia"
       },
       "NovoLancamento": {
         "properties": {
@@ -655,6 +1073,92 @@
           "migrations"
         ],
         "title": "Saude"
+      },
+      "Transferencia": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "conta_origem_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Origem Id"
+          },
+          "conta_destino_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Destino Id"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "situacao": {
+            "type": "string",
+            "enum": [
+              "previsto",
+              "realizado"
+            ],
+            "title": "Situacao"
+          },
+          "criado_por": {
+            "type": "string",
+            "title": "Criado Por"
+          },
+          "criado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Criado Em"
+          },
+          "alterado_por": {
+            "type": "string",
+            "title": "Alterado Por"
+          },
+          "alterado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Alterado Em"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "conta_origem_id",
+          "conta_destino_id",
+          "valor_centavos",
+          "data",
+          "situacao",
+          "criado_por",
+          "criado_em",
+          "alterado_por",
+          "alterado_em"
+        ],
+        "title": "Transferencia"
       },
       "ValidationError": {
         "properties": {

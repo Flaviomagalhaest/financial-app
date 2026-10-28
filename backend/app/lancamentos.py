@@ -1,13 +1,13 @@
 """Contas, categorias e lançamentos simples. Sem chave estrangeira nem trigger (subconjunto do
 DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no aparelho."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.banco import conectar
 from app.login import UsuarioLogado
@@ -18,10 +18,25 @@ router = APIRouter(prefix="/api")
 class NovaConta(BaseModel):
     nome: str = Field(min_length=1)
     tipo: Literal["corrente", "poupanca", "carteira"]
+    # Saldo de abertura: o valor da conta na data; os dois vêm juntos ou nenhum.
+    saldo_abertura_centavos: int | None = None
+    data_abertura: date | None = None
+
+    @model_validator(mode="after")
+    def _abertura_completa(self):
+        if (self.saldo_abertura_centavos is None) != (self.data_abertura is None):
+            raise ValueError("saldo de abertura e data de abertura vêm juntos")
+        return self
+
+
+class EdicaoDeConta(NovaConta):
+    arquivada: bool = False
 
 
 class Conta(NovaConta):
     id: UUID
+    saldo_centavos: int
+    arquivada: bool
 
 
 class NovaCategoria(BaseModel):
@@ -70,22 +85,88 @@ def _url(request: Request) -> str | None:
     return request.app.state.url
 
 
+# Saldo = abertura + realizados (lançamentos e transferências) depois da data de abertura (sem abertura, todos, a partir de zero).
+# O que veio antes (ou no dia) da abertura já está no valor informado e só serve às estatísticas.
+_SALDO = """
+    SELECT c.id, c.nome, c.tipo, c.saldo_abertura_centavos, c.data_abertura,
+           c.arquivada_em IS NOT NULL,
+           COALESCE(c.saldo_abertura_centavos, 0) + COALESCE((
+               SELECT SUM(CASE l.tipo WHEN 'receita' THEN l.valor_centavos
+                                      ELSE -l.valor_centavos END)
+               FROM lancamentos l
+               WHERE l.conta_id = c.id AND l.situacao = 'realizado'
+                 AND (c.data_abertura IS NULL OR l.data > c.data_abertura)
+           ), 0) + COALESCE((
+               SELECT SUM(CASE WHEN t.conta_destino_id = c.id THEN t.valor_centavos
+                               ELSE -t.valor_centavos END)
+               FROM transferencias t
+               WHERE c.id IN (t.conta_origem_id, t.conta_destino_id) AND t.situacao = 'realizado'
+                 AND (c.data_abertura IS NULL OR t.data > c.data_abertura)
+           ), 0)::bigint
+    FROM contas c
+"""
+
+
+def _conta(linha) -> Conta:
+    id, nome, tipo, abertura, data_abertura, arquivada, saldo = linha
+    return Conta(
+        id=id,
+        nome=nome,
+        tipo=tipo,
+        saldo_abertura_centavos=abertura,
+        data_abertura=data_abertura,
+        arquivada=arquivada,
+        saldo_centavos=saldo,
+    )
+
+
 @router.post("/contas", status_code=201, response_model=Conta, operation_id="criar_conta")
 def criar_conta(nova: NovaConta, usuario: UsuarioLogado, request: Request) -> Conta:
     id = uuid4()
     with conectar(_url(request)) as conn:
         conn.execute(
-            "INSERT INTO contas (id, nome, tipo, criado_por) VALUES (%s, %s, %s, %s)",
-            (id, nova.nome, nova.tipo, usuario),
+            "INSERT INTO contas (id, nome, tipo, saldo_abertura_centavos, data_abertura,"
+            " criado_por) VALUES (%s, %s, %s, %s, %s, %s)",
+            (id, nova.nome, nova.tipo, nova.saldo_abertura_centavos, nova.data_abertura, usuario),
         )
-    return Conta(id=id, **nova.model_dump())
+        return _conta(conn.execute(_SALDO + "WHERE c.id = %s", (id,)).fetchone())
+
+
+@router.put("/contas/{id}", response_model=Conta, operation_id="editar_conta")
+def editar_conta(
+    id: UUID, editada: EdicaoDeConta, usuario: UsuarioLogado, request: Request
+) -> Conta:
+    """Arquivar tira a conta das opções e mantém o histórico; desarquivar a devolve."""
+    with conectar(_url(request)) as conn:
+        atual = conn.execute("SELECT arquivada_em FROM contas WHERE id = %s", (id,)).fetchone()
+        if not atual:
+            raise HTTPException(status_code=404, detail="conta não encontrada")
+        # Reenviar arquivada=true mantém a data em que foi arquivada.
+        arquivada_em = (atual[0] or datetime.now(UTC)) if editada.arquivada else None
+        conn.execute(
+            "UPDATE contas SET nome = %s, tipo = %s, saldo_abertura_centavos = %s,"
+            " data_abertura = %s, arquivada_em = %s WHERE id = %s",
+            (
+                editada.nome,
+                editada.tipo,
+                editada.saldo_abertura_centavos,
+                editada.data_abertura,
+                arquivada_em,
+                id,
+            ),
+        )
+        return _conta(conn.execute(_SALDO + "WHERE c.id = %s", (id,)).fetchone())
 
 
 @router.get("/contas", response_model=list[Conta], operation_id="listar_contas")
-def listar_contas(usuario: UsuarioLogado, request: Request) -> list[Conta]:
+def listar_contas(
+    usuario: UsuarioLogado, request: Request, arquivadas: bool = False
+) -> list[Conta]:
+    """As arquivadas só vêm com `arquivadas=true`."""
+    filtro = "" if arquivadas else "WHERE c.arquivada_em IS NULL "
     with conectar(_url(request)) as conn:
-        linhas = conn.execute("SELECT id, nome, tipo FROM contas ORDER BY nome, id").fetchall()
-    return [Conta(id=i, nome=n, tipo=t) for i, n, t in linhas]
+        linhas = conn.execute(_SALDO + filtro + "ORDER BY c.nome, c.id").fetchall()
+    return [_conta(l) for l in linhas]
 
 
 @router.post(
@@ -116,9 +197,17 @@ def _recusar(detalhe: str) -> HTTPException:
     return HTTPException(status_code=422, detail=detalhe)
 
 
-def _conferir_ligacoes(conn, lancamento: NovoLancamento) -> None:
-    if not conn.execute("SELECT 1 FROM contas WHERE id = %s", (lancamento.conta_id,)).fetchone():
+def _conferir_conta(conn, id: UUID, ja_ligada: bool = False) -> None:
+    """A conta existe e, arquivada, só segue com quem já estava nela (o histórico se edita)."""
+    conta = conn.execute("SELECT arquivada_em FROM contas WHERE id = %s", (id,)).fetchone()
+    if not conta:
         raise _recusar("conta não encontrada")
+    if conta[0] and not ja_ligada:
+        raise _recusar("conta arquivada")
+
+
+def _conferir_ligacoes(conn, lancamento: NovoLancamento, conta_atual: UUID | None = None) -> None:
+    _conferir_conta(conn, lancamento.conta_id, ja_ligada=lancamento.conta_id == conta_atual)
     tipos = {
         id: tipo
         for id, tipo in conn.execute(
@@ -218,13 +307,13 @@ def editar_lancamento(
     if editado.id != id:
         raise _recusar("o id do corpo difere do id da URL")
     with conectar(_url(request)) as conn:
-        _conferir_ligacoes(conn, editado)
         atual = conn.execute(
-            "SELECT data, situacao FROM lancamentos WHERE id = %s", (id,)
+            "SELECT data, situacao, conta_id FROM lancamentos WHERE id = %s", (id,)
         ).fetchone()
         if not atual:
             raise HTTPException(status_code=404, detail="lançamento não encontrado")
-        data_atual, situacao_atual = atual
+        data_atual, situacao_atual, conta_atual = atual
+        _conferir_ligacoes(conn, editado, conta_atual)
         # Sem situação no pedido, só mudar a data refaz a inferência; senão a atual fica.
         if editado.situacao:
             situacao = editado.situacao
