@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 2
+VERSAO_FORMATO = 5
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -54,10 +54,61 @@ def _da_versao_1_para_a_2(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
     return manifesto, tabelas
 
 
+def _da_versao_2_para_a_3(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 3 tem o registro das exportações a pedido (ticket 66): backup antigo entra sem
+    nenhum pedido registrado, e o que já trouxer a tabela fica como está."""
+    if "exportacoes" not in tabelas:
+        tabelas["exportacoes"] = (["id", "usuario", "formato", "criada_em"], [])
+        manifesto["tabelas"]["exportacoes"] = {"linhas": 0, "somas": {}}
+    return manifesto, tabelas
+
+
+def _da_versao_3_para_a_4(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 4 (ticket 36) dá às contas saldo de abertura, data de abertura e arquivamento, e
+    traz a tabela de transferências. Nas contas antigas as colunas novas ficam vazias."""
+    colunas, linhas = tabelas["contas"]
+    if "saldo_abertura_centavos" not in colunas:
+        novas = ["saldo_abertura_centavos", "data_abertura", "arquivada_em"]
+        tabelas["contas"] = (colunas + novas, [linha + [None] * len(novas) for linha in linhas])
+        manifesto["tabelas"]["contas"]["somas"] = {"saldo_abertura_centavos": "0"}
+    if "transferencias" not in tabelas:
+        tabelas["transferencias"] = (
+            [
+                "id",
+                "situacao",
+                "valor_centavos",
+                "data",
+                "descricao",
+                "conta_origem_id",
+                "conta_destino_id",
+                "categoria_id",
+                "criado_por",
+                "criado_em",
+                "alterado_por",
+                "alterado_em",
+            ],
+            [],
+        )
+        manifesto["tabelas"]["transferencias"] = {"linhas": 0, "somas": {"valor_centavos": "0"}}
+    return manifesto, tabelas
+
+
+def _da_versao_4_para_a_5(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 4 tem `arquivada` nas categorias (ticket 74): backup antigo entra com todas
+    ativas, e o que já trouxer a coluna fica como está."""
+    colunas, linhas = tabelas["categorias"]
+    if "arquivada" not in colunas:
+        tabelas["categorias"] = ([*colunas, "arquivada"], [[*linha, "false"] for linha in linhas])
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     1: _da_versao_1_para_a_2,
+    2: _da_versao_2_para_a_3,
+    3: _da_versao_3_para_a_4,
+    4: _da_versao_4_para_a_5,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

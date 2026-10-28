@@ -31,6 +31,7 @@ export type LancamentoNaTela = NovoLancamento & {
 const LEITURAS = {
   "/api/lancamentos": () => api.GET("/api/lancamentos"),
   "/api/contas": () => api.GET("/api/contas"),
+  "/api/contas?arquivadas=true": () => api.GET("/api/contas", { params: { query: { arquivadas: true } } }),
   "/api/categorias": () => api.GET("/api/categorias"),
 };
 type Caminho = keyof typeof LEITURAS;
@@ -154,6 +155,12 @@ export function useCadastro() {
     atualizadoEm: contas.atualizadoEm ?? categorias.atualizadoEm,
     recarregar,
   };
+}
+
+/** Todas as contas, arquivadas inclusive, para a tela que as configura. */
+export function useContasComArquivadas() {
+  const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
+  return { contas: dados ?? [], atualizadoEm, recarregar: buscar };
 }
 
 /** Se o navegador diz que há rede; para desativar o que precisa de internet. */

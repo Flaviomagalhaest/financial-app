@@ -1,9 +1,11 @@
 import os
 
 import psycopg
+import psycopg.errors
 import pytest
 from fastapi.testclient import TestClient
 
+from app import banco
 from app.main import create_app
 from app.migrations import aplicar_migrations
 from tests.emissor import Emissor
@@ -42,3 +44,69 @@ def banco_ficticio(database_url: str):
     with psycopg.connect(database_url, autocommit=True) as conn:
         criar_exemplo_ficticio(conn)
         yield conn
+
+
+class Casal:
+    """O casal falando com a API: cada um com o seu token."""
+
+    def __init__(self, client: TestClient, emissor: Emissor) -> None:
+        self.client, self.emissor = client, emissor
+
+    def pedir(self, quem: str, metodo: str, caminho: str, **corpo):
+        return self.client.request(metodo, caminho, headers=self.emissor.cabecalho(quem), **corpo)
+
+    def conta(self, nome="Conta corrente", tipo="corrente") -> str:
+        resposta = self.pedir("flavio", "POST", "/api/contas", json={"nome": nome, "tipo": tipo})
+        assert resposta.status_code == 201
+        return resposta.json()["id"]
+
+    def categoria(self, nome="Alimentação", tipo="despesa") -> str:
+        resposta = self.pedir(
+            "flavio", "POST", "/api/categorias", json={"nome": nome, "tipo": tipo}
+        )
+        assert resposta.status_code == 201
+        return resposta.json()["id"]
+
+
+@pytest.fixture
+def casal(client: TestClient, emissor: Emissor) -> Casal:
+    return Casal(client, emissor)
+
+
+class ConexaoQueFalhaNoCommit:
+    """Conexão real que, quando `falhar`, perde a disputa otimista ao confirmar (40001)."""
+
+    def __init__(self, real, falhar: bool):
+        self._real, self._falhar = real, falhar
+
+    def __getattr__(self, nome):
+        return getattr(self._real, nome)
+
+    def __enter__(self):
+        self._real.__enter__()
+        return self
+
+    def __exit__(self, tipo, valor, tb):
+        if tipo is None and self._falhar:
+            self._real.rollback()
+            self._real.__exit__(None, None, None)
+            raise psycopg.errors.SerializationFailure("OC000")
+        return self._real.__exit__(tipo, valor, tb)
+
+
+@pytest.fixture
+def falhar_ao_confirmar(monkeypatch: pytest.MonkeyPatch):
+    """Faz as `n` primeiras transações de escrita terminarem em erro de serialização (40001)."""
+
+    def preparar(n: int) -> list[int]:
+        abertas = [0]
+        original = psycopg.connect
+
+        def conectar(*args, **kwargs):
+            abertas[0] += 1
+            return ConexaoQueFalhaNoCommit(original(*args, **kwargs), abertas[0] <= n)
+
+        monkeypatch.setattr(banco.psycopg, "connect", conectar)
+        return abertas
+
+    return preparar

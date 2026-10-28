@@ -7,7 +7,7 @@ import { cadastrar, lancar } from "./lancar";
 async function prepararCasal(page: Page, email?: string) {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const [conta, mercado] = [`Corrente ${s}`, `Mercado ${s}`];
-  await page.goto("/#/cadastro");
+  await page.goto("/#/contas-e-categorias");
   await entrar(page, email);
   await cadastrar(page, "Nova conta", conta, "corrente");
   await cadastrar(page, "Nova categoria", mercado, "despesa");
@@ -132,7 +132,7 @@ async function instalarCasca(page: Page) {
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 }
 
-test("sem internet, as telas abertas mostram a última resposta com 'atualizado às' e o cadastro precisa de internet", async ({ page, context }) => {
+test("sem internet, as telas abertas mostram a última resposta com 'atualizado às' e contas e categorias precisam de internet", async ({ page, context }) => {
   const { s, conta, mercado } = await prepararCasal(page);
   await lancar(page, { teclas: ["9", "00"], conta, categoria: mercado, descricao: `Guardado ${s}` });
   const linha = page.getByRole("listitem").filter({ hasText: `Guardado ${s}` });
@@ -144,11 +144,12 @@ test("sem internet, as telas abertas mostram a última resposta com 'atualizado 
   await expect(linha).toContainText("− R$ 9,00");
   await expect(page.getByText(/Sem internet: atualizado às \d\d:\d\d/)).toBeVisible();
 
-  await page.goto("/#/cadastro");
+  await page.goto("/#/contas-e-categorias");
   await expect(page.getByRole("listitem").filter({ hasText: conta })).toBeVisible();
   const novaConta = page.getByRole("form", { name: "Nova conta" });
   await expect(novaConta.getByRole("button", { name: "Cadastrar" })).toBeDisabled();
-  await expect(novaConta.getByText("precisa de internet")).toBeVisible();
+  await expect(page.getByRole("button", { name: `Arquivar conta ${conta}` })).toBeDisabled();
+  await expect(page.getByText("Mudar contas e categorias precisa de internet.")).toBeVisible();
 
   await context.setOffline(false);
   await expect(novaConta.getByRole("button", { name: "Cadastrar" })).toBeEnabled();
