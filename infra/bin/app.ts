@@ -33,6 +33,7 @@ for (const ambiente of ["prod", "dev"] as const) {
   if (existsSync(pacoteDaLambda) && existsSync(site)) {
     new PilhaApp(app, `financial-${ambiente}-app`, {
       env,
+      ambiente,
       dados,
       pacoteDaLambda,
       site,

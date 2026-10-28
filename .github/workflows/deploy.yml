@@ -1,8 +1,8 @@
 name: Deploy
 
 # O merge na main publica em prod; push em outra branch, ou o botão, publica em dev.
-# Ordem: banco e login, migrations e papel `api` no DSQL, build da PWA com o login do ambiente, Lambda e
-# site, teste de fumaça (ADR 0010).
+# Ordem: banco, login e bucket do backup, migrations e papéis `api` e `backup` no DSQL, build da
+# PWA com o login do ambiente, Lambda, site e um backup conferido, teste de fumaça (ADR 0010 e 0012).
 on:
   push:
     branches: ["**"]
@@ -66,13 +66,15 @@ jobs:
           aws cloudformation set-stack-policy --stack-name "financial-$AMBIENTE-dados" \
             --stack-policy-body file://politicas/dados.json
 
-      - name: Migrations no DSQL, antes da Lambda nova
+      - name: Migrations e papéis no DSQL, antes da Lambda nova
         working-directory: backend
         run: |
           export DSQL_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
             --query "Stacks[0].Outputs[?OutputKey=='DsqlEndpoint'].OutputValue" --output text)
           export API_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
             --query "Stacks[0].Outputs[?OutputKey=='RoleDaApiArn'].OutputValue" --output text)
+          export BACKUP_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
+            --query "Stacks[0].Outputs[?OutputKey=='RoleDoBackupArn'].OutputValue" --output text)
           uv run --no-dev python -m app.migrations
 
       - name: Build da PWA com o user pool do ambiente
@@ -86,8 +88,9 @@ jobs:
           export VITE_COGNITO_CLIENTE_ID=$(saida ClienteDoAppId)
           npm run build
 
-      - name: Lambda, HTTP API e site (pilha do app)
+      - name: Lambda, HTTP API, site e backup diário (pilha do app)
         working-directory: infra
+        # O deploy com código novo roda um backup e falha se ele falhar (Trigger do CDK).
         run: |
           npx cdk deploy "financial-$AMBIENTE-app" --exclusively --require-approval never
           aws cloudformation set-stack-policy --stack-name "financial-$AMBIENTE-app" \
