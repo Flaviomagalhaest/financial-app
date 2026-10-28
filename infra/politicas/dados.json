@@ -4,7 +4,11 @@
       "Effect": "Deny",
       "Principal": "*",
       "Action": ["Update:Replace", "Update:Delete"],
-      "Resource": ["LogicalResourceId/Banco", "LogicalResourceId/Usuarios"]
+      "Resource": [
+        "LogicalResourceId/Banco",
+        "LogicalResourceId/Usuarios",
+        "LogicalResourceId/Backup"
+      ]
     },
     {
       "Effect": "Allow",

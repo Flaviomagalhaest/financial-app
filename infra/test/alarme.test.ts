@@ -14,6 +14,7 @@ test("alarme de 5xx da API acima do limite por dia avisa o dono por e-mail", () 
   const pasta = mkdtempSync(join(tmpdir(), "pilha-"));
   const pilha = new PilhaApp(app, "app", {
     env,
+    ambiente: "dev",
     dados,
     pacoteDaLambda: pasta,
     site: pasta,

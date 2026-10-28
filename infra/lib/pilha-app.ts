@@ -1,4 +1,12 @@
-import { CfnOutput, Duration, Fn, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
+import {
+  CfnOutput,
+  Duration,
+  Fn,
+  RemovalPolicy,
+  Stack,
+  TimeZone,
+  type StackProps,
+} from "aws-cdk-lib";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as cwactions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
@@ -12,10 +20,14 @@ import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
+import * as schedulerTargets from "aws-cdk-lib/aws-scheduler-targets";
+import * as triggers from "aws-cdk-lib/triggers";
 import type { Construct } from "constructs";
 import type { PilhaDados } from "./pilha-dados.js";
 
 export interface PilhaAppProps extends StackProps {
+  ambiente: "prod" | "dev";
   dados: PilhaDados;
   /** Pasta com o pacote da Lambda (`scripts/empacotar-lambda.sh`). */
   pacoteDaLambda: string;
@@ -29,7 +41,7 @@ export interface PilhaAppProps extends StackProps {
 
 /**
  * A PWA num S3 privado atrás do CloudFront, e `/api/*` no mesmo endereço indo à HTTP API
- * e a uma Lambda com a API inteira (ADR 0010).
+ * e a uma Lambda com a API inteira (ADR 0010). O backup diário usa o mesmo pacote (ADR 0012).
  */
 export class PilhaApp extends Stack {
   constructor(scope: Construct, id: string, props: PilhaAppProps) {
@@ -140,6 +152,86 @@ export class PilhaApp extends Stack {
       memoryLimit: 256,
     });
 
+    this.backupDiario(props, avisos);
+
     new CfnOutput(this, "Endereco", { value: `https://${distribuicao.distributionDomainName}` });
+  }
+
+  /**
+   * Todo dia o EventBridge Scheduler chama a Lambda do backup, que grava o zip conferido no bucket com
+   * Object Lock. Um e-mail avisa se ela falhar ou se passar 26 horas sem backup concluído.
+   */
+  private backupDiario(props: PilhaAppProps, avisos: sns.Topic) {
+    const { banco, roleDoBackup, backup } = props.dados;
+    const funcao = new lambda.Function(this, "BackupDiario", {
+      runtime: lambda.Runtime.PYTHON_3_14,
+      architecture: lambda.Architecture.ARM_64,
+      handler: "app.backup_diario.handler",
+      code: lambda.Code.fromAsset(props.pacoteDaLambda),
+      // Papel `backup` do banco, só leitura, e só grava zips novos no bucket (pilha de dados).
+      role: roleDoBackup,
+      memorySize: 512,
+      timeout: Duration.minutes(5),
+      environment: {
+        DSQL_ENDPOINT: banco.attrEndpoint,
+        BACKUP_BUCKET: backup.bucketName,
+        AMBIENTE: props.ambiente,
+      },
+      logGroup: new logs.LogGroup(this, "LogsDoBackup", {
+        retention: logs.RetentionDays.THREE_MONTHS,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
+    });
+
+    // 03:07 em São Paulo, fora do uso do casal (ADR 0010: EventBridge Scheduler).
+    new scheduler.Schedule(this, "TodoDia", {
+      schedule: scheduler.ScheduleExpression.cron({
+        minute: "7",
+        hour: "3",
+        timeZone: TimeZone.AMERICA_SAO_PAULO,
+      }),
+      target: new schedulerTargets.LambdaInvoke(funcao, { retryAttempts: 2 }),
+    });
+    // No dev, cada deploy com código novo faz um backup e falha se ele falhar: confere o
+    // backup no DSQL de verdade antes do merge. Em prod não, para um backup quebrado não
+    // travar o deploy de uma correção; lá o alarme avisa.
+    if (props.ambiente === "dev") {
+      new triggers.Trigger(this, "BackupNoDeploy", {
+        handler: funcao,
+        timeout: Duration.minutes(5),
+      });
+    }
+
+    const avisar = new cwactions.SnsAction(avisos);
+
+    new cloudwatch.Alarm(this, "BackupFalhou", {
+      alarmDescription: `O backup diário de ${props.ambiente} falhou (logs da Lambda ${funcao.functionName}).`,
+      metric: funcao.metricErrors({ period: Duration.hours(1), statistic: "Sum" }),
+      threshold: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(avisar);
+
+    // A Lambda publica `BackupsConcluidos` só depois de gravar o zip conferido
+    // (backend/app/backup_diario.py). Com 25 horas cheias sem ela, o alarme dispara até 26
+    // horas depois do último backup (a hora do backup conta inteira).
+    new cloudwatch.Alarm(this, "BackupAtrasado", {
+      alarmDescription: `Nenhum backup de ${props.ambiente} concluído nas últimas 26 horas.`,
+      metric: new cloudwatch.Metric({
+        namespace: "FinancialApp",
+        metricName: "BackupsConcluidos",
+        dimensionsMap: { Ambiente: props.ambiente },
+        statistic: "Sum",
+        period: Duration.hours(1),
+      }),
+      threshold: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 25,
+      datapointsToAlarm: 25,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    }).addAlarmAction(avisar);
+
+    new CfnOutput(this, "FuncaoDoBackup", { value: funcao.functionName });
   }
 }

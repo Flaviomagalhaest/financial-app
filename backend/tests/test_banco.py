@@ -42,3 +42,10 @@ def test_migrations_entram_no_dsql_como_admin(dsql):
     assert dsql.chamadas == ["admin"]
     assert dsql.conexoes[0]["user"] == "admin"
     assert dsql.conexoes[0]["password"] == "token-admin"
+
+
+def test_backup_entra_no_dsql_com_o_papel_proprio_e_token_comum(dsql):
+    banco.conectar(papel=banco.PAPEL_DO_BACKUP)
+
+    assert dsql.chamadas == ["api"]
+    assert dsql.conexoes[0]["user"] == "backup"

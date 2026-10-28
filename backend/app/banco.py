@@ -8,23 +8,31 @@ import botocore
 import psycopg
 
 PAPEL_DA_API = "api"
+PAPEL_DO_BACKUP = "backup"
 
 
 def conectar(
-    url: str | None = None, *, autocommit: bool = False, admin: bool = False
+    url: str | None = None,
+    *,
+    autocommit: bool = False,
+    admin: bool = False,
+    papel: str = PAPEL_DA_API,
 ) -> psycopg.Connection:
     """Abre uma conexão. Sem `url`, usa DSQL_ENDPOINT (token IAM, sem senha) ou DATABASE_URL.
 
-    No DSQL a API entra com o papel `api`; só o job de deploy (migrations) pede `admin`.
+    No DSQL a API entra com o papel `api` e o backup diário com o `backup`, só de leitura; só o
+    job de deploy (migrations) pede `admin`.
     """
     if url is None and os.environ.get("DSQL_ENDPOINT"):
-        return _conectar_ao_dsql(os.environ["DSQL_ENDPOINT"], autocommit, admin)
+        return _conectar_ao_dsql(os.environ["DSQL_ENDPOINT"], autocommit, admin, papel)
     return psycopg.connect(
         url or os.environ["DATABASE_URL"], connect_timeout=3, autocommit=autocommit
     )
 
 
-def _conectar_ao_dsql(endpoint: str, autocommit: bool, admin: bool) -> psycopg.Connection:
+def _conectar_ao_dsql(
+    endpoint: str, autocommit: bool, admin: bool, papel: str
+) -> psycopg.Connection:
     regiao = os.environ["AWS_REGION"]
     cliente = boto3.client("dsql", region_name=regiao)
     gerar = (
@@ -37,7 +45,7 @@ def _conectar_ao_dsql(endpoint: str, autocommit: bool, admin: bool) -> psycopg.C
         host=endpoint,
         port=5432,
         dbname="postgres",
-        user="admin" if admin else PAPEL_DA_API,
+        user="admin" if admin else papel,
         password=token,
         sslmode="verify-full",
         # A cadeia do DSQL termina numa raiz pública; o pacote do botocore traz as raízes.

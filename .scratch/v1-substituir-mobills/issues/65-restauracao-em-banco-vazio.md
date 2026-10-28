@@ -20,3 +20,10 @@ O dono refaz o banco a partir de um backup com confiança.
 - [ ] Teste de ida e volta no CI: restaurar o backup fictício, exportar de novo e exigir zip idêntico; restaurar versão antiga
 - [ ] Restauração de verdade no `dev` a partir do backup de `prod`, antes da virada e a cada mudança no formato
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Comments
+
+- 2026-10-28 (do [ticket 64](64-backup-diario.md)): o gerador está em `backend/app/backup.py` (`gerar_backup`, `conferir_backup`, `VERSAO_FORMATO = 1`). Ele descobre as tabelas do schema `public` sozinho (fora `controle_de_migrations`), escreve cada valor como `::text` do Postgres, `NULL` como campo vazio sem aspas e todo o resto entre aspas (`csv.QUOTE_NOTNULL`), em ordem de chave primária, e o manifesto traz por tabela `linhas` e `somas` das colunas inteiras e `numeric`. Pontos para a restauração:
+  - o `::text` de `timestamptz` depende do `TimeZone` da sessão: fixe o mesmo fuso na geração e na restauração, ou a ida e volta não dá zip idêntico entre sessões com fusos diferentes;
+  - as consultas ao `pg_catalog` (`pg_constraint` com `unnest ... WITH ORDINALITY`) e ao `information_schema` só rodaram no DSQL com o banco sem tabelas do domínio; a restauração de verdade no `dev` deste checklist é a primeira a exercitá-las com tabelas;
+  - falta uma guarda que obrigue subir `versao_formato` quando uma migration muda as tabelas (o ADR 0012 pede); o gerador aceita qualquer esquema.

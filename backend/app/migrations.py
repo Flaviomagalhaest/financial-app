@@ -3,7 +3,7 @@ from pathlib import Path
 
 import psycopg
 
-from app.banco import PAPEL_DA_API, conectar
+from app.banco import PAPEL_DA_API, PAPEL_DO_BACKUP, conectar
 
 PASTA = Path(__file__).resolve().parents[1] / "migrations"
 
@@ -21,8 +21,11 @@ def aplicar_migrations(url: str | None = None) -> None:
                 continue
             conn.execute(arquivo.read_text())
             conn.execute("INSERT INTO controle_de_migrations (nome) VALUES (%s)", (arquivo.name,))
-        if (papel_arn := os.environ.get("API_ROLE_ARN")) and os.environ.get("DSQL_ENDPOINT"):
-            _conceder_ao_papel_da_api(conn, papel_arn)
+        if os.environ.get("DSQL_ENDPOINT"):
+            if papel_arn := os.environ.get("API_ROLE_ARN"):
+                _conceder_ao_papel_da_api(conn, papel_arn)
+            if papel_arn := os.environ.get("BACKUP_ROLE_ARN"):
+                _conceder_ao_papel_do_backup(conn, papel_arn)
 
 
 def _literal(texto: str) -> str:
@@ -30,12 +33,27 @@ def _literal(texto: str) -> str:
 
 
 def _conceder_ao_papel_da_api(conn: psycopg.Connection, papel_arn: str) -> None:
-    """Cria o papel da API (ligado à role IAM da Lambda) e libera leitura e escrita nas tabelas (só leitura em `controle_de_migrations`).
+    """Liga o papel da API à role IAM da Lambda e libera leitura e escrita nas tabelas (só leitura em `controle_de_migrations`).
 
     Roda a cada deploy: o DSQL não tem `ALTER DEFAULT PRIVILEGES`, então as tabelas criadas
     pelas migrations novas recebem o `GRANT` aqui, depois de aplicadas.
     """
     papel = PAPEL_DA_API
+    _ligar_papel_a_role(conn, papel, papel_arn)
+    # Sem GRANT USAGE: o DSQL recusa no schema `public` (entidade de sistema) e já o libera.
+    conn.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {papel}")
+    # A API só lê o controle das migrations (a /api/saude conta as aplicadas).
+    conn.execute(f"REVOKE INSERT, UPDATE, DELETE ON controle_de_migrations FROM {papel}")
+
+
+def _conceder_ao_papel_do_backup(conn: psycopg.Connection, papel_arn: str) -> None:
+    """Liga o papel do backup à role IAM da Lambda do backup, só com leitura (ADR 0012)."""
+    _ligar_papel_a_role(conn, PAPEL_DO_BACKUP, papel_arn)
+    conn.execute(f"GRANT SELECT ON ALL TABLES IN SCHEMA public TO {PAPEL_DO_BACKUP}")
+
+
+def _ligar_papel_a_role(conn: psycopg.Connection, papel: str, papel_arn: str) -> None:
+    """Cria o papel do banco, se faltar, e o deixa ligado só à role IAM de `papel_arn`."""
     if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (papel,)).fetchone():
         conn.execute(f"CREATE ROLE {papel} WITH LOGIN")
     # AWS IAM GRANT não aceita parâmetros; o ARN vem da saída da pilha, não de entrada externa.
@@ -45,15 +63,11 @@ def _conceder_ao_papel_da_api(conn: psycopg.Connection, papel_arn: str) -> None:
             "SELECT arn FROM sys.iam_pg_role_mappings WHERE pg_role_name = %s", (papel,)
         )
     }
-    # Role da Lambda substituída: o ARN novo troca o antigo, senão o login da API falha.
+    # Role da Lambda substituída: o ARN novo troca o antigo, senão o login falha.
     for antigo in mapeados - {papel_arn}:
         conn.execute(f"AWS IAM REVOKE {papel} FROM '{_literal(antigo)}'")
     if papel_arn not in mapeados:
         conn.execute(f"AWS IAM GRANT {papel} TO '{_literal(papel_arn)}'")
-    # Sem GRANT USAGE: o DSQL recusa no schema `public` (entidade de sistema) e já o libera.
-    conn.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {papel}")
-    # A API só lê o controle das migrations (a /api/saude conta as aplicadas).
-    conn.execute(f"REVOKE INSERT, UPDATE, DELETE ON controle_de_migrations FROM {papel}")
 
 
 def total_aplicadas(conn: psycopg.Connection) -> int:
