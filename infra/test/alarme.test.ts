@@ -23,6 +23,7 @@ test("alarme de 5xx da API acima do limite por dia avisa o dono por e-mail", () 
   const modelo = Template.fromStack(pilha);
   modelo.hasResourceProperties("AWS::CloudWatch::Alarm", {
     MetricName: "5xx",
+    Dimensions: Match.arrayWith([Match.objectLike({ Name: "Stage", Value: "$default" })]),
     Namespace: "AWS/ApiGateway",
     Statistic: "Sum",
     Period: 86400,

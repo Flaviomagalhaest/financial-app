@@ -82,7 +82,7 @@ export class PilhaApp extends Stack {
       metric: new cloudwatch.Metric({
         namespace: "AWS/ApiGateway",
         metricName: "5xx",
-        dimensionsMap: { ApiId: httpApi.apiId },
+        dimensionsMap: { ApiId: httpApi.apiId, Stage: "$default" },
         statistic: "Sum",
         period: Duration.days(1),
       }),
