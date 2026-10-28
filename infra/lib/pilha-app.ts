@@ -28,7 +28,7 @@ export interface PilhaAppProps extends StackProps {
 export class PilhaApp extends Stack {
   constructor(scope: Construct, id: string, props: PilhaAppProps) {
     super(scope, id, props);
-    const { banco, roleDaApi, usuarios, clienteDoApp } = props.dados;
+    const { banco, roleDaApi, emissor, clienteDoApp } = props.dados;
 
     const api = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.PYTHON_3_14,
@@ -38,7 +38,12 @@ export class PilhaApp extends Stack {
       role: roleDaApi,
       memorySize: 512,
       timeout: Duration.seconds(15),
-      environment: { DSQL_ENDPOINT: banco.attrEndpoint },
+      // A API confere o JWT de novo, só por emissor e audiência (app/login.py).
+      environment: {
+        DSQL_ENDPOINT: banco.attrEndpoint,
+        JWT_EMISSOR: emissor,
+        JWT_AUDIENCIA: clienteDoApp.userPoolClientId,
+      },
       logGroup: new logs.LogGroup(this, "LogsDaApi", {
         retention: logs.RetentionDays.ONE_MONTH,
         removalPolicy: RemovalPolicy.DESTROY,
@@ -48,11 +53,9 @@ export class PilhaApp extends Stack {
     // Só a rota de saúde é aberta; o resto exige o JWT do user pool (emissor e audiência).
     const httpApi = new apigw.HttpApi(this, "HttpApi", {
       createDefaultStage: false,
-      defaultAuthorizer: new HttpJwtAuthorizer(
-        "Jwt",
-        `https://cognito-idp.${this.region}.amazonaws.com/${usuarios.userPoolId}`,
-        { jwtAudience: [clienteDoApp.userPoolClientId] },
-      ),
+      defaultAuthorizer: new HttpJwtAuthorizer("Jwt", emissor, {
+        jwtAudience: [clienteDoApp.userPoolClientId],
+      }),
     });
     httpApi.addStage("Padrao", {
       stageName: "$default",

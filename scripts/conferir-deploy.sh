@@ -29,6 +29,11 @@ sys.exit(0 if s["status"] == "ok" and s["migrations"] >= int(sys.argv[1]) else 1
 done
 echo "API no ar: $SAUDE"
 
+# O resto da API exige login: sem token, a HTTP API recusa antes da Lambda.
+SEM_LOGIN=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$ENDERECO/api/eu")
+[ "$SEM_LOGIN" = 401 ] || { echo "::error::$ENDERECO/api/eu sem token respondeu $SEM_LOGIN, não 401"; exit 1; }
+echo "API recusa quem não entrou"
+
 curl -fsS --max-time 20 "$ENDERECO/" | grep -q '<div id="root">' \
   || { echo "::error::$ENDERECO/ não serviu a PWA"; exit 1; }
 echo "PWA no ar em $ENDERECO"
