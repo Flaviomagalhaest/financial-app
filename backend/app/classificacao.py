@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api")
 
 def _categoria(conn, id: UUID) -> Categoria | None:
     linha = conn.execute(
-        "SELECT id, nome, tipo, arquivada FROM categorias WHERE id = %s", (id,)
+        "SELECT id, nome, tipo, arquivada_em IS NOT NULL FROM categorias WHERE id = %s", (id,)
     ).fetchone()
     return (
         Categoria(id=linha[0], nome=linha[1], tipo=linha[2], arquivada=linha[3]) if linha else None

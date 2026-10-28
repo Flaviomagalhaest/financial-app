@@ -94,11 +94,11 @@ def _da_versao_3_para_a_4(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
 
 
 def _da_versao_4_para_a_5(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 4 tem `arquivada` nas categorias (ticket 74): backup antigo entra com todas
+    """A versão 5 tem `arquivada_em` nas categorias (ticket 74): backup antigo entra com todas
     ativas, e o que já trouxer a coluna fica como está."""
     colunas, linhas = tabelas["categorias"]
-    if "arquivada" not in colunas:
-        tabelas["categorias"] = ([*colunas, "arquivada"], [[*linha, "false"] for linha in linhas])
+    if "arquivada_em" not in colunas:
+        tabelas["categorias"] = ([*colunas, "arquivada_em"], [[*linha, None] for linha in linhas])
     return manifesto, tabelas
 
 

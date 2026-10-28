@@ -220,7 +220,7 @@ def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Reques
 def listar_categorias(usuario: UsuarioLogado, request: Request) -> list[Categoria]:
     with conectar(url_do_banco(request)) as conn:
         linhas = conn.execute(
-            "SELECT id, nome, tipo, arquivada FROM categorias ORDER BY nome, id"
+            "SELECT id, nome, tipo, arquivada_em IS NOT NULL FROM categorias ORDER BY nome, id"
         ).fetchall()
     return [Categoria(id=i, nome=n, tipo=t, arquivada=a) for i, n, t, a in linhas]
 
@@ -233,9 +233,11 @@ def alterar_categoria(
     linha = em_transacao(
         url_do_banco(request),
         lambda conn: conn.execute(
-            "UPDATE categorias SET nome = COALESCE(%s, nome), arquivada = COALESCE(%s, arquivada)"
-            " WHERE id = %s RETURNING id, nome, tipo, arquivada",
-            (alteracao.nome, alteracao.arquivada, id),
+            "UPDATE categorias SET nome = COALESCE(%s, nome),"
+            " arquivada_em = CASE WHEN %s::boolean IS NULL THEN arquivada_em"
+            " WHEN %s::boolean THEN COALESCE(arquivada_em, now()) END"
+            " WHERE id = %s RETURNING id, nome, tipo, arquivada_em IS NOT NULL",
+            (alteracao.nome, alteracao.arquivada, alteracao.arquivada, id),
         ).fetchone(),
     )
     if not linha:
@@ -271,7 +273,8 @@ def _conferir_ligacoes(
     tipos = {}
     arquivadas = set()
     for id, tipo, arquivada in conn.execute(
-        "SELECT id, tipo, arquivada FROM categorias WHERE id = ANY(%s)", (lancamento.categoria_ids,)
+        "SELECT id, tipo, arquivada_em IS NOT NULL FROM categorias WHERE id = ANY(%s)",
+        (lancamento.categoria_ids,),
     ):
         tipos[id] = tipo
         if arquivada:

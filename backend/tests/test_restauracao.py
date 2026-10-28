@@ -235,7 +235,7 @@ def test_backup_da_versao_2_restaura_convertido_com_as_contas_sem_abertura(datab
 
 
 def test_backup_da_versao_4_sem_categoria_arquivada_restaura_com_todas_ativas(database_url):
-    # O que `prod` gravava antes do ticket 74: `categorias` sem a coluna `arquivada`.
+    # O que `prod` gravava antes do ticket 74: `categorias` sem a coluna `arquivada_em`.
     aplicar_migrations(database_url)
     with psycopg.connect(database_url, autocommit=True) as conn:
         conn.execute(
@@ -268,6 +268,6 @@ def test_backup_da_versao_4_sem_categoria_arquivada_restaura_com_todas_ativas(da
         manifesto = restaurar_backup(conn, antigo.getvalue())
 
         assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
-        assert conn.execute("SELECT nome, arquivada FROM categorias").fetchall() == [
-            ("Mercado", False)
+        assert conn.execute("SELECT nome, arquivada_em FROM categorias").fetchall() == [
+            ("Mercado", None)
         ]
