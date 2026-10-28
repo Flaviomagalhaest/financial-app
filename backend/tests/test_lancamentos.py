@@ -3,6 +3,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from app.banco import TENTATIVAS_NA_SERIALIZACAO
 from tests.conftest import Casal, lancamento
 
 
@@ -212,3 +213,32 @@ def test_editar_a_data_para_o_passado_realiza_o_que_era_futuro_mas_a_escolha_man
     assert passado.json()["situacao"] == "realizado"
     assert mesmo_dia.json()["situacao"] == "previsto"
     assert sem_mexer_na_data.json()["situacao"] == "previsto"
+
+
+def test_escrita_termina_bem_na_segunda_tentativa_do_erro_de_serializacao(
+    casal: Casal, falhar_ao_confirmar
+):
+    conta = casal.conta()
+    categoria = casal.categoria()
+    falhar_ao_confirmar(1)
+
+    novo = lancamento(conta, [categoria])
+    resposta = casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
+
+    assert resposta.status_code == 201
+    assert resposta.json()["id"] == novo["id"]
+    listados = casal.pedir("flavio", "GET", "/api/lancamentos").json()
+    assert [l["id"] for l in listados] == [novo["id"]]
+
+
+def test_escrita_desiste_com_erro_se_a_serializacao_nunca_passa(casal: Casal, falhar_ao_confirmar):
+    conta = casal.conta()
+    categoria = casal.categoria()
+    abertas = falhar_ao_confirmar(100)
+
+    resposta = casal.pedir(
+        "flavio", "POST", "/api/lancamentos", json=lancamento(conta, [categoria])
+    )
+
+    assert resposta.status_code == 503
+    assert abertas[0] == TENTATIVAS_NA_SERIALIZACAO

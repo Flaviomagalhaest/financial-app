@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from app.banco import conectar
+from app.banco import conectar, em_transacao
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
@@ -84,11 +84,13 @@ def _url(request: Request) -> str | None:
 @router.post("/contas", status_code=201, response_model=Conta, operation_id="criar_conta")
 def criar_conta(nova: NovaConta, usuario: UsuarioLogado, request: Request) -> Conta:
     id = uuid4()
-    with conectar(_url(request)) as conn:
-        conn.execute(
+    em_transacao(
+        _url(request),
+        lambda conn: conn.execute(
             "INSERT INTO contas (id, nome, tipo, criado_por) VALUES (%s, %s, %s, %s)",
             (id, nova.nome, nova.tipo, usuario),
-        )
+        ),
+    )
     return Conta(id=id, **nova.model_dump())
 
 
@@ -104,11 +106,13 @@ def listar_contas(usuario: UsuarioLogado, request: Request) -> list[Conta]:
 )
 def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Request) -> Categoria:
     id = uuid4()
-    with conectar(_url(request)) as conn:
-        conn.execute(
+    em_transacao(
+        _url(request),
+        lambda conn: conn.execute(
             "INSERT INTO categorias (id, nome, tipo, criado_por) VALUES (%s, %s, %s, %s)",
             (id, nova.nome, nova.tipo, usuario),
-        )
+        ),
+    )
     return Categoria(id=id, **nova.model_dump())
 
 
@@ -217,7 +221,8 @@ def criar_lancamento(
     novo: NovoLancamento, usuario: UsuarioLogado, request: Request, response: Response
 ) -> Lancamento:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
-    with conectar(_url(request)) as conn:
+
+    def gravar(conn) -> Lancamento:
         _conferir_ligacoes(conn, novo)
         gravados = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
@@ -238,9 +243,10 @@ def criar_lancamento(
         if gravados:
             _gravar_categorias(conn, novo.id, novo.categoria_ids)
             _gravar_tags(conn, novo.id, novo.tags, usuario)
-        else:
-            response.status_code = 200
+        response.status_code = 201 if gravados else 200
         return _todos(conn, novo.id)[0]
+
+    return em_transacao(_url(request), gravar)
 
 
 def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
@@ -295,7 +301,8 @@ def editar_lancamento(
 ) -> Lancamento:
     if editado.id != id:
         raise _recusar("o id do corpo difere do id da URL")
-    with conectar(_url(request)) as conn:
+
+    def gravar(conn) -> Lancamento:
         _conferir_ligacoes(conn, editado)
         atual = conn.execute(
             "SELECT data, situacao FROM lancamentos WHERE id = %s", (id,)
@@ -329,12 +336,17 @@ def editar_lancamento(
         _gravar_tags(conn, id, editado.tags, usuario)
         return _todos(conn, id)[0]
 
+    return em_transacao(_url(request), gravar)
+
 
 @router.delete("/lancamentos/{id}", status_code=204, operation_id="excluir_lancamento")
 def excluir_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente: excluir o que já não existe também dá 204."""
-    with conectar(_url(request)) as conn:
+
+    def excluir(conn) -> None:
         conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
         conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
         conn.execute("DELETE FROM lancamentos WHERE id = %s", (id,))
+
+    em_transacao(_url(request), excluir)
     return Response(status_code=204)

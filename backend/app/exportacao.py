@@ -17,7 +17,7 @@ import psycopg
 from psycopg import IsolationLevel
 
 from app.backup import conferir_backup, gerar_backup
-from app.banco import conectar
+from app.banco import conectar, em_transacao
 
 Formato = Literal["backup", "planilha"]
 VALIDADE_DA_URL = 300
@@ -68,11 +68,13 @@ def exportar(s3, bucket: str, usuario: str, formato: Formato, url: str | None = 
     chave = f"exportacoes/{id_}.{extensao}"
     s3.put_object(Bucket=bucket, Key=chave, Body=conteudo, ContentType=tipo)
     # Só depois de o arquivo existir: um pedido que falhou não conta como exportação.
-    with conectar(url) as conn:
-        conn.execute(
+    em_transacao(
+        url,
+        lambda conn: conn.execute(
             "INSERT INTO exportacoes (id, usuario, formato) VALUES (%s, %s, %s)",
             (id_, usuario, formato),
-        )
+        ),
+    )
     assinada = s3.generate_presigned_url(
         "get_object",
         Params={
