@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 3
+VERSAO_FORMATO = 4
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -55,7 +55,16 @@ def _da_versao_1_para_a_2(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
 
 
 def _da_versao_2_para_a_3(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 3 (ticket 40) arquiva categorias (`arquivada_em`, vazia nas antigas) e traz as
+    """A versão 3 tem o registro das exportações a pedido (ticket 66): backup antigo entra sem
+    nenhum pedido registrado, e o que já trouxer a tabela fica como está."""
+    if "exportacoes" not in tabelas:
+        tabelas["exportacoes"] = (["id", "usuario", "formato", "criada_em"], [])
+        manifesto["tabelas"]["exportacoes"] = {"linhas": 0, "somas": {}}
+    return manifesto, tabelas
+
+
+def _da_versao_3_para_a_4(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 4 (ticket 40) arquiva categorias (`arquivada_em`, vazia nas antigas) e traz as
     tabelas das tags, que entram vazias."""
     colunas, linhas = tabelas["categorias"]
     if "arquivada_em" not in colunas:
@@ -76,6 +85,7 @@ def _da_versao_2_para_a_3(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     1: _da_versao_1_para_a_2,
     2: _da_versao_2_para_a_3,
+    3: _da_versao_3_para_a_4,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
