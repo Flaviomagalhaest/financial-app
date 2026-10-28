@@ -103,3 +103,22 @@ def test_conferencia_recusa_zip_com_linha_faltando(banco_ficticio):
             banco_ficticio,
             trocar_arquivo(backup, "lancamentos.csv", "".join(sem_a_ultima).encode()),
         )
+
+
+def test_papel_so_de_leitura_gera_o_mesmo_backup_que_o_dono(banco_ficticio):
+    # A chave primária não é a primeira coluna: a ordem pela chave difere da ordem pelas colunas.
+    banco_ficticio.execute(
+        "CREATE TABLE parcelas (descricao text NOT NULL, numero int PRIMARY KEY)"
+    )
+    banco_ficticio.execute("INSERT INTO parcelas VALUES ('b primeira', 1), ('a segunda', 2)")
+    do_dono = gerar_backup(banco_ficticio)
+    # Como o papel `backup` do DSQL: só SELECT (o DSQL já libera o schema public).
+    banco_ficticio.execute(
+        "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'so_leitura')"
+        " THEN CREATE ROLE so_leitura; END IF; END $$"
+    )
+    banco_ficticio.execute("GRANT USAGE ON SCHEMA public TO so_leitura")
+    banco_ficticio.execute("GRANT SELECT ON ALL TABLES IN SCHEMA public TO so_leitura")
+    banco_ficticio.execute("SET ROLE so_leitura")
+
+    assert gerar_backup(banco_ficticio) == do_dono

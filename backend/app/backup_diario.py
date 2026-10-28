@@ -11,12 +11,12 @@ import boto3
 from psycopg import IsolationLevel
 
 from app.backup import conferir_backup, gerar_backup
-from app.banco import conectar
+from app.banco import PAPEL_DO_BACKUP, conectar
 
 
 def fazer_backup_diario(s3, bucket: str, ambiente: str, dia: date, url: str | None = None) -> str:
     """Grava `diario/AAAA-MM-DD.zip` e devolve a chave; levanta erro se o zip não bater."""
-    with conectar(url) as conn:
+    with conectar(url, papel=PAPEL_DO_BACKUP) as conn:
         # Uma foto só do banco: a geração e a conferência leem o mesmo instante.
         conn.isolation_level = IsolationLevel.REPEATABLE_READ
         conn.read_only = True

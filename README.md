@@ -68,6 +68,8 @@ O workflow `.github/workflows/deploy.yml` publica pelo GitHub Actions com OIDC (
 
 Cada ambiente tem duas pilhas: `financial-<ambiente>-dados` (cluster Aurora DSQL e user pool do Cognito) e `financial-<ambiente>-app` (Lambda arm64 com a API, HTTP API com limite de 10 por segundo e rajada de 20, PWA num S3 privado e o CloudFront, que leva `/api/*` à HTTP API sem cache). O deploy segue esta ordem: pilha de dados, migrations no DSQL, build da PWA com o user pool do ambiente, pilha do app e o teste de fumaça (`scripts/conferir-deploy.sh <endereço>`), que exige `/api/saude` ok com todas as migrations e `/api/eu` recusado sem token. As políticas das pilhas (`infra/politicas/`) proíbem substituir ou remover a distribuição, o banco e o user pool, porque a PWA instalada fica presa ao endereço do CloudFront.
 
+Alarmes de custo e de erros (e-mail do dono em `config/aws.json`, `emailDoDono`): a pilha `financial-orcamento` (da conta, não de um ambiente) cria o orçamento mensal sem créditos com alertas em US$ 1 (real), US$ 5 (previsão) e US$ 5 (real); ela é publicada à mão, como a `financial-github` (`cd infra && npx cdk deploy financial-orcamento`). Cada pilha do app tem um alarme de mais de 5 respostas 5xx por dia na HTTP API, avisando por SNS e e-mail. Depois do primeiro deploy, o dono confirma a inscrição do SNS que chega por e-mail. `npm test` em `infra/` confere os dois.
+
 Para conferir as pilhas localmente:
 
 ```sh

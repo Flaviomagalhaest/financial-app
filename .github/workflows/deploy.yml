@@ -1,8 +1,8 @@
 name: Deploy
 
 # O merge na main publica em prod; push em outra branch, ou o botão, publica em dev.
-# Ordem: banco, login e bucket do backup, migrations no DSQL, build da PWA com o login do
-# ambiente, Lambda, site e um backup conferido, teste de fumaça (ADR 0010 e 0012).
+# Ordem: banco, login e bucket do backup, migrations e papéis `api` e `backup` no DSQL, build da
+# PWA com o login do ambiente, Lambda, site e um backup conferido, teste de fumaça (ADR 0010 e 0012).
 on:
   push:
     branches: ["**"]
@@ -26,8 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AMBIENTE: ${{ github.ref_name == 'main' && github.event_name == 'push' && 'prod' || 'dev' }}
-      # Quem recebe os alertas do backup (variável do repositório, fora do código).
-      EMAIL_DE_ALERTAS: ${{ vars.EMAIL_DE_ALERTAS }}
     # Um deploy por vez em cada pilha; o dev é dividido por todas as branches.
     concurrency:
       group: deploy-${{ github.ref_name == 'main' && github.event_name == 'push' && 'prod' || 'dev' }}
@@ -68,11 +66,15 @@ jobs:
           aws cloudformation set-stack-policy --stack-name "financial-$AMBIENTE-dados" \
             --stack-policy-body file://politicas/dados.json
 
-      - name: Migrations no DSQL, antes da Lambda nova
+      - name: Migrations e papéis no DSQL, antes da Lambda nova
         working-directory: backend
         run: |
           export DSQL_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
             --query "Stacks[0].Outputs[?OutputKey=='DsqlEndpoint'].OutputValue" --output text)
+          export API_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
+            --query "Stacks[0].Outputs[?OutputKey=='RoleDaApiArn'].OutputValue" --output text)
+          export BACKUP_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
+            --query "Stacks[0].Outputs[?OutputKey=='RoleDoBackupArn'].OutputValue" --output text)
           uv run --no-dev python -m app.migrations
 
       - name: Build da PWA com o user pool do ambiente
@@ -90,9 +92,6 @@ jobs:
         working-directory: infra
         # O deploy com código novo roda um backup e falha se ele falhar (Trigger do CDK).
         run: |
-          if [ -z "$EMAIL_DE_ALERTAS" ]; then
-            echo "::warning::falta a variável EMAIL_DE_ALERTAS do repositório: os alarmes do backup ficam sem e-mail"
-          fi
           npx cdk deploy "financial-$AMBIENTE-app" --exclusively --require-approval never
           aws cloudformation set-stack-policy --stack-name "financial-$AMBIENTE-app" \
             --stack-policy-body file://politicas/app.json

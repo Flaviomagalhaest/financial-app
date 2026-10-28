@@ -102,13 +102,16 @@ def _somas(conn: psycopg.Connection, tabela: str, tipos: dict[str, str]) -> dict
 
 
 def _chave(conn: psycopg.Connection, tabela: str) -> list[str]:
+    """Colunas da chave primária, em ordem. Pelo `pg_catalog`: o `information_schema` esconde
+    as restrições de quem só tem SELECT, como o papel `backup`."""
     nomes = conn.execute(
-        "SELECT k.column_name FROM information_schema.table_constraints t"
-        " JOIN information_schema.key_column_usage k"
-        "   ON k.constraint_schema = t.constraint_schema AND k.constraint_name = t.constraint_name"
-        " WHERE t.table_schema = 'public' AND t.table_name = %s"
-        "   AND t.constraint_type = 'PRIMARY KEY'"
-        " ORDER BY k.ordinal_position",
+        "SELECT a.attname FROM pg_constraint c"
+        " JOIN pg_class t ON t.oid = c.conrelid"
+        " JOIN pg_namespace n ON n.oid = t.relnamespace"
+        " CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(numero, ordem)"
+        " JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.numero"
+        " WHERE n.nspname = 'public' AND t.relname = %s AND c.contype = 'p'"
+        " ORDER BY k.ordem",
         (tabela,),
     ).fetchall()
     return [nome for (nome,) in nomes]

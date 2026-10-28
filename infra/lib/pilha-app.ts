@@ -7,24 +7,22 @@ import {
   Stack,
   type StackProps,
 } from "aws-cdk-lib";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cwactions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
-import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
-import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
-import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
-import * as sns from "aws-cdk-lib/aws-sns";
-import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import * as triggers from "aws-cdk-lib/triggers";
-import type * as dsql from "aws-cdk-lib/aws-dsql";
 import type { Construct } from "constructs";
 import type { PilhaDados } from "./pilha-dados.js";
 
@@ -37,8 +35,8 @@ export interface PilhaAppProps extends StackProps {
   site: string;
   /** Em `prod`, a distribuição fica mesmo se a pilha for apagada. */
   guardar: boolean;
-  /** Quem recebe os alertas; sem ele, o tópico existe sem assinatura. */
-  emailDeAlertas?: string;
+  /** Recebe o alarme de erros 5xx da API. */
+  emailDoDono: string;
 }
 
 /**
@@ -48,13 +46,14 @@ export interface PilhaAppProps extends StackProps {
 export class PilhaApp extends Stack {
   constructor(scope: Construct, id: string, props: PilhaAppProps) {
     super(scope, id, props);
-    const { banco, emissor, clienteDoApp, backup } = props.dados;
+    const { banco, roleDaApi, emissor, clienteDoApp } = props.dados;
 
     const api = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.PYTHON_3_14,
       architecture: lambda.Architecture.ARM_64,
       handler: "app.lambda_handler.handler",
       code: lambda.Code.fromAsset(props.pacoteDaLambda),
+      role: roleDaApi,
       memorySize: 512,
       timeout: Duration.seconds(15),
       // A API confere o JWT de novo, só por emissor e audiência (app/login.py).
@@ -68,12 +67,6 @@ export class PilhaApp extends Stack {
         removalPolicy: RemovalPolicy.DESTROY,
       }),
     });
-    api.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["dsql:DbConnectAdmin"],
-        resources: [banco.attrResourceArn],
-      }),
-    );
 
     // Só a rota de saúde é aberta; o resto exige o JWT do user pool (emissor e audiência).
     const httpApi = new apigw.HttpApi(this, "HttpApi", {
@@ -87,6 +80,24 @@ export class PilhaApp extends Stack {
       autoDeploy: true,
       throttle: { rateLimit: 10, burstLimit: 20 },
     });
+    // Mais de 5 respostas 5xx num dia avisam o dono por e-mail.
+    const avisos = new sns.Topic(this, "Avisos");
+    avisos.addSubscription(new subs.EmailSubscription(props.emailDoDono));
+    new cloudwatch.Alarm(this, "Erros5xx", {
+      alarmDescription: "Erros 5xx da API acima do limite por dia",
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/ApiGateway",
+        metricName: "5xx",
+        dimensionsMap: { ApiId: httpApi.apiId, Stage: "$default" },
+        statistic: "Sum",
+        period: Duration.days(1),
+      }),
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cwactions.SnsAction(avisos));
+
     const integracao = new HttpLambdaIntegration("Lambda", api);
     httpApi.addRoutes({
       path: "/api/saude",
@@ -141,7 +152,7 @@ export class PilhaApp extends Stack {
       memoryLimit: 256,
     });
 
-    this.backupDiario(props, banco, backup);
+    this.backupDiario(props, avisos);
 
     new CfnOutput(this, "Endereco", { value: `https://${distribuicao.distributionDomainName}` });
   }
@@ -150,17 +161,20 @@ export class PilhaApp extends Stack {
    * Todo dia o EventBridge chama a Lambda do backup, que grava o zip conferido no bucket com
    * Object Lock. Um e-mail avisa se ela falhar ou se passar 26 horas sem backup concluído.
    */
-  private backupDiario(props: PilhaAppProps, banco: dsql.CfnCluster, bucket: s3.Bucket) {
+  private backupDiario(props: PilhaAppProps, avisos: sns.Topic) {
+    const { banco, roleDoBackup, backup } = props.dados;
     const funcao = new lambda.Function(this, "BackupDiario", {
       runtime: lambda.Runtime.PYTHON_3_14,
       architecture: lambda.Architecture.ARM_64,
       handler: "app.backup_diario.handler",
       code: lambda.Code.fromAsset(props.pacoteDaLambda),
+      // Papel `backup` do banco, só leitura, e só grava zips novos no bucket (pilha de dados).
+      role: roleDoBackup,
       memorySize: 512,
       timeout: Duration.minutes(5),
       environment: {
         DSQL_ENDPOINT: banco.attrEndpoint,
-        BACKUP_BUCKET: bucket.bucketName,
+        BACKUP_BUCKET: backup.bucketName,
         AMBIENTE: props.ambiente,
       },
       logGroup: new logs.LogGroup(this, "LogsDoBackup", {
@@ -168,21 +182,7 @@ export class PilhaApp extends Stack {
         removalPolicy: RemovalPolicy.DESTROY,
       }),
     });
-    funcao.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["dsql:DbConnectAdmin"],
-        resources: [banco.attrResourceArn],
-      }),
-    );
-    // Só grava zips novos: nem apaga nem mexe na retenção.
-    funcao.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["s3:PutObject"],
-        resources: [bucket.arnForObjects("diario/*")],
-      }),
-    );
 
-    // 03:07 em São Paulo (06:07 UTC), fora do uso do casal.
     new events.Rule(this, "TodoDia", {
       schedule: events.Schedule.cron({ minute: "7", hour: "6" }),
       targets: [new targets.LambdaFunction(funcao)],
@@ -198,13 +198,7 @@ export class PilhaApp extends Stack {
       timeout: Duration.minutes(5),
     });
 
-    const alertas = new sns.Topic(this, "Alertas", {
-      displayName: `Financial App (${props.ambiente})`,
-    });
-    if (props.emailDeAlertas) {
-      alertas.addSubscription(new subscriptions.EmailSubscription(props.emailDeAlertas));
-    }
-    const avisar = new cwActions.SnsAction(alertas);
+    const avisar = new cwactions.SnsAction(avisos);
 
     new cloudwatch.Alarm(this, "BackupFalhou", {
       alarmDescription: `O backup diário de ${props.ambiente} falhou (logs da Lambda ${funcao.functionName}).`,
