@@ -1,4 +1,4 @@
-CREATE TABLE tags (
+CREATE TABLE IF NOT EXISTS tags (
     id uuid PRIMARY KEY,
     nome text NOT NULL,
     arquivada_em timestamptz,
