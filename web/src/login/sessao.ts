@@ -100,7 +100,8 @@ async function renovar(sessao: SessaoGuardada): Promise<string | null> {
 
 /** A API recusou este token (relógio do aparelho errado, por exemplo): renova na próxima chamada. */
 export function tokenRecusado(token: string): void {
-  if (atual?.tokenDeAcesso === token) atual = { ...atual, acessoVenceEm: 0 };
+  // Muda no lugar: uma renovação em andamento compara a sessão por identidade.
+  if (atual?.tokenDeAcesso === token) atual.acessoVenceEm = 0;
 }
 
 function inscrever(ouvinte: () => void) {

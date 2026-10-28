@@ -16,7 +16,8 @@ test("entra com e-mail e senha no próprio app e continua logado ao abrir de nov
   await expect(page.getByLabel("Senha")).toHaveCount(0);
 });
 
-test("e-mail ou senha errados não entram e dizem por quê", async ({ page }) => {
+// O Cognito falso não confere a senha: só o e-mail desconhecido faz a recusa aqui.
+test("e-mail desconhecido não entra e diz por quê", async ({ page }) => {
   await page.goto("/");
   await entrar(page, "intruso@teste.com");
 

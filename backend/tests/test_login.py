@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from tests.conftest import Emissor
+from tests.emissor import Emissor
 
 
 def test_a_api_tira_o_usuario_do_token(client: TestClient, emissor: Emissor):

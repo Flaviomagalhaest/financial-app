@@ -11,6 +11,8 @@ export interface Tokens {
 
 export type MotivoDoErro = "credenciais" | "rede" | "sessao-encerrada" | "outro";
 
+export const mensagemDeFalhaGenerica = "Não deu para entrar agora. Tente de novo em instantes.";
+
 export class ErroDeLogin extends Error {
   constructor(
     readonly motivo: MotivoDoErro,
@@ -24,18 +26,18 @@ const mensagens: Record<MotivoDoErro, string> = {
   credenciais: "E-mail ou senha incorretos.",
   rede: "Sem internet. Tente de novo quando a conexão voltar.",
   "sessao-encerrada": "Sua sessão foi encerrada. Entre de novo.",
-  outro: "Não deu para entrar agora. Tente de novo em instantes.",
+  outro: mensagemDeFalhaGenerica,
 };
 
 function erro(motivo: MotivoDoErro, mensagem = mensagens[motivo]) {
   return new ErroDeLogin(motivo, mensagem);
 }
 
-function traduzir(codigo: string | undefined, naRenovacao = false): ErroDeLogin {
+function traduzir(codigo: string | undefined): ErroDeLogin {
   switch (codigo) {
     case "NotAuthorizedException":
     case "UserNotFoundException":
-      return erro(naRenovacao ? "sessao-encerrada" : "credenciais");
+      return erro("credenciais");
     case "PasswordResetRequiredException":
       return erro("outro", "Esta senha precisa ser trocada pelo dono antes de entrar.");
     case "TooManyRequestsException":
@@ -77,7 +79,7 @@ export function entrarNoCognito(cfg: ConfiguracaoDoCognito, email: string, senha
   });
 }
 
-async function chamar(cfg: ConfiguracaoDoCognito, operacao: string, corpo: object, naRenovacao = false) {
+async function chamar(cfg: ConfiguracaoDoCognito, operacao: string, corpo: object) {
   let resposta: Response;
   try {
     resposta = await fetch(cfg.endpoint, {
@@ -92,19 +94,23 @@ async function chamar(cfg: ConfiguracaoDoCognito, operacao: string, corpo: objec
     throw erro("rede");
   }
   const dados = await resposta.json().catch(() => ({}));
-  if (!resposta.ok) throw traduzir(String(dados.__type ?? dados.code ?? "").split("#").pop(), naRenovacao);
+  if (!resposta.ok) throw traduzir(String(dados.__type ?? dados.code ?? "").split("#").pop());
   return dados;
 }
 
 /** Novo token de acesso pelo refresh token, que não muda (sem rotação). */
 export async function renovarNoCognito(cfg: ConfiguracaoDoCognito, renovacao: string): Promise<Tokens> {
-  const dados = await chamar(
-    cfg,
-    "InitiateAuth",
-    { ClientId: cfg.clienteId, AuthFlow: "REFRESH_TOKEN_AUTH", AuthParameters: { REFRESH_TOKEN: renovacao } },
-    true,
-  );
-  return { acesso: dados.AuthenticationResult.AccessToken, renovacao };
+  try {
+    const dados = await chamar(cfg, "InitiateAuth", {
+      ClientId: cfg.clienteId,
+      AuthFlow: "REFRESH_TOKEN_AUTH",
+      AuthParameters: { REFRESH_TOKEN: renovacao },
+    });
+    return { acesso: dados.AuthenticationResult.AccessToken, renovacao };
+  } catch (e) {
+    // Na renovação, refresh token recusado quer dizer sessão revogada ou vencida.
+    throw e instanceof ErroDeLogin && e.motivo === "credenciais" ? erro("sessao-encerrada") : e;
+  }
 }
 
 /** Invalida o refresh token no Cognito; o token de acesso vale até vencer. */

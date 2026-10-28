@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ErroDeLogin } from "./cognito";
+import { ErroDeLogin, mensagemDeFalhaGenerica } from "./cognito";
 import { entrar } from "./sessao";
 
 export function TelaDeLogin({ aviso }: { aviso?: string }) {
@@ -15,7 +15,7 @@ export function TelaDeLogin({ aviso }: { aviso?: string }) {
     try {
       await entrar(email.trim(), senha);
     } catch (e) {
-      setErro(e instanceof ErroDeLogin ? e.message : "Não deu para entrar agora. Tente de novo em instantes.");
+      setErro(e instanceof ErroDeLogin ? e.message : mensagemDeFalhaGenerica);
       setEntrando(false);
     }
   }
