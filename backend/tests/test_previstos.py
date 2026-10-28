@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from app import lancamentos as modulo
+from app import lancamentos
 from tests.conftest import Casal
 from tests.test_lancamentos import lancamento
 
@@ -14,7 +14,7 @@ HOJE = date(2026, 10, 28)
 @pytest.fixture(autouse=True)
 def hoje_fixo(monkeypatch: pytest.MonkeyPatch) -> None:
     """Hoje é 28/10/2026 em São Paulo, para as datas dos exemplos não envelhecerem."""
-    monkeypatch.setattr(modulo, "hoje", lambda: HOJE)
+    monkeypatch.setattr(lancamentos, "hoje", lambda: HOJE)
 
 
 def test_previsto_com_data_passada_fica_atrasado_e_continua_previsto(casal: Casal):
@@ -128,8 +128,23 @@ def test_confirmar_um_lancamento_que_nao_existe_e_404(casal: Casal):
     assert resposta.status_code == 404
 
 
-def test_confirmar_o_que_ja_foi_confirmado_devolve_o_gravado_sem_reaplicar(casal: Casal):
-    """A fila reenvia, ou a outra pessoa confirmou antes: vale a primeira confirmação."""
+def test_confirmar_de_novo_igual_devolve_o_gravado(casal: Casal):
+    """A fila reenvia, ou a outra pessoa confirmou em um toque: nada se perde."""
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    previsto = lancamento(conta, [luz], data="2026-10-27", situacao="previsto")
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=previsto)
+    caminho = f"/api/lancamentos/{previsto['id']}/confirmar"
+    primeira = casal.pedir("flavio", "POST", caminho, json={"valor_centavos": 13000})
+
+    reenvio = casal.pedir("flavio", "POST", caminho, json={"valor_centavos": 13000})
+    um_toque = casal.pedir("esposa", "POST", caminho, json={})
+
+    assert (reenvio.status_code, um_toque.status_code) == (200, 200)
+    assert reenvio.json() == um_toque.json() == primeira.json()
+
+
+def test_confirmar_de_novo_com_outro_ajuste_e_recusado_sem_perder_o_primeiro(casal: Casal):
+    """Ajuste diferente sobre um já confirmado não some em silêncio (ADR 0011)."""
     conta, luz = casal.conta(), casal.categoria("Luz")
     previsto = lancamento(conta, [luz], data="2026-10-27", situacao="previsto")
     casal.pedir("flavio", "POST", "/api/lancamentos", json=previsto)
@@ -138,9 +153,9 @@ def test_confirmar_o_que_ja_foi_confirmado_devolve_o_gravado_sem_reaplicar(casal
 
     segunda = casal.pedir("esposa", "POST", caminho, json={"valor_centavos": 99999})
 
-    assert segunda.status_code == 200
-    assert segunda.json() == primeira.json()
-    assert segunda.json()["alterado_por"] == "flavio"
+    assert segunda.status_code == 409
+    [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
+    assert visto == primeira.json()
 
 
 def test_contas_da_semana_traz_atrasados_e_previstos_dos_proximos_7_dias_em_ordem_de_data(
@@ -152,7 +167,7 @@ def test_contas_da_semana_traz_atrasados_e_previstos_dos_proximos_7_dias_em_orde
         ("Salário", "receita", salario, "2026-11-04", "previsto"),  # hoje + 7: entra
         ("IPVA", "despesa", luz, "2026-11-05", "previsto"),  # hoje + 8: fica de fora
         ("Luz de setembro", "despesa", luz, "2026-09-10", "previsto"),  # atrasado há tempo
-        ("Água", "despesa", luz, "2026-10-28", "previsto"),  # vence hoje
+        ("Água", "despesa", luz, "2026-10-28", "previsto"),  # data de hoje
         ("Mercado", "despesa", luz, "2026-10-30", "realizado"),  # já realizado: fora
         ("Luz", "despesa", luz, "2026-10-27", "previsto"),  # atrasado
     ]

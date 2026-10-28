@@ -462,16 +462,25 @@ class Confirmacao(BaseModel):
 def confirmar_lancamento(
     id: UUID, confirmacao: Confirmacao, usuario: UsuarioLogado, request: Request
 ) -> Lancamento:
-    """Confirmar de novo (a fila reenviou, a outra pessoa confirmou antes) devolve o gravado."""
+    """Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
+    toque) devolve o gravado; com ajuste diferente é 409, para nada se perder em silêncio."""
 
     def gravar(conn) -> Lancamento:
         atual = conn.execute(
-            "SELECT situacao, conta_id FROM lancamentos WHERE id = %s", (id,)
+            "SELECT situacao, valor_centavos, data, conta_id FROM lancamentos WHERE id = %s",
+            (id,),
         ).fetchone()
         if not atual:
             raise HTTPException(status_code=404, detail="lançamento não encontrado")
-        situacao_atual, conta_atual = atual
+        situacao_atual, valor_atual, data_atual, conta_atual = atual
         if situacao_atual == "realizado":
+            pedido_e_gravado = [
+                (confirmacao.valor_centavos, valor_atual),
+                (confirmacao.data, data_atual),
+                (confirmacao.conta_id, conta_atual),
+            ]
+            if any(pedido not in (None, gravado) for pedido, gravado in pedido_e_gravado):
+                raise HTTPException(status_code=409, detail="já confirmado com outros valores")
             return _um(conn, id)
         if confirmacao.conta_id:
             conferir_conta(

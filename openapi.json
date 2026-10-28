@@ -547,7 +547,7 @@
     "/api/lancamentos/{id}/confirmar": {
       "post": {
         "summary": "Confirmar Lancamento",
-        "description": "Confirmar de novo (a fila reenviou, a outra pessoa confirmou antes) devolve o gravado.",
+        "description": "Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um\ntoque) devolve o gravado; com ajuste diferente é 409, para nada se perder em silêncio.",
         "operationId": "confirmar_lancamento",
         "security": [
           {

@@ -204,7 +204,8 @@ export interface paths {
         put?: never;
         /**
          * Confirmar Lancamento
-         * @description Confirmar de novo (a fila reenviou, a outra pessoa confirmou antes) devolve o gravado.
+         * @description Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
+         *     toque) devolve o gravado; com ajuste diferente é 409, para nada se perder em silêncio.
          */
         post: operations["confirmar_lancamento"];
         delete?: never;

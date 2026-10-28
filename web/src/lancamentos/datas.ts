@@ -1,8 +1,6 @@
-/** Hoje no aparelho, como `AAAA-MM-DD`. */
+/** Hoje em São Paulo, como `AAAA-MM-DD`: o dia do casal é o mesmo da API, qualquer que seja o fuso do aparelho. */
 export function hoje(): string {
-  const d = new Date();
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${String(d.getDate()).padStart(2, "0")}`;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 }
 
 /** `2026-10-02` vira `02/10/2026`. */

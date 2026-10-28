@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/cliente";
+import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
@@ -34,7 +35,12 @@ export function ContasDaSemana() {
     setEnviando(true);
     const corpo = ajuste && { valor_centavos: ajuste.centavos, data: ajuste.data, conta_id: ajuste.contaId };
     try {
-      const { error } = await api.POST("/api/lancamentos/{id}/confirmar", { params: { path: { id: l.id } }, body: corpo ?? {} });
+      const { error, response } = await api.POST("/api/lancamentos/{id}/confirmar", { params: { path: { id: l.id } }, body: corpo ?? {} });
+      if (response.status === 409) {
+        setAjustando(null);
+        await carregar();
+        return setErro("Outra pessoa já confirmou com outros valores; confira no Histórico.");
+      }
       if (error) return setErro("O servidor recusou a confirmação.");
       setAjustando(null);
       await carregar();
@@ -46,7 +52,6 @@ export function ContasDaSemana() {
     }
   }
 
-  const nome = (lista: { id: string; nome: string }[], id: string) => lista.find((i) => i.id === id)?.nome ?? "?";
   const quantas = lancamentos?.length ?? 0;
 
   return (
@@ -66,15 +71,13 @@ export function ContasDaSemana() {
       )}
       <ul className="lista">
         {lancamentos?.map((l) => {
-          const titulo = l.descricao || l.categoria_ids.map((c) => nome(categorias, c)).join(", ");
+          const titulo = tituloDoLancamento(l, categorias);
           const ajuste = ajustando?.id === l.id ? ajustando : null;
           return (
             <li key={l.id}>
               <div>
                 <strong>{titulo}</strong>
-                <span className={l.tipo === "despesa" ? "despesa" : "receita"}>
-                  {l.tipo === "despesa" ? "−" : "+"} {formatarCentavos(l.valor_centavos)}
-                </span>
+                <ValorComSinal l={l} />
               </div>
               <p className="vazio">
                 {l.atrasado && <span className="selo-atrasado">atrasado</span>}

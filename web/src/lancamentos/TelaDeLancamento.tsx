@@ -6,7 +6,7 @@ import { Teclado } from "./Teclado";
 import { useCadastro, type Lancamento } from "./useCadastro";
 
 type Tipo = "despesa" | "receita";
-type Situacao = "previsto" | "realizado";
+type Situacao = Lancamento["situacao"];
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo servidor). */
 export function TelaDeLancamento({ id }: { id?: string }) {
