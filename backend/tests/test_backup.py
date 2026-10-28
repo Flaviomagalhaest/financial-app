@@ -6,7 +6,7 @@ import zipfile
 import pytest
 
 from app.backup import BackupDivergente, conferir_backup, gerar_backup
-from tests.exemplo_ficticio import CONTA_CORRENTE, CONTA_POUPANCA
+from tests.exemplo_ficticio import CONTA_CORRENTE, CONTA_POUPANCA, trocar_arquivo
 
 
 def ler_csv(backup: bytes, nome: str) -> list[list[str | None]]:
@@ -72,7 +72,7 @@ def test_manifesto_traz_a_versao_do_formato_as_contagens_e_as_somas(banco_fictic
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
         manifesto = json.loads(zip.read("manifesto.json"))
     do_exemplo = {n: t for n, t in manifesto["tabelas"].items() if n.startswith("exemplo_")}
-    assert manifesto["versao_formato"] == 1
+    assert manifesto["versao_formato"] == 2
     assert manifesto["tabelas"]["lancamentos"] == {"linhas": 0, "somas": {"valor_centavos": "0"}}
     assert do_exemplo == {
         "exemplo_contas": {"linhas": 2, "somas": {"saldo_de_abertura": "1250.50"}},
@@ -86,14 +86,6 @@ def test_o_mesmo_banco_gera_o_mesmo_zip_sem_a_hora_da_geracao(banco_ficticio):
     assert gerar_backup(banco_ficticio) == backup
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
         assert {info.date_time for info in zip.infolist()} == {(1980, 1, 1, 0, 0, 0)}
-
-
-def trocar_arquivo(backup: bytes, nome: str, conteudo: bytes) -> bytes:
-    saida = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(backup)) as origem, zipfile.ZipFile(saida, "w") as destino:
-        for info in origem.infolist():
-            destino.writestr(info, conteudo if info.filename == nome else origem.read(info))
-    return saida.getvalue()
 
 
 def test_conferencia_aceita_o_backup_do_proprio_banco(banco_ficticio):
