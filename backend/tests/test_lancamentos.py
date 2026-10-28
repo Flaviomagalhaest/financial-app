@@ -3,6 +3,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from app.banco import TENTATIVAS_NA_SERIALIZACAO
 from tests.emissor import Emissor
 
 
@@ -278,4 +279,4 @@ def test_escrita_desiste_com_erro_se_a_serializacao_nunca_passa(casal: Casal, fa
     )
 
     assert resposta.status_code == 503
-    assert abertas[0] == 5
+    assert abertas[0] == TENTATIVAS_NA_SERIALIZACAO
