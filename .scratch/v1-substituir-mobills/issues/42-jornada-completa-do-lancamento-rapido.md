@@ -15,6 +15,7 @@ A tela de lançar chega ao desenho dos protótipos: lançar uma despesa leva pou
 
 ## Checklist
 
+- [ ] Tela de transferência entre duas contas, com categoria opcional da lista de transferência (API do [ticket 36](36-contas-saldo-e-transferencia.md), `/api/transferencias`)
 - [ ] Fileiras de toque para conta ou cartão e categorias; folha de detalhes com descrição, tags, pessoa, data, parcelado e recorrente (os dois últimos ficam desativados até seus tickets), e resumo numa linha
 - [ ] Data entre hoje, ontem ou outra; data futura nasce prevista e passada ou de hoje nasce realizada, trocável à mão
 - [ ] "Repetir último" enquanto o lançamento está vazio

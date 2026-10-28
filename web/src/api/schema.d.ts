@@ -62,11 +62,34 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Listar Contas */
+        /**
+         * Listar Contas
+         * @description As arquivadas só vêm com `arquivadas=true`.
+         */
         get: operations["listar_contas"];
         put?: never;
         /** Criar Conta */
         post: operations["criar_conta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/contas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Editar Conta
+         * @description Arquivar tira a conta das opções e mantém o histórico; desarquivar a devolve.
+         */
+        put: operations["editar_conta"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -153,6 +176,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transferencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Transferencias */
+        get: operations["listar_transferencias"];
+        put?: never;
+        /**
+         * Criar Transferencia
+         * @description Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200.
+         */
+        post: operations["criar_transferencia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transferencias/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Editar Transferencia */
+        put: operations["editar_transferencia"];
+        post?: never;
+        /**
+         * Excluir Transferencia
+         * @description Idempotente: excluir o que já não existe também dá 204.
+         */
+        delete: operations["excluir_transferencia"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -196,11 +261,35 @@ export interface components {
              * @enum {string}
              */
             tipo: "corrente" | "poupanca" | "carteira";
+            /** Saldo Abertura Centavos */
+            saldo_abertura_centavos?: number | null;
+            /** Data Abertura */
+            data_abertura?: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Saldo Centavos */
+            saldo_centavos: number;
+            /** Arquivada */
+            arquivada: boolean;
+        };
+        /** EdicaoDeConta */
+        EdicaoDeConta: {
+            /** Nome */
+            nome: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "corrente" | "poupanca" | "carteira";
+            /** Saldo Abertura Centavos */
+            saldo_abertura_centavos?: number | null;
+            /** Data Abertura */
+            data_abertura?: string | null;
+            /** Arquivada */
+            arquivada?: boolean | null;
         };
         /** Eu */
         Eu: {
@@ -294,6 +383,44 @@ export interface components {
              * @enum {string}
              */
             tipo: "corrente" | "poupanca" | "carteira";
+            /** Saldo Abertura Centavos */
+            saldo_abertura_centavos?: number | null;
+            /** Data Abertura */
+            data_abertura?: string | null;
+        };
+        /** NovaTransferencia */
+        NovaTransferencia: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Conta Origem Id
+             * Format: uuid
+             */
+            conta_origem_id: string;
+            /**
+             * Conta Destino Id
+             * Format: uuid
+             */
+            conta_destino_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /** Categoria Id */
+            categoria_id?: string | null;
+            /** Situacao */
+            situacao?: ("previsto" | "realizado") | null;
         };
         /** NovoLancamento */
         NovoLancamento: {
@@ -343,6 +470,57 @@ export interface components {
             status: string;
             /** Migrations */
             migrations: number;
+        };
+        /** Transferencia */
+        Transferencia: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Conta Origem Id
+             * Format: uuid
+             */
+            conta_origem_id: string;
+            /**
+             * Conta Destino Id
+             * Format: uuid
+             */
+            conta_destino_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /** Categoria Id */
+            categoria_id?: string | null;
+            /**
+             * Situacao
+             * @enum {string}
+             */
+            situacao: "previsto" | "realizado";
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -441,7 +619,9 @@ export interface operations {
     };
     listar_contas: {
         parameters: {
-            query?: never;
+            query?: {
+                arquivadas?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -455,6 +635,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conta"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -474,6 +663,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conta"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_conta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdicaoDeConta"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -669,6 +893,123 @@ export interface operations {
         };
     };
     excluir_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_transferencias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transferencia"][];
+                };
+            };
+        };
+    };
+    criar_transferencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaTransferencia"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transferencia"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_transferencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaTransferencia"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transferencia"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_transferencia: {
         parameters: {
             query?: never;
             header?: never;

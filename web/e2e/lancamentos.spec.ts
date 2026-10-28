@@ -139,3 +139,33 @@ test("a tela provisória #/cadastro deixou de existir", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Hoje", level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Cadastro" })).toHaveCount(0);
 });
+
+test("contas: cria com saldo de abertura, renomeia e arquiva, e a arquivada sai das opções do lançamento", async ({ page }) => {
+  const s = String(Date.now());
+  const [conta, renomeada, categoria] = [`Carteira ${s}`, `Cofre ${s}`, `Mercado ${s}`];
+  await page.goto("/#/contas-e-categorias");
+  await entrar(page);
+  const form = page.getByRole("form", { name: "Nova conta" });
+  await form.getByLabel("Nome").fill(conta);
+  await form.getByLabel("Tipo").selectOption("carteira");
+  await form.getByLabel("Saldo de abertura").fill("1.234,56");
+  await form.getByLabel("Data de abertura").fill("2020-01-01");
+  await form.getByRole("button", { name: "Cadastrar" }).click();
+  const linha = page.getByRole("listitem").filter({ hasText: conta });
+  await expect(linha).toContainText("R$ 1.234,56");
+  await cadastrar(page, "Nova categoria", categoria, "despesa");
+
+  await page.getByRole("button", { name: `Editar ${conta}` }).click();
+  await page.getByLabel(`Novo nome de ${conta}`).fill(renomeada);
+  await page.getByRole("button", { name: "Salvar conta" }).click();
+  const renomeadaLinha = page.getByRole("listitem").filter({ hasText: renomeada });
+  await expect(renomeadaLinha).toContainText("R$ 1.234,56");
+
+  await page.goto("/#/novo");
+  await expect(page.getByRole("button", { name: renomeada })).toBeVisible();
+  await page.goto("/#/contas-e-categorias");
+  await page.getByRole("button", { name: `Arquivar conta ${renomeada}` }).click();
+  await expect(page.getByRole("button", { name: `Desarquivar conta ${renomeada}` })).toBeVisible();
+  await page.goto("/#/novo");
+  await expect(page.getByRole("button", { name: renomeada })).toHaveCount(0);
+});

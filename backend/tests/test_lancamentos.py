@@ -4,34 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.banco import TENTATIVAS_NA_SERIALIZACAO
-from tests.emissor import Emissor
-
-
-class Casal:
-    """O casal falando com a API: cada um com o seu token."""
-
-    def __init__(self, client: TestClient, emissor: Emissor) -> None:
-        self.client, self.emissor = client, emissor
-
-    def pedir(self, quem: str, metodo: str, caminho: str, **corpo):
-        return self.client.request(metodo, caminho, headers=self.emissor.cabecalho(quem), **corpo)
-
-    def conta(self, nome="Conta corrente", tipo="corrente") -> str:
-        resposta = self.pedir("flavio", "POST", "/api/contas", json={"nome": nome, "tipo": tipo})
-        assert resposta.status_code == 201
-        return resposta.json()["id"]
-
-    def categoria(self, nome="Alimentação", tipo="despesa") -> str:
-        resposta = self.pedir(
-            "flavio", "POST", "/api/categorias", json={"nome": nome, "tipo": tipo}
-        )
-        assert resposta.status_code == 201
-        return resposta.json()["id"]
-
-
-@pytest.fixture
-def casal(client: TestClient, emissor: Emissor) -> Casal:
-    return Casal(client, emissor)
+from tests.conftest import Casal
 
 
 def lancamento(conta: str, categorias: list[str], **campos) -> dict:
