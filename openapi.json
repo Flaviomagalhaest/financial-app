@@ -46,6 +46,49 @@
         ]
       }
     },
+    "/api/exportacoes": {
+      "post": {
+        "summary": "Exportacoes",
+        "operationId": "exportar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoDeExportacao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportacaoPronta"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/contas": {
       "get": {
         "summary": "Listar Contas",
@@ -419,6 +462,30 @@
         ],
         "title": "Eu"
       },
+      "ExportacaoPronta": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "arquivo": {
+            "type": "string",
+            "title": "Arquivo"
+          },
+          "expira_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expira Em"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "arquivo",
+          "expira_em"
+        ],
+        "title": "ExportacaoPronta"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -637,6 +704,23 @@
           "categoria_ids"
         ],
         "title": "NovoLancamento"
+      },
+      "PedidoDeExportacao": {
+        "properties": {
+          "formato": {
+            "type": "string",
+            "enum": [
+              "backup",
+              "planilha"
+            ],
+            "title": "Formato"
+          }
+        },
+        "type": "object",
+        "required": [
+          "formato"
+        ],
+        "title": "PedidoDeExportacao"
       },
       "Saude": {
         "properties": {

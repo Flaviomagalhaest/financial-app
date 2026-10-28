@@ -340,3 +340,21 @@ select {
   background: var(--superficie);
   color: var(--texto);
 }
+
+.configuracoes h3 {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+}
+
+.acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-block: 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .acoes {
+    flex-direction: row;
+  }
+}

@@ -187,6 +187,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
         } == {
             "categorias": 0,
             "contas": 0,
+            "exportacoes": 0,
             "lancamento_categorias": 0,
             "lancamentos": 0,
         }
