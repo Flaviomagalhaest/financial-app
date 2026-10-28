@@ -1,4 +1,4 @@
-/* Provisório até a casca do app (ticket 31): uma coluna estreita, tipografia do sistema. */
+/* Tipografia do sistema; o login é uma coluna estreita e a casca do app troca de layout pela largura. */
 :root {
   --fundo: #f6f7f5;
   --superficie: #ffffff;
@@ -116,20 +116,126 @@ button.secundario {
   background: var(--aviso-fundo);
 }
 
-.inicio header {
+a.botao {
+  display: block;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--destaque);
+  color: var(--sobre-destaque);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.vazio {
+  color: var(--texto-suave);
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+/* Casca: celular primeiro, com as abas coladas embaixo. */
+.casca {
+  display: grid;
+  grid-template-areas: "topo" "conteudo";
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+}
+
+.casca .topo {
+  grid-area: topo;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1rem;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 0.5rem
+    max(16px, env(safe-area-inset-left, 0px));
 }
 
-.inicio header h1 {
+.casca .topo h1 {
   flex-basis: 100%;
 }
 
-.inicio header p {
+.casca .topo p {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--texto-suave);
+}
+
+.casca > main {
+  grid-area: conteudo;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding-block: 1rem 5.5rem;
+}
+
+.abas {
+  position: fixed;
+  inset: auto 0 0 0;
+  display: flex;
+  background: var(--superficie);
+  border-top: 1px solid var(--borda);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.abas a {
+  flex: 1;
+  padding: 0.875rem 0.25rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  text-decoration: none;
+}
+
+.abas a[aria-current="page"] {
+  color: var(--destaque);
+  box-shadow: inset 0 3px 0 var(--destaque);
+}
+
+/* Tela larga: abas numa barra lateral e o conteúdo com largura de leitura. */
+@media (min-width: 900px) {
+  .casca {
+    grid-template-areas: "topo topo" "abas conteudo";
+    grid-template-columns: 14rem 1fr;
+  }
+
+  .casca .topo h1 {
+    flex-basis: auto;
+  }
+
+  .abas {
+    grid-area: abas;
+    position: sticky;
+    top: 0;
+    inset: auto;
+    align-self: start;
+    flex-direction: column;
+    height: 100dvh;
+    padding: 0.5rem;
+    border-top: 0;
+    border-right: 1px solid var(--borda);
+  }
+
+  .abas a {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 1rem;
+    border-radius: 0.5rem;
+  }
+
+  .abas a[aria-current="page"] {
+    box-shadow: none;
+    background: var(--fundo);
+  }
+
+  .casca > main {
+    max-width: 60rem;
+    padding-block: 1rem 2rem;
+  }
 }
