@@ -21,12 +21,16 @@ def aplicar_migrations(url: str | None = None) -> None:
                 continue
             conn.execute(arquivo.read_text())
             conn.execute("INSERT INTO controle_de_migrations (nome) VALUES (%s)", (arquivo.name,))
-        if papel_arn := os.environ.get("API_ROLE_ARN"):
+        if (papel_arn := os.environ.get("API_ROLE_ARN")) and os.environ.get("DSQL_ENDPOINT"):
             _conceder_ao_papel_da_api(conn, papel_arn)
 
 
+def _literal(texto: str) -> str:
+    return texto.replace("'", "''")
+
+
 def _conceder_ao_papel_da_api(conn: psycopg.Connection, papel_arn: str) -> None:
-    """Cria o papel da API (ligado à role IAM da Lambda) e libera leitura e escrita nas tabelas.
+    """Cria o papel da API (ligado à role IAM da Lambda) e libera leitura e escrita nas tabelas (só leitura em `controle_de_migrations`).
 
     Roda a cada deploy: o DSQL não tem `ALTER DEFAULT PRIVILEGES`, então as tabelas criadas
     pelas migrations novas recebem o `GRANT` aqui, depois de aplicadas.
@@ -35,13 +39,21 @@ def _conceder_ao_papel_da_api(conn: psycopg.Connection, papel_arn: str) -> None:
     if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (papel,)).fetchone():
         conn.execute(f"CREATE ROLE {papel} WITH LOGIN")
     # AWS IAM GRANT não aceita parâmetros; o ARN vem da saída da pilha, não de entrada externa.
-    arn = papel_arn.replace("'", "''")
-    if not conn.execute(
-        "SELECT 1 FROM sys.iam_pg_role_mappings WHERE pg_role_name = %s", (papel,)
-    ).fetchone():
-        conn.execute(f"AWS IAM GRANT {papel} TO '{arn}'")
+    mapeados = {
+        linha[0]
+        for linha in conn.execute(
+            "SELECT arn FROM sys.iam_pg_role_mappings WHERE pg_role_name = %s", (papel,)
+        )
+    }
+    # Role da Lambda substituída: o ARN novo troca o antigo, senão o login da API falha.
+    for antigo in mapeados - {papel_arn}:
+        conn.execute(f"AWS IAM REVOKE {papel} FROM '{_literal(antigo)}'")
+    if papel_arn not in mapeados:
+        conn.execute(f"AWS IAM GRANT {papel} TO '{_literal(papel_arn)}'")
     conn.execute(f"GRANT USAGE ON SCHEMA public TO {papel}")
     conn.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {papel}")
+    # A API só lê o controle das migrations (a /api/saude conta as aplicadas).
+    conn.execute(f"REVOKE INSERT, UPDATE, DELETE ON controle_de_migrations FROM {papel}")
 
 
 def total_aplicadas(conn: psycopg.Connection) -> int:
