@@ -4,7 +4,6 @@ import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
-import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -29,13 +28,14 @@ export interface PilhaAppProps extends StackProps {
 export class PilhaApp extends Stack {
   constructor(scope: Construct, id: string, props: PilhaAppProps) {
     super(scope, id, props);
-    const { banco, emissor, clienteDoApp } = props.dados;
+    const { banco, roleDaApi, emissor, clienteDoApp } = props.dados;
 
     const api = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.PYTHON_3_14,
       architecture: lambda.Architecture.ARM_64,
       handler: "app.lambda_handler.handler",
       code: lambda.Code.fromAsset(props.pacoteDaLambda),
+      role: roleDaApi,
       memorySize: 512,
       timeout: Duration.seconds(15),
       // A API confere o JWT de novo, só por emissor e audiência (app/login.py).
@@ -49,12 +49,6 @@ export class PilhaApp extends Stack {
         removalPolicy: RemovalPolicy.DESTROY,
       }),
     });
-    api.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["dsql:DbConnectAdmin"],
-        resources: [banco.attrResourceArn],
-      }),
-    );
 
     // Só a rota de saúde é aberta; o resto exige o JWT do user pool (emissor e audiência).
     const httpApi = new apigw.HttpApi(this, "HttpApi", {
