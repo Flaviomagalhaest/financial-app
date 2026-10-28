@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.banco import conectar
-from app.lancamentos import Categoria, categoria
+from app.lancamentos import Categoria, buscar_categoria
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
@@ -22,10 +22,14 @@ def mudar_categoria(
     id: UUID, mudanca: MudancaDeCategoria, usuario: UsuarioLogado, request: Request
 ) -> Categoria:
     with conectar(request.app.state.url) as conn:
-        if not categoria(conn, id):
+        if not buscar_categoria(conn, id):
             raise HTTPException(status_code=404, detail="categoria não encontrada")
         if mudanca.nome is not None:
-            conn.execute("UPDATE categorias SET nome = %s WHERE id = %s", (mudanca.nome, id))
+            if not mudanca.nome.strip():
+                raise HTTPException(status_code=422, detail="categoria sem nome")
+            conn.execute(
+                "UPDATE categorias SET nome = %s WHERE id = %s", (mudanca.nome.strip(), id)
+            )
         if mudanca.arquivada is not None:
             conn.execute(
                 "UPDATE categorias SET arquivada_em = "
@@ -33,7 +37,7 @@ def mudar_categoria(
                 + " WHERE id = %s",
                 (id,),
             )
-        return categoria(conn, id)
+        return buscar_categoria(conn, id)
 
 
 class Juncao(BaseModel):
@@ -46,7 +50,7 @@ def juntar_categoria(
 ) -> Categoria:
     """Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem."""
     with conectar(request.app.state.url) as conn:
-        origem, destino = categoria(conn, id), categoria(conn, juncao.destino_id)
+        origem, destino = buscar_categoria(conn, id), buscar_categoria(conn, juncao.destino_id)
         if not origem or not destino:
             raise HTTPException(status_code=404, detail="categoria não encontrada")
         if origem.id == destino.id:

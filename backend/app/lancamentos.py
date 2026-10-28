@@ -112,7 +112,7 @@ def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Reques
     return Categoria(id=id, **nova.model_dump())
 
 
-def categoria(conn, id: UUID) -> Categoria | None:
+def buscar_categoria(conn, id: UUID) -> Categoria | None:
     linha = conn.execute(
         "SELECT id, nome, tipo, arquivada_em IS NOT NULL FROM categorias WHERE id = %s", (id,)
     ).fetchone()

@@ -30,6 +30,14 @@ _Avoid_: efetivado, pago, confirmado
 Classificação permanente de um lançamento, de uma lista plana que o casal mantém, separada para despesas, receitas e transferências (ex.: "alimentação", "viagem"); toda despesa e receita tem uma ou mais, a transferência pode ter, e é sobre elas que funcionam o planejamento e as estatísticas.
 _Avoid_: subcategoria, grupo
 
+**Arquivar (categoria ou tag)**:
+Tirar das opções de novos lançamentos sem perder o histórico: os lançamentos que já a têm continuam com ela, e ela pode voltar. Excluir só é possível sem lançamentos.
+_Avoid_: desativar, ocultar
+
+**Juntar (categoria ou tag)**:
+Passar todos os lançamentos de uma categoria (ou tag) para outra do mesmo tipo e excluir a primeira; o lançamento que já tinha as duas fica com uma só.
+_Avoid_: mesclar, unir
+
 **Tag**:
 Rótulo pontual que marca os lançamentos de um projeto ou evento (ex.: "novo ap", a reforma do apartamento novo); um lançamento pode ter nenhuma ou várias, e tag não entra no planejamento.
 _Avoid_: etiqueta, marcador

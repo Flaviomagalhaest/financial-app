@@ -19,4 +19,4 @@ O lançamento tem uma ou mais categorias e nenhuma ou várias tags, e o casal ma
 - [x] Tags criáveis no próprio lançamento
 - [x] Renomear reflete em todo o histórico; juntar move lançamentos, itens do planejamento e escolhas de item (quando existirem); arquivar tira das opções; excluir só sem lançamentos
 - [x] Testes de API para cada operação
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Verificações do projeto rodando e PR aberto para `main`
