@@ -32,6 +32,7 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
     assert visto | {"criado_em": None, "alterado_em": None} == novo | {
         "situacao": "realizado",
         "atrasado": False,
+        "tags": [],
         "criado_por": "flavio",
         "alterado_por": "flavio",
         "criado_em": None,
