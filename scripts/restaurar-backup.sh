@@ -16,10 +16,13 @@ shift 2
 case "$AMBIENTE" in prod | dev) ;; *) uso ;; esac
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-export AWS_REGION=$(jq -r .regiao "$RAIZ/config/aws.json")
-export DSQL_ENDPOINT=$(aws cloudformation describe-stacks --region "$AWS_REGION" \
+# Atribuir antes de exportar: `export X=$(...)` esconde a falha do comando do `set -e`.
+AWS_REGION=$(jq -r .regiao "$RAIZ/config/aws.json")
+DSQL_ENDPOINT=$(aws cloudformation describe-stacks --region "$AWS_REGION" \
   --stack-name "financial-$AMBIENTE-dados" \
   --query "Stacks[0].Outputs[?OutputKey=='DsqlEndpoint'].OutputValue" --output text)
-export AMBIENTE
+# Sem endpoint, a conexão cairia no DATABASE_URL, que pode ser outro banco.
+case "$DSQL_ENDPOINT" in "" | None) echo "sem o DsqlEndpoint de financial-$AMBIENTE-dados" >&2; exit 1 ;; esac
+export AWS_REGION DSQL_ENDPOINT AMBIENTE
 cd "$RAIZ/backend"
 uv run --no-dev python -m app.restauracao "$ARQUIVO" "$@"

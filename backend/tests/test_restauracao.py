@@ -7,7 +7,7 @@ import pytest
 
 from app import backup as formato
 from app.backup import RestauracaoDesfeita, RestauracaoRecusada, gerar_backup, restaurar_backup
-from tests.test_backup import trocar_arquivo
+from tests.exemplo_ficticio import trocar_arquivo
 
 
 def apagar_os_dados(conn: psycopg.Connection) -> None:
@@ -81,13 +81,14 @@ def test_restauracao_recusa_banco_com_dados_sem_gravar_nada(banco_ficticio):
     assert gerar_backup(banco_ficticio) == backup
 
 
-def test_restauracao_recusa_versao_de_formato_desconhecida(banco_ficticio):
+@pytest.mark.parametrize("versao", [99, 0, True, "1"])
+def test_restauracao_recusa_versao_de_formato_desconhecida(banco_ficticio, versao):
     backup = trocar_manifesto(
-        gerar_backup(banco_ficticio), lambda manifesto: manifesto.update(versao_formato=99)
+        gerar_backup(banco_ficticio), lambda manifesto: manifesto.update(versao_formato=versao)
     )
     apagar_os_dados(banco_ficticio)
 
-    with pytest.raises(RestauracaoRecusada, match="versão 99"):
+    with pytest.raises(RestauracaoRecusada, match=f"versão {versao}"):
         restaurar_backup(banco_ficticio, backup)
 
     assert contar_linhas(banco_ficticio) == {"contas": 0, "lancamentos": 0}
@@ -158,3 +159,12 @@ def test_restauracao_com_soma_diferente_do_manifesto_e_desfeita(banco_ficticio):
         restaurar_backup(banco_ficticio, backup)
 
     assert contar_linhas(banco_ficticio) == {"contas": 0, "lancamentos": 0}
+
+
+def test_restauracao_recusa_tabela_sem_chave_primaria_que_nao_daria_para_desfazer(banco_ficticio):
+    banco_ficticio.execute("CREATE TABLE notas (texto text)")
+    backup = gerar_backup(banco_ficticio)
+    apagar_os_dados(banco_ficticio)
+
+    with pytest.raises(RestauracaoRecusada, match="notas.*chave primária"):
+        restaurar_backup(banco_ficticio, backup)

@@ -7,6 +7,7 @@ de novo e exige o mesmo zip: a ida e volta do CI, agora no banco de verdade.
 """
 
 import argparse
+import io
 import json
 import os
 import sys
@@ -37,15 +38,13 @@ def main(argumentos: list[str] | None = None) -> int:
     if opcoes.esvaziar and os.environ.get("AMBIENTE") != "dev":
         leitor.error("--esvaziar só roda com AMBIENTE=dev")
     backup = opcoes.arquivo.read_bytes()
-    with zipfile.ZipFile(opcoes.arquivo) as compactado:
-        manifesto = json.loads(compactado.read("manifesto.json"))
 
     with conectar(autocommit=True, admin=True) as conn:
         if opcoes.esvaziar:
             esvaziar_banco(conn)
             print("banco esvaziado")
         try:
-            restaurar_backup(conn, backup)
+            manifesto = restaurar_backup(conn, backup)
         except RestauracaoRecusada as erro:
             print(f"recusada, nada foi gravado: {erro}", file=sys.stderr)
             return 1
@@ -55,16 +54,19 @@ def main(argumentos: list[str] | None = None) -> int:
         for tabela, conferido in sorted(manifesto["tabelas"].items()):
             print(f"{tabela}: {conferido['linhas']} linhas")
         print("restaurado e conferido contra o manifesto")
-        if manifesto["versao_formato"] != VERSAO_FORMATO:
-            print(f"convertido da versão {manifesto['versao_formato']} para a {VERSAO_FORMATO}")
-            return 0
         with conn.transaction():
             de_novo = gerar_backup(conn)
-    if de_novo != backup:
-        print("o backup exportado de novo não é o mesmo zip", file=sys.stderr)
-        return 1
-    print("exportado de novo: mesmo zip")
-    return 0
+    if de_novo == backup:
+        print("exportado de novo: mesmo zip")
+        return 0
+    with zipfile.ZipFile(io.BytesIO(backup)) as compactado:
+        versao = json.loads(compactado.read("manifesto.json"))["versao_formato"]
+    # Um backup convertido de versão antiga não volta igual: o zip novo já sai na atual.
+    if versao != VERSAO_FORMATO:
+        print(f"convertido da versão {versao} para a {VERSAO_FORMATO}")
+        return 0
+    print("o backup exportado de novo não é o mesmo zip", file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":

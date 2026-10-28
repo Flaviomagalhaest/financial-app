@@ -4,7 +4,7 @@ status: accepted
 
 # Exportação única: zip de CSVs por tabela e restauração só em banco vazio
 
-O backup diário, o "exportar tudo" do app e a carga do histórico do Mobills usam o mesmo formato: um `.zip` com um CSV por tabela, os ids originais e um `manifesto.json` com `versao_formato`, contagens e somas. Uma função geradora só lê o banco; o EventBridge a chama todo dia e `POST /api/exportacoes` a chama a pedido, devolvendo uma URL assinada de 5 minutos. A restauração só roda em banco vazio, numa carga única tudo ou nada, e confere o resultado contra o manifesto. O CSV de lançamentos para planilha é um segundo formato, só de leitura, gerado da mesma consulta.
+O backup diário, o "exportar tudo" do app e a carga do histórico do Mobills usam o mesmo formato: um `.zip` com um CSV por tabela, os ids originais e um `manifesto.json` com `versao_formato`, contagens e somas. Uma função geradora só lê o banco; o EventBridge a chama todo dia e `POST /api/exportacoes` a chama a pedido, devolvendo uma URL assinada de 5 minutos. A restauração só roda em banco vazio, numa carga tudo ou nada (em lotes que se desfazem no DSQL, veja as consequências), e confere o resultado contra o manifesto. O CSV de lançamentos para planilha é um segundo formato, só de leitura, gerado da mesma consulta.
 
 ## Considered Options
 

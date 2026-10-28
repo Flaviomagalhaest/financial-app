@@ -16,8 +16,10 @@ from decimal import Decimal
 import psycopg
 
 VERSAO_FORMATO = 1
-# O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes.
+# O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
+# texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
+BYTES_POR_LOTE = 4 * 1024 * 1024
 
 # Tabelas de um backup aberto: nome -> (colunas, linhas), cada valor no texto do Postgres.
 Tabelas = dict[str, tuple[list[str], list[list[str | None]]]]
@@ -99,7 +101,7 @@ def conferir_backup(conn: psycopg.Connection, backup: bytes) -> None:
                 )
 
 
-def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> None:
+def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> dict:
     """Grava o zip num banco vazio com as mesmas tabelas, tudo ou nada, e confere as contagens
     e as somas do banco contra o manifesto. Um backup de versão antiga é convertido antes.
 
@@ -107,13 +109,14 @@ def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> None:
     do backup, a versão for desconhecida ou os CSVs não baterem com o manifesto. Grava em lotes,
     um por transação, porque o DSQL limita as linhas por transação: a conexão vem em autocommit.
     Uma falha depois do primeiro lote apaga tudo o que foi gravado (`RestauracaoDesfeita`).
+    Devolve o manifesto conferido, já na versão atual.
     """
     if not conn.autocommit:
         raise ValueError("a restauração grava um lote por transação: abra a conexão em autocommit")
     manifesto, tabelas = _abrir_backup(backup)
     versao = manifesto.get("versao_formato")
     if not (
-        isinstance(versao, int)
+        type(versao) is int  # `true` no JSON é um `int` para o isinstance
         and versao <= VERSAO_FORMATO
         and all(v in CONVERSORES for v in range(versao, VERSAO_FORMATO))
     ):
@@ -135,6 +138,11 @@ def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> None:
         raise RestauracaoRecusada(
             f"o esquema do banco não é o do backup em {', '.join(diferentes)}"
         )
+    # Sem chave, o desfazer e o esvaziar não apagam em lotes.
+    if sem_chave := [tabela for tabela in no_banco if not _chave_primaria(conn, tabela)]:
+        raise RestauracaoRecusada(
+            f"{', '.join(sem_chave)} sem chave primária: a restauração não daria para desfazer"
+        )
     com_dados = [
         tabela
         for tabela in no_banco
@@ -151,16 +159,31 @@ def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> None:
                 f" ({', '.join(_identificador(c) for c in colunas)})"
                 f" VALUES ({', '.join(['%s'] * len(colunas))})"
             )
-            for inicio in range(0, len(linhas), LINHAS_POR_LOTE):
-                with conn.transaction(), conn.cursor() as cursor:
-                    try:
-                        cursor.executemany(inserir, linhas[inicio : inicio + LINHAS_POR_LOTE])
-                    except psycopg.Error as erro:
-                        raise RestauracaoDesfeita(f"{tabela}: {erro}") from erro
+            for lote in _lotes(linhas):
+                # O conflito da concorrência otimista do DSQL chega no COMMIT, no fim do `with`.
+                try:
+                    with conn.transaction(), conn.cursor() as cursor:
+                        cursor.executemany(inserir, lote)
+                except psycopg.Error as erro:
+                    raise RestauracaoDesfeita(f"{tabela}: {erro}") from erro
         _conferir_gravado(conn, manifesto)
     except BaseException:
         esvaziar_banco(conn)
         raise
+    return manifesto
+
+
+def _lotes(linhas: list[list[str | None]]):
+    lote: list[list[str | None]] = []
+    tamanho = 0
+    for linha in linhas:
+        lote.append(linha)
+        tamanho += sum(len(valor) for valor in linha if valor is not None)
+        if len(lote) == LINHAS_POR_LOTE or tamanho >= BYTES_POR_LOTE:
+            yield lote
+            lote, tamanho = [], 0
+    if lote:
+        yield lote
 
 
 def _conferir_gravado(conn: psycopg.Connection, manifesto: dict) -> None:
@@ -182,19 +205,19 @@ def _conferir_gravado(conn: psycopg.Connection, manifesto: dict) -> None:
 
 
 def esvaziar_banco(conn: psycopg.Connection) -> None:
-    """Apaga as linhas de todas as tabelas do backup, em lotes e de trás para a frente nas
-    chaves estrangeiras. O DSQL não tem `TRUNCATE`."""
+    """Apaga as linhas de todas as tabelas do backup, em lotes pela chave primária e de trás
+    para a frente nas chaves estrangeiras. O DSQL não tem `TRUNCATE`."""
     for tabela in reversed(_ordem_de_gravacao(conn)):
         chave = ", ".join(_identificador(c) for c in _chave_primaria(conn, tabela))
-        apagar = f"DELETE FROM {_identificador(tabela)}"
-        if chave:
-            apagar += (
-                f" WHERE ({chave}) IN (SELECT {chave} FROM {_identificador(tabela)}"
-                f" LIMIT {LINHAS_POR_LOTE})"
-            )
+        if not chave:
+            raise ValueError(f"{tabela} sem chave primária: não dá para apagar em lotes")
+        apagar = (
+            f"DELETE FROM {_identificador(tabela)} WHERE ({chave}) IN"
+            f" (SELECT {chave} FROM {_identificador(tabela)} LIMIT {LINHAS_POR_LOTE})"
+        )
         while True:
             with conn.transaction():
-                if not conn.execute(apagar).rowcount or not chave:
+                if not conn.execute(apagar).rowcount:
                     break
 
 
