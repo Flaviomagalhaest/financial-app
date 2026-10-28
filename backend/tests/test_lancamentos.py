@@ -297,7 +297,7 @@ def test_categoria_arquivada_nao_aceita_lancamento_novo_mas_o_antigo_fica_e_desa
     assert depois.status_code == 201
 
 
-def test_editar_lancamento_antigo_mantem_a_categoria_arquivada_mas_nao_aceita_trocar_para_outra_arquivada(
+def test_editar_lancamento_antigo_mantem_categoria_arquivada_mas_nao_troca_por_outra(
     casal: Casal,
 ):
     conta, velha, outra = casal.conta(), casal.categoria("Velha"), casal.categoria("Outra")
@@ -335,3 +335,24 @@ def test_alterar_categoria_que_nao_existe_e_404_e_sem_login_e_401(casal: Casal, 
 
     assert casal.pedir("flavio", "PATCH", caminho, json={"nome": "X"}).status_code == 404
     assert client.patch(caminho, json={"nome": "X"}).status_code == 401
+
+
+def test_reenviar_lancamento_cuja_categoria_foi_arquivada_depois_devolve_o_gravado(casal: Casal):
+    conta, categoria = casal.conta(), casal.categoria()
+    novo = lancamento(conta, [categoria])
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{categoria}", json={"arquivada": True})
+
+    de_novo = casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
+
+    assert de_novo.status_code == 200
+
+
+def test_nome_da_categoria_e_gravado_sem_espacos_nas_pontas(casal: Casal):
+    categoria = casal.categoria()
+
+    resposta = casal.pedir(
+        "flavio", "PATCH", f"/api/categorias/{categoria}", json={"nome": "  Feira "}
+    )
+
+    assert resposta.json()["nome"] == "Feira"

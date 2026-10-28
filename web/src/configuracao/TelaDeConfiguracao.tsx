@@ -24,7 +24,7 @@ export function TelaDeConfiguracao() {
       form.reset();
       await recarregar();
     } catch {
-      setErro("Sem internet: o cadastro precisa de internet.");
+      setErro("Sem internet: a configuração precisa de internet.");
     }
   }
 
@@ -139,7 +139,7 @@ function LinhaDeCategoria({
           }}
         >
           <label htmlFor={`nome-${categoria.id}`}>Novo nome de {categoria.nome}</label>
-          <input id={`nome-${categoria.id}`} value={nome} onChange={(e) => setNome(e.target.value)} required />
+          <input id={`nome-${categoria.id}`} value={nome} onChange={(e) => setNome(e.target.value)} pattern=".*\S.*" required />
           <button type="submit">Salvar nome</button>
           <button type="button" className="secundario" onClick={() => setEditando(false)}>
             Cancelar

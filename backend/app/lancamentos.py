@@ -40,6 +40,11 @@ class AlteracaoDeCategoria(BaseModel):
     nome: str | None = Field(default=None, min_length=1, pattern=r"\S")
     arquivada: bool | None = None
 
+    @field_validator("nome")
+    @classmethod
+    def _sem_espacos_nas_pontas(cls, nome: str | None) -> str | None:
+        return nome.strip() if nome else nome
+
 
 class NovoLancamento(BaseModel):
     id: UUID
@@ -143,7 +148,7 @@ def _recusar(detalhe: str) -> HTTPException:
 
 
 def _conferir_ligacoes(
-    conn, lancamento: NovoLancamento, ja_ligadas: set[UUID] = frozenset()
+    conn, lancamento: NovoLancamento, ja_ligadas: frozenset[UUID] = frozenset()
 ) -> None:
     """Categoria arquivada só vale num lançamento que já a tinha."""
     if not conn.execute("SELECT 1 FROM contas WHERE id = %s", (lancamento.conta_id,)).fetchone():
@@ -182,7 +187,15 @@ def criar_lancamento(
 ) -> Lancamento:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
     with conectar(_url(request)) as conn:
-        _conferir_ligacoes(conn, novo)
+        # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
+        ja_ligadas = frozenset(
+            categoria
+            for (categoria,) in conn.execute(
+                "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
+                (novo.id,),
+            )
+        )
+        _conferir_ligacoes(conn, novo, ja_ligadas)
         gravados = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
             " conta_id, criado_por, alterado_por) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
@@ -251,12 +264,12 @@ def editar_lancamento(
     if editado.id != id:
         raise _recusar("o id do corpo difere do id da URL")
     with conectar(_url(request)) as conn:
-        ja_ligadas = {
+        ja_ligadas = frozenset(
             categoria
             for (categoria,) in conn.execute(
                 "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s", (id,)
             )
-        }
+        )
         _conferir_ligacoes(conn, editado, ja_ligadas)
         atual = conn.execute(
             "SELECT data, situacao FROM lancamentos WHERE id = %s", (id,)
