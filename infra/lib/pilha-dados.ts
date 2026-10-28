@@ -47,6 +47,10 @@ export class PilhaDados extends Stack {
       }),
     );
 
+    // A pilha do app antiga ainda importa este export; o CloudFormation recusa removê-lo antes
+    // de ela ser atualizada (o deploy dos dados vem primeiro). Pode sair num deploy futuro.
+    this.exportValue(this.banco.attrResourceArn);
+
     // Sem cadastro público: os dois usuários são criados à mão pelo dono (ADR 0002).
     this.usuarios = new cognito.UserPool(this, "Usuarios", {
       selfSignUpEnabled: false,
