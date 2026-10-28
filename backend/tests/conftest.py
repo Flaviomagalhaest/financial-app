@@ -1,5 +1,4 @@
 import os
-from uuid import uuid4
 
 import psycopg
 import psycopg.errors
@@ -72,18 +71,6 @@ class Casal:
 @pytest.fixture
 def casal(client: TestClient, emissor: Emissor) -> Casal:
     return Casal(client, emissor)
-
-
-def lancamento(conta: str, categorias: list[str], **campos) -> dict:
-    return {
-        "id": str(uuid4()),
-        "tipo": "despesa",
-        "valor_centavos": 12035,
-        "data": "2026-10-02",
-        "descricao": "Mercado",
-        "conta_id": conta,
-        "categoria_ids": categorias,
-    } | campos
 
 
 class ConexaoQueFalhaNoCommit:

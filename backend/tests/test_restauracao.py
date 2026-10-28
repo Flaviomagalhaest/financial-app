@@ -189,48 +189,85 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "contas": 0,
             "exportacoes": 0,
             "lancamento_categorias": 0,
-            "lancamentos": 0,
             "lancamento_tags": 0,
+            "lancamentos": 0,
             "tags": 0,
+            "transferencias": 0,
         }
 
 
-def test_backup_da_versao_2_sem_arquivamento_nem_tags_restaura_convertido(database_url):
-    # O que o `dev` gravava depois do ticket 32 e antes do 40: categorias sem `arquivada_em`.
-    categoria = "11111111-1111-1111-1111-111111111111"
-    vazias = {
-        "contas": "id,nome,tipo,criado_por,criado_em",
+def test_backup_da_versao_2_restaura_convertido_com_as_contas_sem_abertura(database_url):
+    # O que `prod` gravava antes do ticket 36: contas sem saldo de abertura nem arquivamento e
+    # nenhuma tabela de transferências.
+    conta = "6f8e2d9a-1b7c-4c53-9a0e-3d5b7f1a2c40"
+    contas = f"id,nome,tipo,criado_por,criado_em\n{conta},Corrente,corrente,flavio,2026-10-01 10:00:00+00\n"
+    manifesto = {
+        "versao_formato": 2,
+        "tabelas": {
+            "contas": {"linhas": 1, "somas": {}},
+            "categorias": {"linhas": 0, "somas": {}},
+            "lancamentos": {"linhas": 0, "somas": {"valor_centavos": "0"}},
+            "lancamento_categorias": {"linhas": 0, "somas": {}},
+        },
+    }
+    cabecalhos = {
+        "categorias": "id,nome,tipo,criado_por,criado_em",
         "lancamentos": "id,tipo,situacao,valor_centavos,data,descricao,conta_id,criado_por,"
         "criado_em,alterado_por,alterado_em",
         "lancamento_categorias": "lancamento_id,categoria_id",
     }
     saida = io.BytesIO()
     with zipfile.ZipFile(saida, "w") as zip:
-        zip.writestr(
-            "manifesto.json",
-            json.dumps(
-                {
-                    "versao_formato": 2,
-                    "tabelas": {"categorias": {"linhas": 1, "somas": {}}}
-                    | {nome: {"linhas": 0, "somas": {}} for nome in vazias}
-                    | {"lancamentos": {"linhas": 0, "somas": {"valor_centavos": "0"}}},
-                }
-            ),
-        )
-        zip.writestr(
-            "categorias.csv",
-            "id,nome,tipo,criado_por,criado_em\n"
-            f"{categoria},Mercado,despesa,flavio,2026-10-01 10:00:00+00\n",
-        )
-        for nome, cabecalho in vazias.items():
-            zip.writestr(f"{nome}.csv", cabecalho + "\n")
+        zip.writestr("manifesto.json", json.dumps(manifesto))
+        zip.writestr("contas.csv", contas)
+        for tabela, cabecalho in cabecalhos.items():
+            zip.writestr(f"{tabela}.csv", cabecalho + "\n")
     aplicar_migrations(database_url)
 
     with psycopg.connect(database_url, autocommit=True) as conn:
-        manifesto = restaurar_backup(conn, saida.getvalue())
+        restaurado = restaurar_backup(conn, saida.getvalue())
+
+        assert restaurado["versao_formato"] == formato.VERSAO_FORMATO
+        assert restaurado["tabelas"]["transferencias"]["linhas"] == 0
+        assert conn.execute(
+            "SELECT nome, saldo_abertura_centavos, data_abertura, arquivada_em FROM contas"
+        ).fetchall() == [("Corrente", None, None, None)]
+
+
+def test_backup_da_versao_4_sem_categoria_arquivada_restaura_com_todas_ativas(database_url):
+    # O que `prod` gravava antes do ticket 74: `categorias` sem a coluna `arquivada`.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO categorias (id, nome, tipo, criado_por)"
+            " VALUES ('00000000-0000-0000-0000-000000000001', 'Mercado', 'despesa', 'flavio')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM categorias")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "categorias.csv":
+                conteudo = (
+                    b"id,nome,tipo,criado_por,criado_em\n"
+                    + b"\n".join(
+                        b",".join(linha.split(b",")[:5])
+                        for linha in conteudo.split(b"\n")[1:]
+                        if linha
+                    )
+                    + b"\n"
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 4
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
 
         assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
-        assert conn.execute("SELECT nome, arquivada_em FROM categorias").fetchall() == [
-            ("Mercado", None)
+        assert conn.execute("SELECT nome, arquivada FROM categorias").fetchall() == [
+            ("Mercado", False)
         ]
-        assert manifesto["tabelas"]["tags"]["linhas"] == 0

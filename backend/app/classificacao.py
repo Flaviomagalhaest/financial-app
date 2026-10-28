@@ -6,40 +6,19 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.banco import conectar, em_transacao
-from app.lancamentos import Categoria, buscar_categoria
+from app.lancamentos import Categoria, url_do_banco
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
 
 
-class MudancaDeCategoria(BaseModel):
-    nome: str | None = Field(default=None, min_length=1)
-    arquivada: bool | None = None
-
-
-@router.patch("/categorias/{id}", response_model=Categoria, operation_id="mudar_categoria")
-def mudar_categoria(
-    id: UUID, mudanca: MudancaDeCategoria, usuario: UsuarioLogado, request: Request
-) -> Categoria:
-    def trabalho(conn):
-        if not buscar_categoria(conn, id):
-            raise HTTPException(status_code=404, detail="categoria não encontrada")
-        if mudanca.nome is not None:
-            if not mudanca.nome.strip():
-                raise HTTPException(status_code=422, detail="categoria sem nome")
-            conn.execute(
-                "UPDATE categorias SET nome = %s WHERE id = %s", (mudanca.nome.strip(), id)
-            )
-        if mudanca.arquivada is not None:
-            conn.execute(
-                "UPDATE categorias SET arquivada_em = "
-                + ("now()" if mudanca.arquivada else "NULL")
-                + " WHERE id = %s",
-                (id,),
-            )
-        return buscar_categoria(conn, id)
-
-    return em_transacao(request.app.state.url, trabalho)
+def _categoria(conn, id: UUID) -> Categoria | None:
+    linha = conn.execute(
+        "SELECT id, nome, tipo, arquivada FROM categorias WHERE id = %s", (id,)
+    ).fetchone()
+    return (
+        Categoria(id=linha[0], nome=linha[1], tipo=linha[2], arquivada=linha[3]) if linha else None
+    )
 
 
 class Juncao(BaseModel):
@@ -53,7 +32,7 @@ def juntar_categoria(
     """Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem."""
 
     def trabalho(conn):
-        origem, destino = buscar_categoria(conn, id), buscar_categoria(conn, juncao.destino_id)
+        origem, destino = _categoria(conn, id), _categoria(conn, juncao.destino_id)
         if not origem or not destino:
             raise HTTPException(status_code=404, detail="categoria não encontrada")
         if origem.id == destino.id:
@@ -72,7 +51,7 @@ def juntar_categoria(
         conn.execute("DELETE FROM categorias WHERE id = %s", (origem.id,))
         return destino
 
-    return em_transacao(request.app.state.url, trabalho)
+    return em_transacao(url_do_banco(request), trabalho)
 
 
 @router.delete("/categorias/{id}", status_code=204, operation_id="excluir_categoria")
@@ -86,7 +65,7 @@ def excluir_categoria(id: UUID, usuario: UsuarioLogado, request: Request) -> Res
             raise HTTPException(status_code=409, detail="categoria com lançamentos")
         conn.execute("DELETE FROM categorias WHERE id = %s", (id,))
 
-    em_transacao(request.app.state.url, trabalho)
+    em_transacao(url_do_banco(request), trabalho)
     return Response(status_code=204)
 
 
@@ -105,7 +84,7 @@ def _tag(conn, id: UUID) -> Tag | None:
 
 @router.get("/tags", response_model=list[Tag], operation_id="listar_tags")
 def listar_tags(usuario: UsuarioLogado, request: Request) -> list[Tag]:
-    with conectar(request.app.state.url) as conn:
+    with conectar(url_do_banco(request)) as conn:
         linhas = conn.execute(
             "SELECT id, nome, arquivada_em IS NOT NULL FROM tags ORDER BY nome, id"
         ).fetchall()
@@ -142,7 +121,7 @@ def criar_tag(nova: NovaTag, usuario: UsuarioLogado, request: Request) -> Tag:
             "INSERT INTO tags (id, nome, criado_por) VALUES (%s, %s, %s)", (id, nome, usuario)
         )
 
-    em_transacao(request.app.state.url, trabalho)
+    em_transacao(url_do_banco(request), trabalho)
     return Tag(id=id, nome=nome)
 
 
@@ -167,7 +146,7 @@ def mudar_tag(id: UUID, mudanca: MudancaDeTag, usuario: UsuarioLogado, request: 
             )
         return _tag(conn, id)
 
-    return em_transacao(request.app.state.url, trabalho)
+    return em_transacao(url_do_banco(request), trabalho)
 
 
 @router.post("/tags/{id}/juntar", response_model=Tag, operation_id="juntar_tag")
@@ -192,7 +171,7 @@ def juntar_tag(id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Reques
         conn.execute("DELETE FROM tags WHERE id = %s", (origem.id,))
         return destino
 
-    return em_transacao(request.app.state.url, trabalho)
+    return em_transacao(url_do_banco(request), trabalho)
 
 
 @router.delete("/tags/{id}", status_code=204, operation_id="excluir_tag")
@@ -206,5 +185,5 @@ def excluir_tag(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
             raise HTTPException(status_code=409, detail="tag com lançamentos")
         conn.execute("DELETE FROM tags WHERE id = %s", (id,))
 
-    em_transacao(request.app.state.url, trabalho)
+    em_transacao(url_do_banco(request), trabalho)
     return Response(status_code=204)

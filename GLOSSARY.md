@@ -30,9 +30,8 @@ _Avoid_: efetivado, pago, confirmado
 Classificação permanente de um lançamento, de uma lista plana que o casal mantém, separada para despesas, receitas e transferências (ex.: "alimentação", "viagem"); toda despesa e receita tem uma ou mais, a transferência pode ter, e é sobre elas que funcionam o planejamento e as estatísticas.
 _Avoid_: subcategoria, grupo
 
-**Arquivar (categoria ou tag)**:
-Tirar das opções de novos lançamentos sem perder o histórico: os lançamentos que já a têm continuam com ela, e ela pode voltar. Excluir só é possível sem lançamentos.
-_Avoid_: desativar, ocultar
+**Categoria arquivada**:
+Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada.
 
 **Juntar (categoria ou tag)**:
 Passar todos os lançamentos de uma categoria (ou tag) para outra do mesmo tipo e excluir a primeira; o lançamento que já tinha as duas fica com uma só.
@@ -41,6 +40,8 @@ _Avoid_: mesclar, unir
 **Tag**:
 Rótulo pontual que marca os lançamentos de um projeto ou evento (ex.: "novo ap", a reforma do apartamento novo); um lançamento pode ter nenhuma ou várias, e tag não entra no planejamento.
 _Avoid_: etiqueta, marcador
+
+A tag também pode ser arquivada, como a categoria; excluir categoria ou tag só é possível sem lançamentos.
 
 **Pessoa**:
 O Flávio ou a esposa, quando o lançamento é de um deles; cada lançamento tem no máximo uma.
@@ -158,6 +159,10 @@ _Avoid_: reajuste, arredondamento, diferença de fatura
 **Saldo de abertura**:
 Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é calculado; só os realizados depois dessa data mexem no saldo, e o que veio antes serve às estatísticas.
 _Avoid_: saldo inicial, saldo importado
+
+**Conta arquivada**:
+Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve.
+_Avoid_: conta excluída, conta inativa
 
 **Limite**:
 Teto de compras de um cartão, informado pelo casal e editável; é opcional, e o cartão adicional divide o limite do titular.

@@ -45,7 +45,9 @@ O CI (`.github/workflows/ci.yml`) roda lint, testes, o contrato e o build com um
 
 ## Lançamentos
 
-`backend/app/lancamentos.py` tem contas, categorias e lançamentos simples (valor em centavos inteiros, uma ou mais categorias, id UUID gerado no aparelho). No app, `#/novo` lança, `#/historico` lista, edita e exclui, e `#/cadastro` cria conta e categoria (tela provisória, ticket 77).
+`backend/app/lancamentos.py` tem contas, categorias e lançamentos simples (valor em centavos inteiros, uma ou mais categorias, id UUID gerado no aparelho). No app, `#/novo` lança, `#/historico` lista, edita e exclui, e `#/contas-e-categorias` cria conta e cria, renomeia e arquiva categoria.
+
+`backend/app/transferencias.py` registra a transferência entre duas contas ([ADR 0014](docs/adr/0014-transferencia-em-tabela-propria.md)). A conta guarda o saldo de abertura (valor e data) e pode ser arquivada (`PUT /api/contas/{id}`); `GET /api/contas` devolve `saldo_centavos` (abertura mais os realizados depois da data) e esconde as arquivadas, salvo com `?arquivadas=true`. Só a API existe: as telas são do ticket 74.
 
 ## Contrato (OpenAPI e tipos)
 

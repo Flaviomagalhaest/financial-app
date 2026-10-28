@@ -1,4 +1,5 @@
-from tests.conftest import Casal, lancamento
+from tests.conftest import Casal
+from tests.test_lancamentos import lancamento
 
 
 def test_renomear_categoria_aparece_no_historico_sem_mexer_nos_lancamentos(casal: Casal):

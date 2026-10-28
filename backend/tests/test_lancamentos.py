@@ -4,7 +4,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.banco import TENTATIVAS_NA_SERIALIZACAO
-from tests.conftest import Casal, lancamento
+from tests.conftest import Casal
+
+
+def lancamento(conta: str, categorias: list[str], **campos) -> dict:
+    return {
+        "id": str(uuid4()),
+        "tipo": "despesa",
+        "valor_centavos": 12035,
+        "data": "2026-10-02",
+        "descricao": "Mercado",
+        "conta_id": conta,
+        "categoria_ids": categorias,
+    } | campos
 
 
 def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
@@ -213,6 +225,112 @@ def test_editar_a_data_para_o_passado_realiza_o_que_era_futuro_mas_a_escolha_man
     assert passado.json()["situacao"] == "realizado"
     assert mesmo_dia.json()["situacao"] == "previsto"
     assert sem_mexer_na_data.json()["situacao"] == "previsto"
+
+
+def test_renomeia_uma_categoria_e_o_lancamento_antigo_mostra_o_nome_novo(casal: Casal):
+    conta, categoria = casal.conta(), casal.categoria("Alimentacao")
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=lancamento(conta, [categoria]))
+
+    resposta = casal.pedir(
+        "esposa", "PATCH", f"/api/categorias/{categoria}", json={"nome": "Alimentação"}
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {
+        "id": categoria,
+        "nome": "Alimentação",
+        "tipo": "despesa",
+        "arquivada": False,
+    }
+    [lida] = casal.pedir("flavio", "GET", "/api/categorias").json()
+    assert lida["nome"] == "Alimentação"
+    [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
+    assert visto["categoria_ids"] == [categoria]
+
+
+def test_categoria_arquivada_nao_aceita_lancamento_novo_mas_o_antigo_fica_e_desarquivar_volta(
+    casal: Casal,
+):
+    conta, categoria = casal.conta(), casal.categoria()
+    antigo = lancamento(conta, [categoria])
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=antigo)
+
+    arquivada = casal.pedir(
+        "flavio", "PATCH", f"/api/categorias/{categoria}", json={"arquivada": True}
+    )
+    novo = casal.pedir("flavio", "POST", "/api/lancamentos", json=lancamento(conta, [categoria]))
+    [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
+    [lida] = casal.pedir("flavio", "GET", "/api/categorias").json()
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{categoria}", json={"arquivada": False})
+    depois = casal.pedir("flavio", "POST", "/api/lancamentos", json=lancamento(conta, [categoria]))
+
+    assert arquivada.json()["arquivada"] is True
+    assert novo.status_code == 422
+    assert novo.json()["detail"] == "categoria arquivada"
+    assert visto["id"] == antigo["id"]
+    assert lida["arquivada"] is True and lida["nome"] == "Alimentação"
+    assert depois.status_code == 201
+
+
+def test_editar_lancamento_antigo_mantem_categoria_arquivada_mas_nao_troca_por_outra(
+    casal: Casal,
+):
+    conta, velha, outra = casal.conta(), casal.categoria("Velha"), casal.categoria("Outra")
+    antigo = lancamento(conta, [velha])
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=antigo)
+    for id in (velha, outra):
+        casal.pedir("flavio", "PATCH", f"/api/categorias/{id}", json={"arquivada": True})
+
+    mantida = casal.pedir(
+        "flavio", "PUT", f"/api/lancamentos/{antigo['id']}", json=antigo | {"descricao": "x"}
+    )
+    trocada = casal.pedir(
+        "flavio",
+        "PUT",
+        f"/api/lancamentos/{antigo['id']}",
+        json=antigo | {"categoria_ids": [outra]},
+    )
+
+    assert mantida.status_code == 200
+    assert trocada.status_code == 422
+
+
+@pytest.mark.parametrize("corpo", [{"nome": ""}, {"nome": "   "}])
+def test_renomear_para_nome_vazio_e_recusado(casal: Casal, corpo):
+    categoria = casal.categoria("Mercado")
+
+    resposta = casal.pedir("flavio", "PATCH", f"/api/categorias/{categoria}", json=corpo)
+
+    assert resposta.status_code == 422
+    assert casal.pedir("flavio", "GET", "/api/categorias").json()[0]["nome"] == "Mercado"
+
+
+def test_alterar_categoria_que_nao_existe_e_404_e_sem_login_e_401(casal: Casal, client: TestClient):
+    caminho = f"/api/categorias/{uuid4()}"
+
+    assert casal.pedir("flavio", "PATCH", caminho, json={"nome": "X"}).status_code == 404
+    assert client.patch(caminho, json={"nome": "X"}).status_code == 401
+
+
+def test_reenviar_lancamento_cuja_categoria_foi_arquivada_depois_devolve_o_gravado(casal: Casal):
+    conta, categoria = casal.conta(), casal.categoria()
+    novo = lancamento(conta, [categoria])
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{categoria}", json={"arquivada": True})
+
+    de_novo = casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
+
+    assert de_novo.status_code == 200
+
+
+def test_nome_da_categoria_e_gravado_sem_espacos_nas_pontas(casal: Casal):
+    categoria = casal.categoria()
+
+    resposta = casal.pedir(
+        "flavio", "PATCH", f"/api/categorias/{categoria}", json={"nome": "  Feira "}
+    )
+
+    assert resposta.json()["nome"] == "Feira"
 
 
 def test_escrita_termina_bem_na_segunda_tentativa_do_erro_de_serializacao(
