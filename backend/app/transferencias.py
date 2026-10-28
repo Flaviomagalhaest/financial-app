@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app.banco import conectar
+from app.banco import conectar, em_transacao
 from app.lancamentos import conferir_conta, recusar, situacao_pela_data, url_do_banco
 from app.login import UsuarioLogado
 
@@ -82,7 +82,8 @@ def criar_transferencia(
     nova: NovaTransferencia, usuario: UsuarioLogado, request: Request, response: Response
 ) -> Transferencia:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
-    with conectar(url_do_banco(request)) as conn:
+
+    def gravar(conn) -> Transferencia:
         _conferir_transferencia(conn, nova)
         gravadas = conn.execute(
             "INSERT INTO transferencias (id, conta_origem_id, conta_destino_id, valor_centavos,"
@@ -101,9 +102,11 @@ def criar_transferencia(
                 usuario,
             ),
         ).rowcount
-        if not gravadas:
-            response.status_code = 200
+        # O 200 vale para a tentativa que terminou: refeita, `gravadas` é lido de novo.
+        response.status_code = 201 if gravadas else 200
         return _ler_transferencias(conn, nova.id)[0]
+
+    return em_transacao(url_do_banco(request), gravar)
 
 
 @router.get(
@@ -122,7 +125,8 @@ def editar_transferencia(
 ) -> Transferencia:
     if editada.id != id:
         raise recusar("o id do corpo difere do id da URL")
-    with conectar(url_do_banco(request)) as conn:
+
+    def gravar(conn) -> Transferencia:
         atual = conn.execute(
             "SELECT data, situacao, conta_origem_id, conta_destino_id FROM transferencias"
             " WHERE id = %s",
@@ -157,10 +161,14 @@ def editar_transferencia(
         )
         return _ler_transferencias(conn, id)[0]
 
+    return em_transacao(url_do_banco(request), gravar)
+
 
 @router.delete("/transferencias/{id}", status_code=204, operation_id="excluir_transferencia")
 def excluir_transferencia(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente: excluir o que já não existe também dá 204."""
-    with conectar(url_do_banco(request)) as conn:
-        conn.execute("DELETE FROM transferencias WHERE id = %s", (id,))
+    em_transacao(
+        url_do_banco(request),
+        lambda conn: conn.execute("DELETE FROM transferencias WHERE id = %s", (id,)),
+    )
     return Response(status_code=204)

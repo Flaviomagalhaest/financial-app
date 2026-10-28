@@ -25,7 +25,7 @@ O casal cadastra contas (corrente, poupança, carteira), informa o saldo de aber
 
 - Contas: `saldo_abertura_centavos` e `data_abertura` (juntos ou nenhum), `PUT /api/contas/{id}` para editar e arquivar, `GET /api/contas[?arquivadas=true]` com `saldo_centavos`. O saldo é a abertura mais os realizados com data **depois** da de abertura (no dia já está no valor informado); sem abertura, todos os realizados a partir de zero. Conta arquivada recusa lançamento e transferência novos (422), mas o histórico dela segue editável.
 - Transferência em tabela própria, `/api/transferencias`: [ADR 0014](../../../docs/adr/0014-transferencia-em-tabela-propria.md). Categoria opcional, da lista de transferência.
-- Backup na versão 3, com o conversor da 2 (contas sem abertura e `transferencias` vazia).
+- Backup na versão 4, com o conversor da 3 (contas sem abertura e `transferencias` vazia).
 - Fora deste ticket, de propósito: as telas de contas e transferência. As de contas ficam no [ticket 74](74-cadastro-provisorio-de-contas-e-categorias.md); a de lançar uma transferência não tem ticket e entra com a jornada do [ticket 42](42-jornada-completa-do-lancamento-rapido.md). A busca e o histórico ainda não listam transferências (ADR 0014).
 - História 67 (transferência com categoria contando no planejamento): a transferência já guarda a categoria; contar no item do planejamento é do [ticket 49](49-itens-do-planejamento.md), que precisa ler `transferencias` além de `lancamentos`.
 - `PUT /api/contas/{id}` sem `arquivada` mantém o estado atual; só `true`/`false` arquiva ou desarquiva.

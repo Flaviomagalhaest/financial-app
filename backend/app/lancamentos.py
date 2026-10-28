@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.banco import conectar
+from app.banco import conectar, em_transacao
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
@@ -125,7 +125,8 @@ def _conta(linha) -> Conta:
 @router.post("/contas", status_code=201, response_model=Conta, operation_id="criar_conta")
 def criar_conta(nova: NovaConta, usuario: UsuarioLogado, request: Request) -> Conta:
     id = uuid4()
-    with conectar(url_do_banco(request)) as conn:
+
+    def gravar(conn) -> Conta:
         conn.execute(
             "INSERT INTO contas (id, nome, tipo, saldo_abertura_centavos, data_abertura,"
             " criado_por) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -133,13 +134,16 @@ def criar_conta(nova: NovaConta, usuario: UsuarioLogado, request: Request) -> Co
         )
         return _conta(conn.execute(_SALDO + "WHERE c.id = %s", (id,)).fetchone())
 
+    return em_transacao(url_do_banco(request), gravar)
+
 
 @router.put("/contas/{id}", response_model=Conta, operation_id="editar_conta")
 def editar_conta(
     id: UUID, editada: EdicaoDeConta, usuario: UsuarioLogado, request: Request
 ) -> Conta:
     """Arquivar tira a conta das opções e mantém o histórico; desarquivar a devolve."""
-    with conectar(url_do_banco(request)) as conn:
+
+    def gravar(conn) -> Conta:
         atual = conn.execute("SELECT arquivada_em FROM contas WHERE id = %s", (id,)).fetchone()
         if not atual:
             raise HTTPException(status_code=404, detail="conta não encontrada")
@@ -160,6 +164,8 @@ def editar_conta(
         )
         return _conta(conn.execute(_SALDO + "WHERE c.id = %s", (id,)).fetchone())
 
+    return em_transacao(url_do_banco(request), gravar)
+
 
 @router.get("/contas", response_model=list[Conta], operation_id="listar_contas")
 def listar_contas(
@@ -177,11 +183,13 @@ def listar_contas(
 )
 def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Request) -> Categoria:
     id = uuid4()
-    with conectar(url_do_banco(request)) as conn:
-        conn.execute(
+    em_transacao(
+        url_do_banco(request),
+        lambda conn: conn.execute(
             "INSERT INTO categorias (id, nome, tipo, criado_por) VALUES (%s, %s, %s, %s)",
             (id, nova.nome, nova.tipo, usuario),
-        )
+        ),
+    )
     return Categoria(id=id, **nova.model_dump())
 
 
@@ -240,7 +248,8 @@ def criar_lancamento(
     novo: NovoLancamento, usuario: UsuarioLogado, request: Request, response: Response
 ) -> Lancamento:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
-    with conectar(url_do_banco(request)) as conn:
+
+    def gravar(conn) -> Lancamento:
         _conferir_ligacoes(conn, novo)
         gravados = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
@@ -260,9 +269,10 @@ def criar_lancamento(
         ).rowcount
         if gravados:
             _gravar_categorias(conn, novo.id, novo.categoria_ids)
-        else:
-            response.status_code = 200
+        response.status_code = 201 if gravados else 200
         return _todos(conn, novo.id)[0]
+
+    return em_transacao(url_do_banco(request), gravar)
 
 
 def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
@@ -309,7 +319,8 @@ def editar_lancamento(
 ) -> Lancamento:
     if editado.id != id:
         raise recusar("o id do corpo difere do id da URL")
-    with conectar(url_do_banco(request)) as conn:
+
+    def gravar(conn) -> Lancamento:
         atual = conn.execute(
             "SELECT data, situacao, conta_id FROM lancamentos WHERE id = %s", (id,)
         ).fetchone()
@@ -342,11 +353,16 @@ def editar_lancamento(
         _gravar_categorias(conn, id, editado.categoria_ids)
         return _todos(conn, id)[0]
 
+    return em_transacao(url_do_banco(request), gravar)
+
 
 @router.delete("/lancamentos/{id}", status_code=204, operation_id="excluir_lancamento")
 def excluir_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente: excluir o que já não existe também dá 204."""
-    with conectar(url_do_banco(request)) as conn:
+
+    def excluir(conn) -> None:
         conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
         conn.execute("DELETE FROM lancamentos WHERE id = %s", (id,))
+
+    em_transacao(url_do_banco(request), excluir)
     return Response(status_code=204)
