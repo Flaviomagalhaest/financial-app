@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/cliente";
 import type { components } from "../api/schema";
-import { config } from "../config";
 import {
   apagarTudo,
   comTrava,
@@ -16,7 +15,7 @@ import {
   type Lancamento,
   type NovoLancamento,
 } from "./armazem";
-import { descartar, enfileirarExcluir, enfileirarSalvar, enviarFila, LISTA, type Remessa } from "./fila";
+import { descartar, enfileirarExcluir, enfileirarSalvar, enviarFila, ETIQUETA_DO_ENVIO, LISTA, type Remessa } from "./fila";
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
@@ -28,9 +27,6 @@ export type LancamentoNaTela = NovoLancamento & {
   naoEnviado: boolean;
   recusa?: string;
 };
-
-/** Depois de tanto tempo sem subir, o aviso de não enviado fica em destaque. */
-export const AVISO_DE_NAO_ENVIADO_MS = config.avisoDeNaoEnviadoHoras * 3_600_000;
 
 const LEITURAS = {
   "/api/lancamentos": () => api.GET("/api/lancamentos"),
@@ -105,7 +101,8 @@ export function useFila(): ItemDaFila[] {
   return itens;
 }
 
-function hoje(): string {
+/** A data de hoje no aparelho, "AAAA-MM-DD". */
+export function hoje(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -186,7 +183,7 @@ const remeter: Remessa = async (acoes) => {
 /** No Android, o navegador chama o service worker quando a rede volta, mesmo com o app fechado. */
 function pedirEnvioEmSegundoPlano() {
   void navigator.serviceWorker?.ready
-    .then((registro) => (registro as ServiceWorkerRegistration & { sync?: { register(tag: string): Promise<void> } }).sync?.register("enviar-fila"))
+    .then((registro) => (registro as ServiceWorkerRegistration & { sync?: { register(tag: string): Promise<void> } }).sync?.register(ETIQUETA_DO_ENVIO))
     .catch(() => undefined);
 }
 

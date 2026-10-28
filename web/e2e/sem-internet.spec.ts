@@ -252,3 +252,39 @@ test("no Android, o service worker sobe a fila em segundo plano, sem o app abert
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
 });
+
+test("criado com a resposta perdida e depois editado ou excluído sem internet: a mudança não se perde", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  // O servidor grava os dois lançamentos, mas a resposta não chega ao aparelho.
+  let perdidas = 0;
+  await page.route("**/api/lancamentos/lote", async (rota) => {
+    if (perdidas > 0) return rota.continue();
+    perdidas++;
+    await rota.fetch();
+    await rota.abort("connectionreset");
+  });
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["1"], conta, categoria: mercado, descricao: `Editado ${s}` });
+  await lancar(page, { teclas: ["2"], conta, categoria: mercado, descricao: `Excluído ${s}` });
+  await context.setOffline(false);
+  await expect.poll(() => perdidas).toBe(1);
+
+  await context.setOffline(true);
+  const editado = page.getByRole("listitem").filter({ hasText: `Editado ${s}` });
+  const excluido = page.getByRole("listitem").filter({ hasText: `Excluído ${s}` });
+  await editado.getByRole("link", { name: `Editar Editado ${s}` }).click();
+  await page.getByRole("button", { name: "9", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(editado).toContainText("− R$ 0,19");
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await excluido.getByRole("button", { name: `Excluir Excluído ${s}` }).click();
+  await expect(excluido).toHaveCount(0);
+
+  await context.setOffline(false);
+  await aba(page, "Hoje");
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await page.reload();
+  await aba(page, "Histórico");
+  await expect(editado).toContainText("− R$ 0,19");
+  await expect(excluido).toHaveCount(0);
+});

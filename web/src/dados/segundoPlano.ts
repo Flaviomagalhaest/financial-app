@@ -4,6 +4,8 @@
 import { tokenEmSegundoPlano } from "../login/renovacao";
 import { enviarFila, type Remessa } from "./fila";
 
+export { ETIQUETA_DO_ENVIO } from "./fila";
+
 const remeter: Remessa = async (acoes) => {
   const token = await tokenEmSegundoPlano();
   if (!token) return 401;

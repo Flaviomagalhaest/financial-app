@@ -1,15 +1,9 @@
 import { useEffect, useState } from "react";
-import { salvarLancamento, useCadastro, useLancamentos, type LancamentoNaTela } from "../dados";
+import { hoje, salvarLancamento, useCadastro, useLancamentos, type LancamentoNaTela } from "../dados";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
-
-function hoje(): string {
-  const d = new Date();
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
 export function TelaDeLancamento({ id }: { id?: string }) {

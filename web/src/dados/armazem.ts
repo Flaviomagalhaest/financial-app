@@ -18,6 +18,8 @@ export interface ItemDaFila {
   revisao: number;
   /** Motivo da recusa do servidor; recusado não sobe até ser corrigido ou descartado. */
   recusa?: string;
+  /** No criar enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
+  talvezNoServidor?: number;
 }
 
 export interface Guardada<T> {
@@ -33,13 +35,13 @@ const CANAL = "financial-app-dados";
 
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const pedido = indexedDB.open(BANCO, 1);
-    pedido.onupgradeneeded = () => {
-      pedido.result.createObjectStore(FILA, { keyPath: "id" });
-      pedido.result.createObjectStore(RESPOSTAS);
+    const abertura = indexedDB.open(BANCO, 1);
+    abertura.onupgradeneeded = () => {
+      abertura.result.createObjectStore(FILA, { keyPath: "id" });
+      abertura.result.createObjectStore(RESPOSTAS);
     };
-    pedido.onsuccess = () => resolve(pedido.result);
-    pedido.onerror = () => reject(pedido.error);
+    abertura.onsuccess = () => resolve(abertura.result);
+    abertura.onerror = () => reject(abertura.error);
   });
 }
 

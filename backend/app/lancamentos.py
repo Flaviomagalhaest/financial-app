@@ -1,11 +1,13 @@
 """Contas, categorias e lançamentos simples. Sem chave estrangeira nem trigger (subconjunto do
 DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no aparelho."""
 
+import logging
 from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
+import psycopg
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
@@ -13,6 +15,7 @@ from app.banco import conectar
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
+log = logging.getLogger(__name__)
 
 
 class NovaConta(BaseModel):
@@ -278,9 +281,12 @@ class AcaoExcluir(BaseModel):
     id: UUID
 
 
+Acao = AcaoCriar | AcaoEditar | AcaoExcluir
+
+
 class Lote(BaseModel):
-    acoes: list[Annotated[AcaoCriar | AcaoEditar | AcaoExcluir, Field(discriminator="acao")]] = (
-        Field(min_length=1, max_length=LIMITE_DO_LOTE)
+    acoes: list[Annotated[Acao, Field(discriminator="acao")]] = Field(
+        min_length=1, max_length=LIMITE_DO_LOTE
     )
 
 
@@ -297,8 +303,12 @@ class ResultadoDoLote(BaseModel):
     resultados: list[Resultado]
 
 
-def _aplicar(acao, usuario: str, request: Request) -> Resultado:
-    """As mesmas regras das rotas de um lançamento só; a recusa de uma não para as outras."""
+def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
+    """As mesmas regras das rotas de um lançamento só; a recusa de uma não para as outras.
+
+    Banco fora do ar ou disputa perdida derrubam o lote inteiro, que o aparelho reenvia; outro
+    erro fica só nesta ação, recusada, para não travar a fila para sempre.
+    """
     try:
         return _aplicar_rota(acao, usuario, request)
     except HTTPException as erro:
@@ -307,9 +317,14 @@ def _aplicar(acao, usuario: str, request: Request) -> Resultado:
         if erro.status_code == 422:
             return Resultado(resultado="recusada", motivo=erro.detail)
         raise
+    except psycopg.OperationalError:
+        raise
+    except Exception:
+        log.exception("ação do lote falhou")
+        return Resultado(resultado="recusada", motivo="erro no servidor")
 
 
-def _aplicar_rota(acao, usuario: str, request: Request) -> Resultado:
+def _aplicar_rota(acao: Acao, usuario: str, request: Request) -> Resultado:
     match acao:
         case AcaoCriar(lancamento=novo):
             criado = criar_lancamento(novo, usuario, request, Response())

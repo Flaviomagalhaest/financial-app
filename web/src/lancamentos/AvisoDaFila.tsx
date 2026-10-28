@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { AVISO_DE_NAO_ENVIADO_MS, enviarAgora, useFila } from "../dados";
+import { config } from "../config";
+import { enviarAgora, useFila } from "../dados";
+
+const AVISO_DE_NAO_ENVIADO_MS = config.avisoDeNaoEnviadoHoras * 3_600_000;
 
 function useAgora(): number {
   const [agora, setAgora] = useState(Date.now);
@@ -33,8 +36,8 @@ export function AvisoDaFila() {
         {fila.length === 1 ? "1 lançamento não enviado" : `${fila.length} lançamentos não enviados`}
         {recusados > 0 && ` (${recusados} recusado${recusados === 1 ? "" : "s"}: veja no Histórico)`}
       </p>
-      {atrasado && <p>Há mais de {AVISO_DE_NAO_ENVIADO_MS / 3_600_000} h sem enviar: abra com internet para enviar.</p>}
-      {semInternet && <p className="vazio">Sem internet: a fila sobe quando a conexão voltar.</p>}
+      {atrasado && <p>Há mais de {config.avisoDeNaoEnviadoHoras} h sem enviar: abra com internet para enviar.</p>}
+      {semInternet && <p className="vazio">Sem internet: os não enviados sobem quando a conexão voltar.</p>}
       <button type="button" className="secundario" disabled={enviando} onClick={() => void enviar()}>
         Enviar agora
       </button>

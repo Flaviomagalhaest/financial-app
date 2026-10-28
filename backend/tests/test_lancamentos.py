@@ -315,3 +315,23 @@ def test_no_lote_editar_o_que_foi_excluido_e_descartado_e_excluir_de_novo_e_acei
     assert (editar["resultado"], editar["motivo"]) == ("descartada", "lançamento excluído")
     assert excluir["resultado"] == "aceita"
     assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []
+
+
+def test_no_lote_um_erro_inesperado_numa_acao_vira_recusa_e_nao_trava_as_seguintes(casal: Casal):
+    conta, alimentacao = casal.conta(), casal.categoria()
+    # O Postgres não guarda o caractere NUL num texto: o banco erra nesta ação só.
+    estranho = lancamento(conta, [alimentacao], descricao="a\x00b")
+    bom = lancamento(conta, [alimentacao])
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json=lote({"acao": "criar", "lancamento": estranho}, {"acao": "criar", "lancamento": bom}),
+    )
+
+    assert resposta.status_code == 200
+    recusada, aceita = resposta.json()["resultados"]
+    assert (recusada["resultado"], recusada["motivo"]) == ("recusada", "erro no servidor")
+    assert aceita["resultado"] == "aceita"
+    assert [l["id"] for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()] == [bom["id"]]
