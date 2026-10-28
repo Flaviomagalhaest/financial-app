@@ -7,3 +7,14 @@
 O bloco `RegionFloor` libera `sa-east-1` (São Paulo). **Reaplicar a SCP sem `sa-east-1` derruba o app**: o Aurora DSQL, a Lambda, o S3 do backup e o login ficam todos em São Paulo (ADR 0009 e 0010).
 
 Ela fica fora da infraestrutura como código, porque o repositório do app não deve ter credencial da conta de gerência. Se ela mudar na AWS, atualize a cópia.
+
+## Deploy pelo GitHub Actions
+
+Feito uma vez à mão, em 2026-10-28, com credencial temporária da conta:
+
+1. `npx aws-cdk bootstrap aws://255235818791/sa-east-1` (pilha `CDKToolkit`).
+2. `cd infra && npm ci && npx cdk deploy financial-github`: provedor OIDC do GitHub e a role `financial-app-deploy`. A role confia em qualquer branch deste repositório, no formato novo do `sub` (`repo:Flaviomagalhaest@14982168/financial-app@1432589902:ref:refs/heads/*`), assume as roles do bootstrap do CDK e entra no DSQL como `admin` para as migrations.
+
+Daí em diante, todo deploy sai pelo `.github/workflows/deploy.yml`. Refaça os dois passos só se a pilha `CDKToolkit` ou a `financial-github` sumirem.
+
+O `dev` é descartável: `cd infra && npx cdk destroy financial-dev-app financial-dev-dados` (o próximo push recria, com endereço novo). A `prod` tem proteção contra término, e as políticas das pilhas (`infra/politicas/`) recusam qualquer deploy que substitua ou remova a distribuição, o banco ou o user pool. Se mesmo assim uma pilha de `prod` for apagada, o banco, o user pool e a distribuição ficam na conta (retidos), mas a pilha recriada nasce com distribuição nova e endereço novo: os dois reinstalam o app (ADR 0010).

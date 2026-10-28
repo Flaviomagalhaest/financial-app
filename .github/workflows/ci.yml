@@ -34,7 +34,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            infra/package-lock.json
 
       - name: Backend, lint e testes
         working-directory: backend
@@ -54,6 +56,14 @@ jobs:
       - name: App, tipos e build
         working-directory: web
         run: npm run build
+
+      - name: Infra, tipos e synth das pilhas
+        run: |
+          scripts/empacotar-lambda.sh
+          cd infra
+          npm ci
+          npm run typecheck
+          npm run synth
 
       - name: App, testes com navegador
         working-directory: web
