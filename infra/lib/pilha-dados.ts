@@ -1,6 +1,7 @@
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dsql from "aws-cdk-lib/aws-dsql";
+import * as iam from "aws-cdk-lib/aws-iam";
 import type { Construct } from "constructs";
 
 export interface PilhaDadosProps extends StackProps {
@@ -14,6 +15,8 @@ export interface PilhaDadosProps extends StackProps {
  */
 export class PilhaDados extends Stack {
   readonly banco: dsql.CfnCluster;
+  /** Role da Lambda; mora aqui para o deploy ligá-la ao papel `api` do banco antes da Lambda nova. */
+  readonly roleDaApi: iam.Role;
   readonly usuarios: cognito.UserPool;
   readonly clienteDoApp: cognito.UserPoolClient;
 
@@ -27,6 +30,20 @@ export class PilhaDados extends Stack {
     this.banco.applyRemovalPolicy(remocao);
     // IDs fixos: a política da pilha (politicas/dados.json) proíbe substituir esses recursos.
     this.banco.overrideLogicalId("Banco");
+
+    // Só `dsql:DbConnect` (papel `api` do banco), nunca `DbConnectAdmin`.
+    this.roleDaApi = new iam.Role(this, "RoleDaApi", {
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+      ],
+    });
+    this.roleDaApi.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["dsql:DbConnect"],
+        resources: [this.banco.attrResourceArn],
+      }),
+    );
 
     // Sem cadastro público: os dois usuários são criados à mão pelo dono (ADR 0002).
     this.usuarios = new cognito.UserPool(this, "Usuarios", {
@@ -47,6 +64,7 @@ export class PilhaDados extends Stack {
     });
 
     new CfnOutput(this, "DsqlEndpoint", { value: this.banco.attrEndpoint });
+    new CfnOutput(this, "RoleDaApiArn", { value: this.roleDaApi.roleArn });
     new CfnOutput(this, "UserPoolId", { value: this.usuarios.userPoolId });
     new CfnOutput(this, "ClienteDoAppId", { value: this.clienteDoApp.userPoolClientId });
   }

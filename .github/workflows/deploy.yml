@@ -1,7 +1,7 @@
 name: Deploy
 
 # O merge na main publica em prod; push em outra branch, ou o botão, publica em dev.
-# Ordem: banco e login, migrations no DSQL, Lambda e site, teste de fumaça (ADR 0010).
+# Ordem: banco e login, migrations e papel `api` no DSQL, Lambda e site, teste de fumaça (ADR 0010).
 on:
   push:
     branches: ["**"]
@@ -68,6 +68,8 @@ jobs:
         run: |
           export DSQL_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
             --query "Stacks[0].Outputs[?OutputKey=='DsqlEndpoint'].OutputValue" --output text)
+          export API_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "financial-$AMBIENTE-dados" \
+            --query "Stacks[0].Outputs[?OutputKey=='RoleDaApiArn'].OutputValue" --output text)
           uv run --no-dev python -m app.migrations
 
       - name: Lambda, HTTP API e site (pilha do app)
