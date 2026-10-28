@@ -13,9 +13,7 @@ function serviceWorker(): Plugin {
     generateBundle(_opcoes, bundle) {
       const publicos = readdirSync("public");
       const arquivos = [
-        "/index.html",
-        ...Object.keys(bundle).map((nome) => `/${nome}`),
-        ...publicos.map((nome) => `/${nome}`),
+        ...new Set(["index.html", ...Object.keys(bundle), ...publicos].map((nome) => `/${nome}`)),
       ].sort();
       const versao = createHash("sha256")
         .update(

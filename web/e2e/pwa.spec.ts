@@ -63,11 +63,15 @@ test("celular tem as abas embaixo e tela larga tem as abas ao lado", async ({ pa
   await entrar(page);
   const abas = page.getByRole("navigation", { name: "Telas" });
   const conteudo = page.getByRole("main");
+  const novo = page.getByRole("link", { name: "+ Novo lançamento" });
 
   await page.setViewportSize({ width: 390, height: 800 });
   const celular = (await abas.boundingBox())!;
   expect(celular.y + celular.height).toBeCloseTo(800, 0);
   expect(celular.width).toBeCloseTo(390, 0);
+  await expect(novo).toBeVisible();
+  // O conteúdo termina acima das abas fixas.
+  expect((await novo.boundingBox())!.y + (await novo.boundingBox())!.height).toBeLessThan(celular.y);
 
   await page.setViewportSize({ width: 1280, height: 800 });
   const larga = (await abas.boundingBox())!;
@@ -75,4 +79,5 @@ test("celular tem as abas embaixo e tela larga tem as abas ao lado", async ({ pa
   expect(larga.x).toBe(0);
   expect(larga.width).toBeLessThan(300);
   expect(principal.x).toBeGreaterThanOrEqual(larga.x + larga.width);
+  await expect(novo).toBeVisible();
 });
