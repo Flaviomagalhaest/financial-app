@@ -11,10 +11,11 @@ function serviceWorker(): Plugin {
     name: "service-worker-da-casca",
     apply: "build",
     generateBundle(_opcoes, bundle) {
+      const publicos = readdirSync("public");
       const arquivos = [
         "/index.html",
         ...Object.keys(bundle).map((nome) => `/${nome}`),
-        ...readdirSync("public").map((nome) => `/${nome}`),
+        ...publicos.map((nome) => `/${nome}`),
       ].sort();
       const versao = createHash("sha256")
         .update(
@@ -22,7 +23,7 @@ function serviceWorker(): Plugin {
             .map((item) => item.fileName + (item.type === "chunk" ? item.code : ""))
             .join(),
         )
-        .update(readdirSync("public").map((nome) => readFileSync(`public/${nome}`)).join())
+        .update(publicos.map((nome) => readFileSync(`public/${nome}`)).join())
         .digest("hex")
         .slice(0, 12);
       this.emitFile({
