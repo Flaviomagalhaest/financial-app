@@ -188,6 +188,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "categorias": 0,
             "contas": 0,
             "exportacoes": 0,
+            "lancamento_campos": 0,
             "lancamento_categorias": 0,
             "lancamento_tags": 0,
             "lancamentos": 0,
@@ -271,3 +272,43 @@ def test_backup_da_versao_4_sem_categoria_arquivada_restaura_com_todas_ativas(da
         assert conn.execute("SELECT nome, arquivada_em FROM categorias").fetchall() == [
             ("Mercado", None)
         ]
+
+
+def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_ativo(database_url):
+    # O que `prod` gravava antes do ticket 34: lançamentos sem versão, sem marca de exclusão e sem
+    # a versão de cada campo.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, conta_id,"
+            " criado_por, alterado_por) VALUES ('00000000-0000-0000-0000-000000000001',"
+            " 'despesa', 'realizado', 1000, '2026-10-02', '00000000-0000-0000-0000-000000000002',"
+            " 'flavio', 'flavio')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "lancamento_campos.csv":
+                continue
+            if nome == "lancamentos.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-3]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 6
+                del manifesto["tabelas"]["lancamento_campos"]
+                manifesto["tabelas"]["lancamentos"]["somas"] = {"valor_centavos": "1000"}
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute(
+            "SELECT valor_centavos, versao, excluido_em FROM lancamentos"
+        ).fetchall() == [(1000, None, None)]

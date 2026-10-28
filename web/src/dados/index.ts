@@ -11,24 +11,47 @@ import {
   lerFila,
   lerResposta,
   ouvirMudancas,
+  type Base,
+  type Conflito,
+  type Exclusao,
   type Guardada,
   type ItemDaFila,
   type Lancamento,
   type NovoLancamento,
 } from "./armazem";
-import { descartar, enfileirarExcluir, enfileirarSalvar, enviarFila, ETIQUETA_DO_ENVIO, LISTA, type Remessa } from "./fila";
+import {
+  decidirConflito,
+  descartar,
+  enfileirarExcluir,
+  enfileirarSalvar,
+  enviarFila,
+  ETIQUETA_DO_ENVIO,
+  excluirMesmoAssim,
+  guardarConflito,
+  lancarDeNovo,
+  LISTA,
+  type Campo,
+  type Remessa,
+} from "./fila";
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
-export type { ItemDaFila, Lancamento, NovoLancamento };
+export type { Campo, Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
+export { comoNovo } from "./fila";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
 export type LancamentoNaTela = NovoLancamento & {
   situacao: "previsto" | "realizado";
   /** O do servidor; o não enviado repete o da versão que o servidor tem. */
   atrasado?: boolean;
+  /** A versão do servidor que a tela mostra; o não enviado não tem. */
+  versao?: number;
   naoEnviado: boolean;
   recusa?: string;
+  /** A mudança do aparelho espera decisão; enquanto isso, a tela mostra a versão do servidor. */
+  conflito?: boolean;
+  /** A outra pessoa excluiu: a tela mostra a mudança que não foi salva, para "Lançar de novo". */
+  exclusao?: Exclusao;
 };
 
 const LEITURAS = {
@@ -118,6 +141,11 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
   const novos: LancamentoNaTela[] = [];
   for (const item of fila) {
     const anterior = porId.get(item.id);
+    if (item.conflito) {
+      const servidor = anterior ?? { ...item.conflito.lancamento, naoEnviado: false };
+      porId.set(item.id, { ...servidor, conflito: true });
+      continue;
+    }
     if (item.acao === "excluir") {
       porId.delete(item.id);
       continue;
@@ -126,7 +154,7 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
     const situacao = situacaoNoAparelho(lancamento, anterior);
     // O atraso é regra do servidor: vale o dele enquanto a mudança não mexe em data nem situação.
     const atrasado = anterior?.data === lancamento.data && anterior.situacao === situacao ? anterior.atrasado : undefined;
-    const mostrado = { ...lancamento, situacao, atrasado, naoEnviado: true, recusa: item.recusa };
+    const mostrado = { ...lancamento, situacao, atrasado, naoEnviado: true, recusa: item.recusa, exclusao: item.exclusao };
     if (anterior) porId.set(item.id, mostrado);
     else novos.unshift(mostrado);
   }
@@ -202,17 +230,42 @@ export async function enviarAgora(): Promise<boolean> {
   return enviou;
 }
 
-export async function salvarLancamento(lancamento: NovoLancamento, novo: boolean): Promise<void> {
-  await enfileirarSalvar(lancamento, novo);
+/** A versão do servidor que a tela mostrava, quando é a do servidor (não a da fila). */
+function baseDe(mostrado?: LancamentoNaTela): Base | undefined {
+  return mostrado && !mostrado.naoEnviado && mostrado.versao !== undefined ? { ...mostrado, versao: mostrado.versao } : undefined;
+}
+
+/** `mostrado` é o lançamento que a tela abriu para editar: a mudança vale sobre a versão dele. */
+export async function salvarLancamento(lancamento: NovoLancamento, novo: boolean, mostrado?: LancamentoNaTela): Promise<void> {
+  await enfileirarSalvar(lancamento, novo, baseDe(mostrado));
   void enviarAgora();
 }
 
-export async function excluirLancamento(id: string): Promise<void> {
-  await enfileirarExcluir(id);
+export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {
+  await enfileirarExcluir(mostrado.id, baseDe(mostrado));
   void enviarAgora();
 }
 
 export const descartarNaoEnviado = descartar;
+
+/** A decisão do conflito sobe na hora, se houver internet. */
+export async function decidir(id: string, ficaOMeu: Campo[]): Promise<void> {
+  await decidirConflito(id, ficaOMeu);
+  void enviarAgora();
+}
+
+export async function excluirApesarDoConflito(id: string): Promise<void> {
+  await excluirMesmoAssim(id);
+  void enviarAgora();
+}
+
+export async function lancarDeNovoOExcluido(id: string): Promise<void> {
+  await lancarDeNovo(id);
+  void enviarAgora();
+}
+
+/** A confirmação recusada como conflito vai para a tela de decisão, como qualquer conflito. */
+export const levarConfirmacaoAoConflito = guardarConflito;
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */
 export async function criarConta(nome: string, tipo: Conta["tipo"]): Promise<boolean> {

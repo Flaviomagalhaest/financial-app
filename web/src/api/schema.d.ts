@@ -167,17 +167,22 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Editar Lancamento */
-        put: operations["editar_lancamento"];
+        put?: never;
         post?: never;
         /**
          * Excluir Lancamento
-         * @description Idempotente: excluir o que já não existe também dá 204.
+         * @description Idempotente: excluir o que já não existe também dá 204. Com `versao`, o que o outro lado
+         *     mudou depois dela é 409, para perguntar antes.
          */
         delete: operations["excluir_lancamento"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Editar Lancamento
+         * @description Só os campos mudados, sobre uma versão: campos diferentes se mesclam, o mesmo campo
+         *     mudado depois pelo outro lado é 409, e o excluído é 410 (ADR 0011).
+         */
+        patch: operations["editar_lancamento"];
         trace?: never;
     };
     "/api/contas-da-semana": {
@@ -209,7 +214,8 @@ export interface paths {
         /**
          * Confirmar Lancamento
          * @description Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
-         *     toque) devolve o gravado; com ajuste diferente é 409, para nada se perder em silêncio.
+         *     toque) devolve o gravado; com ajuste diferente é 409 com os campos divergentes e quem
+         *     confirmou, para nada se perder em silêncio.
          */
         post: operations["confirmar_lancamento"];
         delete?: never;
@@ -379,7 +385,12 @@ export interface components {
              * @enum {string}
              */
             acao: "editar";
-            lancamento: components["schemas"]["NovoLancamento"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            alteracao: components["schemas"]["AlteracaoDeLancamento"];
         };
         /** AcaoExcluir */
         AcaoExcluir: {
@@ -393,6 +404,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Versao */
+            versao?: number | null;
         };
         /**
          * AlteracaoDeCategoria
@@ -403,6 +416,54 @@ export interface components {
             nome?: string | null;
             /** Arquivada */
             arquivada?: boolean | null;
+        };
+        /**
+         * AlteracaoDeLancamento
+         * @description Só os campos que a pessoa mudou, feitos sobre a `versao` que o aparelho tinha; o campo
+         *     ausente fica como está no servidor, com o que o outro lado tiver mudado nele (ADR 0011).
+         */
+        AlteracaoDeLancamento: {
+            /** Versao */
+            versao: number;
+            /** Tipo */
+            tipo?: ("despesa" | "receita") | null;
+            /** Valor Centavos */
+            valor_centavos?: number | null;
+            /** Data */
+            data?: string | null;
+            /** Descricao */
+            descricao?: string | null;
+            /** Conta Id */
+            conta_id?: string | null;
+            /** Categoria Ids */
+            categoria_ids?: string[] | null;
+            /** Situacao */
+            situacao?: ("previsto" | "realizado") | null;
+            /** Tags */
+            tags?: string[] | null;
+        };
+        /**
+         * CampoEmConflito
+         * @description Um campo que o outro lado mudou depois da versão do pedido; o valor dele está no
+         *     lançamento que acompanha o conflito.
+         */
+        CampoEmConflito: {
+            /**
+             * Campo
+             * @enum {string}
+             */
+            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags";
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
+            /** Por Voce */
+            por_voce: boolean;
+            /** Origem */
+            origem?: string | null;
         };
         /** Categoria */
         Categoria: {
@@ -435,6 +496,18 @@ export interface components {
             data?: string | null;
             /** Conta Id */
             conta_id?: string | null;
+        };
+        /**
+         * Conflito
+         * @description Corpo do 409: o lançamento como o servidor o tem e os campos em conflito. Na exclusão, os
+         *     campos são os que o outro lado mudou depois.
+         */
+        Conflito: {
+            /** Motivo */
+            motivo: string;
+            lancamento: components["schemas"]["Lancamento"];
+            /** Campos */
+            campos: components["schemas"]["CampoEmConflito"][];
         };
         /** Conta */
         Conta: {
@@ -487,6 +560,26 @@ export interface components {
         Eu: {
             /** Usuario */
             usuario: string;
+        };
+        /**
+         * Exclusao
+         * @description Corpo do 410: a exclusão vence a edição (ADR 0011).
+         */
+        Exclusao: {
+            /**
+             * Motivo
+             * @default lançamento excluído
+             */
+            motivo: string;
+            /** Excluido Por */
+            excluido_por: string;
+            /**
+             * Excluido Em
+             * Format: date-time
+             */
+            excluido_em: string;
+            /** Por Voce */
+            por_voce: boolean;
         };
         /** ExportacaoPronta */
         ExportacaoPronta: {
@@ -556,6 +649,8 @@ export interface components {
             tags: string[];
             /** Atrasado */
             atrasado: boolean;
+            /** Versao */
+            versao: number;
             /** Criado Por */
             criado_por: string;
             /**
@@ -695,8 +790,8 @@ export interface components {
         };
         /**
          * Resultado
-         * @description `recusada` traz o motivo para mostrar; `descartada` é a edição de algo já excluído; o
-         *     `conflito` (mesmo campo mudado pelo outro lado, ADR 0011) chega com o ticket 34.
+         * @description `recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os
+         *     campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu.
          */
         Resultado: {
             /**
@@ -707,6 +802,9 @@ export interface components {
             /** Motivo */
             motivo?: string | null;
             lancamento?: components["schemas"]["Lancamento"] | null;
+            /** Campos */
+            campos?: components["schemas"]["CampoEmConflito"][] | null;
+            exclusao?: components["schemas"]["Exclusao"] | null;
         };
         /** ResultadoDoLote */
         ResultadoDoLote: {
@@ -1139,6 +1237,55 @@ export interface operations {
                     "application/json": components["schemas"]["Lancamento"];
                 };
             };
+            /** @description O lançamento foi excluído */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exclusao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_lancamento: {
+        parameters: {
+            query?: {
+                versao?: number | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description O outro lado mudou depois */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conflito"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -1161,7 +1308,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NovoLancamento"];
+                "application/json": components["schemas"]["AlteracaoDeLancamento"];
             };
         };
         responses: {
@@ -1174,34 +1321,23 @@ export interface operations {
                     "application/json": components["schemas"]["Lancamento"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description O outro lado mudou depois */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["Conflito"];
                 };
             };
-        };
-    };
-    excluir_lancamento: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
+            /** @description O lançamento foi excluído */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Exclusao"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -1256,6 +1392,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Lancamento"];
+                };
+            };
+            /** @description O outro lado mudou depois */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conflito"];
+                };
+            };
+            /** @description O lançamento foi excluído */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exclusao"];
                 };
             };
             /** @description Validation Error */

@@ -402,3 +402,26 @@ fieldset.sem-moldura {
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+
+/* Conflito: cada campo divergente com as duas versões lado a lado, uma para escolher. */
+.conflito {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 32rem;
+}
+
+.campo-em-conflito {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.campo-em-conflito h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.campo-em-conflito .ficha {
+  text-align: left;
+}
