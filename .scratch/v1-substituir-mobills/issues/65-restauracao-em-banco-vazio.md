@@ -1,7 +1,7 @@
 # Restauração em banco vazio
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 64
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
