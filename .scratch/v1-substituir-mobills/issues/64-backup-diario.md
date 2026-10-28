@@ -17,7 +17,7 @@ Os dados passam a ter cópia diária que nem o root apaga. **Deve ser ligado ant
 
 - [ ] Gerador que só lê o banco e produz um zip com um CSV por tabela, ids originais e `manifesto.json` (`versao_formato`, contagens e somas)
 - [ ] EventBridge diário grava o zip num S3 com versões e Object Lock em compliance por 90 dias, e confere as contagens do zip contra o banco
-- [ ] Regra de ciclo de vida que apaga as versões depois dos 90 dias (o ticket 20 confere a ambiguidade na documentação)
+- [ ] Regra de ciclo de vida que apaga as versões depois dos 90 dias (a documentação é ambígua sobre apagar versões após o Object Lock em compliance: confira na AWS, com o bucket criado, que a regra de fato as expira; veja o [ticket 20](20-configurar-o-acesso-a-conta-aws.md))
 - [ ] E-mail se o backup falhar ou não rodar em 26 horas
 - [ ] Teste de API do gerador com o exemplo fictício
 - [ ] Verificações do projeto rodando e PR aberto para `main`
