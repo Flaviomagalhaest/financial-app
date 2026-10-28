@@ -13,6 +13,10 @@ Origem: [ticket 66](66-exportar-tudo-e-csv-de-planilha.md): o `POST /api/exporta
 
 Escrever a consulta de `ler_lancamentos` contra o esquema real, com os nomes no lugar dos ids, e trocar o `NotImplementedError` que hoje a protege. Colunas e formato já fixados em `COLUNAS_DA_PLANILHA` e `formatar_planilha`, vindos do [ticket 25](25-exportacao.md): data, descrição, valor, conta ou cartão, fatura, categorias (` | `), tags, pessoa, situação (previsto ou efetivado), quem criou e quem alterou por último. Sem filtro por período; valor em reais com ponto (o formatador troca por vírgula).
 
+**Atenção à ordem**: enquanto faltar alguma das seis tabelas, `ler_lancamentos` devolve só o cabeçalho; assim que a última existir, ela levanta `NotImplementedError` e `POST /api/exportacoes` com `planilha` responde 500. Este ticket precisa entrar antes ou junto com a última tabela (quem mesclar a última dos tickets 32, 36, 37, 40 e 41 faz este junto).
+
+Decidir aqui também a grafia dos nomes das colunas (hoje sem acento: `descricao`, `situacao`) e as datas em `AAAA-MM-DD` do [ticket 25](25-exportacao.md).
+
 ## Checklist
 
 - [ ] Teste na costura `POST /api/exportacoes` com `formato: planilha`, num banco com lançamentos, categorias, tags, conta e cartão de exemplo fictício: o CSV traz nomes, não ids

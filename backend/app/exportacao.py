@@ -9,7 +9,7 @@ import csv
 import io
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -83,7 +83,7 @@ def exportar(s3, bucket: str, usuario: str, formato: Formato, url: str | None = 
         },
         ExpiresIn=VALIDADE_DA_URL,
     )
-    expira_em = datetime.fromtimestamp(agora.timestamp() + VALIDADE_DA_URL, SAO_PAULO)
+    expira_em = agora + timedelta(seconds=VALIDADE_DA_URL)
     return Exportacao(url=assinada, arquivo=arquivo, expira_em=expira_em)
 
 

@@ -16,7 +16,8 @@ O casal baixa os dados a qualquer momento.
 ## Checklist
 
 - [x] `POST /api/exportacoes` gera o backup ou o CSV e devolve URL assinada de 5 minutos; cada exportação a pedido fica registrada (quem e quando)
-- [x] CSV de lançamentos para planilha: separador `;`, vírgula decimal, UTF-8 com BOM, nomes no lugar dos ids, sem filtro por período (o formato está pronto e testado; a consulta aos lançamentos fica para o [ticket 74](74-ligar-o-csv-de-planilha-ao-esquema-real.md), porque as tabelas ainda não existem)
+- [x] Formato do CSV de lançamentos para planilha: separador `;`, vírgula decimal, UTF-8 com BOM, sem filtro por período
+- [x] Nomes no lugar dos ids: a consulta aos lançamentos foi movida para o [ticket 74](74-ligar-o-csv-de-planilha-ao-esquema-real.md), porque as tabelas ainda não existem (hoje a planilha sai só com o cabeçalho)
 - [x] Botão nas configurações, só com internet
 - [x] Habilita o [ticket 26](26-verificar-o-download-da-exportacao-no-iphone.md) (verificar o download no iPhone)
 - [x] Verificações do projeto rodando e PR aberto para `main`
