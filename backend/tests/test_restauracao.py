@@ -230,3 +230,42 @@ def test_backup_da_versao_2_restaura_convertido_com_as_contas_sem_abertura(datab
         assert conn.execute(
             "SELECT nome, saldo_abertura_centavos, data_abertura, arquivada_em FROM contas"
         ).fetchall() == [("Corrente", None, None, None)]
+
+
+def test_backup_da_versao_4_sem_categoria_arquivada_restaura_com_todas_ativas(database_url):
+    # O que `prod` gravava antes do ticket 74: `categorias` sem a coluna `arquivada`.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO categorias (id, nome, tipo, criado_por)"
+            " VALUES ('00000000-0000-0000-0000-000000000001', 'Mercado', 'despesa', 'flavio')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM categorias")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "categorias.csv":
+                conteudo = (
+                    b"id,nome,tipo,criado_por,criado_em\n"
+                    + b"\n".join(
+                        b",".join(linha.split(b",")[:5])
+                        for linha in conteudo.split(b"\n")[1:]
+                        if linha
+                    )
+                    + b"\n"
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 4
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT nome, arquivada FROM categorias").fetchall() == [
+            ("Mercado", False)
+        ]

@@ -127,5 +127,62 @@
       "alterado_por": "text",
       "alterado_em": "timestamp with time zone"
     }
+  },
+  "5": {
+    "categorias": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "arquivada": "boolean"
+    },
+    "contas": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "saldo_abertura_centavos": "bigint",
+      "data_abertura": "date",
+      "arquivada_em": "timestamp with time zone"
+    },
+    "exportacoes": {
+      "id": "uuid",
+      "usuario": "text",
+      "formato": "text",
+      "criada_em": "timestamp with time zone"
+    },
+    "lancamento_categorias": {
+      "lancamento_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "lancamentos": {
+      "id": "uuid",
+      "tipo": "text",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "transferencias": {
+      "id": "uuid",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_origem_id": "uuid",
+      "conta_destino_id": "uuid",
+      "categoria_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    }
   }
 }

@@ -304,6 +304,62 @@
         ]
       }
     },
+    "/api/categorias/{id}": {
+      "patch": {
+        "summary": "Alterar Categoria",
+        "description": "Renomear e arquivar não mexem nos lançamentos: eles apontam para o id da categoria.",
+        "operationId": "alterar_categoria",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlteracaoDeCategoria"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Categoria"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/lancamentos": {
       "get": {
         "summary": "Listar Lancamentos",
@@ -629,6 +685,37 @@
   },
   "components": {
     "schemas": {
+      "AlteracaoDeCategoria": {
+        "properties": {
+          "nome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome"
+          },
+          "arquivada": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arquivada"
+          }
+        },
+        "type": "object",
+        "title": "AlteracaoDeCategoria",
+        "description": "Só o nome e o arquivamento mudam; o tipo é fixo porque os lançamentos dependem dele."
+      },
       "Categoria": {
         "properties": {
           "nome": {
@@ -649,6 +736,11 @@
             "type": "string",
             "format": "uuid",
             "title": "Id"
+          },
+          "arquivada": {
+            "type": "boolean",
+            "title": "Arquivada",
+            "default": false
           }
         },
         "type": "object",

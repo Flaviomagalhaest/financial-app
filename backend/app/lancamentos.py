@@ -47,6 +47,19 @@ class NovaCategoria(BaseModel):
 
 class Categoria(NovaCategoria):
     id: UUID
+    arquivada: bool = False
+
+
+class AlteracaoDeCategoria(BaseModel):
+    """Só o nome e o arquivamento mudam; o tipo é fixo porque os lançamentos dependem dele."""
+
+    nome: str | None = Field(default=None, min_length=1, pattern=r"\S")
+    arquivada: bool | None = None
+
+    @field_validator("nome")
+    @classmethod
+    def _sem_espacos_nas_pontas(cls, nome: str | None) -> str | None:
+        return nome.strip() if nome else nome
 
 
 class NovoLancamento(BaseModel):
@@ -196,8 +209,28 @@ def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Reques
 @router.get("/categorias", response_model=list[Categoria], operation_id="listar_categorias")
 def listar_categorias(usuario: UsuarioLogado, request: Request) -> list[Categoria]:
     with conectar(url_do_banco(request)) as conn:
-        linhas = conn.execute("SELECT id, nome, tipo FROM categorias ORDER BY nome, id").fetchall()
-    return [Categoria(id=i, nome=n, tipo=t) for i, n, t in linhas]
+        linhas = conn.execute(
+            "SELECT id, nome, tipo, arquivada FROM categorias ORDER BY nome, id"
+        ).fetchall()
+    return [Categoria(id=i, nome=n, tipo=t, arquivada=a) for i, n, t, a in linhas]
+
+
+@router.patch("/categorias/{id}", response_model=Categoria, operation_id="alterar_categoria")
+def alterar_categoria(
+    id: UUID, alteracao: AlteracaoDeCategoria, usuario: UsuarioLogado, request: Request
+) -> Categoria:
+    """Renomear e arquivar não mexem nos lançamentos: eles apontam para o id da categoria."""
+    linha = em_transacao(
+        url_do_banco(request),
+        lambda conn: conn.execute(
+            "UPDATE categorias SET nome = COALESCE(%s, nome), arquivada = COALESCE(%s, arquivada)"
+            " WHERE id = %s RETURNING id, nome, tipo, arquivada",
+            (alteracao.nome, alteracao.arquivada, id),
+        ).fetchone(),
+    )
+    if not linha:
+        raise HTTPException(status_code=404, detail="categoria não encontrada")
+    return Categoria(id=linha[0], nome=linha[1], tipo=linha[2], arquivada=linha[3])
 
 
 def situacao_pela_data(dia: date) -> str:
@@ -217,19 +250,29 @@ def conferir_conta(conn, id: UUID, ja_ligada: bool = False) -> None:
         raise recusar("conta arquivada")
 
 
-def _conferir_ligacoes(conn, lancamento: NovoLancamento, conta_atual: UUID | None = None) -> None:
+def _conferir_ligacoes(
+    conn,
+    lancamento: NovoLancamento,
+    conta_atual: UUID | None = None,
+    categorias_atuais: frozenset[UUID] = frozenset(),
+) -> None:
+    """Conta e categoria arquivadas só valem num lançamento que já as tinha."""
     conferir_conta(conn, lancamento.conta_id, ja_ligada=lancamento.conta_id == conta_atual)
-    tipos = {
-        id: tipo
-        for id, tipo in conn.execute(
-            "SELECT id, tipo FROM categorias WHERE id = ANY(%s)", (lancamento.categoria_ids,)
-        )
-    }
+    tipos = {}
+    arquivadas = set()
+    for id, tipo, arquivada in conn.execute(
+        "SELECT id, tipo, arquivada FROM categorias WHERE id = ANY(%s)", (lancamento.categoria_ids,)
+    ):
+        tipos[id] = tipo
+        if arquivada:
+            arquivadas.add(id)
     for categoria in lancamento.categoria_ids:
         if categoria not in tipos:
             raise recusar("categoria não encontrada")
         if tipos[categoria] != lancamento.tipo:
             raise recusar(f"categoria de {tipos[categoria]} num lançamento de {lancamento.tipo}")
+        if categoria in arquivadas and categoria not in categorias_atuais:
+            raise recusar("categoria arquivada")
 
 
 def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
@@ -250,7 +293,15 @@ def criar_lancamento(
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
 
     def gravar(conn) -> Lancamento:
-        _conferir_ligacoes(conn, novo)
+        # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
+        ja_ligadas = frozenset(
+            categoria
+            for (categoria,) in conn.execute(
+                "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
+                (novo.id,),
+            )
+        )
+        _conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
         gravados = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
             " conta_id, criado_por, alterado_por) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
@@ -321,13 +372,19 @@ def editar_lancamento(
         raise recusar("o id do corpo difere do id da URL")
 
     def gravar(conn) -> Lancamento:
+        categorias_atuais = frozenset(
+            categoria
+            for (categoria,) in conn.execute(
+                "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s", (id,)
+            )
+        )
         atual = conn.execute(
             "SELECT data, situacao, conta_id FROM lancamentos WHERE id = %s", (id,)
         ).fetchone()
         if not atual:
             raise HTTPException(status_code=404, detail="lançamento não encontrado")
         data_atual, situacao_atual, conta_atual = atual
-        _conferir_ligacoes(conn, editado, conta_atual)
+        _conferir_ligacoes(conn, editado, conta_atual, categorias_atuais)
         # Sem situação no pedido, só mudar a data refaz a inferência; senão a atual fica.
         if editado.situacao:
             situacao = editado.situacao
