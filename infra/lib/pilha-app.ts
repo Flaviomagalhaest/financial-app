@@ -1,10 +1,10 @@
 import {
-  Annotations,
   CfnOutput,
   Duration,
   Fn,
   RemovalPolicy,
   Stack,
+  TimeZone,
   type StackProps,
 } from "aws-cdk-lib";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
@@ -14,14 +14,14 @@ import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
-import * as events from "aws-cdk-lib/aws-events";
-import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
+import * as schedulerTargets from "aws-cdk-lib/aws-scheduler-targets";
 import * as triggers from "aws-cdk-lib/triggers";
 import type { Construct } from "constructs";
 import type { PilhaDados } from "./pilha-dados.js";
@@ -158,7 +158,7 @@ export class PilhaApp extends Stack {
   }
 
   /**
-   * Todo dia o EventBridge chama a Lambda do backup, que grava o zip conferido no bucket com
+   * Todo dia o EventBridge Scheduler chama a Lambda do backup, que grava o zip conferido no bucket com
    * Object Lock. Um e-mail avisa se ela falhar ou se passar 26 horas sem backup concluído.
    */
   private backupDiario(props: PilhaAppProps, avisos: sns.Topic) {
@@ -183,20 +183,24 @@ export class PilhaApp extends Stack {
       }),
     });
 
-    new events.Rule(this, "TodoDia", {
-      schedule: events.Schedule.cron({ minute: "7", hour: "6" }),
-      targets: [new targets.LambdaFunction(funcao)],
+    // 03:07 em São Paulo, fora do uso do casal (ADR 0010: EventBridge Scheduler).
+    new scheduler.Schedule(this, "TodoDia", {
+      schedule: scheduler.ScheduleExpression.cron({
+        minute: "7",
+        hour: "3",
+        timeZone: TimeZone.AMERICA_SAO_PAULO,
+      }),
+      target: new schedulerTargets.LambdaInvoke(funcao, { retryAttempts: 2 }),
     });
-    Annotations.of(funcao).acknowledgeWarning(
-      "@aws-cdk/aws-lambda:addPermissionsToVersionOrAlias",
-      "O EventBridge chama a função sem versão; o Trigger chama a versão com IAM em `:*`.",
-    );
-    // Cada deploy com código novo faz um backup e falha se ele falhar: o dev confere o
-    // backup no DSQL de verdade antes do merge.
-    new triggers.Trigger(this, "BackupNoDeploy", {
-      handler: funcao,
-      timeout: Duration.minutes(5),
-    });
+    // No dev, cada deploy com código novo faz um backup e falha se ele falhar: confere o
+    // backup no DSQL de verdade antes do merge. Em prod não, para um backup quebrado não
+    // travar o deploy de uma correção; lá o alarme avisa.
+    if (props.ambiente === "dev") {
+      new triggers.Trigger(this, "BackupNoDeploy", {
+        handler: funcao,
+        timeout: Duration.minutes(5),
+      });
+    }
 
     const avisar = new cwactions.SnsAction(avisos);
 
@@ -210,7 +214,8 @@ export class PilhaApp extends Stack {
     }).addAlarmAction(avisar);
 
     // A Lambda publica `BackupsConcluidos` só depois de gravar o zip conferido
-    // (backend/app/backup_diario.py). 26 horas seguidas sem ela: sem backup.
+    // (backend/app/backup_diario.py). Com 25 horas cheias sem ela, o alarme dispara até 26
+    // horas depois do último backup (a hora do backup conta inteira).
     new cloudwatch.Alarm(this, "BackupAtrasado", {
       alarmDescription: `Nenhum backup de ${props.ambiente} concluído nas últimas 26 horas.`,
       metric: new cloudwatch.Metric({
@@ -222,8 +227,8 @@ export class PilhaApp extends Stack {
       }),
       threshold: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-      evaluationPeriods: 26,
-      datapointsToAlarm: 26,
+      evaluationPeriods: 25,
+      datapointsToAlarm: 25,
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     }).addAlarmAction(avisar);
 

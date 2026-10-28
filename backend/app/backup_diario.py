@@ -1,6 +1,6 @@
-"""Backup diário: o EventBridge chama esta Lambda, que gera o backup, confere o zip contra o
-banco e grava no bucket com Object Lock (ADR 0012). O alarme de 26 horas observa a métrica
-publicada no fim; sem ela, ou com erro na Lambda, o dono recebe e-mail."""
+"""Backup diário: o EventBridge Scheduler chama esta Lambda, que gera o backup, confere o zip
+contra o banco e grava no bucket com Object Lock (ADR 0012). O alarme de 26 horas observa a
+métrica publicada no fim; sem ela, ou com erro na Lambda, o dono recebe e-mail."""
 
 import json
 import os
@@ -17,7 +17,7 @@ from app.banco import PAPEL_DO_BACKUP, conectar
 def fazer_backup_diario(s3, bucket: str, ambiente: str, dia: date, url: str | None = None) -> str:
     """Grava `diario/AAAA-MM-DD.zip` e devolve a chave; levanta erro se o zip não bater."""
     with conectar(url, papel=PAPEL_DO_BACKUP) as conn:
-        # Uma foto só do banco: a geração e a conferência leem o mesmo instante.
+        # A geração e a conferência leem o mesmo instante do banco.
         conn.isolation_level = IsolationLevel.REPEATABLE_READ
         conn.read_only = True
         with conn.transaction():

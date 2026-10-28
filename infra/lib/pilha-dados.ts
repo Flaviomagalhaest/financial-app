@@ -98,6 +98,7 @@ export class PilhaDados extends Stack {
         // não a apaga e tenta de novo depois.
         {
           id: "ApagarDepoisDoPrazo",
+          prefix: "diario/",
           expiration: retencao,
           noncurrentVersionExpiration: Duration.days(1),
         },

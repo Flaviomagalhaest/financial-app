@@ -13,7 +13,8 @@ import psycopg
 
 VERSAO_FORMATO = 1
 FORA_DO_BACKUP = {"controle_de_migrations"}
-NUMERICOS = {"smallint", "integer", "bigint", "numeric", "real", "double precision"}
+# Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
+NUMERICOS = {"smallint", "integer", "bigint", "numeric"}
 
 
 class BackupDivergente(Exception):
@@ -21,15 +22,19 @@ class BackupDivergente(Exception):
 
 
 def gerar_backup(conn: psycopg.Connection) -> bytes:
+    """Lê todas as tabelas e devolve o zip. Rode numa transação REPEATABLE READ, para as
+    tabelas, as contagens e as somas saírem do mesmo instante do banco (veja `backup_diario`).
+    """
     arquivos: dict[str, bytes] = {}
     tabelas: dict[str, dict] = {}
     for tabela in _tabelas(conn):
         tipos = _colunas(conn, tabela)
         colunas = list(tipos)
-        ordem = _chave(conn, tabela) or colunas
+        ordem = _chave_primaria(conn, tabela) or colunas
+        como_texto = ", ".join(f"{_identificador(c)}::text" for c in colunas)
         linhas = conn.execute(
-            f"SELECT {', '.join(f'{_nome(c)}::text' for c in colunas)} FROM {_nome(tabela)}"
-            f" ORDER BY {', '.join(_nome(c) for c in ordem)}"
+            f"SELECT {como_texto} FROM {_identificador(tabela)}"
+            f" ORDER BY {', '.join(_identificador(c) for c in ordem)}"
         ).fetchall()
         texto = io.StringIO(newline="")
         escritor = csv.writer(texto, quoting=csv.QUOTE_NOTNULL, lineterminator="\n")
@@ -42,10 +47,10 @@ def gerar_backup(conn: psycopg.Connection) -> bytes:
 
     # Sem a hora da geração: o mesmo banco dá o mesmo zip, byte a byte.
     saida = io.BytesIO()
-    with zipfile.ZipFile(saida, "w") as zip:
+    with zipfile.ZipFile(saida, "w") as compactado:
         for nome, conteudo in arquivos.items():
             info = zipfile.ZipInfo(nome, date_time=(1980, 1, 1, 0, 0, 0))
-            zip.writestr(info, conteudo, compress_type=zipfile.ZIP_DEFLATED)
+            compactado.writestr(info, conteudo, compress_type=zipfile.ZIP_DEFLATED)
     return saida.getvalue()
 
 
@@ -53,17 +58,20 @@ def conferir_backup(conn: psycopg.Connection, backup: bytes) -> None:
     """Abre o zip e compara as tabelas e as contagens com o banco; diverge, levanta erro.
 
     Para não acusar a escrita de alguém no meio, rode na mesma transação da geração.
+    Confere só as contagens: as somas do manifesto ficam para a restauração.
     """
-    with zipfile.ZipFile(io.BytesIO(backup)) as zip:
-        manifesto = json.loads(zip.read("manifesto.json"))
-        no_zip = {nome.removesuffix(".csv") for nome in zip.namelist() if nome.endswith(".csv")}
+    with zipfile.ZipFile(io.BytesIO(backup)) as compactado:
+        manifesto = json.loads(compactado.read("manifesto.json"))
+        no_zip = {
+            nome.removesuffix(".csv") for nome in compactado.namelist() if nome.endswith(".csv")
+        }
         no_banco = set(_tabelas(conn))
         if no_zip != no_banco or set(manifesto["tabelas"]) != no_banco:
             raise BackupDivergente(f"tabelas no zip {sorted(no_zip)}, no banco {sorted(no_banco)}")
         for tabela in sorted(no_banco):
-            texto = io.StringIO(zip.read(f"{tabela}.csv").decode("utf-8"), newline="")
+            texto = io.StringIO(compactado.read(f"{tabela}.csv").decode("utf-8"), newline="")
             no_csv = sum(1 for _ in csv.reader(texto)) - 1
-            (contagem,) = conn.execute(f"SELECT count(*) FROM {_nome(tabela)}").fetchone()
+            (contagem,) = conn.execute(f"SELECT count(*) FROM {_identificador(tabela)}").fetchone()
             if no_csv != contagem or manifesto["tabelas"][tabela]["linhas"] != contagem:
                 raise BackupDivergente(
                     f"{tabela}: {no_csv} linhas no CSV,"
@@ -95,13 +103,13 @@ def _somas(conn: psycopg.Connection, tabela: str, tipos: dict[str, str]) -> dict
     if not numericas:
         return {}
     somas = conn.execute(
-        f"SELECT {', '.join(f'coalesce(sum({_nome(c)}), 0)::text' for c in numericas)}"
-        f" FROM {_nome(tabela)}"
+        f"SELECT {', '.join(f'coalesce(sum({_identificador(c)}), 0)::text' for c in numericas)}"
+        f" FROM {_identificador(tabela)}"
     ).fetchone()
     return dict(zip(numericas, somas))
 
 
-def _chave(conn: psycopg.Connection, tabela: str) -> list[str]:
+def _chave_primaria(conn: psycopg.Connection, tabela: str) -> list[str]:
     """Colunas da chave primária, em ordem. Pelo `pg_catalog`: o `information_schema` esconde
     as restrições de quem só tem SELECT, como o papel `backup`."""
     nomes = conn.execute(
@@ -117,5 +125,5 @@ def _chave(conn: psycopg.Connection, tabela: str) -> list[str]:
     return [nome for (nome,) in nomes]
 
 
-def _nome(identificador: str) -> str:
+def _identificador(identificador: str) -> str:
     return '"' + identificador.replace('"', '""') + '"'
