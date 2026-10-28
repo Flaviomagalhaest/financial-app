@@ -15,7 +15,9 @@ O dono é avisado por e-mail quando o custo ou os erros fogem do esperado, sem q
 
 ## Checklist
 
-- [ ] Orçamento sem créditos com alertas em US$ 1 (real), US$ 5 (previsão) e US$ 5 (real), no mesmo código do CDK
-- [ ] Alarme de erros 5xx da API acima de um limite por dia, por e-mail
+- [x] Orçamento sem créditos com alertas em US$ 1 (real), US$ 5 (previsão) e US$ 5 (real), no mesmo código do CDK
+- [x] Alarme de erros 5xx da API acima de um limite por dia, por e-mail
 - [ ] Confirmado pela entrega de um alerta de teste no e-mail do dono
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+Pendente do dono (HITL): publicar `financial-orcamento` com credenciais da conta, confirmar a inscrição do SNS nas pilhas do app e disparar um alerta de teste (`aws sns publish` no tópico `Avisos`).

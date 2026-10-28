@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "synth": "cdk synth --quiet"
+    "synth": "cdk synth --quiet",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "2.275.0",

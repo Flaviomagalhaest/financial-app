@@ -1,4 +1,6 @@
 import { CfnOutput, Duration, Fn, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cwactions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
@@ -7,6 +9,8 @@ import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import type { Construct } from "constructs";
@@ -20,6 +24,8 @@ export interface PilhaAppProps extends StackProps {
   site: string;
   /** Em `prod`, a distribuição fica mesmo se a pilha for apagada. */
   guardar: boolean;
+  /** Recebe o alarme de erros 5xx da API. */
+  emailDoDono: string;
 }
 
 /**
@@ -68,6 +74,24 @@ export class PilhaApp extends Stack {
       autoDeploy: true,
       throttle: { rateLimit: 10, burstLimit: 20 },
     });
+    // Mais de 5 respostas 5xx num dia avisam o dono por e-mail.
+    const avisos = new sns.Topic(this, "Avisos");
+    avisos.addSubscription(new subs.EmailSubscription(props.emailDoDono));
+    new cloudwatch.Alarm(this, "Erros5xx", {
+      alarmDescription: "Erros 5xx da API acima do limite por dia",
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/ApiGateway",
+        metricName: "5xx",
+        dimensionsMap: { ApiId: httpApi.apiId },
+        statistic: "Sum",
+        period: Duration.days(1),
+      }),
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cwactions.SnsAction(avisos));
+
     const integracao = new HttpLambdaIntegration("Lambda", api);
     httpApi.addRoutes({
       path: "/api/saude",
