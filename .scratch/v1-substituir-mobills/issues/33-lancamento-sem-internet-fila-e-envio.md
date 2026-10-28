@@ -20,4 +20,5 @@ Sem internet, criar, editar, excluir e confirmar lançamentos funciona: o lança
 - [ ] Fila sobe ao abrir ou voltar ao app, pelo botão "Enviar agora" e, no Android, em segundo plano; ⏳ nas listas, contagem na Hoje e destaque depois de 24 h
 - [ ] Recusa aparece como "não enviado: <motivo>" para corrigir ou descartar; telas de configuração mostram o botão desativado com "precisa de internet"
 - [ ] Testes de navegador com a rede desligada e religada: lançar offline, ⏳, envio sem duplicar e recusa com motivo
+- [ ] `contarNaoEnviados` em `web/src/App.tsx` conta a fila de verdade, para "Sair" pedir confirmação com não enviados (ticket 30), com teste de navegador do aviso
 - [ ] Verificações do projeto rodando e PR aberto para `main`

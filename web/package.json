@@ -12,6 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "amazon-cognito-identity-js": "^6.3.22",
     "openapi-fetch": "^0.17.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

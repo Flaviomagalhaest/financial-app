@@ -22,10 +22,46 @@
           }
         }
       }
+    },
+    "/api/eu": {
+      "get": {
+        "summary": "Eu",
+        "operationId": "eu",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Eu"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "Eu": {
+        "properties": {
+          "usuario": {
+            "type": "string",
+            "title": "Usuario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "usuario"
+        ],
+        "title": "Eu"
+      },
       "Saude": {
         "properties": {
           "status": {
@@ -43,6 +79,12 @@
           "migrations"
         ],
         "title": "Saude"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }

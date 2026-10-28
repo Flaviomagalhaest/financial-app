@@ -16,6 +16,8 @@ export class PilhaDados extends Stack {
   readonly banco: dsql.CfnCluster;
   readonly usuarios: cognito.UserPool;
   readonly clienteDoApp: cognito.UserPoolClient;
+  /** Emissor dos JWTs do user pool, conferido pela HTTP API e pela API. */
+  readonly emissor: string;
 
   constructor(scope: Construct, id: string, props: PilhaDadosProps) {
     super(scope, id, props);
@@ -38,13 +40,18 @@ export class PilhaDados extends Stack {
     (this.usuarios.node.defaultChild as cognito.CfnUserPool).overrideLogicalId("Usuarios");
 
     // Cliente público (sem segredo) com SRP; sessão de anos e acesso de 15 minutos (ADR 0010).
+    // O token de identidade também vale 15 minutos: a API aceita qualquer JWT do cliente, e
+    // é esse o tempo que um celular perdido segue entrando depois de desconectado.
     this.clienteDoApp = this.usuarios.addClient("ClienteDoApp", {
       generateSecret: false,
       authFlows: { userSrp: true },
       accessTokenValidity: Duration.minutes(15),
+      idTokenValidity: Duration.minutes(15),
       refreshTokenValidity: Duration.days(3650),
+      enableTokenRevocation: true,
       preventUserExistenceErrors: true,
     });
+    this.emissor = `https://cognito-idp.${this.region}.amazonaws.com/${this.usuarios.userPoolId}`;
 
     new CfnOutput(this, "DsqlEndpoint", { value: this.banco.attrEndpoint });
     new CfnOutput(this, "UserPoolId", { value: this.usuarios.userPoolId });
