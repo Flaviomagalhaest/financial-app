@@ -2,7 +2,7 @@
 DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no aparelho."""
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -258,3 +258,73 @@ def excluir_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Re
         conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
         conn.execute("DELETE FROM lancamentos WHERE id = %s", (id,))
     return Response(status_code=204)
+
+
+LIMITE_DO_LOTE = 100
+
+
+class AcaoCriar(BaseModel):
+    acao: Literal["criar"]
+    lancamento: NovoLancamento
+
+
+class AcaoEditar(BaseModel):
+    acao: Literal["editar"]
+    lancamento: NovoLancamento
+
+
+class AcaoExcluir(BaseModel):
+    acao: Literal["excluir"]
+    id: UUID
+
+
+class Lote(BaseModel):
+    acoes: list[Annotated[AcaoCriar | AcaoEditar | AcaoExcluir, Field(discriminator="acao")]] = (
+        Field(min_length=1, max_length=LIMITE_DO_LOTE)
+    )
+
+
+class Resultado(BaseModel):
+    """`recusada` traz o motivo para mostrar; `descartada` é a edição de algo já excluído; o
+    `conflito` (mesmo campo mudado pelo outro lado, ADR 0011) chega com o ticket 34."""
+
+    resultado: Literal["aceita", "conflito", "recusada", "descartada"]
+    motivo: str | None = None
+    lancamento: Lancamento | None = None
+
+
+class ResultadoDoLote(BaseModel):
+    resultados: list[Resultado]
+
+
+def _aplicar(acao, usuario: str, request: Request) -> Resultado:
+    """As mesmas regras das rotas de um lançamento só; a recusa de uma não para as outras."""
+    try:
+        return _aplicar_rota(acao, usuario, request)
+    except HTTPException as erro:
+        if erro.status_code == 404:
+            return Resultado(resultado="descartada", motivo="lançamento excluído")
+        if erro.status_code == 422:
+            return Resultado(resultado="recusada", motivo=erro.detail)
+        raise
+
+
+def _aplicar_rota(acao, usuario: str, request: Request) -> Resultado:
+    match acao:
+        case AcaoCriar(lancamento=novo):
+            criado = criar_lancamento(novo, usuario, request, Response())
+            return Resultado(resultado="aceita", lancamento=criado)
+        case AcaoEditar(lancamento=editado):
+            return Resultado(
+                resultado="aceita",
+                lancamento=editar_lancamento(editado.id, editado, usuario, request),
+            )
+        case AcaoExcluir(id=id):
+            excluir_lancamento(id, usuario, request)
+            return Resultado(resultado="aceita")
+
+
+@router.post("/lancamentos/lote", response_model=ResultadoDoLote, operation_id="enviar_lote")
+def enviar_lote(lote: Lote, usuario: UsuarioLogado, request: Request) -> ResultadoDoLote:
+    """A fila do aparelho: as ações na ordem, cada uma na sua transação, um resultado por ação."""
+    return ResultadoDoLote(resultados=[_aplicar(a, usuario, request) for a in lote.acoes])

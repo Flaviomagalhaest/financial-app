@@ -116,10 +116,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lancamentos/lote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar Lote
+         * @description A fila do aparelho: as ações na ordem, cada uma na sua transação, um resultado por ação.
+         */
+        post: operations["enviar_lote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcaoCriar */
+        AcaoCriar: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "criar";
+            lancamento: components["schemas"]["NovoLancamento"];
+        };
+        /** AcaoEditar */
+        AcaoEditar: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "editar";
+            lancamento: components["schemas"]["NovoLancamento"];
+        };
+        /** AcaoExcluir */
+        AcaoExcluir: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "excluir";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /** Categoria */
         Categoria: {
             /** Nome */
@@ -211,6 +262,11 @@ export interface components {
              */
             alterado_em: string;
         };
+        /** Lote */
+        Lote: {
+            /** Acoes */
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"])[];
+        };
         /** NovaCategoria */
         NovaCategoria: {
             /** Nome */
@@ -264,6 +320,26 @@ export interface components {
             categoria_ids: string[];
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
+        };
+        /**
+         * Resultado
+         * @description `recusada` traz o motivo para mostrar; `descartada` é a edição de algo já excluído; o
+         *     `conflito` (mesmo campo mudado pelo outro lado, ADR 0011) chega com o ticket 34.
+         */
+        Resultado: {
+            /**
+             * Resultado
+             * @enum {string}
+             */
+            resultado: "aceita" | "conflito" | "recusada" | "descartada";
+            /** Motivo */
+            motivo?: string | null;
+            lancamento?: components["schemas"]["Lancamento"] | null;
+        };
+        /** ResultadoDoLote */
+        ResultadoDoLote: {
+            /** Resultados */
+            resultados: components["schemas"]["Resultado"][];
         };
         /** Saude */
         Saude: {
@@ -545,6 +621,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enviar_lote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Lote"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultadoDoLote"];
+                };
             };
             /** @description Validation Error */
             422: {

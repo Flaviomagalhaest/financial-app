@@ -342,10 +342,110 @@
           }
         }
       }
+    },
+    "/api/lancamentos/lote": {
+      "post": {
+        "summary": "Enviar Lote",
+        "description": "A fila do aparelho: as ações na ordem, cada uma na sua transação, um resultado por ação.",
+        "operationId": "enviar_lote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Lote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoDoLote"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "AcaoCriar": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "criar",
+            "title": "Acao"
+          },
+          "lancamento": {
+            "$ref": "#/components/schemas/NovoLancamento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "lancamento"
+        ],
+        "title": "AcaoCriar"
+      },
+      "AcaoEditar": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "editar",
+            "title": "Acao"
+          },
+          "lancamento": {
+            "$ref": "#/components/schemas/NovoLancamento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "lancamento"
+        ],
+        "title": "AcaoEditar"
+      },
+      "AcaoExcluir": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "excluir",
+            "title": "Acao"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "id"
+        ],
+        "title": "AcaoExcluir"
+      },
       "Categoria": {
         "properties": {
           "nome": {
@@ -519,6 +619,42 @@
         ],
         "title": "Lancamento"
       },
+      "Lote": {
+        "properties": {
+          "acoes": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/AcaoCriar"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoEditar"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoExcluir"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "acao",
+                "mapping": {
+                  "criar": "#/components/schemas/AcaoCriar",
+                  "editar": "#/components/schemas/AcaoEditar",
+                  "excluir": "#/components/schemas/AcaoExcluir"
+                }
+              }
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Acoes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acoes"
+        ],
+        "title": "Lote"
+      },
       "NovaCategoria": {
         "properties": {
           "nome": {
@@ -637,6 +773,63 @@
           "categoria_ids"
         ],
         "title": "NovoLancamento"
+      },
+      "Resultado": {
+        "properties": {
+          "resultado": {
+            "type": "string",
+            "enum": [
+              "aceita",
+              "conflito",
+              "recusada",
+              "descartada"
+            ],
+            "title": "Resultado"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "lancamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Lancamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "resultado"
+        ],
+        "title": "Resultado",
+        "description": "`recusada` traz o motivo para mostrar; `descartada` é a edição de algo já excluído; o\n`conflito` (mesmo campo mudado pelo outro lado, ADR 0011) chega com o ticket 34."
+      },
+      "ResultadoDoLote": {
+        "properties": {
+          "resultados": {
+            "items": {
+              "$ref": "#/components/schemas/Resultado"
+            },
+            "type": "array",
+            "title": "Resultados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resultados"
+        ],
+        "title": "ResultadoDoLote"
       },
       "Saude": {
         "properties": {
