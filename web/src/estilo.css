@@ -363,6 +363,14 @@ select {
   }
 }
 
+/* Agrupa o que precisa de internet, para desativar tudo de uma vez. */
+fieldset.sem-moldura {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
 /* Contas da semana: o atrasado leva um selo de aviso; o ajuste abre dentro da linha. */
 .contas-da-semana {
   display: flex;

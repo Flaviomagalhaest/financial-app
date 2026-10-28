@@ -4,7 +4,7 @@ import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresent
 import { dataPorExtenso } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
-import { useCadastro, type Lancamento } from "./useCadastro";
+import { useCadastro, type Lancamento } from "../dados";
 
 type Ajuste = { centavos: number; data: string; contaId: string };
 

@@ -1,29 +1,18 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
+import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, type Categoria, type Conta } from "../dados";
 import { formatarCentavos } from "../lancamentos/dinheiro";
-import { useCadastro, type Categoria, type Conta } from "../lancamentos/useCadastro";
 
 const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: "Carteira" } as const;
 const TIPOS_DE_CATEGORIA = { despesa: "Despesa", receita: "Receita", transferencia: "Transferência" } as const;
 
 /** Contas e categorias: criar, renomear e arquivar (a conta também leva o saldo de abertura). Tudo exige internet. */
 export function TelaDeContasECategorias() {
-  const { categorias, recarregar: recarregarCadastro } = useCadastro();
-  const [contas, setContas] = useState<Conta[]>([]);
-  const [erro, setErro] = useState("");
-
+  const { categorias, atualizadoEm, recarregar: recarregarCadastro } = useCadastro();
   // Aqui as arquivadas aparecem também, para poderem voltar.
-  const recarregarContas = useCallback(async () => {
-    try {
-      const { data } = await api.GET("/api/contas", { params: { query: { arquivadas: true } } });
-      if (data) setContas(data);
-    } catch {
-      // Sem internet: segue com o que já tinha.
-    }
-  }, []);
-  useEffect(() => {
-    void recarregarContas();
-  }, [recarregarContas]);
+  const { contas, recarregar: recarregarContas } = useContasComArquivadas();
+  const online = useConexao();
+  const [erro, setErro] = useState("");
   const recarregar = async () => {
     await Promise.all([recarregarCadastro(), recarregarContas()]);
   };
@@ -90,11 +79,15 @@ export function TelaDeContasECategorias() {
   return (
     <section>
       <h2>Contas e categorias</h2>
+      {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {erro && (
         <p role="alert" className="erro">
           {erro}
         </p>
       )}
+      {/* Sem internet, a lista guardada continua à vista, mas mudar fica desativado (ADR 0011). */}
+      {!online && <p className="aviso">Mudar contas e categorias precisa de internet.</p>}
+      <fieldset className="sem-moldura" disabled={!online}>
       <h3>Contas</h3>
       <ul className="lista">
         {contas.map((c) => (
@@ -168,6 +161,7 @@ export function TelaDeContasECategorias() {
         </select>
         <button type="submit">Cadastrar</button>
       </form>
+      </fieldset>
       <a href="#/hoje">Voltar</a>
     </section>
   );

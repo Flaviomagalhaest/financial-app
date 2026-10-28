@@ -18,5 +18,6 @@ A cada toque na tela de lançar, o casal vê o efeito no planejamento ("Mercado:
 - [ ] Cálculo puro sobre os totais do mês e o lançamento em edição, compartilhado entre servidor e app e testado por tabela; sem internet roda sobre o cache e a fila
 - [ ] Mostra quanto ainda dá para gastar ou quanto passa; em compra no cartão, a fatura e o mês que conta; "conta só no total do mês" quando nenhuma categoria tem item
 - [ ] Com duas ou mais categorias com item, "Conta no planejamento em:" com a última escolha para aquele conjunto, trocável com um toque
+- [ ] Sem internet, os totais vêm de `web/src/dados/` (ticket 33): a resposta guardada com a fila por cima, como `useLancamentos` faz com a lista
 - [ ] Testes de tabela e de navegador
 - [ ] Verificações do projeto rodando e PR aberto para `main`

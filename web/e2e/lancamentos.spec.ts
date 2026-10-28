@@ -1,17 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { entrar } from "./entrar";
-
-const digitar = async (page: Page, ...teclas: string[]) => {
-  for (const tecla of teclas) await page.getByRole("button", { name: tecla, exact: true }).click();
-};
-
-async function cadastrar(page: Page, formulario: string, nome: string, tipo: string) {
-  const form = page.getByRole("form", { name: formulario });
-  await form.getByLabel("Nome").fill(nome);
-  await form.getByLabel("Tipo").selectOption(tipo);
-  await form.getByRole("button", { name: "Cadastrar" }).click();
-  await expect(page.getByRole("listitem").filter({ hasText: nome })).toBeVisible();
-}
+import { cadastrar, digitar } from "./lancar";
 
 test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ page }) => {
   const s = String(Date.now());

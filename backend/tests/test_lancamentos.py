@@ -179,6 +179,7 @@ def test_o_id_do_corpo_tem_de_ser_o_da_url(casal: Casal):
         ("POST", "/api/lancamentos"),
         ("PUT", f"/api/lancamentos/{uuid4()}"),
         ("DELETE", f"/api/lancamentos/{uuid4()}"),
+        ("POST", "/api/lancamentos/lote"),
         ("POST", f"/api/lancamentos/{uuid4()}/confirmar"),
         ("GET", "/api/contas-da-semana"),
     ],
@@ -363,3 +364,87 @@ def test_escrita_desiste_com_erro_se_a_serializacao_nunca_passa(casal: Casal, fa
 
     assert resposta.status_code == 503
     assert abertas[0] == TENTATIVAS_NA_SERIALIZACAO
+
+
+def lote(*acoes: dict) -> dict:
+    return {"acoes": list(acoes)}
+
+
+def test_o_lote_grava_na_ordem_e_reenviar_nao_duplica(casal: Casal):
+    conta, alimentacao = casal.conta(), casal.categoria()
+    novo = lancamento(conta, [alimentacao])
+    acoes = lote(
+        {"acao": "criar", "lancamento": novo},
+        {"acao": "editar", "lancamento": novo | {"valor_centavos": 999}},
+    )
+
+    primeira = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json=acoes)
+    segunda = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json=acoes)
+
+    assert primeira.status_code == segunda.status_code == 200
+    resultados = primeira.json()["resultados"]
+    assert [r["resultado"] for r in resultados] == ["aceita", "aceita"]
+    assert resultados[1]["lancamento"]["valor_centavos"] == 999
+    assert [r["resultado"] for r in segunda.json()["resultados"]] == ["aceita", "aceita"]
+    [visto] = casal.pedir("esposa", "GET", "/api/lancamentos").json()
+    assert (visto["id"], visto["valor_centavos"]) == (novo["id"], 999)
+
+
+def test_no_lote_a_recusa_traz_o_motivo_e_nao_trava_as_seguintes(casal: Casal):
+    conta, alimentacao = casal.conta(), casal.categoria()
+    sem_conta = lancamento(str(uuid4()), [alimentacao])
+    bom = lancamento(conta, [alimentacao])
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json=lote({"acao": "criar", "lancamento": sem_conta}, {"acao": "criar", "lancamento": bom}),
+    )
+
+    recusada, aceita = resposta.json()["resultados"]
+    assert (recusada["resultado"], recusada["motivo"]) == ("recusada", "conta não encontrada")
+    assert aceita["resultado"] == "aceita"
+    assert [l["id"] for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()] == [bom["id"]]
+
+
+def test_no_lote_editar_o_que_foi_excluido_e_descartado_e_excluir_de_novo_e_aceito(casal: Casal):
+    conta, alimentacao = casal.conta(), casal.categoria()
+    novo = lancamento(conta, [alimentacao])
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{novo['id']}")
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json=lote(
+            {"acao": "editar", "lancamento": novo | {"valor_centavos": 5}},
+            {"acao": "excluir", "id": novo["id"]},
+        ),
+    )
+
+    editar, excluir = resposta.json()["resultados"]
+    assert (editar["resultado"], editar["motivo"]) == ("descartada", "lançamento excluído")
+    assert excluir["resultado"] == "aceita"
+    assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []
+
+
+def test_no_lote_um_erro_inesperado_numa_acao_vira_recusa_e_nao_trava_as_seguintes(casal: Casal):
+    conta, alimentacao = casal.conta(), casal.categoria()
+    # O Postgres não guarda o caractere NUL num texto: o banco erra nesta ação só.
+    estranho = lancamento(conta, [alimentacao], descricao="a\x00b")
+    bom = lancamento(conta, [alimentacao])
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json=lote({"acao": "criar", "lancamento": estranho}, {"acao": "criar", "lancamento": bom}),
+    )
+
+    assert resposta.status_code == 200
+    recusada, aceita = resposta.json()["resultados"]
+    assert (recusada["resultado"], recusada["motivo"]) == ("recusada", "erro no servidor")
+    assert aceita["resultado"] == "aceita"
+    assert [l["id"] for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()] == [bom["id"]]

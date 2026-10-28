@@ -17,6 +17,7 @@ Fecha a etapa 1 com o teste de verdade nos aparelhos do casal (HITL, do dono). S
 
 - [ ] Instalar o app pelo Compartilhar no iPhone e pelo Chrome no Android
 - [ ] Lançar sem internet nos dois, enviar a fila e conferir que nada duplicou; no iPhone, ver a fila subir ao abrir o app
+- [ ] No Android, fechar o app com lançamentos não enviados, ligar a rede e conferir que eles sobem sozinhos (o `sync` do service worker, ticket 33; o teste automático só o dispara pelo CDP do Chromium)
 - [ ] Provocar um conflito de verdade entre os dois aparelhos e decidi-lo
 - [ ] Deixar o iPhone alguns dias sem abrir e conferir que nada local se perdeu (senão, retomar o roteiro do ticket 17)
 - [ ] Resultado e decisão sobre seguir ou acionar o plano B em `## Answer`
