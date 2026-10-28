@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Configuracoes } from "../configuracoes/Configuracoes";
 import { ABAS, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
@@ -22,6 +23,7 @@ export function Casca({ email, onSair, hoje }: Props) {
       <header className="topo">
         <h1>Financial App</h1>
         <p>Entrou como {email}</p>
+        <a href="#/configuracoes">Configurações</a>
         <button className="secundario" onClick={onSair}>
           Sair
         </button>
@@ -50,6 +52,7 @@ export function Casca({ email, onSair, hoje }: Props) {
             <a href="#/hoje">Voltar</a>
           </section>
         )}
+        {rota === "configuracoes" && <Configuracoes />}
         {aba && aba.id !== "hoje" && <Vazia nome={aba.nome} />}
       </main>
     </div>

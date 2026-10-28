@@ -19,7 +19,12 @@ def test_backup_tem_um_csv_por_tabela_com_os_ids_na_ordem_da_chave(banco_fictici
     backup = gerar_backup(banco_ficticio)
 
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
-        assert sorted(zip.namelist()) == ["contas.csv", "lancamentos.csv", "manifesto.json"]
+        assert sorted(zip.namelist()) == [
+            "contas.csv",
+            "exportacoes.csv",
+            "lancamentos.csv",
+            "manifesto.json",
+        ]
     assert ler_csv(backup, "contas.csv") == [
         ["id", "nome", "saldo_de_abertura"],
         [CONTA_CORRENTE, "Corrente", "250.50"],
@@ -68,6 +73,7 @@ def test_manifesto_traz_a_versao_do_formato_as_contagens_e_as_somas(banco_fictic
         "versao_formato": 1,
         "tabelas": {
             "contas": {"linhas": 2, "somas": {"saldo_de_abertura": "1250.50"}},
+            "exportacoes": {"linhas": 0, "somas": {}},
             "lancamentos": {"linhas": 3, "somas": {"valor": "4870.75"}},
         },
     }

@@ -8,12 +8,12 @@ export const ABAS = [
   { id: "futuro", nome: "Futuro" },
 ] as const;
 
-export type Rota = (typeof ABAS)[number]["id"] | "novo";
+export type Rota = (typeof ABAS)[number]["id"] | "novo" | "configuracoes";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
 export function lerRota(hash: string): Rota {
   const id = hash.replace(/^#\/?/, "");
-  return id === "novo" || ABAS.some((aba) => aba.id === id) ? (id as Rota) : "hoje";
+  return id === "novo" || id === "configuracoes" || ABAS.some((aba) => aba.id === id) ? (id as Rota) : "hoje";
 }
 
 export function useRota(): Rota {
