@@ -21,3 +21,4 @@ Quando os dois mexem no mesmo lançamento, mudanças em campos diferentes ficam 
 - [ ] Testes de API para cada regra e testes de navegador com dois contextos fazendo o papel do casal
 - [ ] Verificações do projeto rodando e PR aberto para `main`
 - [ ] Trocar a exclusão física do ticket 32 por marca de exclusão (sem ela, "exclusão vence edição" não distingue excluído de inexistente) e dar versão ao `PUT /api/lancamentos/{id}`
+- [ ] A confirmação com ajuste diferente sobre um previsto já confirmado devolve 409 "já confirmado com outros valores" (ticket 43), e o app só avisa e recarrega: levá-la para a tela de conflito, com os campos divergentes e quem confirmou
