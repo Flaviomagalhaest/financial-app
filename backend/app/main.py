@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.banco import conectar
+from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
 from app.migrations import total_aplicadas
 
 
@@ -11,8 +12,13 @@ class Saude(BaseModel):
     migrations: int
 
 
-def create_app(url: str | None = None) -> FastAPI:
+class Eu(BaseModel):
+    usuario: str
+
+
+def create_app(url: str | None = None, verificador: VerificadorDeJwt | None = None) -> FastAPI:
     app = FastAPI(title="Financial App", version="0.1.0")
+    app.state.verificador = verificador or verificador_da_configuracao()
 
     @app.get("/api/saude", response_model=Saude, operation_id="saude")
     def saude() -> Saude:
@@ -21,5 +27,9 @@ def create_app(url: str | None = None) -> FastAPI:
                 return Saude(status="ok", migrations=total_aplicadas(conn))
         except psycopg.Error:
             raise HTTPException(status_code=503, detail="banco indisponível")
+
+    @app.get("/api/eu", response_model=Eu, operation_id="eu")
+    def eu(usuario: UsuarioLogado) -> Eu:
+        return Eu(usuario=usuario)
 
     return app

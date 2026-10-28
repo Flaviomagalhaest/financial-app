@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { entrar } from "./entrar";
 
 test("mostra que a API está no ar e avisa quando a rede cai", async ({ page, context }) => {
   await page.goto("/");
+  await entrar(page);
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
 
   await context.setOffline(true);
