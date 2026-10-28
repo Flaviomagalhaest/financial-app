@@ -21,3 +21,4 @@ O casal planeja o mês por item ("R$ 1.000 em alimentação") e vê o realizado,
 - [ ] Testes de API com exemplos concretos
 - [ ] Juntar categorias (`POST /api/categorias/{id}/juntar`) também move os itens do planejamento e as escolhas de item, e excluir categoria recusa se há item (hoje a API só olha lançamentos; ticket 40)
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+- [ ] O "ainda dá para gastar" conta o previsto atrasado (data passada, sem confirmação; campo `atrasado` do ticket 43) até ele ser confirmado ou excluído (história 108): somar todo previsto do mês, não só o de data futura

@@ -31,6 +31,7 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
     [visto] = lista.json()
     assert visto | {"criado_em": None, "alterado_em": None} == novo | {
         "situacao": "realizado",
+        "atrasado": False,
         "tags": [],
         "criado_por": "flavio",
         "alterado_por": "flavio",
@@ -178,6 +179,8 @@ def test_o_id_do_corpo_tem_de_ser_o_da_url(casal: Casal):
         ("POST", "/api/lancamentos"),
         ("PUT", f"/api/lancamentos/{uuid4()}"),
         ("DELETE", f"/api/lancamentos/{uuid4()}"),
+        ("POST", f"/api/lancamentos/{uuid4()}/confirmar"),
+        ("GET", "/api/contas-da-semana"),
     ],
 )
 def test_sem_login_nada_de_lancamentos(client: TestClient, metodo: str, caminho: str):

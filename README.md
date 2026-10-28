@@ -47,6 +47,8 @@ O CI (`.github/workflows/ci.yml`) roda lint, testes, o contrato e o build com um
 
 `backend/app/lancamentos.py` tem contas, categorias e lançamentos simples (valor em centavos inteiros, uma ou mais categorias, id UUID gerado no aparelho). No app, `#/novo` lança, `#/historico` lista, edita e exclui, e `#/contas-e-categorias` cria conta e cria, renomeia e arquiva categoria.
 
+Previsto e realizado ([ADR 0004](docs/adr/0004-previsto-e-situacao-do-lancamento.md)): sem `situacao`, data futura nasce prevista; a tela de lançamento troca à mão em Detalhes. Cada lançamento traz `atrasado` (previsto com data antes de hoje em São Paulo). `POST /api/lancamentos/{id}/confirmar` vira o previsto em realizado, com ajuste opcional de valor, data e conta; confirmar de novo sem ajuste diferente devolve o gravado, e com ajuste diferente dá 409. `GET /api/contas-da-semana` lista os previstos atrasados e os dos próximos `contasDaSemanaDias` dias, em ordem de data, e a aba Hoje mostra o bloco "Contas da semana" com "Confirmar" e "Ajustar". Os testes de API fixam o dia trocando `app.lancamentos.hoje`.
+
 `backend/app/transferencias.py` registra a transferência entre duas contas ([ADR 0014](docs/adr/0014-transferencia-em-tabela-propria.md)). A conta guarda o saldo de abertura (valor e data) e pode ser arquivada (`PUT /api/contas/{id}`); `GET /api/contas` devolve `saldo_centavos` (abertura mais os realizados depois da data) e esconde as arquivadas, salvo com `?arquivadas=true`. Só a API existe: as telas são do ticket 74.
 
 ## Contrato (OpenAPI e tipos)

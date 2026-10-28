@@ -20,3 +20,4 @@ Ao abrir o app o casal vê o essencial, e os favoritos entram aqui no ticket de 
 - [ ] Última resposta em cache com "atualizado às" sem internet
 - [ ] Testes de API e de navegador; fonte da interface: branch `prototipo/dashboards`
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+- [ ] O bloco `ContasDaSemana` (ticket 43, `web/src/lancamentos/ContasDaSemana.tsx`) já está na Hoje com a leitura própria `GET /api/contas-da-semana`: juntá-lo à leitura única da tela, e mostrar os atrasados pelo campo `atrasado` do lançamento

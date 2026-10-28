@@ -23,3 +23,4 @@ Sem internet, criar, editar, excluir e confirmar lançamentos funciona: o lança
 - [ ] `contarNaoEnviados` em `web/src/App.tsx` conta a fila de verdade, para "Sair" pedir confirmação com não enviados (ticket 30), com teste de navegador do aviso
 - [ ] Verificações do projeto rodando e PR aberto para `main`
 - [ ] Trocar as chamadas diretas à API de `TelaDeLancamento` e `ListaDeLancamentos` (ticket 32) pela camada de dados do aparelho, que hoje só mostra "Sem internet" ao salvar ou excluir
+- [ ] Confirmar sem internet entra na fila (ticket 43): a ação "confirmar" do lote tem as regras de `POST /api/lancamentos/{id}/confirmar` (ajuste opcional de valor, data e conta; reenvio igual devolve o gravado; ajuste diferente sobre um já confirmado dá 409), e o bloco `ContasDaSemana` da Hoje, que hoje só mostra "Sem internet", passa a usar a camada de dados do aparelho

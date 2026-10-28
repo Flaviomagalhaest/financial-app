@@ -20,3 +20,4 @@ O casal lança uma compra ou dívida em N parcelas, no cartão ou em boleto, tam
 - [ ] Sem internet vai como um pedido só, gerado pelo servidor
 - [ ] Testes de API com divisão de centavos e viradas de fatura
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+- [ ] Parcela automática não pede confirmação (ticket 43): fica fora de `GET /api/contas-da-semana` e não aparece como `atrasado`, que hoje valem para todo `situacao = 'previsto'`

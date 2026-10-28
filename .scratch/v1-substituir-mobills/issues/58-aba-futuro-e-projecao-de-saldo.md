@@ -19,3 +19,4 @@ O casal sabe se vai fechar no azul nos próximos meses.
 - [ ] A fatura é descontada no mês dela
 - [ ] Testes de API com exemplos concretos
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+- [ ] A linha "só previstos" conta também o previsto atrasado (data passada, sem confirmação; campo `atrasado` do ticket 43) até ele ser confirmado ou excluído (história 108), e não só os de data futura
