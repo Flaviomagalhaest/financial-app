@@ -46,7 +46,7 @@ export interface PilhaAppProps extends StackProps {
 export class PilhaApp extends Stack {
   constructor(scope: Construct, id: string, props: PilhaAppProps) {
     super(scope, id, props);
-    const { banco, roleDaApi, emissor, clienteDoApp } = props.dados;
+    const { banco, roleDaApi, emissor, clienteDoApp, exportacoes } = props.dados;
 
     const api = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.PYTHON_3_14,
@@ -55,12 +55,14 @@ export class PilhaApp extends Stack {
       code: lambda.Code.fromAsset(props.pacoteDaLambda),
       role: roleDaApi,
       memorySize: 512,
-      timeout: Duration.seconds(15),
+      // O "exportar tudo" lê o histórico inteiro e grava no S3; a HTTP API corta em 30 s.
+      timeout: Duration.seconds(29),
       // A API confere o JWT de novo, só por emissor e audiência (app/login.py).
       environment: {
         DSQL_ENDPOINT: banco.attrEndpoint,
         JWT_EMISSOR: emissor,
         JWT_AUDIENCIA: clienteDoApp.userPoolClientId,
+        EXPORTACOES_BUCKET: exportacoes.bucketName,
       },
       logGroup: new logs.LogGroup(this, "LogsDaApi", {
         retention: logs.RetentionDays.ONE_MONTH,

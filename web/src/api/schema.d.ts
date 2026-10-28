@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/exportacoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exportacoes */
+        post: operations["exportar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/contas": {
         parameters: {
             query?: never;
@@ -155,6 +172,18 @@ export interface components {
             /** Usuario */
             usuario: string;
         };
+        /** ExportacaoPronta */
+        ExportacaoPronta: {
+            /** Url */
+            url: string;
+            /** Arquivo */
+            arquivo: string;
+            /**
+             * Expira Em
+             * Format: date-time
+             */
+            expira_em: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -265,6 +294,14 @@ export interface components {
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
         };
+        /** PedidoDeExportacao */
+        PedidoDeExportacao: {
+            /**
+             * Formato
+             * @enum {string}
+             */
+            formato: "backup" | "planilha";
+        };
         /** Saude */
         Saude: {
             /** Status */
@@ -330,6 +367,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Eu"];
+                };
+            };
+        };
+    };
+    exportar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PedidoDeExportacao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportacaoPronta"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -1,9 +1,9 @@
 # Verificar o download da exportação no iPhone
 
 Type: task
-Status: open
-Blocked by: 66
-Skills: `run`, `implement` (só depois que o "exportar tudo" existir)
+Status: ready-for-human
+Blocked by: —
+Skills: `run`; HITL (precisa do iPhone do dono, com o "exportar tudo" já publicado)
 Modelo recomendado: Sonnet
 Effort recomendado: low
 Issue: #76

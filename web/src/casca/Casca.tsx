@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Configuracoes } from "../configuracoes/Configuracoes";
 import { ListaDeLancamentos } from "../lancamentos/ListaDeLancamentos";
 import { TelaDeCadastro } from "../lancamentos/TelaDeCadastro";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
@@ -25,6 +26,7 @@ export function Casca({ email, onSair, hoje }: Props) {
       <header className="topo">
         <h1>Financial App</h1>
         <p>Entrou como {email}</p>
+        <a href="#/configuracoes">Configurações</a>
         <button className="secundario" onClick={onSair}>
           Sair
         </button>
@@ -49,6 +51,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         )}
         {rota === "novo" && <TelaDeLancamento key={id ?? "novo"} id={id} />}
         {rota === "cadastro" && <TelaDeCadastro />}
+        {rota === "configuracoes" && <Configuracoes />}
         {rota === "historico" && <ListaDeLancamentos />}
         {aba && aba.id !== "hoje" && aba.id !== "historico" && <Vazia nome={aba.nome} />}
       </main>
