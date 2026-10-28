@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
+import { formatarCentavos } from "./dinheiro";
 import { useCadastro } from "./useCadastro";
 
 const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: "Carteira" } as const;
@@ -40,7 +41,9 @@ export function TelaDeCadastro() {
       <h3>Contas</h3>
       <ul className="lista">
         {contas.map((c) => (
-          <li key={c.id}>{c.nome}</li>
+          <li key={c.id}>
+            {c.nome} · saldo {formatarCentavos(c.saldo_centavos)}
+          </li>
         ))}
       </ul>
       <form

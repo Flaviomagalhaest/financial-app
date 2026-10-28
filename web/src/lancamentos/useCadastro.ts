@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/cliente";
 import type { components } from "../api/schema";
 
-export type Conta = components["schemas"]["Conta"];
+export type Conta = components["schemas"]["ContaComSaldo"];
 export type Categoria = components["schemas"]["Categoria"];
 export type Lancamento = components["schemas"]["Lancamento"];
 

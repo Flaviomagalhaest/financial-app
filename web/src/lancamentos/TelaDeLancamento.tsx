@@ -1,16 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/cliente";
+import { hoje } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
 import { useCadastro, type Lancamento } from "./useCadastro";
 
 type Tipo = "despesa" | "receita";
-
-function hoje(): string {
-  const d = new Date();
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${String(d.getDate()).padStart(2, "0")}`;
-}
+type Situacao = "previsto" | "realizado";
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo servidor). */
 export function TelaDeLancamento({ id }: { id?: string }) {
@@ -24,6 +20,8 @@ export function TelaDeLancamento({ id }: { id?: string }) {
   const [categoriaIds, setCategoriaIds] = useState<string[]>([]);
   const [data, setData] = useState(hoje);
   const [descricao, setDescricao] = useState("");
+  // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
+  const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -48,6 +46,9 @@ export function TelaDeLancamento({ id }: { id?: string }) {
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
   const conta = contaId || contas[0]?.id || "";
   const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo);
+  const situacao: Situacao =
+    situacaoEscolhida ??
+    (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
   const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null);
 
   function trocarTipo(novo: Tipo) {
@@ -72,6 +73,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
       descricao,
       conta_id: conta,
       categoria_ids: categoriaIds,
+      ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
     };
     try {
       const resposta = existente
@@ -133,6 +135,13 @@ export function TelaDeLancamento({ id }: { id?: string }) {
         <input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         <label htmlFor="data">Data</label>
         <input id="data" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
+        <div className="alternancia" role="group" aria-label="Situação">
+          {(["realizado", "previsto"] as const).map((s) => (
+            <button type="button" key={s} className={situacao === s ? "" : "secundario"} aria-pressed={situacao === s} onClick={() => setSituacaoEscolhida(s)}>
+              {s === "realizado" ? "Realizado" : "Previsto"}
+            </button>
+          ))}
+        </div>
       </details>
       {erro && (
         <p role="alert" className="erro">

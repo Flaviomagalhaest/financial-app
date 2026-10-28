@@ -133,6 +133,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/contas-da-semana": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contas Da Semana */
+        get: operations["contas_da_semana"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lancamentos/{id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Lancamento
+         * @description Confirmar de novo (a fila reenviou, a outra pessoa confirmou antes) devolve o gravado.
+         */
+        post: operations["confirmar_lancamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -152,6 +189,18 @@ export interface components {
              */
             id: string;
         };
+        /**
+         * Confirmacao
+         * @description O que de fato aconteceu; campo ausente fica como estava no previsto.
+         */
+        Confirmacao: {
+            /** Valor Centavos */
+            valor_centavos?: number | null;
+            /** Data */
+            data?: string | null;
+            /** Conta Id */
+            conta_id?: string | null;
+        };
         /** Conta */
         Conta: {
             /** Nome */
@@ -166,6 +215,31 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /** ContaComSaldo */
+        ContaComSaldo: {
+            /** Nome */
+            nome: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "corrente" | "poupanca" | "carteira";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Saldo Centavos */
+            saldo_centavos: number;
+        };
+        /**
+         * ContasDaSemana
+         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo.
+         */
+        ContasDaSemana: {
+            /** Lancamentos */
+            lancamentos: components["schemas"]["Lancamento"][];
         };
         /** Eu */
         Eu: {
@@ -225,6 +299,8 @@ export interface components {
              * @enum {string}
              */
             situacao: "previsto" | "realizado";
+            /** Atrasado */
+            atrasado: boolean;
             /** Criado Por */
             criado_por: string;
             /**
@@ -419,7 +495,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Conta"][];
+                    "application/json": components["schemas"]["ContaComSaldo"][];
                 };
             };
         };
@@ -615,6 +691,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    contas_da_semana: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContasDaSemana"];
+                };
+            };
+        };
+    };
+    confirmar_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Confirmacao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"];
+                };
             };
             /** @description Validation Error */
             422: {

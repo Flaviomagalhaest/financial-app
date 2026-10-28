@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app import banco
 from app.main import create_app
 from app.migrations import aplicar_migrations
+from tests.casal import Casal
 from tests.emissor import Emissor
 from tests.exemplo_ficticio import criar_exemplo_ficticio
 
@@ -35,6 +36,11 @@ def database_url() -> str:
 def client(database_url: str, emissor: Emissor) -> TestClient:
     aplicar_migrations(database_url)
     return TestClient(create_app(database_url, verificador=emissor.verificador()))
+
+
+@pytest.fixture
+def casal(client: TestClient, emissor: Emissor) -> Casal:
+    return Casal(client, emissor)
 
 
 @pytest.fixture

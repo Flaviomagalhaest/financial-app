@@ -358,3 +358,35 @@ select {
     flex-direction: row;
   }
 }
+
+/* Contas da semana: o atrasado leva um selo de aviso; o ajuste abre dentro da linha. */
+.contas-da-semana {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-block: 1rem;
+  max-width: 26rem;
+}
+
+.contas-da-semana h3 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.selo-atrasado {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--aviso-fundo);
+  color: var(--erro);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.ajuste {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}

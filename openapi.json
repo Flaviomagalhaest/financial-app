@@ -100,7 +100,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/Conta"
+                    "$ref": "#/components/schemas/ContaComSaldo"
                   },
                   "type": "array",
                   "title": "Response Listar Contas"
@@ -385,6 +385,85 @@
           }
         }
       }
+    },
+    "/api/contas-da-semana": {
+      "get": {
+        "summary": "Contas Da Semana",
+        "operationId": "contas_da_semana",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContasDaSemana"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/lancamentos/{id}/confirmar": {
+      "post": {
+        "summary": "Confirmar Lancamento",
+        "description": "Confirmar de novo (a fila reenviou, a outra pessoa confirmou antes) devolve o gravado.",
+        "operationId": "confirmar_lancamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Confirmacao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lancamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -419,6 +498,49 @@
         ],
         "title": "Categoria"
       },
+      "Confirmacao": {
+        "properties": {
+          "valor_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "conta_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conta Id"
+          }
+        },
+        "type": "object",
+        "title": "Confirmacao",
+        "description": "O que de fato aconteceu; campo ausente fica como estava no previsto."
+      },
       "Conta": {
         "properties": {
           "nome": {
@@ -448,6 +570,58 @@
           "id"
         ],
         "title": "Conta"
+      },
+      "ContaComSaldo": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "corrente",
+              "poupanca",
+              "carteira"
+            ],
+            "title": "Tipo"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "saldo_centavos": {
+            "type": "integer",
+            "title": "Saldo Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome",
+          "tipo",
+          "id",
+          "saldo_centavos"
+        ],
+        "title": "ContaComSaldo"
+      },
+      "ContasDaSemana": {
+        "properties": {
+          "lancamentos": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Lancamentos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lancamentos"
+        ],
+        "title": "ContasDaSemana",
+        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."
       },
       "Eu": {
         "properties": {
@@ -551,6 +725,10 @@
             ],
             "title": "Situacao"
           },
+          "atrasado": {
+            "type": "boolean",
+            "title": "Atrasado"
+          },
           "criado_por": {
             "type": "string",
             "title": "Criado Por"
@@ -579,6 +757,7 @@
           "conta_id",
           "categoria_ids",
           "situacao",
+          "atrasado",
           "criado_por",
           "criado_em",
           "alterado_por",

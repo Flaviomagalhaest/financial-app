@@ -1,7 +1,7 @@
 """Contas, categorias e lançamentos simples. Sem chave estrangeira nem trigger (subconjunto do
 DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no aparelho."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.banco import conectar, em_transacao
+from app.config import valores_iniciais
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
@@ -54,6 +55,8 @@ class NovoLancamento(BaseModel):
 
 class Lancamento(NovoLancamento):
     situacao: Literal["previsto", "realizado"]
+    # Previsto cuja data já passou sem confirmação; continua previsto (e contando) até confirmar.
+    atrasado: bool
     criado_por: str
     criado_em: datetime
     alterado_por: str
@@ -83,11 +86,22 @@ def criar_conta(nova: NovaConta, usuario: UsuarioLogado, request: Request) -> Co
     return Conta(id=id, **nova.model_dump())
 
 
-@router.get("/contas", response_model=list[Conta], operation_id="listar_contas")
-def listar_contas(usuario: UsuarioLogado, request: Request) -> list[Conta]:
+class ContaComSaldo(Conta):
+    # Só o realizado mexe no saldo; o previsto entra na projeção (ADR 0004).
+    saldo_centavos: int
+
+
+@router.get("/contas", response_model=list[ContaComSaldo], operation_id="listar_contas")
+def listar_contas(usuario: UsuarioLogado, request: Request) -> list[ContaComSaldo]:
     with conectar(_url(request)) as conn:
-        linhas = conn.execute("SELECT id, nome, tipo FROM contas ORDER BY nome, id").fetchall()
-    return [Conta(id=i, nome=n, tipo=t) for i, n, t in linhas]
+        linhas = conn.execute(
+            "SELECT c.id, c.nome, c.tipo, COALESCE(SUM(CASE l.tipo WHEN 'receita'"
+            " THEN l.valor_centavos ELSE -l.valor_centavos END), 0)"
+            " FROM contas c LEFT JOIN lancamentos l"
+            " ON l.conta_id = c.id AND l.situacao = 'realizado'"
+            " GROUP BY c.id, c.nome, c.tipo ORDER BY c.nome, c.id"
+        ).fetchall()
+    return [ContaComSaldo(id=i, nome=n, tipo=t, saldo_centavos=s) for i, n, t, s in linhas]
 
 
 @router.post(
@@ -112,8 +126,13 @@ def listar_categorias(usuario: UsuarioLogado, request: Request) -> list[Categori
     return [Categoria(id=i, nome=n, tipo=t) for i, n, t in linhas]
 
 
+def hoje() -> date:
+    """O dia do casal é o de São Paulo, qualquer que seja o fuso do servidor."""
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+
+
 def _situacao_pela_data(dia: date) -> str:
-    return "previsto" if dia > datetime.now(ZoneInfo("America/Sao_Paulo")).date() else "realizado"
+    return "previsto" if dia > hoje() else "realizado"
 
 
 def _recusar(detalhe: str) -> HTTPException:
@@ -174,29 +193,33 @@ def criar_lancamento(
         if gravados:
             _gravar_categorias(conn, novo.id, novo.categoria_ids)
         response.status_code = 201 if gravados else 200
-        return _todos(conn, novo.id)[0]
+        return _um(conn, novo.id)
 
     return em_transacao(_url(request), gravar)
 
 
-def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
-    filtro, parametros = ("WHERE id = %s", (id,)) if id else ("", ())
+def _todos(
+    conn, filtro: str = "", parametros: tuple = (), ordem: str = "data DESC, criado_em DESC, id"
+) -> list[Lancamento]:
     linhas = conn.execute(
-        f"SELECT {_COLUNAS} FROM lancamentos {filtro} ORDER BY data DESC, criado_em DESC, id",
-        parametros,
+        f"SELECT {_COLUNAS} FROM lancamentos {filtro} ORDER BY {ordem}", parametros
     ).fetchall()
+    # Com filtro, só as categorias dos lançamentos lidos.
+    ids = [l[0] for l in linhas]
     categorias: dict[UUID, list[UUID]] = {}
     for lancamento_id, categoria_id in conn.execute(
         "SELECT lancamento_id, categoria_id FROM lancamento_categorias"
-        f" {'WHERE lancamento_id = %s' if id else ''} ORDER BY categoria_id",
-        parametros,
+        f" {'WHERE lancamento_id = ANY(%s)' if filtro else ''} ORDER BY categoria_id",
+        (ids,) if filtro else (),
     ):
         categorias.setdefault(lancamento_id, []).append(categoria_id)
+    dia = hoje()
     return [
         Lancamento(
             id=l[0],
             tipo=l[1],
             situacao=l[2],
+            atrasado=l[2] == "previsto" and l[4] < dia,
             valor_centavos=l[3],
             data=l[4],
             descricao=l[5],
@@ -209,6 +232,10 @@ def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
         )
         for l in linhas
     ]
+
+
+def _um(conn, id: UUID) -> Lancamento:
+    return _todos(conn, "WHERE id = %s", (id,))[0]
 
 
 @router.get("/lancamentos", response_model=list[Lancamento], operation_id="listar_lancamentos")
@@ -255,7 +282,67 @@ def editar_lancamento(
             ),
         )
         _gravar_categorias(conn, id, editado.categoria_ids)
-        return _todos(conn, id)[0]
+        return _um(conn, id)
+
+    return em_transacao(_url(request), gravar)
+
+
+class ContasDaSemana(BaseModel):
+    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."""
+
+    lancamentos: list[Lancamento]
+
+
+@router.get("/contas-da-semana", response_model=ContasDaSemana, operation_id="contas_da_semana")
+def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana:
+    ate = hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
+    with conectar(_url(request)) as conn:
+        lancamentos = _todos(
+            conn,
+            "WHERE situacao = 'previsto' AND data <= %s",
+            (ate,),
+            ordem="data, criado_em, id",
+        )
+    return ContasDaSemana(lancamentos=lancamentos)
+
+
+class Confirmacao(BaseModel):
+    """O que de fato aconteceu; campo ausente fica como estava no previsto."""
+
+    valor_centavos: int | None = Field(default=None, gt=0)
+    data: date | None = None
+    conta_id: UUID | None = None
+
+
+@router.post(
+    "/lancamentos/{id}/confirmar", response_model=Lancamento, operation_id="confirmar_lancamento"
+)
+def confirmar_lancamento(
+    id: UUID, confirmacao: Confirmacao, usuario: UsuarioLogado, request: Request
+) -> Lancamento:
+    """Confirmar de novo (a fila reenviou, a outra pessoa confirmou antes) devolve o gravado."""
+
+    def gravar(conn) -> Lancamento:
+        atual = conn.execute("SELECT situacao FROM lancamentos WHERE id = %s", (id,)).fetchone()
+        if not atual:
+            raise HTTPException(status_code=404, detail="lançamento não encontrado")
+        if atual[0] == "realizado":
+            return _um(conn, id)
+        if (
+            confirmacao.conta_id
+            and not conn.execute(
+                "SELECT 1 FROM contas WHERE id = %s", (confirmacao.conta_id,)
+            ).fetchone()
+        ):
+            raise _recusar("conta não encontrada")
+        conn.execute(
+            "UPDATE lancamentos SET situacao = 'realizado',"
+            " valor_centavos = COALESCE(%s, valor_centavos), data = COALESCE(%s, data),"
+            " conta_id = COALESCE(%s, conta_id), alterado_por = %s, alterado_em = now()"
+            " WHERE id = %s",
+            (confirmacao.valor_centavos, confirmacao.data, confirmacao.conta_id, usuario, id),
+        )
+        return _um(conn, id)
 
     return em_transacao(_url(request), gravar)
 
