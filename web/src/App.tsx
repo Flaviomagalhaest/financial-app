@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api/cliente";
+import { Casca } from "./casca/Casca";
 import { sair, TelaDeLogin, useSessao } from "./login";
 
 type Estado = "verificando" | "no ar" | "sem conexão";
@@ -47,17 +48,16 @@ function Inicio({ email }: { email: string }) {
   }, [verificar]);
 
   return (
-    <main className="inicio">
-      <header>
-        <h1>Financial App</h1>
-        <p>Entrou como {email}</p>
-        <button className="secundario" onClick={() => void sairDaConta()}>
-          Sair
-        </button>
-      </header>
-      <p data-testid="estado-da-api">{textos[estado]}</p>
-      <button onClick={() => void verificar()}>Verificar de novo</button>
-    </main>
+    <Casca
+      email={email}
+      onSair={() => void sairDaConta()}
+      hoje={
+        <>
+          <p data-testid="estado-da-api">{textos[estado]}</p>
+          <button onClick={() => void verificar()}>Verificar de novo</button>
+        </>
+      }
+    />
   );
 }
 
