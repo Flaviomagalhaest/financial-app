@@ -21,6 +21,6 @@ As rotas que escrevem repetem a transação inteira algumas vezes quando o banco
 
 ## Notas da implementação
 
-- `app.banco.em_transacao` refaz a transação inteira em conexão nova, até `TENTATIVAS_NA_SERIALIZACAO = 5` (valor provisório, sem espera entre tentativas) e usado por criar conta, criar categoria, criar/editar/excluir lançamento. Leituras seguem com `conectar`.
+- `app.banco.em_transacao` refaz a transação inteira em conexão nova, até `TENTATIVAS_NA_SERIALIZACAO = 5` (valor provisório, sem espera entre tentativas) e usado por criar conta, criar categoria, criar/editar/excluir lançamento e o registro da exportação. Leituras seguem com `conectar`.
 - Esgotadas as tentativas, a API responde 503 com `Retry-After: 1` (antes seria 500). Código e espera são escolhas minhas; o dono confirma ou muda.
 - Só o POST de lançamento tem teste de retry; as outras rotas passam pelo mesmo ponto único.
