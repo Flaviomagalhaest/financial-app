@@ -74,6 +74,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/categorias/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Alterar Categoria
+         * @description Renomear e arquivar não mexem nos lançamentos: eles apontam para o id da categoria.
+         */
+        patch: operations["alterar_categoria"];
+        trace?: never;
+    };
     "/api/lancamentos": {
         parameters: {
             query?: never;
@@ -120,6 +140,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AlteracaoDeCategoria
+         * @description Só o nome e o arquivamento mudam; o tipo é fixo porque os lançamentos dependem dele.
+         */
+        AlteracaoDeCategoria: {
+            /** Nome */
+            nome?: string | null;
+            /** Arquivada */
+            arquivada?: boolean | null;
+        };
         /** Categoria */
         Categoria: {
             /** Nome */
@@ -134,6 +164,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Arquivada
+             * @default false
+             */
+            arquivada: boolean;
         };
         /** Conta */
         Conta: {
@@ -422,6 +457,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Categoria"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alterar_categoria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlteracaoDeCategoria"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

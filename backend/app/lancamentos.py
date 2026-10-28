@@ -31,6 +31,14 @@ class NovaCategoria(BaseModel):
 
 class Categoria(NovaCategoria):
     id: UUID
+    arquivada: bool = False
+
+
+class AlteracaoDeCategoria(BaseModel):
+    """Só o nome e o arquivamento mudam; o tipo é fixo porque os lançamentos dependem dele."""
+
+    nome: str | None = Field(default=None, min_length=1, pattern=r"\S")
+    arquivada: bool | None = None
 
 
 class NovoLancamento(BaseModel):
@@ -104,8 +112,26 @@ def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Reques
 @router.get("/categorias", response_model=list[Categoria], operation_id="listar_categorias")
 def listar_categorias(usuario: UsuarioLogado, request: Request) -> list[Categoria]:
     with conectar(_url(request)) as conn:
-        linhas = conn.execute("SELECT id, nome, tipo FROM categorias ORDER BY nome, id").fetchall()
-    return [Categoria(id=i, nome=n, tipo=t) for i, n, t in linhas]
+        linhas = conn.execute(
+            "SELECT id, nome, tipo, arquivada FROM categorias ORDER BY nome, id"
+        ).fetchall()
+    return [Categoria(id=i, nome=n, tipo=t, arquivada=a) for i, n, t, a in linhas]
+
+
+@router.patch("/categorias/{id}", response_model=Categoria, operation_id="alterar_categoria")
+def alterar_categoria(
+    id: UUID, alteracao: AlteracaoDeCategoria, usuario: UsuarioLogado, request: Request
+) -> Categoria:
+    """Renomear e arquivar não mexem nos lançamentos: eles apontam para o id da categoria."""
+    with conectar(_url(request)) as conn:
+        linha = conn.execute(
+            "UPDATE categorias SET nome = COALESCE(%s, nome), arquivada = COALESCE(%s, arquivada)"
+            " WHERE id = %s RETURNING id, nome, tipo, arquivada",
+            (alteracao.nome, alteracao.arquivada, id),
+        ).fetchone()
+    if not linha:
+        raise HTTPException(status_code=404, detail="categoria não encontrada")
+    return Categoria(id=linha[0], nome=linha[1], tipo=linha[2], arquivada=linha[3])
 
 
 def _situacao_pela_data(dia: date) -> str:
@@ -116,20 +142,27 @@ def _recusar(detalhe: str) -> HTTPException:
     return HTTPException(status_code=422, detail=detalhe)
 
 
-def _conferir_ligacoes(conn, lancamento: NovoLancamento) -> None:
+def _conferir_ligacoes(
+    conn, lancamento: NovoLancamento, ja_ligadas: set[UUID] = frozenset()
+) -> None:
+    """Categoria arquivada só vale num lançamento que já a tinha."""
     if not conn.execute("SELECT 1 FROM contas WHERE id = %s", (lancamento.conta_id,)).fetchone():
         raise _recusar("conta não encontrada")
-    tipos = {
-        id: tipo
-        for id, tipo in conn.execute(
-            "SELECT id, tipo FROM categorias WHERE id = ANY(%s)", (lancamento.categoria_ids,)
-        )
-    }
+    tipos = {}
+    arquivadas = set()
+    for id, tipo, arquivada in conn.execute(
+        "SELECT id, tipo, arquivada FROM categorias WHERE id = ANY(%s)", (lancamento.categoria_ids,)
+    ):
+        tipos[id] = tipo
+        if arquivada:
+            arquivadas.add(id)
     for categoria in lancamento.categoria_ids:
         if categoria not in tipos:
             raise _recusar("categoria não encontrada")
         if tipos[categoria] != lancamento.tipo:
             raise _recusar(f"categoria de {tipos[categoria]} num lançamento de {lancamento.tipo}")
+        if categoria in arquivadas and categoria not in ja_ligadas:
+            raise _recusar("categoria arquivada")
 
 
 def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
@@ -218,7 +251,13 @@ def editar_lancamento(
     if editado.id != id:
         raise _recusar("o id do corpo difere do id da URL")
     with conectar(_url(request)) as conn:
-        _conferir_ligacoes(conn, editado)
+        ja_ligadas = {
+            categoria
+            for (categoria,) in conn.execute(
+                "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s", (id,)
+            )
+        }
+        _conferir_ligacoes(conn, editado, ja_ligadas)
         atual = conn.execute(
             "SELECT data, situacao FROM lancamentos WHERE id = %s", (id,)
         ).fetchone()

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ListaDeLancamentos } from "../lancamentos/ListaDeLancamentos";
-import { TelaDeCadastro } from "../lancamentos/TelaDeCadastro";
+import { TelaDeConfiguracao } from "../configuracao/TelaDeConfiguracao";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
 import { ABAS, useRota } from "./rota";
 
@@ -44,11 +44,11 @@ export function Casca({ email, onSair, hoje }: Props) {
               + Novo lançamento
             </a>
             {hoje}
-            <a href="#/cadastro">Contas e categorias</a>
+            <a href="#/configuracao">Contas e categorias</a>
           </section>
         )}
         {rota === "novo" && <TelaDeLancamento key={id ?? "novo"} id={id} />}
-        {rota === "cadastro" && <TelaDeCadastro />}
+        {rota === "configuracao" && <TelaDeConfiguracao />}
         {rota === "historico" && <ListaDeLancamentos />}
         {aba && aba.id !== "hoje" && aba.id !== "historico" && <Vazia nome={aba.nome} />}
       </main>

@@ -1,7 +1,7 @@
 # Trocar o cadastro provisório de contas e categorias pelas telas de configuração
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: 32
 Skills: `implement`, `tdd`; apoio: `artifact-design`
 Modelo recomendado: Sonnet
@@ -15,7 +15,13 @@ Telas de configuração de categorias (e das contas, junto com o [ticket 36](36-
 
 ## Checklist
 
-- [ ] Categorias: criar, renomear e arquivar (despesa, receita e transferência), só com internet
-- [ ] Remover `TelaDeCadastro` e a rota `#/cadastro`
-- [ ] Testes de API e de navegador
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Categorias: criar, renomear e arquivar (despesa, receita e transferência), só com internet
+- [x] Remover `TelaDeCadastro` e a rota `#/cadastro`
+- [x] Testes de API e de navegador
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- A tela é `#/configuracao` (`web/src/configuracao/TelaDeConfiguracao.tsx`). As contas continuam só com "criar" nela, para o app não ficar sem onde cadastrar conta; renomear e arquivar conta, junto com o saldo de abertura, é do [ticket 36](36-contas-saldo-e-transferencia.md).
+- Categoria arquivada (`PATCH /api/categorias/{id}`, campo `arquivada`) sai das opções do lançamento novo, mas um lançamento que já a tinha a mantém ao ser editado. `GET /api/categorias` devolve todas, com `arquivada`.
+- Sem teste unitário de `lerRota`: o web não tem runner de unidade, e a rota é coberta pelo teste de navegador.

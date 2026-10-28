@@ -340,3 +340,7 @@ select {
   background: var(--superficie);
   color: var(--texto);
 }
+
+.lista .arquivada {
+  opacity: 0.6;
+}

@@ -47,7 +47,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
 
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
   const conta = contaId || contas[0]?.id || "";
-  const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo);
+  const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo && (!c.arquivada || categoriaIds.includes(c.id)));
   const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null);
 
   function trocarTipo(novo: Tipo) {
@@ -110,7 +110,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
         ))}
         {carregado && contas.length === 0 && (
           <p className="vazio">
-            Nenhuma conta. <a href="#/cadastro">Cadastrar</a>
+            Nenhuma conta. <a href="#/configuracao">Cadastrar</a>
           </p>
         )}
       </div>
@@ -123,7 +123,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
         ))}
         {carregado && categoriasDoTipo.length === 0 && (
           <p className="vazio">
-            Nenhuma categoria de {tipo}. <a href="#/cadastro">Cadastrar</a>
+            Nenhuma categoria de {tipo}. <a href="#/configuracao">Cadastrar</a>
           </p>
         )}
       </div>

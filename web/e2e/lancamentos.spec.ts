@@ -16,7 +16,7 @@ async function cadastrar(page: Page, formulario: string, nome: string, tipo: str
 test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ page }) => {
   const s = String(Date.now());
   const [conta, mercado, viagem, salario] = [`Corrente ${s}`, `Mercado ${s}`, `Viagem ${s}`, `Salário ${s}`];
-  await page.goto("/#/cadastro");
+  await page.goto("/#/configuracao");
   await entrar(page);
   await cadastrar(page, "Nova conta", conta, "corrente");
   await cadastrar(page, "Nova categoria", mercado, "despesa");
@@ -84,7 +84,7 @@ test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ pa
 test("lança uma receita e a lista a mostra com sinal de mais", async ({ page }) => {
   const s = String(Date.now());
   const [conta, salario] = [`Poupança ${s}`, `Salário ${s}`];
-  await page.goto("/#/cadastro");
+  await page.goto("/#/configuracao");
   await entrar(page, "esposa@teste.com");
   await cadastrar(page, "Nova conta", conta, "poupanca");
   await cadastrar(page, "Nova categoria", salario, "receita");
@@ -99,4 +99,43 @@ test("lança uma receita e a lista a mostra com sinal de mais", async ({ page })
 
   const linha = page.getByRole("listitem").filter({ hasText: salario });
   await expect(linha).toContainText("+ R$ 500,00");
+});
+
+test("configuração: cria, renomeia e arquiva categorias, e a arquivada sai das opções do lançamento", async ({ page }) => {
+  const s = String(Date.now());
+  const [conta, despesa, receita, transferencia, renomeada] = [`Conta ${s}`, `Mercado ${s}`, `Salário ${s}`, `Reserva ${s}`, `Feira ${s}`];
+  await page.goto("/#/configuracao");
+  await entrar(page);
+  await cadastrar(page, "Nova conta", conta, "corrente");
+  await cadastrar(page, "Nova categoria", despesa, "despesa");
+  await cadastrar(page, "Nova categoria", receita, "receita");
+  await cadastrar(page, "Nova categoria", transferencia, "transferencia");
+
+  // Renomeia: o nome novo vale também depois de recarregar.
+  await page.getByRole("button", { name: `Renomear ${despesa}` }).click();
+  await page.getByLabel(`Novo nome de ${despesa}`).fill(renomeada);
+  await page.getByRole("button", { name: "Salvar nome" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: renomeada })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: despesa })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("listitem").filter({ hasText: renomeada })).toBeVisible();
+
+  // Arquivada some do novo lançamento; desarquivada volta.
+  await page.getByRole("button", { name: `Arquivar ${renomeada}` }).click();
+  await expect(page.getByRole("button", { name: `Desarquivar ${renomeada}` })).toBeVisible();
+  await page.goto("/#/novo");
+  await expect(page.getByRole("button", { name: renomeada })).toHaveCount(0);
+  await page.getByRole("button", { name: "Receita" }).click();
+  await expect(page.getByRole("button", { name: receita })).toBeVisible();
+  await page.goto("/#/configuracao");
+  await page.getByRole("button", { name: `Desarquivar ${renomeada}` }).click();
+  await page.goto("/#/novo");
+  await expect(page.getByRole("button", { name: renomeada })).toBeVisible();
+});
+
+test("a tela provisória #/cadastro deixou de existir", async ({ page }) => {
+  await page.goto("/#/cadastro");
+  await entrar(page);
+  await expect(page.getByRole("heading", { name: "Hoje", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cadastro" })).toHaveCount(0);
 });
