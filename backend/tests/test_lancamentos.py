@@ -218,3 +218,35 @@ def test_listas_de_contas_e_categorias(casal: Casal):
 
     assert [(c["nome"], c["tipo"]) for c in contas] == [("Poupança", "poupanca")]
     assert [(c["nome"], c["tipo"]) for c in categorias] == [("Salário", "receita")]
+
+
+def test_editar_a_data_para_o_passado_realiza_o_que_era_futuro_mas_a_escolha_manual_fica(
+    casal: Casal,
+):
+    conta, alimentacao = casal.conta(), casal.categoria()
+    futuro = lancamento(conta, [alimentacao], data="2999-01-01")
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=futuro)
+    sem_situacao = {k: v for k, v in futuro.items() if k != "situacao"}
+
+    passado = casal.pedir(
+        "flavio",
+        "PUT",
+        f"/api/lancamentos/{futuro['id']}",
+        json=sem_situacao | {"data": "2020-01-01"},
+    )
+    mesmo_dia = casal.pedir(
+        "flavio",
+        "PUT",
+        f"/api/lancamentos/{futuro['id']}",
+        json=sem_situacao | {"data": "2020-01-01", "valor_centavos": 5, "situacao": "previsto"},
+    )
+    sem_mexer_na_data = casal.pedir(
+        "flavio",
+        "PUT",
+        f"/api/lancamentos/{futuro['id']}",
+        json=sem_situacao | {"data": "2020-01-01", "valor_centavos": 6},
+    )
+
+    assert passado.json()["situacao"] == "realizado"
+    assert mesmo_dia.json()["situacao"] == "previsto"
+    assert sem_mexer_na_data.json()["situacao"] == "previsto"

@@ -181,7 +181,9 @@ def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
     ).fetchall()
     categorias: dict[UUID, list[UUID]] = {}
     for lancamento_id, categoria_id in conn.execute(
-        "SELECT lancamento_id, categoria_id FROM lancamento_categorias ORDER BY categoria_id"
+        "SELECT lancamento_id, categoria_id FROM lancamento_categorias"
+        f" {'WHERE lancamento_id = %s' if id else ''} ORDER BY categoria_id",
+        parametros,
     ):
         categorias.setdefault(lancamento_id, []).append(categoria_id)
     return [
@@ -217,13 +219,26 @@ def editar_lancamento(
         raise _recusar("o id do corpo difere do id da URL")
     with conectar(_url(request)) as conn:
         _conferir_ligacoes(conn, editado)
-        alterados = conn.execute(
-            "UPDATE lancamentos SET tipo = %s, situacao = coalesce(%s, situacao),"
-            " valor_centavos = %s, data = %s, descricao = %s, conta_id = %s,"
-            " alterado_por = %s, alterado_em = now() WHERE id = %s",
+        atual = conn.execute(
+            "SELECT data, situacao FROM lancamentos WHERE id = %s", (id,)
+        ).fetchone()
+        if not atual:
+            raise HTTPException(status_code=404, detail="lançamento não encontrado")
+        data_atual, situacao_atual = atual
+        # Sem situação no pedido, só mudar a data refaz a inferência; senão a atual fica.
+        if editado.situacao:
+            situacao = editado.situacao
+        elif editado.data != data_atual:
+            situacao = _situacao_pela_data(editado.data)
+        else:
+            situacao = situacao_atual
+        conn.execute(
+            "UPDATE lancamentos SET tipo = %s, situacao = %s, valor_centavos = %s, data = %s,"
+            " descricao = %s, conta_id = %s, alterado_por = %s, alterado_em = now()"
+            " WHERE id = %s",
             (
                 editado.tipo,
-                editado.situacao,
+                situacao,
                 editado.valor_centavos,
                 editado.data,
                 editado.descricao,
@@ -231,9 +246,7 @@ def editar_lancamento(
                 usuario,
                 id,
             ),
-        ).rowcount
-        if not alterados:
-            raise HTTPException(status_code=404, detail="lançamento não encontrado")
+        )
         _gravar_categorias(conn, id, editado.categoria_ids)
         return _todos(conn, id)[0]
 

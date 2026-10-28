@@ -29,7 +29,9 @@ export function TelaDeLancamento({ id }: { id?: string }) {
 
   useEffect(() => {
     if (!id) return;
-    void api.GET("/api/lancamentos").then(({ data: lista }) => {
+    void api
+      .GET("/api/lancamentos")
+      .then(({ data: lista }) => {
       const achado = lista?.find((l) => l.id === id);
       if (!achado) return setErro("Lançamento não encontrado.");
       setExistente(achado);
@@ -39,13 +41,14 @@ export function TelaDeLancamento({ id }: { id?: string }) {
       setCategoriaIds(achado.categoria_ids);
       setData(achado.data);
       setDescricao(achado.descricao);
-    });
+      })
+      .catch(() => setErro("Sem internet: não foi possível abrir o lançamento."));
   }, [id]);
 
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
   const conta = contaId || contas[0]?.id || "";
   const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo);
-  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando;
+  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null);
 
   function trocarTipo(novo: Tipo) {
     setTipo(novo);

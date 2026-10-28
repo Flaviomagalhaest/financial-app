@@ -1,5 +1,5 @@
-"""Exemplo fictício para o backup: as tabelas de exemplo têm prefixo `exemplo_` para não colidir com as do domínio, e o gerador lê
-qualquer tabela do banco. Dado real nunca entra aqui (ADR 0012)."""
+"""Exemplo fictício para o backup: as tabelas de exemplo têm prefixo `exemplo_` para não
+colidir com as do domínio, e o gerador lê qualquer tabela do banco. Dado real nunca entra aqui (ADR 0012)."""
 
 import psycopg
 
