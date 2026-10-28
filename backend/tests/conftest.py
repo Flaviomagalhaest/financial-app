@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.migrations import aplicar_migrations
 from tests.emissor import Emissor
+from tests.exemplo_ficticio import criar_exemplo_ficticio
 
 
 @pytest.fixture(scope="session")
@@ -32,3 +33,12 @@ def database_url() -> str:
 def client(database_url: str, emissor: Emissor) -> TestClient:
     aplicar_migrations(database_url)
     return TestClient(create_app(database_url, verificador=emissor.verificador()))
+
+
+@pytest.fixture
+def banco_ficticio(database_url: str):
+    """Banco migrado com o exemplo fictício do backup (tests/exemplo_ficticio.py)."""
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        criar_exemplo_ficticio(conn)
+        yield conn
