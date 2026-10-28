@@ -21,3 +21,4 @@ A tela de lançar chega ao desenho dos protótipos: lançar uma despesa leva pou
 - [ ] Atalho "Novo lançamento" funcionando no Android e botão na tela inicial no iPhone
 - [ ] Teste de navegador do fluxo completo, online e offline
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+- [ ] Da revisão do ticket 32: data com "hoje / ontem / outra" (história 18) e a linha de resumo dos detalhes embaixo do valor (história 17); hoje a data é só um campo em "Detalhes"

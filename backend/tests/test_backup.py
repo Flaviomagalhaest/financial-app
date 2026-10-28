@@ -19,8 +19,15 @@ def test_backup_tem_um_csv_por_tabela_com_os_ids_na_ordem_da_chave(banco_fictici
     backup = gerar_backup(banco_ficticio)
 
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
-        assert sorted(zip.namelist()) == ["contas.csv", "lancamentos.csv", "manifesto.json"]
-    assert ler_csv(backup, "contas.csv") == [
+        # As tabelas do domínio (vazias aqui) vão junto com as do exemplo.
+        nomes = set(zip.namelist())
+    assert {
+        "exemplo_contas.csv",
+        "exemplo_lancamentos.csv",
+        "lancamentos.csv",
+        "manifesto.json",
+    } <= nomes
+    assert ler_csv(backup, "exemplo_contas.csv") == [
         ["id", "nome", "saldo_de_abertura"],
         [CONTA_CORRENTE, "Corrente", "250.50"],
         [CONTA_POUPANCA, "Poupança", "1000.00"],
@@ -30,7 +37,7 @@ def test_backup_tem_um_csv_por_tabela_com_os_ids_na_ordem_da_chave(banco_fictici
 def test_backup_distingue_nulo_de_texto_vazio_e_guarda_o_texto_como_esta(banco_ficticio):
     backup = gerar_backup(banco_ficticio)
 
-    assert ler_csv(backup, "lancamentos.csv") == [
+    assert ler_csv(backup, "exemplo_lancamentos.csv") == [
         ["id", "conta_id", "descricao", "valor", "data", "observacao"],
         [
             "00000000-0000-0000-0000-000000000001",
@@ -64,12 +71,12 @@ def test_manifesto_traz_a_versao_do_formato_as_contagens_e_as_somas(banco_fictic
 
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
         manifesto = json.loads(zip.read("manifesto.json"))
-    assert manifesto == {
-        "versao_formato": 1,
-        "tabelas": {
-            "contas": {"linhas": 2, "somas": {"saldo_de_abertura": "1250.50"}},
-            "lancamentos": {"linhas": 3, "somas": {"valor": "4870.75"}},
-        },
+    do_exemplo = {n: t for n, t in manifesto["tabelas"].items() if n.startswith("exemplo_")}
+    assert manifesto["versao_formato"] == 1
+    assert manifesto["tabelas"]["lancamentos"] == {"linhas": 0, "somas": {"valor_centavos": "0"}}
+    assert do_exemplo == {
+        "exemplo_contas": {"linhas": 2, "somas": {"saldo_de_abertura": "1250.50"}},
+        "exemplo_lancamentos": {"linhas": 3, "somas": {"valor": "4870.75"}},
     }
 
 
@@ -96,12 +103,12 @@ def test_conferencia_aceita_o_backup_do_proprio_banco(banco_ficticio):
 def test_conferencia_recusa_zip_com_linha_faltando(banco_ficticio):
     backup = gerar_backup(banco_ficticio)
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
-        sem_a_ultima = zip.read("lancamentos.csv").decode().splitlines(keepends=True)[:-1]
+        sem_a_ultima = zip.read("exemplo_lancamentos.csv").decode().splitlines(keepends=True)[:-1]
 
-    with pytest.raises(BackupDivergente, match="lancamentos"):
+    with pytest.raises(BackupDivergente, match="exemplo_lancamentos"):
         conferir_backup(
             banco_ficticio,
-            trocar_arquivo(backup, "lancamentos.csv", "".join(sem_a_ultima).encode()),
+            trocar_arquivo(backup, "exemplo_lancamentos.csv", "".join(sem_a_ultima).encode()),
         )
 
 

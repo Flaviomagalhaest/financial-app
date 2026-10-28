@@ -38,14 +38,232 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/contas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Contas */
+        get: operations["listar_contas"];
+        put?: never;
+        /** Criar Conta */
+        post: operations["criar_conta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/categorias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Categorias */
+        get: operations["listar_categorias"];
+        put?: never;
+        /** Criar Categoria */
+        post: operations["criar_categoria"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lancamentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Lancamentos */
+        get: operations["listar_lancamentos"];
+        put?: never;
+        /**
+         * Criar Lancamento
+         * @description Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200.
+         */
+        post: operations["criar_lancamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lancamentos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Editar Lancamento */
+        put: operations["editar_lancamento"];
+        post?: never;
+        /**
+         * Excluir Lancamento
+         * @description Idempotente: excluir o que já não existe também dá 204.
+         */
+        delete: operations["excluir_lancamento"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Categoria */
+        Categoria: {
+            /** Nome */
+            nome: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita" | "transferencia";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** Conta */
+        Conta: {
+            /** Nome */
+            nome: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "corrente" | "poupanca" | "carteira";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /** Eu */
         Eu: {
             /** Usuario */
             usuario: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /** Lancamento */
+        Lancamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Situacao
+             * @enum {string}
+             */
+            situacao: "previsto" | "realizado";
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
+        };
+        /** NovaCategoria */
+        NovaCategoria: {
+            /** Nome */
+            nome: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita" | "transferencia";
+        };
+        /** NovaConta */
+        NovaConta: {
+            /** Nome */
+            nome: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "corrente" | "poupanca" | "carteira";
+        };
+        /** NovoLancamento */
+        NovoLancamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /** Situacao */
+            situacao?: ("previsto" | "realizado") | null;
         };
         /** Saude */
         Saude: {
@@ -53,6 +271,19 @@ export interface components {
             status: string;
             /** Migrations */
             migrations: number;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -99,6 +330,229 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Eu"];
+                };
+            };
+        };
+    };
+    listar_contas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conta"][];
+                };
+            };
+        };
+    };
+    criar_conta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaConta"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conta"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_categorias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Categoria"][];
+                };
+            };
+        };
+    };
+    criar_categoria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaCategoria"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Categoria"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_lancamentos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"][];
+                };
+            };
+        };
+    };
+    criar_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoLancamento"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoLancamento"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
