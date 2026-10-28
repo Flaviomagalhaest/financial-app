@@ -23,6 +23,7 @@ Sem internet, criar, editar, excluir e confirmar lançamentos funciona: o lança
 - [x] `contarNaoEnviados` em `web/src/App.tsx` conta a fila de verdade, para "Sair" pedir confirmação com não enviados (ticket 30), com teste de navegador do aviso
 - [x] Verificações do projeto rodando e PR aberto para `main`
 - [x] Trocar as chamadas diretas à API de `TelaDeLancamento` e `ListaDeLancamentos` (ticket 32) pela camada de dados do aparelho, que hoje só mostra "Sem internet" ao salvar ou excluir
+- [x] Confirmar sem internet entra na fila (ticket 43): passou para o [ticket 83](83-confirmar-previsto-sem-internet-pela-fila.md)
 
 ## Notas da implementação
 

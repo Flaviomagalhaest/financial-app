@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/cliente";
 import type { components } from "../api/schema";
+import { hoje } from "../lancamentos/datas";
 import {
   apagarTudo,
   comTrava,
@@ -24,6 +25,8 @@ export type { ItemDaFila, Lancamento, NovoLancamento };
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
 export type LancamentoNaTela = NovoLancamento & {
   situacao: "previsto" | "realizado";
+  /** O do servidor; o não enviado repete o da versão que o servidor tem. */
+  atrasado?: boolean;
   naoEnviado: boolean;
   recusa?: string;
 };
@@ -102,11 +105,6 @@ export function useFila(): ItemDaFila[] {
   return itens;
 }
 
-/** A data de hoje no aparelho, "AAAA-MM-DD". */
-export function hoje(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 /** A mesma regra do servidor: sem situação, data futura é prevista; só mudar a data refaz. */
 function situacaoNoAparelho(lancamento: NovoLancamento, anterior?: LancamentoNaTela) {
@@ -125,7 +123,10 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
       continue;
     }
     const lancamento = item.lancamento!;
-    const mostrado = { ...lancamento, situacao: situacaoNoAparelho(lancamento, anterior), naoEnviado: true, recusa: item.recusa };
+    const situacao = situacaoNoAparelho(lancamento, anterior);
+    // O atraso é regra do servidor: vale o dele enquanto a mudança não mexe em data nem situação.
+    const atrasado = anterior?.data === lancamento.data && anterior.situacao === situacao ? anterior.atrasado : undefined;
+    const mostrado = { ...lancamento, situacao, atrasado, naoEnviado: true, recusa: item.recusa };
     if (anterior) porId.set(item.id, mostrado);
     else novos.unshift(mostrado);
   }

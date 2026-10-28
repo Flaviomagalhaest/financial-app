@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { hoje, salvarLancamento, useCadastro, useLancamentos, type LancamentoNaTela } from "../dados";
+import { salvarLancamento, useCadastro, useLancamentos, type LancamentoNaTela } from "../dados";
+import { hoje } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
+type Situacao = LancamentoNaTela["situacao"];
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
 export function TelaDeLancamento({ id }: { id?: string }) {
@@ -18,6 +20,8 @@ export function TelaDeLancamento({ id }: { id?: string }) {
   const [categoriaIds, setCategoriaIds] = useState<string[]>([]);
   const [data, setData] = useState(hoje);
   const [descricao, setDescricao] = useState("");
+  // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
+  const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -42,6 +46,9 @@ export function TelaDeLancamento({ id }: { id?: string }) {
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
   const conta = contaId || contas[0]?.id || "";
   const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo && (!c.arquivada || categoriaIds.includes(c.id) || !!existente?.categoria_ids.includes(c.id)));
+  const situacao: Situacao =
+    situacaoEscolhida ??
+    (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
   const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null);
 
   function trocarTipo(novo: Tipo) {
@@ -69,6 +76,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
           descricao,
           conta_id: conta,
           categoria_ids: categoriaIds,
+          ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
           // A tela ainda não edita tags (ticket 78): devolve as que o lançamento já tem.
           tags: existente?.tags ?? [],
         },
@@ -129,6 +137,13 @@ export function TelaDeLancamento({ id }: { id?: string }) {
         <input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         <label htmlFor="data">Data</label>
         <input id="data" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
+        <div className="alternancia" role="group" aria-label="Situação">
+          {(["realizado", "previsto"] as const).map((s) => (
+            <button type="button" key={s} className={situacao === s ? "" : "secundario"} aria-pressed={situacao === s} onClick={() => setSituacaoEscolhida(s)}>
+              {s === "realizado" ? "Realizado" : "Previsto"}
+            </button>
+          ))}
+        </div>
       </details>
       {erro && (
         <p role="alert" className="erro">

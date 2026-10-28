@@ -20,3 +20,4 @@ O casal cadastra o salário, a luz ou o seguro anual uma vez só e os previstos 
 - [ ] Previstos gerados até o horizonte de 24 meses, estendido por uma tarefa diária (EventBridge) que também realiza os automáticos
 - [ ] Testes de API com datas de fim de mês e com a tarefa diária
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+- [ ] Previsto automático não pede confirmação (ticket 43): fica fora de `GET /api/contas-da-semana` e não aparece como `atrasado`, que hoje valem para todo `situacao = 'previsto'`

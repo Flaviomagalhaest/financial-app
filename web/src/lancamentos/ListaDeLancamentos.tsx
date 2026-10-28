@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { atualizadoAs, descartarNaoEnviado, excluirLancamento, useCadastro, useLancamentos, type LancamentoNaTela } from "../dados";
-import { formatarCentavos } from "./dinheiro";
-
-function dataPorExtenso(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
+import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresentacao";
+import { dataPorExtenso } from "./datas";
 
 /** Lançamentos do casal, do mais recente ao mais antigo, com editar e excluir em cada linha. */
 export function ListaDeLancamentos() {
@@ -24,8 +20,6 @@ export function ListaDeLancamentos() {
     await descartarNaoEnviado(l.id).catch(() => setErro("Não foi possível descartar no aparelho."));
   }
 
-  const nome = (lista: { id: string; nome: string }[], id: string) => lista.find((i) => i.id === id)?.nome ?? "?";
-
   return (
     <section>
       <h2>Histórico</h2>
@@ -43,18 +37,16 @@ export function ListaDeLancamentos() {
       {!semDados && lancamentos?.length === 0 && <p className="vazio">Nenhum lançamento ainda.</p>}
       <ul className="lista">
         {lancamentos?.map((l) => {
-          const titulo = l.descricao || l.categoria_ids.map((c) => nome(categorias, c)).join(", ");
+          const titulo = tituloDoLancamento(l, categorias);
           return (
             <li key={l.id}>
               <div>
                 <strong>{titulo}</strong>
-                <span className={l.tipo === "despesa" ? "despesa" : "receita"}>
-                  {l.tipo === "despesa" ? "−" : "+"} {formatarCentavos(l.valor_centavos)}
-                </span>
+                <ValorComSinal l={l} />
               </div>
               <p className="vazio">
                 {dataPorExtenso(l.data)} · {nome(contas, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
-                {l.situacao === "previsto" && " · previsto"}
+                {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
               </p>
               {l.naoEnviado && (
                 <p className={l.recusa ? "erro" : "vazio"}>{l.recusa ? `⏳ não enviado: ${l.recusa}` : "⏳ não enviado"}</p>
