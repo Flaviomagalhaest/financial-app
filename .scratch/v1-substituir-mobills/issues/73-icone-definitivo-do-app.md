@@ -1,7 +1,7 @@
 # Escolher o ícone definitivo do app
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: decisão do dono (HITL); apoio: `artifact-design` para propor opções
 Modelo recomendado: Sonnet
@@ -15,5 +15,9 @@ Qual é o ícone do app na Tela de Início do casal?
 
 ## Checklist
 
-- [ ] O dono escolhe ou fornece o desenho
-- [ ] Gerar `icone-192.png`, `icone-512.png`, `icone-maskable-512.png` (miolo dentro de 80%) e `apple-touch-icon.png` (180×180, sem transparência)
+- [x] O dono escolhe ou fornece o desenho
+- [x] Gerar `icone-192.png`, `icone-512.png`, `icone-maskable-512.png` (miolo dentro de 80%) e `apple-touch-icon.png` (180×180, sem transparência)
+
+## Resolução
+
+O dono escolheu a proposta A: duas moedas que se sobrepõem (branca e dourada, com a interseção em verde-claro) num fundo verde `#1f6b4f`. Os quatro PNGs foram regenerados a partir desse desenho; o miolo ocupa cerca de 58% da largura, dentro dos 80% do maskable.
