@@ -7,6 +7,7 @@ import pytest
 
 from app import backup as formato
 from app.backup import RestauracaoDesfeita, RestauracaoRecusada, gerar_backup, restaurar_backup
+from app.migrations import aplicar_migrations
 from tests.exemplo_ficticio import trocar_arquivo
 
 
@@ -29,7 +30,7 @@ def trocar_manifesto(backup: bytes, mudar) -> bytes:
 def contar_linhas(conn: psycopg.Connection) -> dict[str, int]:
     return {
         tabela: conn.execute(f'SELECT count(*) FROM "{tabela}"').fetchone()[0]
-        for tabela in ("contas", "lancamentos")
+        for tabela in ("exemplo_contas", "exemplo_lancamentos")
     }
 
 
@@ -56,10 +57,10 @@ def test_ida_e_volta_de_timestamptz_nao_depende_do_fuso_da_sessao(banco_ficticio
 
 
 def test_restauracao_grava_a_tabela_referenciada_antes_da_que_aponta_para_ela(banco_ficticio):
-    # `a_parcelas` vem antes de `lancamentos` na ordem alfabética, mas depende dela.
+    # `a_parcelas` vem antes de `exemplo_lancamentos` na ordem alfabética, mas depende dela.
     banco_ficticio.execute(
         "CREATE TABLE a_parcelas (id int PRIMARY KEY, lancamento_id uuid NOT NULL"
-        " REFERENCES lancamentos (id))"
+        " REFERENCES exemplo_lancamentos (id))"
     )
     banco_ficticio.execute(
         "INSERT INTO a_parcelas VALUES (1, '00000000-0000-0000-0000-000000000001')"
@@ -91,14 +92,14 @@ def test_restauracao_recusa_versao_de_formato_desconhecida(banco_ficticio, versa
     with pytest.raises(RestauracaoRecusada, match=f"versão {versao}"):
         restaurar_backup(banco_ficticio, backup)
 
-    assert contar_linhas(banco_ficticio) == {"contas": 0, "lancamentos": 0}
+    assert contar_linhas(banco_ficticio) == {"exemplo_contas": 0, "exemplo_lancamentos": 0}
 
 
 @pytest.mark.parametrize(
     "migration_que_o_backup_nao_tem",
     [
-        "ALTER TABLE contas ADD COLUMN apelido text",
-        "ALTER TABLE lancamentos DROP COLUMN observacao",
+        "ALTER TABLE exemplo_contas ADD COLUMN apelido text",
+        "ALTER TABLE exemplo_lancamentos DROP COLUMN observacao",
         "CREATE TABLE metas (id int PRIMARY KEY)",
     ],
 )
@@ -112,20 +113,20 @@ def test_restauracao_recusa_banco_com_esquema_diferente_do_backup(
     with pytest.raises(RestauracaoRecusada, match="esquema"):
         restaurar_backup(banco_ficticio, backup)
 
-    assert contar_linhas(banco_ficticio) == {"contas": 0, "lancamentos": 0}
+    assert contar_linhas(banco_ficticio) == {"exemplo_contas": 0, "exemplo_lancamentos": 0}
 
 
 def test_restauracao_recusa_zip_que_nao_bate_com_o_manifesto_antes_de_gravar(banco_ficticio):
     backup = gerar_backup(banco_ficticio)
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
-        sem_a_ultima = zip.read("lancamentos.csv").decode().splitlines(keepends=True)[:-1]
-    backup = trocar_arquivo(backup, "lancamentos.csv", "".join(sem_a_ultima).encode())
+        sem_a_ultima = zip.read("exemplo_lancamentos.csv").decode().splitlines(keepends=True)[:-1]
+    backup = trocar_arquivo(backup, "exemplo_lancamentos.csv", "".join(sem_a_ultima).encode())
     apagar_os_dados(banco_ficticio)
 
-    with pytest.raises(RestauracaoRecusada, match="lancamentos.*manifesto"):
+    with pytest.raises(RestauracaoRecusada, match="exemplo_lancamentos.*manifesto"):
         restaurar_backup(banco_ficticio, backup)
 
-    assert contar_linhas(banco_ficticio) == {"contas": 0, "lancamentos": 0}
+    assert contar_linhas(banco_ficticio) == {"exemplo_contas": 0, "exemplo_lancamentos": 0}
 
 
 def test_falha_no_meio_da_gravacao_desfaz_os_lotes_ja_gravados(banco_ficticio, monkeypatch):
@@ -134,31 +135,31 @@ def test_falha_no_meio_da_gravacao_desfaz_os_lotes_ja_gravados(banco_ficticio, m
     monkeypatch.setattr(formato, "LINHAS_POR_LOTE", 1)
     backup = gerar_backup(banco_ficticio)
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
-        csv_de_lancamentos = zip.read("lancamentos.csv").decode()
+        csv_de_lancamentos = zip.read("exemplo_lancamentos.csv").decode()
     backup = trocar_arquivo(
         backup,
-        "lancamentos.csv",
+        "exemplo_lancamentos.csv",
         csv_de_lancamentos.replace('"-120.35"', '"cento e vinte"').encode(),
     )
     apagar_os_dados(banco_ficticio)
 
-    with pytest.raises(RestauracaoDesfeita, match="lancamentos"):
+    with pytest.raises(RestauracaoDesfeita, match="exemplo_lancamentos"):
         restaurar_backup(banco_ficticio, backup)
 
-    assert contar_linhas(banco_ficticio) == {"contas": 0, "lancamentos": 0}
+    assert contar_linhas(banco_ficticio) == {"exemplo_contas": 0, "exemplo_lancamentos": 0}
 
 
 def test_restauracao_com_soma_diferente_do_manifesto_e_desfeita(banco_ficticio):
     def mudar_a_soma(manifesto: dict) -> None:
-        manifesto["tabelas"]["lancamentos"]["somas"]["valor"] = "4870.76"
+        manifesto["tabelas"]["exemplo_lancamentos"]["somas"]["valor"] = "4870.76"
 
     backup = trocar_manifesto(gerar_backup(banco_ficticio), mudar_a_soma)
     apagar_os_dados(banco_ficticio)
 
-    with pytest.raises(RestauracaoDesfeita, match="lancamentos.*valor"):
+    with pytest.raises(RestauracaoDesfeita, match="exemplo_lancamentos.*valor"):
         restaurar_backup(banco_ficticio, backup)
 
-    assert contar_linhas(banco_ficticio) == {"contas": 0, "lancamentos": 0}
+    assert contar_linhas(banco_ficticio) == {"exemplo_contas": 0, "exemplo_lancamentos": 0}
 
 
 def test_restauracao_recusa_tabela_sem_chave_primaria_que_nao_daria_para_desfazer(banco_ficticio):
@@ -168,3 +169,24 @@ def test_restauracao_recusa_tabela_sem_chave_primaria_que_nao_daria_para_desfaze
 
     with pytest.raises(RestauracaoRecusada, match="notas.*chave primária"):
         restaurar_backup(banco_ficticio, backup)
+
+
+def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(database_url):
+    # O que `prod` gravava antes do ticket 32: só o manifesto, sem tabela nenhuma.
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w") as zip:
+        zip.writestr("manifesto.json", json.dumps({"versao_formato": 1, "tabelas": {}}))
+    aplicar_migrations(database_url)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, saida.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert {
+            tabela: conferido["linhas"] for tabela, conferido in manifesto["tabelas"].items()
+        } == {
+            "categorias": 0,
+            "contas": 0,
+            "lancamento_categorias": 0,
+            "lancamentos": 0,
+        }

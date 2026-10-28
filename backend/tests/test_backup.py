@@ -72,7 +72,7 @@ def test_manifesto_traz_a_versao_do_formato_as_contagens_e_as_somas(banco_fictic
     with zipfile.ZipFile(io.BytesIO(backup)) as zip:
         manifesto = json.loads(zip.read("manifesto.json"))
     do_exemplo = {n: t for n, t in manifesto["tabelas"].items() if n.startswith("exemplo_")}
-    assert manifesto["versao_formato"] == 1
+    assert manifesto["versao_formato"] == 2
     assert manifesto["tabelas"]["lancamentos"] == {"linhas": 0, "somas": {"valor_centavos": "0"}}
     assert do_exemplo == {
         "exemplo_contas": {"linhas": 2, "somas": {"saldo_de_abertura": "1250.50"}},

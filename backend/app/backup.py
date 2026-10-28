@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 1
+VERSAO_FORMATO = 2
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -23,9 +23,42 @@ BYTES_POR_LOTE = 4 * 1024 * 1024
 
 # Tabelas de um backup aberto: nome -> (colunas, linhas), cada valor no texto do Postgres.
 Tabelas = dict[str, tuple[list[str], list[list[str | None]]]]
+
+
+def _da_versao_1_para_a_2(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 2 tem as primeiras tabelas do domínio (ticket 32). O backup da 1 de `prod` é de
+    antes delas, e elas entram vazias; o do `dev` pode já trazê-las, e fica como está."""
+    novas = {
+        "contas": ["id", "nome", "tipo", "criado_por", "criado_em"],
+        "categorias": ["id", "nome", "tipo", "criado_por", "criado_em"],
+        "lancamentos": [
+            "id",
+            "tipo",
+            "situacao",
+            "valor_centavos",
+            "data",
+            "descricao",
+            "conta_id",
+            "criado_por",
+            "criado_em",
+            "alterado_por",
+            "alterado_em",
+        ],
+        "lancamento_categorias": ["lancamento_id", "categoria_id"],
+    }
+    somas = {"lancamentos": {"valor_centavos": "0"}}
+    for tabela, colunas in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas.get(tabela, {})}
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
-CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {}
+CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
+    1: _da_versao_1_para_a_2,
+}
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
 NUMERICOS = {"smallint", "integer", "bigint", "numeric"}

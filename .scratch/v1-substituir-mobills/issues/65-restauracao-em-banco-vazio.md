@@ -16,8 +16,8 @@ O dono refaz o banco a partir de um backup com confiança.
 ## Checklist
 
 - [x] Restaura tudo ou nada, só em banco vazio, e confere contagens e somas contra o manifesto; recusa banco com dados e versão de formato desconhecida
-- [x] Conversores das versões antigas do formato (o encadeamento em `CONVERSORES`; ainda não existe versão antiga, e a guarda do formato obriga o primeiro conversor junto com a primeira migration que mudar as tabelas)
-- [x] Teste de ida e volta no CI: restaurar o backup fictício, exportar de novo e exigir zip idêntico; restaurar versão antiga (fica para o primeiro conversor: a guarda pede um teste que restaura um backup da versão anterior)
+- [x] Conversores das versões antigas do formato (o encadeamento em `CONVERSORES` e o da versão 1 para a 2, que veio com as tabelas do ticket 32)
+- [x] Teste de ida e volta no CI: restaurar o backup fictício, exportar de novo e exigir zip idêntico; restaurar versão antiga
 - [x] Restauração de verdade no `dev` a partir do backup de `prod`, antes da virada e a cada mudança no formato: o comando ficou pronto e roda contra o Postgres local; rodar no DSQL depende da credencial do dono e de o `prod` ter dados, e foi para o [ticket 76](76-restaurar-no-dev-o-backup-de-prod.md)
 - [x] Verificações do projeto rodando e PR aberto para `main`
 
@@ -37,7 +37,10 @@ Pronto em 2026-10-28 e conferido no Postgres local e no do CI. Ainda não rodou 
   - se um lote falhar (inclusive no conflito da concorrência otimista, que chega no COMMIT) ou o banco não bater com o manifesto, `esvaziar_banco` apaga tudo em lotes pela chave primária, de trás para a frente, e a restauração levanta `RestauracaoDesfeita`.
 
   O ADR 0012 e o glossário registram que o tudo ou nada vale para o resultado, não para uma transação só.
-- **Conversores**: `CONVERSORES[N]` leva o manifesto e as tabelas da versão N para a N+1, e a restauração os encadeia. O teste `test_formato_do_backup.py` compara o esquema das migrations com o esquema gravado da versão atual em `backend/tests/esquemas_do_formato.json`. A versão 1 é o banco sem tabelas do domínio. Uma migration que mude as tabelas faz o teste falhar até alguém subir `VERSAO_FORMATO`, escrever o conversor da versão anterior com um teste que restaura um backup dela e gravar o esquema novo. O teste compara só o nome e o tipo das colunas: mudar precisão, nulidade ou chave não pede versão nova.
+- **Conversores e versão 2**: `CONVERSORES[N]` leva o manifesto e as tabelas da versão N para a N+1, e a restauração os encadeia. O teste `test_formato_do_backup.py` compara o esquema das migrations com o esquema gravado da versão atual em `backend/tests/esquemas_do_formato.json`. Uma migration que mude as tabelas faz o teste falhar até alguém subir `VERSAO_FORMATO`, escrever o conversor da versão anterior com um teste que restaura um backup dela e gravar o esquema novo. O teste compara só o nome e o tipo das colunas: mudar precisão, nulidade ou chave não pede versão nova.
+  - O ticket 32 entrou na `main` durante esta sessão com as primeiras tabelas do domínio, e a guarda pediu a versão 2.
+  - A versão 1 é a de antes delas: os backups de `prod` só têm o manifesto. O conversor `_da_versao_1_para_a_2` acrescenta vazias as tabelas que faltam. Um backup do `dev` gravado pela branch do ticket 32, que já as traz, fica como está.
+  - Um teste restaura um backup da versão 1 como o de `prod`.
 - **`timestamptz` sem depender do fuso**: o gerador passou a escrever esse tipo sempre em UTC (`... AT TIME ZONE 'UTC'` mais `+00`). Os backups já gravados não mudam, porque nenhum tem coluna desse tipo.
 - **Comando do dono** (`scripts/restaurar-backup.sh <prod|dev> <zip> [--esvaziar]`, que chama `python -m app.restauracao`):
   - acha o endpoint do DSQL pela pilha `financial-<ambiente>-dados` e para se ele vier vazio;
@@ -50,7 +53,7 @@ Pronto em 2026-10-28 e conferido no Postgres local e no do CI. Ainda não rodou 
 Pendências gravadas no tracker:
 
 - [ticket 76](76-restaurar-no-dev-o-backup-de-prod.md) (HITL): a restauração de verdade no `dev` com o backup de `prod`, antes da virada e a cada versão nova do formato; a primeira execução das consultas no DSQL; e a decisão sobre o que fazer se uma restauração em `prod` cair sem conseguir desfazer. O [ticket 69](69-virada-para-o-app.md) passou a depender dele.
-- A primeira migration com tabelas (a de `exportacoes` do ticket 66, ou as do domínio do ticket 32, o que entrar primeiro na `main`) vai fazer a guarda do formato falhar, de propósito: ela sobe para a versão 2 com o conversor da 1. É a guarda que cobra isso, não um ticket.
+- A migration de `exportacoes` do ticket 66 (PR aberto) vai fazer a guarda do formato falhar quando encontrar esta versão 2 na `main`, de propósito: ela sobe para a versão 3 com o conversor da 2 (acrescentar a tabela vazia). É a guarda que cobra isso, não um ticket.
 
 ## Comments
 

@@ -1,1 +1,36 @@
-{"1": {}}
+{
+  "1": {},
+  "2": {
+    "categorias": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "contas": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "lancamento_categorias": {
+      "lancamento_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "lancamentos": {
+      "id": "uuid",
+      "tipo": "text",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    }
+  }
+}
