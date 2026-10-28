@@ -1,7 +1,7 @@
 # Tentar de novo no erro de serialização do DSQL
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: 32
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ As rotas que escrevem repetem a transação inteira algumas vezes quando o banco
 
 ## Checklist
 
-- [ ] Ponto único de repetição (por exemplo em `app/banco.py`) usado pelas rotas de escrita
-- [ ] Teste que força o erro de serialização e confere que a rota termina bem na segunda tentativa
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Ponto único de repetição (por exemplo em `app/banco.py`) usado pelas rotas de escrita
+- [x] Teste que força o erro de serialização e confere que a rota termina bem na segunda tentativa
+- [x] Verificações do projeto rodando e PR aberto para `main`

@@ -1,5 +1,6 @@
 import psycopg
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.banco import conectar
@@ -33,6 +34,15 @@ def create_app(url: str | None = None, verificador: VerificadorDeJwt | None = No
     @app.get("/api/eu", response_model=Eu, operation_id="eu")
     def eu(usuario: UsuarioLogado) -> Eu:
         return Eu(usuario=usuario)
+
+    @app.exception_handler(psycopg.errors.SerializationFailure)
+    def disputa_perdida(_: Request, __: psycopg.errors.SerializationFailure) -> JSONResponse:
+        # Esgotou as tentativas de em_transacao: o cliente pode repetir (a fila do app repete).
+        return JSONResponse(
+            {"detail": "banco ocupado, tente de novo"},
+            status_code=503,
+            headers={"Retry-After": "1"},
+        )
 
     app.include_router(lancamentos)
     return app
