@@ -44,7 +44,7 @@ async function lancar(page: Page, conta: string, l: Previsto) {
 test("confirma as contas da semana em um toque ou ajustando, e só o realizado mexe no saldo", async ({ page }) => {
   const s = String(Date.now());
   const [conta, luz, salario] = [`Corrente ${s}`, `Luz ${s}`, `Salário ${s}`];
-  await page.goto("/#/cadastro");
+  await page.goto("/#/contas-e-categorias");
   await entrar(page);
   await cadastrar(page, "Nova conta", conta, "corrente");
   await cadastrar(page, "Nova categoria", luz, "despesa");
@@ -60,7 +60,7 @@ test("confirma as contas da semana em um toque ou ajustando, e só o realizado m
   await expect(page.getByRole("listitem").filter({ hasText: `Pagamento ${s}` })).toContainText("previsto");
 
   // Previsto não mexe no saldo.
-  await page.goto("/#/cadastro");
+  await page.goto("/#/contas-e-categorias");
   const saldo = page.getByRole("listitem").filter({ hasText: conta });
   await expect(saldo).toContainText("R$ 0,00");
 
@@ -95,7 +95,7 @@ test("confirma as contas da semana em um toque ou ajustando, e só o realizado m
   await expect(minhas).toHaveCount(0);
 
   // Confirmados viram realizados e entram no saldo: 5.123,45 − 70,00.
-  await page.goto("/#/cadastro");
+  await page.goto("/#/contas-e-categorias");
   await expect(saldo).toContainText("R$ 5.053,45");
   await page.goto("/#/historico");
   const pagamento = page.getByRole("listitem").filter({ hasText: `Pagamento ${s}` });

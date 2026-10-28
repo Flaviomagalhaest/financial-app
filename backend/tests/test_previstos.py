@@ -5,7 +5,8 @@ from datetime import date
 import pytest
 
 from app import lancamentos as modulo
-from tests.casal import Casal, lancamento
+from tests.conftest import Casal
+from tests.test_lancamentos import lancamento
 
 HOJE = date(2026, 10, 28)
 
@@ -215,3 +216,23 @@ def test_so_o_realizado_mexe_no_saldo_e_a_confirmacao_o_traz_para_dentro(casal: 
 
     assert antes == {corrente: 490000, poupanca: 0}
     assert depois == {corrente: 490000, poupanca: -26000}
+
+
+def test_confirmar_nao_leva_o_previsto_para_uma_conta_arquivada(casal: Casal):
+    conta, antiga, luz = casal.conta(), casal.conta("Antiga"), casal.categoria("Luz")
+    casal.pedir(
+        "flavio",
+        "PUT",
+        f"/api/contas/{antiga}",
+        json={"nome": "Antiga", "tipo": "corrente", "arquivada": True},
+    )
+    previsto = lancamento(conta, [luz], data="2026-10-27", situacao="previsto")
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=previsto)
+
+    resposta = casal.pedir(
+        "flavio", "POST", f"/api/lancamentos/{previsto['id']}/confirmar", json={"conta_id": antiga}
+    )
+
+    assert resposta.status_code == 422
+    [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
+    assert (visto["situacao"], visto["conta_id"]) == ("previsto", conta)

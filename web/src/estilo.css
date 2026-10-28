@@ -341,6 +341,10 @@ select {
   color: var(--texto);
 }
 
+.lista .arquivada {
+  opacity: 0.6;
+}
+
 .configuracoes h3 {
   margin: 0.5rem 0;
   font-size: 1rem;
