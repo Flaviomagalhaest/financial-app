@@ -1,6 +1,7 @@
 """Conexão com o banco: Postgres por DATABASE_URL (local e CI) ou Aurora DSQL por IAM (na AWS)."""
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import boto3
@@ -9,6 +10,7 @@ import psycopg
 
 PAPEL_DA_API = "api"
 PAPEL_DO_BACKUP = "backup"
+TENTATIVAS_NA_SERIALIZACAO = 5
 
 
 def conectar(
@@ -53,3 +55,18 @@ def _conectar_ao_dsql(
         connect_timeout=5,
         autocommit=autocommit,
     )
+
+
+def em_transacao[T](url: str | None, trabalho: Callable[[psycopg.Connection], T]) -> T:
+    """Roda `trabalho(conn)` numa transação e confirma. No erro de serialização (SQLSTATE 40001,
+    a concorrência otimista do DSQL, ADR 0009) refaz a transação inteira numa conexão nova; esgotadas
+    as tentativas, o erro sobe. `trabalho` precisa poder rodar de novo: nada de efeito fora do banco.
+    """
+    for tentativa in range(1, TENTATIVAS_NA_SERIALIZACAO + 1):
+        try:
+            with conectar(url) as conn:
+                return trabalho(conn)
+        except psycopg.errors.SerializationFailure:
+            if tentativa == TENTATIVAS_NA_SERIALIZACAO:
+                raise
+    raise AssertionError("inalcançável")

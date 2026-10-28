@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from app.banco import conectar
+from app.banco import conectar, em_transacao
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
@@ -86,11 +86,13 @@ def _url(request: Request) -> str | None:
 @router.post("/contas", status_code=201, response_model=Conta, operation_id="criar_conta")
 def criar_conta(nova: NovaConta, usuario: UsuarioLogado, request: Request) -> Conta:
     id = uuid4()
-    with conectar(_url(request)) as conn:
-        conn.execute(
+    em_transacao(
+        _url(request),
+        lambda conn: conn.execute(
             "INSERT INTO contas (id, nome, tipo, criado_por) VALUES (%s, %s, %s, %s)",
             (id, nova.nome, nova.tipo, usuario),
-        )
+        ),
+    )
     return Conta(id=id, **nova.model_dump())
 
 
@@ -106,11 +108,13 @@ def listar_contas(usuario: UsuarioLogado, request: Request) -> list[Conta]:
 )
 def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Request) -> Categoria:
     id = uuid4()
-    with conectar(_url(request)) as conn:
-        conn.execute(
+    em_transacao(
+        _url(request),
+        lambda conn: conn.execute(
             "INSERT INTO categorias (id, nome, tipo, criado_por) VALUES (%s, %s, %s, %s)",
             (id, nova.nome, nova.tipo, usuario),
-        )
+        ),
+    )
     return Categoria(id=id, **nova.model_dump())
 
 
@@ -128,12 +132,14 @@ def alterar_categoria(
     id: UUID, alteracao: AlteracaoDeCategoria, usuario: UsuarioLogado, request: Request
 ) -> Categoria:
     """Renomear e arquivar não mexem nos lançamentos: eles apontam para o id da categoria."""
-    with conectar(_url(request)) as conn:
-        linha = conn.execute(
+    linha = em_transacao(
+        _url(request),
+        lambda conn: conn.execute(
             "UPDATE categorias SET nome = COALESCE(%s, nome), arquivada = COALESCE(%s, arquivada)"
             " WHERE id = %s RETURNING id, nome, tipo, arquivada",
             (alteracao.nome, alteracao.arquivada, id),
-        ).fetchone()
+        ).fetchone(),
+    )
     if not linha:
         raise HTTPException(status_code=404, detail="categoria não encontrada")
     return Categoria(id=linha[0], nome=linha[1], tipo=linha[2], arquivada=linha[3])
@@ -186,7 +192,8 @@ def criar_lancamento(
     novo: NovoLancamento, usuario: UsuarioLogado, request: Request, response: Response
 ) -> Lancamento:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
-    with conectar(_url(request)) as conn:
+
+    def gravar(conn) -> Lancamento:
         # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
         ja_ligadas = frozenset(
             categoria
@@ -214,9 +221,10 @@ def criar_lancamento(
         ).rowcount
         if gravados:
             _gravar_categorias(conn, novo.id, novo.categoria_ids)
-        else:
-            response.status_code = 200
+        response.status_code = 201 if gravados else 200
         return _todos(conn, novo.id)[0]
+
+    return em_transacao(_url(request), gravar)
 
 
 def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
@@ -263,7 +271,8 @@ def editar_lancamento(
 ) -> Lancamento:
     if editado.id != id:
         raise _recusar("o id do corpo difere do id da URL")
-    with conectar(_url(request)) as conn:
+
+    def gravar(conn) -> Lancamento:
         ja_ligadas = frozenset(
             categoria
             for (categoria,) in conn.execute(
@@ -302,11 +311,16 @@ def editar_lancamento(
         _gravar_categorias(conn, id, editado.categoria_ids)
         return _todos(conn, id)[0]
 
+    return em_transacao(_url(request), gravar)
+
 
 @router.delete("/lancamentos/{id}", status_code=204, operation_id="excluir_lancamento")
 def excluir_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente: excluir o que já não existe também dá 204."""
-    with conectar(_url(request)) as conn:
+
+    def excluir(conn) -> None:
         conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
         conn.execute("DELETE FROM lancamentos WHERE id = %s", (id,))
+
+    em_transacao(_url(request), excluir)
     return Response(status_code=204)
