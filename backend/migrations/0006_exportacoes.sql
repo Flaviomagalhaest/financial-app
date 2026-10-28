@@ -1,4 +1,4 @@
-CREATE TABLE exportacoes (
+CREATE TABLE IF NOT EXISTS exportacoes (
     id uuid PRIMARY KEY,
     usuario text NOT NULL,
     formato text NOT NULL,
