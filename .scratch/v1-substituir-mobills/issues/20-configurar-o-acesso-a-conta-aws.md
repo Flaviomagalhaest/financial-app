@@ -26,3 +26,5 @@ Bloqueado pelo [ticket 17](17-medir-retomada-e-confirmar-pontos-no-prototipo.md)
 - [ ] Resultado em `## Answer`
 
 ## Comments
+
+- 2026-10-28: o ticket 17 está resolvido, então o bloqueio acabou. Preparei `scripts/configurar-conta-aws.sh` (skill `wizard`), que guia as seis etapas do checklist e grava a cópia da SCP em `docs/aws/scp-p-q0eemrzp.json` quando a CLI tem acesso à conta de gerência. Falta o dono rodá-lo (`scripts/configurar-conta-aws.sh`) e preencher `## Answer`. O bucket de backup ainda não existe, então a conferência da regra de ciclo de vida pode ficar para a infraestrutura dele.
