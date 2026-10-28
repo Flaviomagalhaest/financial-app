@@ -50,7 +50,7 @@ def _conceder_ao_papel_da_api(conn: psycopg.Connection, papel_arn: str) -> None:
         conn.execute(f"AWS IAM REVOKE {papel} FROM '{_literal(antigo)}'")
     if papel_arn not in mapeados:
         conn.execute(f"AWS IAM GRANT {papel} TO '{_literal(papel_arn)}'")
-    conn.execute(f"GRANT USAGE ON SCHEMA public TO {papel}")
+    # Sem GRANT USAGE: o DSQL recusa no schema `public` (entidade de sistema) e já o libera.
     conn.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {papel}")
     # A API só lê o controle das migrations (a /api/saude conta as aplicadas).
     conn.execute(f"REVOKE INSERT, UPDATE, DELETE ON controle_de_migrations FROM {papel}")
