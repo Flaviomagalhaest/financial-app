@@ -1,7 +1,7 @@
 # Gerador de backup e backup diário
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 28
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
