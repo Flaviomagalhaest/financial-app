@@ -8,8 +8,8 @@ import { PilhaGithub } from "../lib/pilha-github.js";
 const app = new App();
 // Região e conta só em configuração (config/aws.json).
 const env = { account: aws.conta, region: aws.regiao };
-const pacoteDaLambda = app.node.tryGetContext("pacoteDaLambda") ?? "../build/lambda";
-const site = app.node.tryGetContext("site") ?? "../web/dist";
+const pacoteDaLambda = "../build/lambda"; // scripts/empacotar-lambda.sh
+const site = "../web/dist"; // npm run build em web/
 
 new PilhaGithub(app, "financial-github", {
   env,

@@ -7,9 +7,9 @@ from app.banco import conectar
 PASTA = Path(__file__).resolve().parents[1] / "migrations"
 
 
-def aplicar_migrations(database_url: str | None = None) -> None:
+def aplicar_migrations(url: str | None = None) -> None:
     """Aplica em ordem os arquivos NNNN_*.sql ainda não registrados, um DDL por arquivo."""
-    with conectar(database_url, autocommit=True) as conn:
+    with conectar(url, autocommit=True) as conn:
         ja_aplicadas: set[str] = set()
         if conn.execute("SELECT to_regclass('controle_de_migrations') IS NOT NULL").fetchone()[0]:
             ja_aplicadas = {

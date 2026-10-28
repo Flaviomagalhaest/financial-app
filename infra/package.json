@@ -4,7 +4,6 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "cdk": "cdk",
     "typecheck": "tsc --noEmit",
     "synth": "cdk synth --quiet"
   },

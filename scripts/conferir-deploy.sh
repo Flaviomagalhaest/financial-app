@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Teste de fumaça depois do deploy: o endereço serve a PWA e /api/saude responde pela Lambda
-# e pelo banco com todas as migrations do repositório aplicadas.
+# e pelo banco com ao menos as migrations do repositório aplicadas (o dev é dividido pelas
+# branches, então pode ter migrations de outra branch a mais).
 # Uso: scripts/conferir-deploy.sh https://dxxxx.cloudfront.net
 set -euo pipefail
 
@@ -16,7 +17,7 @@ for i in $(seq "$TENTATIVAS"); do
     && echo "$SAUDE" | python3 -c '
 import json, sys
 s = json.load(sys.stdin)
-sys.exit(0 if s == {"status": "ok", "migrations": int(sys.argv[1])} else 1)' "$ESPERADAS"; then
+sys.exit(0 if s["status"] == "ok" and s["migrations"] >= int(sys.argv[1]) else 1)' "$ESPERADAS"; then
     break
   fi
   echo "tentativa $i: /api/saude ainda não respondeu ok com $ESPERADAS migrations (${SAUDE:-sem resposta})"

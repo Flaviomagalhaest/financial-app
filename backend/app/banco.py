@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+import boto3
+import botocore
 import psycopg
 
 
@@ -16,9 +18,6 @@ def conectar(url: str | None = None, *, autocommit: bool = False) -> psycopg.Con
 
 
 def _conectar_ao_dsql(endpoint: str, autocommit: bool) -> psycopg.Connection:
-    import boto3
-    import botocore
-
     regiao = os.environ["AWS_REGION"]
     token = boto3.client("dsql", region_name=regiao).generate_db_connect_admin_auth_token(
         endpoint, regiao

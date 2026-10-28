@@ -4,7 +4,7 @@ App financeiro do casal: API em Python (FastAPI) em `backend/`, app React + Type
 
 ## Pré-requisitos
 
-Python 3.12+ com [uv](https://docs.astral.sh/uv/), Node 22, Postgres 16 (o mesmo do CI).
+Python 3.14 (o runtime da Lambda; `backend/.python-version`) com [uv](https://docs.astral.sh/uv/), Node 22, Postgres 16 (o mesmo do CI).
 
 ## Como rodar
 

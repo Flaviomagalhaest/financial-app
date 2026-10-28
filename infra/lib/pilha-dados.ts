@@ -33,7 +33,6 @@ export class PilhaDados extends Stack {
       selfSignUpEnabled: false,
       signInAliases: { email: true },
       featurePlan: cognito.FeaturePlan.LITE,
-      accountRecovery: cognito.AccountRecovery.NONE,
       removalPolicy: remocao,
     });
     (this.usuarios.node.defaultChild as cognito.CfnUserPool).overrideLogicalId("Usuarios");
@@ -43,7 +42,6 @@ export class PilhaDados extends Stack {
       generateSecret: false,
       authFlows: { userSrp: true },
       accessTokenValidity: Duration.minutes(15),
-      idTokenValidity: Duration.minutes(15),
       refreshTokenValidity: Duration.days(3650),
       preventUserExistenceErrors: true,
     });

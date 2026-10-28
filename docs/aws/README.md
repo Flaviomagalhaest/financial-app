@@ -17,4 +17,4 @@ Feito uma vez à mão, em 2026-10-28, com credencial temporária da conta:
 
 Daí em diante, todo deploy sai pelo `.github/workflows/deploy.yml`. Refaça os dois passos só se a pilha `CDKToolkit` ou a `financial-github` sumirem.
 
-O `dev` é descartável: `cd infra && npx cdk destroy financial-dev-app financial-dev-dados` (o próximo push recria, com endereço novo). A `prod` tem proteção contra término e guarda banco, user pool e distribuição mesmo se a pilha for apagada.
+O `dev` é descartável: `cd infra && npx cdk destroy financial-dev-app financial-dev-dados` (o próximo push recria, com endereço novo). A `prod` tem proteção contra término, e as políticas das pilhas (`infra/politicas/`) recusam qualquer deploy que substitua ou remova a distribuição, o banco ou o user pool. Se mesmo assim uma pilha de `prod` for apagada, o banco, o user pool e a distribuição ficam na conta (retidos), mas a pilha recriada nasce com distribuição nova e endereço novo: os dois reinstalam o app (ADR 0010).

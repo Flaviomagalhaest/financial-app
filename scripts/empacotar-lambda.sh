@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Monta o pacote da Lambda da API (arm64, python3.14) sem Docker: dependências em wheels
 # de aarch64, o código de backend/app, as migrations e config/valores-iniciais.json.
-# Uso: scripts/empacotar-lambda.sh [destino]   (padrão: build/lambda, lido pelo CDK em infra/)
+# Uso: scripts/empacotar-lambda.sh   (grava em build/lambda, lido pelo CDK em infra/)
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-DESTINO="${1:-$RAIZ/build/lambda}"
+DESTINO="$RAIZ/build/lambda"
 
 rm -rf "$DESTINO"
 mkdir -p "$DESTINO/config"

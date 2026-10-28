@@ -4,6 +4,7 @@ name: Deploy
 # Ordem: banco e login, migrations no DSQL, Lambda e site, teste de fumaça (ADR 0010).
 on:
   push:
+    branches: ["**"]
     paths:
       - "backend/**"
       - "web/**"
