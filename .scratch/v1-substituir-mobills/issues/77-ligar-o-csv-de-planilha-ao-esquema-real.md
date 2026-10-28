@@ -2,18 +2,18 @@
 
 Type: task
 Status: ready-for-agent
-Blocked by: 32, 36, 37, 40, 41
+Blocked by: 36, 37, 40, 41
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
 Effort recomendado: medium
 Issue: #143
-Origem: [ticket 66](66-exportar-tudo-e-csv-de-planilha.md): o `POST /api/exportacoes` e o formato do CSV de planilha estão prontos, mas as tabelas de lançamentos, contas, cartões, faturas, categorias e tags ainda não existem, então `ler_lancamentos` (`backend/app/exportacao.py`) devolve nenhuma linha e a planilha sai só com o cabeçalho
+Origem: [ticket 66](66-exportar-tudo-e-csv-de-planilha.md): o `POST /api/exportacoes` e o formato do CSV de planilha estão prontos, mas só existem as tabelas `contas`, `categorias`, `lancamentos` e `lancamento_categorias` (ticket 32); cartões, faturas e tags ainda não, então `ler_lancamentos` (`backend/app/exportacao.py`) devolve nenhuma linha e a planilha sai só com o cabeçalho
 
 ## O que fazer
 
 Escrever a consulta de `ler_lancamentos` contra o esquema real, com os nomes no lugar dos ids, e trocar o `NotImplementedError` que hoje a protege. Colunas e formato já fixados em `COLUNAS_DA_PLANILHA` e `formatar_planilha`, vindos do [ticket 25](25-exportacao.md): data, descrição, valor, conta ou cartão, fatura, categorias (` | `), tags, pessoa, situação (previsto ou efetivado), quem criou e quem alterou por último. Sem filtro por período; valor em reais com ponto (o formatador troca por vírgula).
 
-**Atenção à ordem**: enquanto faltar alguma das seis tabelas, `ler_lancamentos` devolve só o cabeçalho; assim que a última existir, ela levanta `NotImplementedError` e `POST /api/exportacoes` com `planilha` responde 500. Este ticket precisa entrar antes ou junto com a última tabela (quem mesclar a última dos tickets 32, 36, 37, 40 e 41 faz este junto).
+**Atenção à ordem**: enquanto faltar alguma das tabelas de `TABELAS_DA_PLANILHA`, `ler_lancamentos` devolve só o cabeçalho; assim que a última existir, ela levanta `NotImplementedError` e `POST /api/exportacoes` com `planilha` responde 500. Este ticket precisa entrar antes ou junto com a última tabela (quem mesclar a última dos tickets 36, 37, 40 e 41 faz este junto).
 
 Decidir aqui também a grafia dos nomes das colunas (hoje sem acento: `descricao`, `situacao`) e as datas em `AAAA-MM-DD` do [ticket 25](25-exportacao.md).
 

@@ -240,7 +240,108 @@ h2 {
   }
 }
 
-h3 {
+/* Lançamento: valor em destaque, teclado próprio e fileiras de toque. */
+.lancamento {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 26rem;
+}
+
+.lancamento h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.alternancia {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.valor {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.teclado {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.tecla {
+  padding: 0.875rem 0;
+  font-size: 1.25rem;
+  background: var(--superficie);
+  color: var(--texto);
+  border-color: var(--borda);
+}
+
+.fileira {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ficha {
+  background: var(--superficie);
+  color: var(--texto);
+  border-color: var(--borda);
+}
+
+.ficha.marcada {
+  background: var(--destaque);
+  color: var(--sobre-destaque);
+  border-color: var(--destaque);
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lista li > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.lista .despesa {
+  color: var(--erro);
+}
+
+.lista .acoes {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+a.botao.secundario {
+  background: transparent;
+  color: var(--destaque);
+  border: 1px solid var(--destaque);
+}
+
+select {
+  font: inherit;
+  padding: 0.75rem;
+  margin-bottom: 0.625rem;
+  border: 1px solid var(--borda);
+  border-radius: 0.5rem;
+  background: var(--superficie);
+  color: var(--texto);
+}
+
+.configuracoes h3 {
   margin: 0.5rem 0;
   font-size: 1rem;
 }

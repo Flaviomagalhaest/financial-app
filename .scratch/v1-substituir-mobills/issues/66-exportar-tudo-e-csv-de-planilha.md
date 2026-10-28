@@ -17,7 +17,7 @@ O casal baixa os dados a qualquer momento.
 
 - [x] `POST /api/exportacoes` gera o backup ou o CSV e devolve URL assinada de 5 minutos; cada exportação a pedido fica registrada (quem e quando)
 - [x] Formato do CSV de lançamentos para planilha: separador `;`, vírgula decimal, UTF-8 com BOM, sem filtro por período
-- [x] Nomes no lugar dos ids: a consulta aos lançamentos foi movida para o [ticket 74](74-ligar-o-csv-de-planilha-ao-esquema-real.md), porque as tabelas ainda não existem (hoje a planilha sai só com o cabeçalho)
+- [x] Nomes no lugar dos ids: a consulta aos lançamentos foi movida para o [ticket 77](77-ligar-o-csv-de-planilha-ao-esquema-real.md), porque as tabelas ainda não existem (hoje a planilha sai só com o cabeçalho)
 - [x] Botão nas configurações, só com internet
 - [x] Habilita o [ticket 26](26-verificar-o-download-da-exportacao-no-iphone.md) (verificar o download no iPhone)
 - [x] Verificações do projeto rodando e PR aberto para `main`
@@ -35,4 +35,4 @@ Entregue em `ticket-66`:
 - App: tela Configurações (link no topo) com os dois botões; sem internet ficam desligados com o aviso "Exportar precisa de internet."; a URL assinada é aberta com `window.location.assign`, e o S3 responde como download.
 - O [ticket 26](26-verificar-o-download-da-exportacao-no-iphone.md) está liberado.
 
-Pendências gravadas: [ticket 74](74-ligar-o-csv-de-planilha-ao-esquema-real.md) (consulta do CSV de planilha, bloqueado pelas tabelas de lançamentos, contas, cartões, categorias e tags). O download por `window.location.assign` e o bucket novo só foram exercitados com S3 falso e URL simulada; o teste de verdade (AWS e iPhone) é o ticket 26 e a conferência do `dev` no deploy.
+Pendências gravadas: [ticket 77](77-ligar-o-csv-de-planilha-ao-esquema-real.md) (consulta do CSV de planilha, bloqueado pelas tabelas de lançamentos, contas, cartões, categorias e tags). O download por `window.location.assign` e o bucket novo só foram exercitados com S3 falso e URL simulada; o teste de verdade (AWS e iPhone) é o ticket 26 e a conferência do `dev` no deploy.

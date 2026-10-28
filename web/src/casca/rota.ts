@@ -8,15 +8,18 @@ export const ABAS = [
   { id: "futuro", nome: "Futuro" },
 ] as const;
 
-export type Rota = (typeof ABAS)[number]["id"] | "novo" | "configuracoes";
+export type Rota = (typeof ABAS)[number]["id"] | "novo" | "cadastro" | "configuracoes";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
-export function lerRota(hash: string): Rota {
-  const id = hash.replace(/^#\/?/, "");
-  return id === "novo" || id === "configuracoes" || ABAS.some((aba) => aba.id === id) ? (id as Rota) : "hoje";
+export function lerRota(hash: string): { rota: Rota; id?: string } {
+  const [tela, id] = hash.replace(/^#\/?/, "").split("/");
+  const conhecida =
+    tela === "novo" || tela === "cadastro" || tela === "configuracoes" || ABAS.some((aba) => aba.id === tela);
+  // `#/novo/<id>` edita o lançamento de identidade `<id>`.
+  return conhecida ? { rota: tela as Rota, id: tela === "novo" ? id : undefined } : { rota: "hoje" };
 }
 
-export function useRota(): Rota {
+export function useRota(): { rota: Rota; id?: string } {
   const [rota, setRota] = useState(() => lerRota(window.location.hash));
   useEffect(() => {
     const aoMudar = () => setRota(lerRota(window.location.hash));

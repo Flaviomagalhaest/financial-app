@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.banco import conectar
 from app.exportacao import Formato, exportar
+from app.lancamentos import router as lancamentos
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
 from app.migrations import total_aplicadas
 
@@ -39,6 +40,7 @@ def create_app(
     bucket_de_exportacoes: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Financial App", version="0.1.0")
+    app.state.url = url
     app.state.verificador = verificador or verificador_da_configuracao()
 
     @app.get("/api/saude", response_model=Saude, operation_id="saude")
@@ -63,4 +65,5 @@ def create_app(
         pronta = exportar(cliente_s3, bucket, usuario, pedido.formato, url)
         return ExportacaoPronta(url=pronta.url, arquivo=pronta.arquivo, expira_em=pronta.expira_em)
 
+    app.include_router(lancamentos)
     return app

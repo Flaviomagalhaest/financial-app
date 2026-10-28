@@ -53,12 +53,8 @@ def test_exportar_tudo_devolve_url_de_5_minutos_para_o_zip_do_backup(
     assert enviado["Bucket"] == "bucket-de-exportacoes"
     assert enviado["Key"].startswith("exportacoes/") and enviado["Key"].endswith(".zip")
     with zipfile.ZipFile(io.BytesIO(enviado["Body"])) as zip:
-        assert sorted(zip.namelist()) == [
-            "contas.csv",
-            "exportacoes.csv",
-            "lancamentos.csv",
-            "manifesto.json",
-        ]
+        nomes = set(zip.namelist())
+    assert {"exemplo_contas.csv", "exemplo_lancamentos.csv", "exportacoes.csv"} <= nomes
     (assinado,) = s3.assinados
     assert assinado["operacao"] == "get_object"
     assert assinado["expira_em"] == 300

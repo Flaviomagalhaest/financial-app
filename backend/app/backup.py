@@ -1,17 +1,74 @@
 """Backup: zip com um CSV por tabela, ids originais e um manifesto (ADR 0012).
 
 O gerador só lê o banco. Ele descobre as tabelas sozinho, então uma tabela nova entra no
-backup sem mudar este módulo; o controle de migrations fica de fora.
+backup sem mudar este módulo; o controle de migrations fica de fora. A restauração grava o zip
+num banco vazio com as tabelas das migrations.
 """
 
 import csv
+import graphlib
 import io
 import json
 import zipfile
+from collections.abc import Callable
+from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 1
+VERSAO_FORMATO = 3
+# O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
+# texto do CSV conta para a folga dos bytes.
+LINHAS_POR_LOTE = 1000
+BYTES_POR_LOTE = 4 * 1024 * 1024
+
+# Tabelas de um backup aberto: nome -> (colunas, linhas), cada valor no texto do Postgres.
+Tabelas = dict[str, tuple[list[str], list[list[str | None]]]]
+
+
+def _da_versao_1_para_a_2(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 2 tem as primeiras tabelas do domínio (ticket 32). O backup da 1 de `prod` é de
+    antes delas, e elas entram vazias; o do `dev` pode já trazê-las, e fica como está."""
+    novas = {
+        "contas": ["id", "nome", "tipo", "criado_por", "criado_em"],
+        "categorias": ["id", "nome", "tipo", "criado_por", "criado_em"],
+        "lancamentos": [
+            "id",
+            "tipo",
+            "situacao",
+            "valor_centavos",
+            "data",
+            "descricao",
+            "conta_id",
+            "criado_por",
+            "criado_em",
+            "alterado_por",
+            "alterado_em",
+        ],
+        "lancamento_categorias": ["lancamento_id", "categoria_id"],
+    }
+    somas = {"lancamentos": {"valor_centavos": "0"}}
+    for tabela, colunas in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas.get(tabela, {})}
+    return manifesto, tabelas
+
+
+def _da_versao_2_para_a_3(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 3 tem o registro das exportações a pedido (ticket 66): backup antigo entra sem
+    nenhum pedido registrado, e o que já trouxer a tabela fica como está."""
+    if "exportacoes" not in tabelas:
+        tabelas["exportacoes"] = (["id", "usuario", "formato", "criada_em"], [])
+        manifesto["tabelas"]["exportacoes"] = {"linhas": 0, "somas": {}}
+    return manifesto, tabelas
+
+
+# Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
+# devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
+CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
+    1: _da_versao_1_para_a_2,
+    2: _da_versao_2_para_a_3,
+}
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
 NUMERICOS = {"smallint", "integer", "bigint", "numeric"}
@@ -19,6 +76,14 @@ NUMERICOS = {"smallint", "integer", "bigint", "numeric"}
 
 class BackupDivergente(Exception):
     """O zip não bate com o banco: o backup não vale."""
+
+
+class RestauracaoRecusada(Exception):
+    """A restauração não começou: o banco e o backup continuam como estavam."""
+
+
+class RestauracaoDesfeita(Exception):
+    """A restauração falhou no meio e apagou o que tinha gravado: o banco voltou a ficar vazio."""
 
 
 def gerar_backup(conn: psycopg.Connection) -> bytes:
@@ -31,7 +96,7 @@ def gerar_backup(conn: psycopg.Connection) -> bytes:
         tipos = _colunas(conn, tabela)
         colunas = list(tipos)
         ordem = _chave_primaria(conn, tabela) or colunas
-        como_texto = ", ".join(f"{_identificador(c)}::text" for c in colunas)
+        como_texto = ", ".join(_como_texto(c, tipo) for c, tipo in tipos.items())
         linhas = conn.execute(
             f"SELECT {como_texto} FROM {_identificador(tabela)}"
             f" ORDER BY {', '.join(_identificador(c) for c in ordem)}"
@@ -79,6 +144,152 @@ def conferir_backup(conn: psycopg.Connection, backup: bytes) -> None:
                 )
 
 
+def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> dict:
+    """Grava o zip num banco vazio com as mesmas tabelas, tudo ou nada, e confere as contagens
+    e as somas do banco contra o manifesto. Um backup de versão antiga é convertido antes.
+
+    Recusa (`RestauracaoRecusada`) sem gravar nada se o banco tiver dados, o esquema não for o
+    do backup, a versão for desconhecida ou os CSVs não baterem com o manifesto. Grava em lotes,
+    um por transação, porque o DSQL limita as linhas por transação: a conexão vem em autocommit.
+    Uma falha depois do primeiro lote apaga tudo o que foi gravado (`RestauracaoDesfeita`).
+    Devolve o manifesto conferido, já na versão atual.
+    """
+    if not conn.autocommit:
+        raise ValueError("a restauração grava um lote por transação: abra a conexão em autocommit")
+    manifesto, tabelas = _abrir_backup(backup)
+    versao = manifesto.get("versao_formato")
+    if not (
+        type(versao) is int  # `true` no JSON é um `int` para o isinstance
+        and versao <= VERSAO_FORMATO
+        and all(v in CONVERSORES for v in range(versao, VERSAO_FORMATO))
+    ):
+        raise RestauracaoRecusada(
+            f"versão {versao} do formato desconhecida: esta restauração lê da"
+            f" {min(CONVERSORES, default=VERSAO_FORMATO)} à {VERSAO_FORMATO}"
+        )
+    _conferir_manifesto(manifesto, tabelas)
+    for anterior in range(versao, VERSAO_FORMATO):
+        manifesto, tabelas = CONVERSORES[anterior](manifesto, tabelas)
+        manifesto["versao_formato"] = anterior + 1
+    no_banco = {tabela: set(_colunas(conn, tabela)) for tabela in _tabelas(conn)}
+    no_backup = {tabela: set(colunas) for tabela, (colunas, _) in tabelas.items()}
+    if diferentes := sorted(
+        tabela
+        for tabela in no_banco.keys() | no_backup.keys()
+        if no_banco.get(tabela) != no_backup.get(tabela)
+    ):
+        raise RestauracaoRecusada(
+            f"o esquema do banco não é o do backup em {', '.join(diferentes)}"
+        )
+    # Sem chave, o desfazer e o esvaziar não apagam em lotes.
+    if sem_chave := [tabela for tabela in no_banco if not _chave_primaria(conn, tabela)]:
+        raise RestauracaoRecusada(
+            f"{', '.join(sem_chave)} sem chave primária: a restauração não daria para desfazer"
+        )
+    com_dados = [
+        tabela
+        for tabela in no_banco
+        if conn.execute(f"SELECT EXISTS (SELECT FROM {_identificador(tabela)})").fetchone()[0]
+    ]
+    if com_dados:
+        raise RestauracaoRecusada(f"o banco já tem dados em {', '.join(com_dados)}")
+    ordem = _ordem_de_gravacao(conn)
+    try:
+        for tabela in ordem:
+            colunas, linhas = tabelas[tabela]
+            inserir = (
+                f"INSERT INTO {_identificador(tabela)}"
+                f" ({', '.join(_identificador(c) for c in colunas)})"
+                f" VALUES ({', '.join(['%s'] * len(colunas))})"
+            )
+            for lote in _lotes(linhas):
+                # O conflito da concorrência otimista do DSQL chega no COMMIT, no fim do `with`.
+                try:
+                    with conn.transaction(), conn.cursor() as cursor:
+                        cursor.executemany(inserir, lote)
+                except psycopg.Error as erro:
+                    raise RestauracaoDesfeita(f"{tabela}: {erro}") from erro
+        _conferir_gravado(conn, manifesto)
+    except BaseException:
+        esvaziar_banco(conn)
+        raise
+    return manifesto
+
+
+def _lotes(linhas: list[list[str | None]]):
+    lote: list[list[str | None]] = []
+    tamanho = 0
+    for linha in linhas:
+        lote.append(linha)
+        tamanho += sum(len(valor) for valor in linha if valor is not None)
+        if len(lote) == LINHAS_POR_LOTE or tamanho >= BYTES_POR_LOTE:
+            yield lote
+            lote, tamanho = [], 0
+    if lote:
+        yield lote
+
+
+def _conferir_gravado(conn: psycopg.Connection, manifesto: dict) -> None:
+    """Contagens e somas do banco contra o manifesto, lidas depois de gravar."""
+    for tabela, esperado in sorted(manifesto["tabelas"].items()):
+        (contagem,) = conn.execute(f"SELECT count(*) FROM {_identificador(tabela)}").fetchone()
+        if contagem != esperado["linhas"]:
+            raise RestauracaoDesfeita(
+                f"{tabela}: {contagem} linhas no banco, {esperado['linhas']} no manifesto"
+            )
+        somas = _somas(conn, tabela, _colunas(conn, tabela))
+        # Como número: `1.50` e `1.5` são a mesma soma.
+        if {c: Decimal(v) for c, v in somas.items()} != {
+            c: Decimal(v) for c, v in esperado["somas"].items()
+        }:
+            raise RestauracaoDesfeita(
+                f"{tabela}: somas {somas} no banco, {esperado['somas']} no manifesto"
+            )
+
+
+def esvaziar_banco(conn: psycopg.Connection) -> None:
+    """Apaga as linhas de todas as tabelas do backup, em lotes pela chave primária e de trás
+    para a frente nas chaves estrangeiras. O DSQL não tem `TRUNCATE`."""
+    for tabela in reversed(_ordem_de_gravacao(conn)):
+        chave = ", ".join(_identificador(c) for c in _chave_primaria(conn, tabela))
+        if not chave:
+            raise ValueError(f"{tabela} sem chave primária: não dá para apagar em lotes")
+        apagar = (
+            f"DELETE FROM {_identificador(tabela)} WHERE ({chave}) IN"
+            f" (SELECT {chave} FROM {_identificador(tabela)} LIMIT {LINHAS_POR_LOTE})"
+        )
+        while True:
+            with conn.transaction():
+                if not conn.execute(apagar).rowcount:
+                    break
+
+
+def _conferir_manifesto(manifesto: dict, tabelas: Tabelas) -> None:
+    """O zip chegou inteiro: as mesmas tabelas e as mesmas contagens nos CSVs e no manifesto."""
+    if set(manifesto["tabelas"]) != set(tabelas):
+        raise RestauracaoRecusada(
+            f"tabelas nos CSVs {sorted(tabelas)}, no manifesto {sorted(manifesto['tabelas'])}"
+        )
+    for tabela, (_, linhas) in sorted(tabelas.items()):
+        if len(linhas) != manifesto["tabelas"][tabela]["linhas"]:
+            raise RestauracaoRecusada(
+                f"{tabela}: {len(linhas)} linhas no CSV,"
+                f" {manifesto['tabelas'][tabela]['linhas']} no manifesto"
+            )
+
+
+def _abrir_backup(backup: bytes) -> tuple[dict, Tabelas]:
+    with zipfile.ZipFile(io.BytesIO(backup)) as compactado:
+        manifesto = json.loads(compactado.read("manifesto.json"))
+        tabelas: Tabelas = {}
+        for nome in compactado.namelist():
+            if nome.endswith(".csv"):
+                texto = io.StringIO(compactado.read(nome).decode("utf-8"), newline="")
+                colunas, *linhas = csv.reader(texto, quoting=csv.QUOTE_NOTNULL)
+                tabelas[nome.removesuffix(".csv")] = (colunas, linhas)
+    return manifesto, tabelas
+
+
 def _tabelas(conn: psycopg.Connection) -> list[str]:
     nomes = conn.execute(
         "SELECT table_name FROM information_schema.tables"
@@ -123,6 +334,31 @@ def _chave_primaria(conn: psycopg.Connection, tabela: str) -> list[str]:
         (tabela,),
     ).fetchall()
     return [nome for (nome,) in nomes]
+
+
+def _como_texto(coluna: str, tipo: str) -> str:
+    """O valor no texto do Postgres. O de `timestamptz` sai em UTC: o texto padrão segue o
+    fuso da sessão, e a ida e volta entre sessões de fusos diferentes não daria o mesmo zip."""
+    if tipo == "timestamp with time zone":
+        return f"({_identificador(coluna)} AT TIME ZONE 'UTC')::text || '+00'"
+    return f"{_identificador(coluna)}::text"
+
+
+def _ordem_de_gravacao(conn: psycopg.Connection) -> list[str]:
+    """As tabelas numa ordem em que cada uma vem depois das que ela referencia."""
+    referencias = conn.execute(
+        "SELECT t.relname, r.relname FROM pg_constraint c"
+        " JOIN pg_class t ON t.oid = c.conrelid"
+        " JOIN pg_class r ON r.oid = c.confrelid"
+        " JOIN pg_namespace n ON n.oid = t.relnamespace"
+        " WHERE n.nspname = 'public' AND c.contype = 'f' AND t.oid <> r.oid"
+    ).fetchall()
+    dependencias: dict[str, set[str]] = {tabela: set() for tabela in _tabelas(conn)}
+    for tabela, referenciada in referencias:
+        if tabela in dependencias and referenciada in dependencias:
+            dependencias[tabela].add(referenciada)
+    # Um ciclo de chaves entre tabelas levanta `graphlib.CycleError` antes de gravar.
+    return list(graphlib.TopologicalSorter(dependencias).static_order())
 
 
 def _identificador(identificador: str) -> str:

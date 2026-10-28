@@ -177,7 +177,7 @@ Arquivo que o app gera a pedido de um dos dois: o backup completo ou o CSV de la
 _Avoid_: download, relatório
 
 **Restauração**:
-Carga de um backup num banco vazio, tudo ou nada, que recusa banco com dados; é também o caminho da carga do histórico do Mobills.
+Carga de um backup num banco vazio, tudo ou nada (em lotes que se desfazem se algo falhar), conferida contra o manifesto, que recusa banco com dados e versão de formato desconhecida; é também o caminho da carga do histórico do Mobills.
 _Avoid_: importação do backup, merge
 
 ### Importação do Mobills

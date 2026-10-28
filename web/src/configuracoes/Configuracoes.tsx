@@ -44,7 +44,7 @@ export function Configuracoes() {
 
   const desligado = !online || gerando !== null;
   return (
-    <section>
+    <section className="configuracoes">
       <h2>Configurações</h2>
       <h3>Exportar</h3>
       <p className="vazio">

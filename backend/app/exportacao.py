@@ -90,9 +90,8 @@ def exportar(s3, bucket: str, usuario: str, formato: Formato, url: str | None = 
 def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
     """Lançamentos com nomes no lugar dos ids, de todo o histórico (sem filtro por período).
 
-    As tabelas de lançamentos, contas, cartões e categorias ainda não existem (tickets 32, 36,
-    37 e 40): enquanto faltarem, a planilha sai só com o cabeçalho. Ligar a consulta ao esquema
-    real é o ticket 74.
+    As tabelas de cartões, faturas e tags ainda não existem (tickets 37 e 40): enquanto
+    faltarem, a planilha sai só com o cabeçalho. Ligar a consulta ao esquema real é o ticket 77.
     """
     existentes = {
         nome
@@ -102,7 +101,7 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
     }
     if not TABELAS_DA_PLANILHA <= existentes:
         return []
-    raise NotImplementedError("consulta da planilha: ticket 74")
+    raise NotImplementedError("consulta da planilha: ticket 77")
 
 
 def formatar_planilha(linhas: list[dict]) -> bytes:
