@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.banco import conectar
-from app.lancamentos import _conferir_conta, _recusar, _situacao_pela_data, _url
+from app.lancamentos import conferir_conta, recusar, situacao_pela_data, url_do_banco
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
@@ -40,24 +40,26 @@ _COLUNAS = (
     " situacao, criado_por, criado_em, alterado_por, alterado_em"
 )
 
+_NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
 
-def _ler(conn, id: UUID | None = None) -> list[Transferencia]:
+
+def _ler_transferencias(conn, id: UUID | None = None) -> list[Transferencia]:
     filtro, parametros = ("WHERE id = %s", (id,)) if id else ("", ())
     linhas = conn.execute(
         f"SELECT {_COLUNAS} FROM transferencias {filtro} ORDER BY data DESC, criado_em DESC, id",
         parametros,
     ).fetchall()
-    return [Transferencia(**dict(zip(_COLUNAS.replace(" ", "").split(","), l))) for l in linhas]
+    return [Transferencia(**dict(zip(_NOMES_DAS_COLUNAS, linha))) for linha in linhas]
 
 
-def _conferir(conn, t: NovaTransferencia, atual: tuple[UUID, UUID] | None = None) -> None:
+def _conferir_transferencia(
+    conn, t: NovaTransferencia, atual: tuple[UUID, UUID] | None = None
+) -> None:
     if t.conta_origem_id == t.conta_destino_id:
-        raise _recusar("origem e destino são a mesma conta")
+        raise recusar("origem e destino são a mesma conta")
     # Arquivada só segue com quem já estava nela (o histórico se edita).
-    _conferir_conta(
-        conn, t.conta_origem_id, ja_ligada=bool(atual) and t.conta_origem_id == atual[0]
-    )
-    _conferir_conta(
+    conferir_conta(conn, t.conta_origem_id, ja_ligada=bool(atual) and t.conta_origem_id == atual[0])
+    conferir_conta(
         conn, t.conta_destino_id, ja_ligada=bool(atual) and t.conta_destino_id == atual[1]
     )
     if t.categoria_id:
@@ -65,9 +67,9 @@ def _conferir(conn, t: NovaTransferencia, atual: tuple[UUID, UUID] | None = None
             "SELECT tipo FROM categorias WHERE id = %s", (t.categoria_id,)
         ).fetchone()
         if not tipo:
-            raise _recusar("categoria não encontrada")
+            raise recusar("categoria não encontrada")
         if tipo[0] != "transferencia":
-            raise _recusar(f"categoria de {tipo[0]} numa transferência")
+            raise recusar(f"categoria de {tipo[0]} numa transferência")
 
 
 @router.post(
@@ -80,8 +82,8 @@ def criar_transferencia(
     nova: NovaTransferencia, usuario: UsuarioLogado, request: Request, response: Response
 ) -> Transferencia:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
-    with conectar(_url(request)) as conn:
-        _conferir(conn, nova)
+    with conectar(url_do_banco(request)) as conn:
+        _conferir_transferencia(conn, nova)
         gravadas = conn.execute(
             "INSERT INTO transferencias (id, conta_origem_id, conta_destino_id, valor_centavos,"
             " data, descricao, categoria_id, situacao, criado_por, alterado_por)"
@@ -94,22 +96,22 @@ def criar_transferencia(
                 nova.data,
                 nova.descricao,
                 nova.categoria_id,
-                nova.situacao or _situacao_pela_data(nova.data),
+                nova.situacao or situacao_pela_data(nova.data),
                 usuario,
                 usuario,
             ),
         ).rowcount
         if not gravadas:
             response.status_code = 200
-        return _ler(conn, nova.id)[0]
+        return _ler_transferencias(conn, nova.id)[0]
 
 
 @router.get(
     "/transferencias", response_model=list[Transferencia], operation_id="listar_transferencias"
 )
 def listar_transferencias(usuario: UsuarioLogado, request: Request) -> list[Transferencia]:
-    with conectar(_url(request)) as conn:
-        return _ler(conn)
+    with conectar(url_do_banco(request)) as conn:
+        return _ler_transferencias(conn)
 
 
 @router.put(
@@ -119,8 +121,8 @@ def editar_transferencia(
     id: UUID, editada: NovaTransferencia, usuario: UsuarioLogado, request: Request
 ) -> Transferencia:
     if editada.id != id:
-        raise _recusar("o id do corpo difere do id da URL")
-    with conectar(_url(request)) as conn:
+        raise recusar("o id do corpo difere do id da URL")
+    with conectar(url_do_banco(request)) as conn:
         atual = conn.execute(
             "SELECT data, situacao, conta_origem_id, conta_destino_id FROM transferencias"
             " WHERE id = %s",
@@ -129,12 +131,12 @@ def editar_transferencia(
         if not atual:
             raise HTTPException(status_code=404, detail="transferência não encontrada")
         data_atual, situacao_atual, origem, destino = atual
-        _conferir(conn, editada, (origem, destino))
+        _conferir_transferencia(conn, editada, (origem, destino))
         # Como no lançamento: sem situação no pedido, só mudar a data refaz a inferência.
         if editada.situacao:
             situacao = editada.situacao
         elif editada.data != data_atual:
-            situacao = _situacao_pela_data(editada.data)
+            situacao = situacao_pela_data(editada.data)
         else:
             situacao = situacao_atual
         conn.execute(
@@ -153,12 +155,12 @@ def editar_transferencia(
                 id,
             ),
         )
-        return _ler(conn, id)[0]
+        return _ler_transferencias(conn, id)[0]
 
 
 @router.delete("/transferencias/{id}", status_code=204, operation_id="excluir_transferencia")
 def excluir_transferencia(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente: excluir o que já não existe também dá 204."""
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         conn.execute("DELETE FROM transferencias WHERE id = %s", (id,))
     return Response(status_code=204)

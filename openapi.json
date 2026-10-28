@@ -719,9 +719,15 @@
             "title": "Data Abertura"
           },
           "arquivada": {
-            "type": "boolean",
-            "title": "Arquivada",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arquivada"
           }
         },
         "type": "object",

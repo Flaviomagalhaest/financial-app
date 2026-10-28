@@ -151,6 +151,10 @@ _Avoid_: reajuste, arredondamento, diferença de fatura
 Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é calculado; só os realizados depois dessa data mexem no saldo, e o que veio antes serve às estatísticas.
 _Avoid_: saldo inicial, saldo importado
 
+**Conta arquivada**:
+Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve.
+_Avoid_: conta excluída, conta inativa
+
 **Limite**:
 Teto de compras de um cartão, informado pelo casal e editável; é opcional, e o cartão adicional divide o limite do titular.
 _Avoid_: crédito, saldo do cartão

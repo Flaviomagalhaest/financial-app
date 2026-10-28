@@ -236,11 +236,8 @@ export interface components {
             saldo_abertura_centavos?: number | null;
             /** Data Abertura */
             data_abertura?: string | null;
-            /**
-             * Arquivada
-             * @default false
-             */
-            arquivada: boolean;
+            /** Arquivada */
+            arquivada?: boolean | null;
         };
         /** Eu */
         Eu: {

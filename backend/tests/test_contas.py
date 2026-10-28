@@ -121,7 +121,7 @@ def test_conta_arquivada_nao_recebe_lancamento_novo_e_pode_voltar(casal: Casal):
     casal.pedir("flavio", "PUT", f"/api/contas/{conta}", json=corpo | {"arquivada": True})
 
     recusado = casal.pedir("flavio", "POST", "/api/lancamentos", json=lancamento(conta, [mercado]))
-    casal.pedir("flavio", "PUT", f"/api/contas/{conta}", json=corpo)
+    casal.pedir("flavio", "PUT", f"/api/contas/{conta}", json=corpo | {"arquivada": False})
     aceito = casal.pedir("flavio", "POST", "/api/lancamentos", json=lancamento(conta, [mercado]))
 
     assert recusado.status_code == 422
@@ -239,3 +239,16 @@ def test_reenviar_o_mesmo_id_nao_duplica_a_transferencia(casal: Casal):
 
     assert (primeira.status_code, segunda.status_code) == (201, 200)
     assert saldo(casal, a) == -30000
+
+
+def test_renomear_conta_arquivada_sem_informar_arquivada_nao_desarquiva(casal: Casal):
+    conta = nova_conta(casal)["id"]
+    corpo = {"nome": "Corrente", "tipo": "corrente"}
+    casal.pedir("flavio", "PUT", f"/api/contas/{conta}", json=corpo | {"arquivada": True})
+
+    renomeada = casal.pedir(
+        "flavio", "PUT", f"/api/contas/{conta}", json=corpo | {"nome": "Antiga"}
+    )
+
+    assert renomeada.json()["arquivada"] is True
+    assert casal.pedir("flavio", "GET", "/api/contas").json() == []

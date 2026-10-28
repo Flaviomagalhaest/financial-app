@@ -30,7 +30,8 @@ class NovaConta(BaseModel):
 
 
 class EdicaoDeConta(NovaConta):
-    arquivada: bool = False
+    # Sem o campo, a conta fica como está: renomear não desarquiva.
+    arquivada: bool | None = None
 
 
 class Conta(NovaConta):
@@ -81,12 +82,13 @@ _COLUNAS = (
 )
 
 
-def _url(request: Request) -> str | None:
+def url_do_banco(request: Request) -> str | None:
     return request.app.state.url
 
 
-# Saldo = abertura + realizados (lançamentos e transferências) depois da data de abertura (sem abertura, todos, a partir de zero).
-# O que veio antes (ou no dia) da abertura já está no valor informado e só serve às estatísticas.
+# Saldo = abertura + realizados (lançamentos e transferências) depois da data de abertura
+# (sem abertura, todos, a partir de zero). O que veio antes (ou no dia) da abertura já está no
+# valor informado e só serve às estatísticas.
 _SALDO = """
     SELECT c.id, c.nome, c.tipo, c.saldo_abertura_centavos, c.data_abertura,
            c.arquivada_em IS NOT NULL,
@@ -123,7 +125,7 @@ def _conta(linha) -> Conta:
 @router.post("/contas", status_code=201, response_model=Conta, operation_id="criar_conta")
 def criar_conta(nova: NovaConta, usuario: UsuarioLogado, request: Request) -> Conta:
     id = uuid4()
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         conn.execute(
             "INSERT INTO contas (id, nome, tipo, saldo_abertura_centavos, data_abertura,"
             " criado_por) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -137,12 +139,13 @@ def editar_conta(
     id: UUID, editada: EdicaoDeConta, usuario: UsuarioLogado, request: Request
 ) -> Conta:
     """Arquivar tira a conta das opções e mantém o histórico; desarquivar a devolve."""
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         atual = conn.execute("SELECT arquivada_em FROM contas WHERE id = %s", (id,)).fetchone()
         if not atual:
             raise HTTPException(status_code=404, detail="conta não encontrada")
         # Reenviar arquivada=true mantém a data em que foi arquivada.
-        arquivada_em = (atual[0] or datetime.now(UTC)) if editada.arquivada else None
+        arquivada = editada.arquivada if editada.arquivada is not None else bool(atual[0])
+        arquivada_em = (atual[0] or datetime.now(UTC)) if arquivada else None
         conn.execute(
             "UPDATE contas SET nome = %s, tipo = %s, saldo_abertura_centavos = %s,"
             " data_abertura = %s, arquivada_em = %s WHERE id = %s",
@@ -164,9 +167,9 @@ def listar_contas(
 ) -> list[Conta]:
     """As arquivadas só vêm com `arquivadas=true`."""
     filtro = "" if arquivadas else "WHERE c.arquivada_em IS NULL "
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         linhas = conn.execute(_SALDO + filtro + "ORDER BY c.nome, c.id").fetchall()
-    return [_conta(l) for l in linhas]
+    return [_conta(linha) for linha in linhas]
 
 
 @router.post(
@@ -174,7 +177,7 @@ def listar_contas(
 )
 def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Request) -> Categoria:
     id = uuid4()
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         conn.execute(
             "INSERT INTO categorias (id, nome, tipo, criado_por) VALUES (%s, %s, %s, %s)",
             (id, nova.nome, nova.tipo, usuario),
@@ -184,30 +187,30 @@ def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Reques
 
 @router.get("/categorias", response_model=list[Categoria], operation_id="listar_categorias")
 def listar_categorias(usuario: UsuarioLogado, request: Request) -> list[Categoria]:
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         linhas = conn.execute("SELECT id, nome, tipo FROM categorias ORDER BY nome, id").fetchall()
     return [Categoria(id=i, nome=n, tipo=t) for i, n, t in linhas]
 
 
-def _situacao_pela_data(dia: date) -> str:
+def situacao_pela_data(dia: date) -> str:
     return "previsto" if dia > datetime.now(ZoneInfo("America/Sao_Paulo")).date() else "realizado"
 
 
-def _recusar(detalhe: str) -> HTTPException:
+def recusar(detalhe: str) -> HTTPException:
     return HTTPException(status_code=422, detail=detalhe)
 
 
-def _conferir_conta(conn, id: UUID, ja_ligada: bool = False) -> None:
+def conferir_conta(conn, id: UUID, ja_ligada: bool = False) -> None:
     """A conta existe e, arquivada, só segue com quem já estava nela (o histórico se edita)."""
     conta = conn.execute("SELECT arquivada_em FROM contas WHERE id = %s", (id,)).fetchone()
     if not conta:
-        raise _recusar("conta não encontrada")
+        raise recusar("conta não encontrada")
     if conta[0] and not ja_ligada:
-        raise _recusar("conta arquivada")
+        raise recusar("conta arquivada")
 
 
 def _conferir_ligacoes(conn, lancamento: NovoLancamento, conta_atual: UUID | None = None) -> None:
-    _conferir_conta(conn, lancamento.conta_id, ja_ligada=lancamento.conta_id == conta_atual)
+    conferir_conta(conn, lancamento.conta_id, ja_ligada=lancamento.conta_id == conta_atual)
     tipos = {
         id: tipo
         for id, tipo in conn.execute(
@@ -216,9 +219,9 @@ def _conferir_ligacoes(conn, lancamento: NovoLancamento, conta_atual: UUID | Non
     }
     for categoria in lancamento.categoria_ids:
         if categoria not in tipos:
-            raise _recusar("categoria não encontrada")
+            raise recusar("categoria não encontrada")
         if tipos[categoria] != lancamento.tipo:
-            raise _recusar(f"categoria de {tipos[categoria]} num lançamento de {lancamento.tipo}")
+            raise recusar(f"categoria de {tipos[categoria]} num lançamento de {lancamento.tipo}")
 
 
 def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
@@ -237,7 +240,7 @@ def criar_lancamento(
     novo: NovoLancamento, usuario: UsuarioLogado, request: Request, response: Response
 ) -> Lancamento:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         _conferir_ligacoes(conn, novo)
         gravados = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
@@ -246,7 +249,7 @@ def criar_lancamento(
             (
                 novo.id,
                 novo.tipo,
-                novo.situacao or _situacao_pela_data(novo.data),
+                novo.situacao or situacao_pela_data(novo.data),
                 novo.valor_centavos,
                 novo.data,
                 novo.descricao,
@@ -296,7 +299,7 @@ def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
 
 @router.get("/lancamentos", response_model=list[Lancamento], operation_id="listar_lancamentos")
 def listar_lancamentos(usuario: UsuarioLogado, request: Request) -> list[Lancamento]:
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         return _todos(conn)
 
 
@@ -305,8 +308,8 @@ def editar_lancamento(
     id: UUID, editado: NovoLancamento, usuario: UsuarioLogado, request: Request
 ) -> Lancamento:
     if editado.id != id:
-        raise _recusar("o id do corpo difere do id da URL")
-    with conectar(_url(request)) as conn:
+        raise recusar("o id do corpo difere do id da URL")
+    with conectar(url_do_banco(request)) as conn:
         atual = conn.execute(
             "SELECT data, situacao, conta_id FROM lancamentos WHERE id = %s", (id,)
         ).fetchone()
@@ -318,7 +321,7 @@ def editar_lancamento(
         if editado.situacao:
             situacao = editado.situacao
         elif editado.data != data_atual:
-            situacao = _situacao_pela_data(editado.data)
+            situacao = situacao_pela_data(editado.data)
         else:
             situacao = situacao_atual
         conn.execute(
@@ -343,7 +346,7 @@ def editar_lancamento(
 @router.delete("/lancamentos/{id}", status_code=204, operation_id="excluir_lancamento")
 def excluir_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente: excluir o que já não existe também dá 204."""
-    with conectar(_url(request)) as conn:
+    with conectar(url_do_banco(request)) as conn:
         conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
         conn.execute("DELETE FROM lancamentos WHERE id = %s", (id,))
     return Response(status_code=204)
