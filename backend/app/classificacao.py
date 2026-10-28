@@ -1,0 +1,187 @@
+"""Manutenção das categorias e das tags (ADR 0006): renomear, arquivar, juntar e excluir."""
+
+from uuid import UUID, uuid4
+
+from fastapi import APIRouter, HTTPException, Request, Response
+from pydantic import BaseModel, Field
+
+from app.banco import conectar
+from app.lancamentos import Categoria, categoria
+from app.login import UsuarioLogado
+
+router = APIRouter(prefix="/api")
+
+
+class MudancaDeCategoria(BaseModel):
+    nome: str | None = Field(default=None, min_length=1)
+    arquivada: bool | None = None
+
+
+@router.patch("/categorias/{id}", response_model=Categoria, operation_id="mudar_categoria")
+def mudar_categoria(
+    id: UUID, mudanca: MudancaDeCategoria, usuario: UsuarioLogado, request: Request
+) -> Categoria:
+    with conectar(request.app.state.url) as conn:
+        if not categoria(conn, id):
+            raise HTTPException(status_code=404, detail="categoria não encontrada")
+        if mudanca.nome is not None:
+            conn.execute("UPDATE categorias SET nome = %s WHERE id = %s", (mudanca.nome, id))
+        if mudanca.arquivada is not None:
+            conn.execute(
+                "UPDATE categorias SET arquivada_em = "
+                + ("now()" if mudanca.arquivada else "NULL")
+                + " WHERE id = %s",
+                (id,),
+            )
+        return categoria(conn, id)
+
+
+class Juncao(BaseModel):
+    destino_id: UUID
+
+
+@router.post("/categorias/{id}/juntar", response_model=Categoria, operation_id="juntar_categoria")
+def juntar_categoria(
+    id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Request
+) -> Categoria:
+    """Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem."""
+    with conectar(request.app.state.url) as conn:
+        origem, destino = categoria(conn, id), categoria(conn, juncao.destino_id)
+        if not origem or not destino:
+            raise HTTPException(status_code=404, detail="categoria não encontrada")
+        if origem.id == destino.id:
+            raise HTTPException(status_code=422, detail="origem e destino são a mesma categoria")
+        if origem.tipo != destino.tipo:
+            raise HTTPException(status_code=422, detail="categorias de tipos diferentes")
+        if destino.arquivada:
+            raise HTTPException(status_code=422, detail="categoria de destino arquivada")
+        conn.execute(
+            "INSERT INTO lancamento_categorias (lancamento_id, categoria_id)"
+            " SELECT lancamento_id, %s FROM lancamento_categorias WHERE categoria_id = %s"
+            " ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM lancamento_categorias WHERE categoria_id = %s", (origem.id,))
+        conn.execute("DELETE FROM categorias WHERE id = %s", (origem.id,))
+        return destino
+
+
+@router.delete("/categorias/{id}", status_code=204, operation_id="excluir_categoria")
+def excluir_categoria(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
+    """Idempotente. Com lançamentos, recusa: arquive ou junte em outra."""
+    with conectar(request.app.state.url) as conn:
+        if conn.execute(
+            "SELECT 1 FROM lancamento_categorias WHERE categoria_id = %s LIMIT 1", (id,)
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="categoria com lançamentos")
+        conn.execute("DELETE FROM categorias WHERE id = %s", (id,))
+    return Response(status_code=204)
+
+
+class Tag(BaseModel):
+    id: UUID
+    nome: str
+    arquivada: bool = False
+
+
+def _tag(conn, id: UUID) -> Tag | None:
+    linha = conn.execute(
+        "SELECT id, nome, arquivada_em IS NOT NULL FROM tags WHERE id = %s", (id,)
+    ).fetchone()
+    return Tag(id=linha[0], nome=linha[1], arquivada=linha[2]) if linha else None
+
+
+@router.get("/tags", response_model=list[Tag], operation_id="listar_tags")
+def listar_tags(usuario: UsuarioLogado, request: Request) -> list[Tag]:
+    with conectar(request.app.state.url) as conn:
+        linhas = conn.execute(
+            "SELECT id, nome, arquivada_em IS NOT NULL FROM tags ORDER BY nome, id"
+        ).fetchall()
+    return [Tag(id=i, nome=n, arquivada=a) for i, n, a in linhas]
+
+
+class NovaTag(BaseModel):
+    nome: str = Field(min_length=1)
+
+
+class MudancaDeTag(BaseModel):
+    nome: str | None = Field(default=None, min_length=1)
+    arquivada: bool | None = None
+
+
+def _nome_em_uso(conn, nome: str, exceto: UUID | None = None) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM tags WHERE lower(nome) = lower(%s) AND id IS DISTINCT FROM %s",
+            (nome.strip(), exceto),
+        ).fetchone()
+        is not None
+    )
+
+
+@router.post("/tags", status_code=201, response_model=Tag, operation_id="criar_tag")
+def criar_tag(nova: NovaTag, usuario: UsuarioLogado, request: Request) -> Tag:
+    nome, id = nova.nome.strip(), uuid4()
+    with conectar(request.app.state.url) as conn:
+        if not nome or _nome_em_uso(conn, nome):
+            raise HTTPException(status_code=409, detail="já existe uma tag com esse nome")
+        conn.execute(
+            "INSERT INTO tags (id, nome, criado_por) VALUES (%s, %s, %s)", (id, nome, usuario)
+        )
+    return Tag(id=id, nome=nome)
+
+
+@router.patch("/tags/{id}", response_model=Tag, operation_id="mudar_tag")
+def mudar_tag(id: UUID, mudanca: MudancaDeTag, usuario: UsuarioLogado, request: Request) -> Tag:
+    with conectar(request.app.state.url) as conn:
+        if not _tag(conn, id):
+            raise HTTPException(status_code=404, detail="tag não encontrada")
+        if mudanca.nome is not None:
+            nome = mudanca.nome.strip()
+            if not nome:
+                raise HTTPException(status_code=422, detail="tag sem nome")
+            if _nome_em_uso(conn, nome, id):
+                raise HTTPException(status_code=409, detail="já existe uma tag com esse nome")
+            conn.execute("UPDATE tags SET nome = %s WHERE id = %s", (nome, id))
+        if mudanca.arquivada is not None:
+            conn.execute(
+                "UPDATE tags SET arquivada_em = "
+                + ("now()" if mudanca.arquivada else "NULL")
+                + " WHERE id = %s",
+                (id,),
+            )
+        return _tag(conn, id)
+
+
+@router.post("/tags/{id}/juntar", response_model=Tag, operation_id="juntar_tag")
+def juntar_tag(id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Request) -> Tag:
+    """Move os lançamentos da tag para o destino e exclui a origem."""
+    with conectar(request.app.state.url) as conn:
+        origem, destino = _tag(conn, id), _tag(conn, juncao.destino_id)
+        if not origem or not destino:
+            raise HTTPException(status_code=404, detail="tag não encontrada")
+        if origem.id == destino.id:
+            raise HTTPException(status_code=422, detail="origem e destino são a mesma tag")
+        if destino.arquivada:
+            raise HTTPException(status_code=422, detail="tag de destino arquivada")
+        conn.execute(
+            "INSERT INTO lancamento_tags (lancamento_id, tag_id)"
+            " SELECT lancamento_id, %s FROM lancamento_tags WHERE tag_id = %s"
+            " ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM lancamento_tags WHERE tag_id = %s", (origem.id,))
+        conn.execute("DELETE FROM tags WHERE id = %s", (origem.id,))
+        return destino
+
+
+@router.delete("/tags/{id}", status_code=204, operation_id="excluir_tag")
+def excluir_tag(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
+    """Idempotente. Com lançamentos, recusa: arquive ou junte em outra."""
+    with conectar(request.app.state.url) as conn:
+        if conn.execute(
+            "SELECT 1 FROM lancamento_tags WHERE tag_id = %s LIMIT 1", (id,)
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="tag com lançamentos")
+        conn.execute("DELETE FROM tags WHERE id = %s", (id,))
+    return Response(status_code=204)

@@ -72,6 +72,8 @@ export function TelaDeLancamento({ id }: { id?: string }) {
       descricao,
       conta_id: conta,
       categoria_ids: categoriaIds,
+      // A tela ainda não edita tags (ticket 40 é só a API): devolve as que o lançamento já tem.
+      tags: existente?.tags ?? [],
     };
     try {
       const resposta = existente

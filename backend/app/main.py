@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.banco import conectar
+from app.classificacao import router as classificacao
 from app.lancamentos import router as lancamentos
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
 from app.migrations import total_aplicadas
@@ -35,4 +36,5 @@ def create_app(url: str | None = None, verificador: VerificadorDeJwt | None = No
         return Eu(usuario=usuario)
 
     app.include_router(lancamentos)
+    app.include_router(classificacao)
     return app

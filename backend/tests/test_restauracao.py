@@ -189,4 +189,47 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "contas": 0,
             "lancamento_categorias": 0,
             "lancamentos": 0,
+            "lancamento_tags": 0,
+            "tags": 0,
         }
+
+
+def test_backup_da_versao_2_sem_arquivamento_nem_tags_restaura_convertido(database_url):
+    # O que o `dev` gravava depois do ticket 32 e antes do 40: categorias sem `arquivada_em`.
+    categoria = "11111111-1111-1111-1111-111111111111"
+    vazias = {
+        "contas": "id,nome,tipo,criado_por,criado_em",
+        "lancamentos": "id,tipo,situacao,valor_centavos,data,descricao,conta_id,criado_por,"
+        "criado_em,alterado_por,alterado_em",
+        "lancamento_categorias": "lancamento_id,categoria_id",
+    }
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w") as zip:
+        zip.writestr(
+            "manifesto.json",
+            json.dumps(
+                {
+                    "versao_formato": 2,
+                    "tabelas": {"categorias": {"linhas": 1, "somas": {}}}
+                    | {nome: {"linhas": 0, "somas": {}} for nome in vazias}
+                    | {"lancamentos": {"linhas": 0, "somas": {"valor_centavos": "0"}}},
+                }
+            ),
+        )
+        zip.writestr(
+            "categorias.csv",
+            "id,nome,tipo,criado_por,criado_em\n"
+            f"{categoria},Mercado,despesa,flavio,2026-10-01 10:00:00+00\n",
+        )
+        for nome, cabecalho in vazias.items():
+            zip.writestr(f"{nome}.csv", cabecalho + "\n")
+    aplicar_migrations(database_url)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, saida.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT nome, arquivada_em FROM categorias").fetchall() == [
+            ("Mercado", None)
+        ]
+        assert manifesto["tabelas"]["tags"]["linhas"] == 0
