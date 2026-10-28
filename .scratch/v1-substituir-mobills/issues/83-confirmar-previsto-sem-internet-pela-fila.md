@@ -15,7 +15,7 @@ Confirmar um previsto (com ou sem ajuste de valor, data e conta) entra na fila d
 
 ## Checklist
 
-- [ ] Ação `confirmar` em `POST /api/lancamentos/lote`, com as regras da rota de confirmar do ticket 43 (ajuste opcional; reenvio igual devolve o gravado; ajuste diferente sobre um já confirmado vira o resultado que o ticket 34 definir para conflito)
+- [ ] Ação `confirmar` em `POST /api/lancamentos/lote`, com as regras da rota de confirmar do ticket 43 (ajuste opcional; reenvio igual devolve o gravado; ajuste diferente sobre um já confirmado vira o resultado `conflito` do lote, como a edição do ticket 34). A ação leva a `versao` que o aparelho tinha e só os ajustes que a pessoa fez, como o `ContasDaSemana` já manda para `/confirmar`; o conflito usa a mesma tela de decisão (hoje a confirmação em conflito entra na fila por `guardarConflito`)
 - [ ] Na fila (no máximo uma mudança por lançamento): confirmar o que ainda não subiu muda o pedido que já está lá; o aparelho mostra o lançamento como realizado ⏳
 - [ ] `ContasDaSemana` lê e escreve pela camada de dados, com "atualizado às" sem internet
 - [ ] Teste de navegador: confirmar sem internet, ⏳, envio sem duplicar

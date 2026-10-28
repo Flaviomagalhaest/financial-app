@@ -20,12 +20,12 @@ export function AvisoDaFila() {
   const [enviando, setEnviando] = useState(false);
   const [semInternet, setSemInternet] = useState(false);
   if (fila.length === 0) return null;
+  const conflitos = fila.filter((item) => item.conflito).length;
 
   const atrasado = agora - fila[0].desde > AVISO_DE_NAO_ENVIADO_MS;
   const contar = (n: number, um: string, varios: string) => (n === 0 ? null : `${n} ${n === 1 ? um : varios}`);
   const esperando = [
     contar(fila.filter((item) => item.recusa).length, "recusado", "recusados"),
-    contar(fila.filter((item) => item.conflito).length, "com conflito", "com conflito"),
     contar(fila.filter((item) => item.exclusao).length, "excluído pela outra pessoa", "excluídos pela outra pessoa"),
   ].filter(Boolean);
 
@@ -41,6 +41,11 @@ export function AvisoDaFila() {
         {fila.length === 1 ? "1 lançamento não enviado" : `${fila.length} lançamentos não enviados`}
         {esperando.length > 0 && ` (${esperando.join(", ")}: veja no Histórico)`}
       </p>
+      {conflitos > 0 && (
+        <p className="erro">
+          {conflitos === 1 ? "1 lançamento com conflito" : `${conflitos} lançamentos com conflito`}: decida no Histórico.
+        </p>
+      )}
       {atrasado && <p>Há mais de {config.avisoDeNaoEnviadoHoras} h sem enviar: abra com internet para enviar.</p>}
       {semInternet && <p className="vazio">Sem internet: os não enviados sobem quando a conexão voltar.</p>}
       <button type="button" className="secundario" disabled={enviando} onClick={() => void enviar()}>

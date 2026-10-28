@@ -4,7 +4,7 @@ import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresent
 import { dataPorExtenso } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
-import { comoNovo, levarConfirmacaoAoConflito, useCadastro, type Lancamento } from "../dados";
+import { comoNovo, guardarConflito, useCadastro, type Lancamento } from "../dados";
 
 type Ajuste = { centavos: number; data: string; contaId: string };
 
@@ -33,13 +33,19 @@ export function ContasDaSemana() {
   async function confirmar(l: Lancamento, ajuste?: Ajuste) {
     setErro("");
     setEnviando(true);
-    const corpo = ajuste && { valor_centavos: ajuste.centavos, data: ajuste.data, conta_id: ajuste.contaId };
+    // Só o que a pessoa ajustou, sobre a versão que a tela mostrava: o resto fica como o servidor tem.
+    const corpo = ajuste && {
+      versao: l.versao,
+      ...(ajuste.centavos !== l.valor_centavos && { valor_centavos: ajuste.centavos }),
+      ...(ajuste.data !== l.data && { data: ajuste.data }),
+      ...(ajuste.contaId !== l.conta_id && { conta_id: ajuste.contaId }),
+    };
     try {
       const { error, response } = await api.POST("/api/lancamentos/{id}/confirmar", { params: { path: { id: l.id } }, body: corpo ?? {} });
       if (response.status === 409 && error && "campos" in error && ajuste) {
         // Já confirmado com outros valores: a decisão é campo a campo, na tela de conflito.
         const meu = { ...comoNovo(l), situacao: "realizado" as const, valor_centavos: ajuste.centavos, data: ajuste.data, conta_id: ajuste.contaId };
-        await levarConfirmacaoAoConflito(meu, l, error);
+        await guardarConflito(meu, l, error);
         window.location.hash = `#/conflito/${l.id}`;
         return;
       }

@@ -2,7 +2,7 @@
 DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no aparelho."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal, get_args
 from uuid import UUID, uuid4
@@ -182,9 +182,11 @@ class ConflitoDeCampos(Exception):
         self.conflito = conflito
 
 
+# Lançamento de antes do ticket 34 não tem versão: está como nasceu, na 1.
+_VERSAO = "COALESCE(versao, 1)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
-    " criado_por, criado_em, alterado_por, alterado_em, COALESCE(versao, 1)"
+    f" criado_por, criado_em, alterado_por, alterado_em, {_VERSAO}"
 )
 
 
@@ -420,7 +422,7 @@ def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
 
 
 def _registrar_mudancas(
-    conn, id: UUID, campos, versao: int, usuario: str, origem: str | None = None
+    conn, id: UUID, campos: Iterable[str], versao: int, usuario: str, origem: str | None = None
 ) -> None:
     """Guarda, por campo, a versão em que ele mudou por último e quem o mudou (ADR 0011)."""
     for campo in campos:
@@ -438,8 +440,7 @@ def _subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) 
     """Grava a mudança só se ninguém mudou o lançamento desde a leitura; senão a transação
     recomeça (`em_transacao`) e a nova leitura vê a outra mudança."""
     gravadas = conn.execute(
-        f"UPDATE lancamentos SET {atribuicoes}, versao = %s"
-        " WHERE id = %s AND COALESCE(versao, 1) = %s",
+        f"UPDATE lancamentos SET {atribuicoes}, versao = %s WHERE id = %s AND {_VERSAO} = %s",
         (*parametros, de + 1, id, de),
     ).rowcount
     if not gravadas:
@@ -473,24 +474,36 @@ def _versoes(conn, lancamento: Lancamento) -> dict[str, _VersaoDoCampo]:
     return {campo: lidas.get(campo, nascido) for campo in CAMPOS}
 
 
-def _em_conflito(campo: Campo, versao: _VersaoDoCampo, usuario: str) -> CampoEmConflito:
-    return CampoEmConflito(
-        campo=campo,
-        alterado_por=versao.alterado_por,
-        alterado_em=versao.alterado_em,
-        por_voce=versao.alterado_por == usuario,
-        origem=versao.origem,
+def _conflito(
+    motivo: str, atual: Lancamento, campos: dict[Campo, _VersaoDoCampo], usuario: str
+) -> ConflitoDeCampos:
+    """O conflito com o lançamento do servidor e quem mudou por último cada campo."""
+    return ConflitoDeCampos(
+        Conflito(
+            motivo=motivo,
+            lancamento=atual,
+            campos=[
+                CampoEmConflito(
+                    campo=campo,
+                    alterado_por=versao.alterado_por,
+                    alterado_em=versao.alterado_em,
+                    por_voce=versao.alterado_por == usuario,
+                    origem=versao.origem,
+                )
+                for campo, versao in campos.items()
+            ],
+        )
     )
 
 
 def _atual(conn, id: UUID, usuario: str) -> Lancamento:
     """O lançamento como está; o excluído responde com quem o excluiu."""
-    excluido = conn.execute(
+    linha = conn.execute(
         "SELECT excluido_por, excluido_em FROM lancamentos WHERE id = %s", (id,)
     ).fetchone()
-    if not excluido:
+    if not linha:
         raise LancamentoNaoEncontrado()
-    por, em = excluido
+    por, em = linha
     if em:
         raise LancamentoExcluido(
             Exclusao(excluido_por=por, excluido_em=em, por_voce=por == usuario)
@@ -556,12 +569,11 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
         else:
             mudancas[campo] = valor
     if conflitos:
-        raise ConflitoDeCampos(
-            Conflito(
-                motivo="o outro lado mudou os mesmos campos depois",
-                lancamento=atual,
-                campos=[_em_conflito(c, versoes[c], usuario) for c in conflitos],
-            )
+        raise _conflito(
+            "o outro lado mudou os mesmos campos depois",
+            atual,
+            {c: versoes[c] for c in conflitos},
+            usuario,
         )
     # Só mudar a data refaz a situação pela data, se ninguém mudou a situação depois.
     if (
@@ -605,24 +617,14 @@ def _excluir(conn, id: UUID, versao: int | None, usuario: str) -> None:
     """Marca a exclusão: sem a marca, a edição que chega depois não saberia que perdeu para
     ela. Com `versao`, excluir o que o outro lado mudou depois é conflito."""
     linha = conn.execute(
-        "SELECT COALESCE(versao, 1), excluido_em FROM lancamentos WHERE id = %s", (id,)
+        f"SELECT {_VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
     ).fetchone()
     if not linha or linha[1]:
         return
     if versao is not None and linha[0] > versao:
         atual = _um(conn, id)
-        versoes = _versoes(conn, atual)
-        raise ConflitoDeCampos(
-            Conflito(
-                motivo="alterado depois da sua versão",
-                lancamento=atual,
-                campos=[
-                    _em_conflito(c, versoes[c], usuario)
-                    for c in CAMPOS
-                    if versoes[c].versao > versao
-                ],
-            )
-        )
+        depois = {c: v for c, v in _versoes(conn, atual).items() if v.versao > versao}
+        raise _conflito("alterado depois da sua versão", atual, depois, usuario)
     _subir_versao(conn, id, linha[0], "excluido_em = now(), excluido_por = %s", (usuario,))
     # Sem lixeira: "Lançar de novo" cria outro lançamento. As ligações saem para a categoria e a
     # tag não contarem como usadas por ele.
@@ -655,7 +657,7 @@ _CONFLITO = {409: {"model": Conflito, "description": "O outro lado mudou depois"
 )
 def criar_lancamento(
     novo: NovoLancamento, usuario: UsuarioLogado, request: Request, response: Response
-):
+) -> Lancamento | JSONResponse:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
 
     def gravar(conn) -> Lancamento:
@@ -732,7 +734,7 @@ def listar_lancamentos(usuario: UsuarioLogado, request: Request) -> list[Lancame
 )
 def editar_lancamento(
     id: UUID, alteracao: AlteracaoDeLancamento, usuario: UsuarioLogado, request: Request
-):
+) -> Lancamento | JSONResponse:
     """Só os campos mudados, sobre uma versão: campos diferentes se mesclam, o mesmo campo
     mudado depois pelo outro lado é 409, e o excluído é 410 (ADR 0011)."""
     return _na_rota(request, lambda conn: _editar(conn, id, alteracao, usuario))
@@ -758,8 +760,10 @@ def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana
 
 
 class Confirmacao(BaseModel):
-    """O que de fato aconteceu; campo ausente fica como estava no previsto."""
+    """O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o
+    ajuste num campo que o outro lado mudou depois dela é conflito, como na edição."""
 
+    versao: int | None = Field(default=None, ge=0)
     valor_centavos: int | None = Field(default=None, gt=0)
     data: date | None = None
     conta_id: UUID | None = None
@@ -767,23 +771,22 @@ class Confirmacao(BaseModel):
 
 def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancamento:
     atual = _atual(conn, id, usuario)
+    versoes = _versoes(conn, atual)
     ajustes = {
         campo: pedido
-        for campo, pedido in confirmacao.model_dump(exclude_none=True).items()
+        for campo, pedido in confirmacao.model_dump(exclude={"versao"}, exclude_none=True).items()
         if pedido != getattr(atual, campo)
     }
     if atual.situacao == "realizado":
         if not ajustes:
             return atual
-        # Quem confirmou antes é o outro lado de todos os campos divergentes.
-        quem_confirmou = _versoes(conn, atual)["situacao"]
-        raise ConflitoDeCampos(
-            Conflito(
-                motivo="já confirmado com outros valores",
-                lancamento=atual,
-                campos=[_em_conflito(campo, quem_confirmou, usuario) for campo in ajustes],
-            )
-        )
+        # Quem confirmou antes é o outro lado de todos os campos em conflito.
+        quem_confirmou = dict.fromkeys(ajustes, versoes["situacao"])
+        raise _conflito("já confirmado com outros valores", atual, quem_confirmou, usuario)
+    if confirmacao.versao is not None:
+        depois = {c: versoes[c] for c in ajustes if versoes[c].versao > confirmacao.versao}
+        if depois:
+            raise _conflito("o outro lado mudou os mesmos campos depois", atual, depois, usuario)
     if confirmacao.conta_id:
         conferir_conta(conn, confirmacao.conta_id, ja_ligada=confirmacao.conta_id == atual.conta_id)
     versao = _subir_versao(
@@ -807,9 +810,9 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
 )
 def confirmar_lancamento(
     id: UUID, confirmacao: Confirmacao, usuario: UsuarioLogado, request: Request
-):
+) -> Lancamento | JSONResponse:
     """Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
-    toque) devolve o gravado; com ajuste diferente é 409 com os campos divergentes e quem
+    toque) devolve o gravado; com ajuste diferente é 409 com os campos em conflito e quem
     confirmou, para nada se perder em silêncio."""
     return _na_rota(request, lambda conn: _confirmar(conn, id, confirmacao, usuario))
 

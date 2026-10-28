@@ -41,7 +41,8 @@ async function mudar(id: string, proximo: (atual: ItemDaFila | undefined) => Pro
   });
 }
 
-/** Como o servidor compara: categorias e tags sem ordem, tags sem distinguir maiúsculas. */
+/** Como o servidor compara (`_iguais`): categorias e tags sem ordem, tags sem distinguir
+ * maiúsculas (o `toLowerCase` faz aqui o papel do `casefold`). */
 function comparavel(campo: Campo, valor: unknown): unknown {
   if (campo === "categoria_ids") return [...((valor as string[]) ?? [])].sort().join();
   if (campo === "tags") return ((valor as string[]) ?? []).map((t) => t.toLowerCase()).sort().join("\u0000");

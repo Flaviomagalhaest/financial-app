@@ -641,7 +641,7 @@
     "/api/lancamentos/{id}/confirmar": {
       "post": {
         "summary": "Confirmar Lancamento",
-        "description": "Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um\ntoque) devolve o gravado; com ajuste diferente é 409 com os campos divergentes e quem\nconfirmou, para nada se perder em silêncio.",
+        "description": "Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um\ntoque) devolve o gravado; com ajuste diferente é 409 com os campos em conflito e quem\nconfirmou, para nada se perder em silêncio.",
         "operationId": "confirmar_lancamento",
         "security": [
           {
@@ -1508,6 +1508,18 @@
       },
       "Confirmacao": {
         "properties": {
+          "versao": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versao"
+          },
           "valor_centavos": {
             "anyOf": [
               {
@@ -1547,7 +1559,7 @@
         },
         "type": "object",
         "title": "Confirmacao",
-        "description": "O que de fato aconteceu; campo ausente fica como estava no previsto."
+        "description": "O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o\najuste num campo que o outro lado mudou depois dela é conflito, como na edição."
       },
       "Conflito": {
         "properties": {

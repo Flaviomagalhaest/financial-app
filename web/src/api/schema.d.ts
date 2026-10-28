@@ -214,7 +214,7 @@ export interface paths {
         /**
          * Confirmar Lancamento
          * @description Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
-         *     toque) devolve o gravado; com ajuste diferente é 409 com os campos divergentes e quem
+         *     toque) devolve o gravado; com ajuste diferente é 409 com os campos em conflito e quem
          *     confirmou, para nada se perder em silêncio.
          */
         post: operations["confirmar_lancamento"];
@@ -487,9 +487,12 @@ export interface components {
         };
         /**
          * Confirmacao
-         * @description O que de fato aconteceu; campo ausente fica como estava no previsto.
+         * @description O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o
+         *     ajuste num campo que o outro lado mudou depois dela é conflito, como na edição.
          */
         Confirmacao: {
+            /** Versao */
+            versao?: number | null;
             /** Valor Centavos */
             valor_centavos?: number | null;
             /** Data */

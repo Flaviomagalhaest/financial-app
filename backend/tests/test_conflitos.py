@@ -237,3 +237,37 @@ def test_no_lote_cada_regra_vira_o_seu_resultado(casal: Casal):
     assert descartada["resultado"] == "descartada"
     assert descartada["exclusao"]["excluido_por"] == "esposa"
     assert exclusao["resultado"] == "conflito"
+
+
+def test_confirmar_ajustando_so_a_data_nao_desfaz_o_valor_que_o_outro_lado_mudou(casal: Casal):
+    criado = criar(casal, data="2099-01-10", valor_centavos=10000)
+    editar(casal, "esposa", criado["id"], 1, valor_centavos=12000)
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/lancamentos/{criado['id']}/confirmar",
+        json={"versao": 1, "data": "2099-01-11"},
+    )
+
+    assert resposta.status_code == 200
+    confirmado = resposta.json()
+    assert (confirmado["situacao"], confirmado["data"]) == ("realizado", "2099-01-11")
+    assert confirmado["valor_centavos"] == 12000
+
+
+def test_confirmar_ajustando_o_valor_que_o_outro_lado_mudou_depois_e_conflito(casal: Casal):
+    criado = criar(casal, data="2099-01-10", valor_centavos=10000)
+    editar(casal, "esposa", criado["id"], 1, valor_centavos=12000)
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/lancamentos/{criado['id']}/confirmar",
+        json={"versao": 1, "valor_centavos": 9000},
+    )
+
+    assert resposta.status_code == 409
+    assert [c["campo"] for c in resposta.json()["campos"]] == ["valor_centavos"]
+    [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
+    assert (visto["situacao"], visto["valor_centavos"]) == ("previsto", 12000)

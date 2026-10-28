@@ -74,7 +74,7 @@ test("mudança no mesmo campo vira conflito: o aparelho mostra a versão do serv
   // Enquanto espera, os dois celulares mostram o mesmo número.
   await expect(minha).toContainText("− R$ 10,05");
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento não enviado (1 com conflito: veja no Histórico)");
+  await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento com conflito: decida no Histórico.");
 
   await aba(page, "Histórico");
   await minha.getByRole("link", { name: `Decidir ${descricao}` }).click();

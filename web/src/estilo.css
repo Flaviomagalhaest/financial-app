@@ -403,7 +403,7 @@ fieldset.sem-moldura {
   margin-top: 0.75rem;
 }
 
-/* Conflito: cada campo divergente com as duas versões lado a lado, uma para escolher. */
+/* Conflito: cada campo em conflito com as duas versões, uma para escolher. */
 .conflito {
   display: flex;
   flex-direction: column;

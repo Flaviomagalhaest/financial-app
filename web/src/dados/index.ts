@@ -30,13 +30,13 @@ import {
   guardarConflito,
   lancarDeNovo,
   LISTA,
-  type Campo,
   type Remessa,
 } from "./fila";
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
-export type { Campo, Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
+export type { Campo } from "./fila";
+export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { comoNovo } from "./fila";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
@@ -248,24 +248,18 @@ export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<voi
 
 export const descartarNaoEnviado = descartar;
 
-/** A decisão do conflito sobe na hora, se houver internet. */
-export async function decidir(id: string, ficaOMeu: Campo[]): Promise<void> {
-  await decidirConflito(id, ficaOMeu);
-  void enviarAgora();
+/** A mudança na fila sobe na hora, se houver internet. */
+function eEnvia<A extends unknown[]>(mudar: (...args: A) => Promise<void>) {
+  return async (...args: A) => {
+    await mudar(...args);
+    void enviarAgora();
+  };
 }
 
-export async function excluirApesarDoConflito(id: string): Promise<void> {
-  await excluirMesmoAssim(id);
-  void enviarAgora();
-}
-
-export async function lancarDeNovoOExcluido(id: string): Promise<void> {
-  await lancarDeNovo(id);
-  void enviarAgora();
-}
-
-/** A confirmação recusada como conflito vai para a tela de decisão, como qualquer conflito. */
-export const levarConfirmacaoAoConflito = guardarConflito;
+export const decidir = eEnvia(decidirConflito);
+export const excluirApesarDoConflito = eEnvia(excluirMesmoAssim);
+export const lancarDeNovoOExcluido = eEnvia(lancarDeNovo);
+export { guardarConflito };
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */
 export async function criarConta(nome: string, tipo: Conta["tipo"]): Promise<boolean> {
