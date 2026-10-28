@@ -10,6 +10,8 @@ const app = new App();
 const env = { account: aws.conta, region: aws.regiao };
 const pacoteDaLambda = "../build/lambda"; // scripts/empacotar-lambda.sh
 const site = "../web/dist"; // npm run build em web/
+// Quem recebe os alertas: variável EMAIL_DE_ALERTAS do repositório, passada pelo deploy.
+const emailDeAlertas = process.env.EMAIL_DE_ALERTAS || undefined;
 
 new PilhaGithub(app, "financial-github", {
   env,
@@ -29,10 +31,12 @@ for (const ambiente of ["prod", "dev"] as const) {
   if (existsSync(pacoteDaLambda) && existsSync(site)) {
     new PilhaApp(app, `financial-${ambiente}-app`, {
       env,
+      ambiente,
       dados,
       pacoteDaLambda,
       site,
       guardar,
+      emailDeAlertas,
       terminationProtection: guardar,
     });
   }
