@@ -17,6 +17,6 @@ O casal cadastra contas (corrente, poupança, carteira), informa o saldo de aber
 
 - [ ] Contas com saldo de abertura e data; só realizados depois dessa data mexem no saldo, e o histórico anterior serve às estatísticas sem alterá-lo
 - [ ] Tipo transferência entre duas contas, sem contar como despesa, com categoria opcional da lista de transferência
-- [ ] Renomear e arquivar conta na tela `#/configuracao` (hoje só cria; [ticket 74](74-cadastro-provisorio-de-contas-e-categorias.md)): arquivar tira das opções e mantém o histórico
+- [ ] Renomear e arquivar conta na tela `#/contas-e-categorias` (hoje só cria; [ticket 74](74-cadastro-provisorio-de-contas-e-categorias.md)): arquivar tira das opções e mantém o histórico
 - [ ] Testes de API com exemplos concretos de saldo antes e depois do saldo de abertura
 - [ ] Verificações do projeto rodando e PR aberto para `main`

@@ -6,7 +6,7 @@ const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: 
 const TIPOS_DE_CATEGORIA = { despesa: "Despesa", receita: "Receita", transferencia: "Transferência" } as const;
 
 /** Contas (só criar, até o ticket 36) e categorias (criar, renomear, arquivar). Tudo exige internet. */
-export function TelaDeConfiguracao() {
+export function TelaDeContasECategorias() {
   const { contas, categorias, recarregar } = useCadastro();
   const [erro, setErro] = useState("");
 
@@ -24,7 +24,7 @@ export function TelaDeConfiguracao() {
       form.reset();
       await recarregar();
     } catch {
-      setErro("Sem internet: a configuração precisa de internet.");
+      setErro("Sem internet: a alteração precisa de internet.");
     }
   }
 
@@ -39,14 +39,14 @@ export function TelaDeConfiguracao() {
       await recarregar();
       return true;
     } catch {
-      setErro("Sem internet: a configuração precisa de internet.");
+      setErro("Sem internet: a alteração precisa de internet.");
       return false;
     }
   }
 
   return (
     <section>
-      <h2>Configuração</h2>
+      <h2>Contas e categorias</h2>
       {erro && (
         <p role="alert" className="erro">
           {erro}

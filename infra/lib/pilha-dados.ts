@@ -24,6 +24,8 @@ export class PilhaDados extends Stack {
   readonly emissor: string;
   /** Backup diário, com versões e Object Lock em compliance (ADR 0012). */
   readonly backup: s3.Bucket;
+  /** Exportações a pedido, sem Object Lock e com expiração de 7 dias (ADR 0012). */
+  readonly exportacoes: s3.Bucket;
   /** Role da Lambda do backup, ligada ao papel `backup` do banco (só leitura) pelo deploy. */
   readonly roleDoBackup: iam.Role;
 
@@ -107,6 +109,24 @@ export class PilhaDados extends Stack {
     });
     (this.backup.node.defaultChild as s3.CfnBucket).overrideLogicalId("Backup");
 
+    // Separado do backup (ADR 0012): sem Object Lock, para os arquivos pedidos sumirem em 7 dias.
+    this.exportacoes = new s3.Bucket(this, "Exportacoes", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      lifecycleRules: [
+        { id: "ApagarEm7Dias", prefix: "exportacoes/", expiration: Duration.days(7) },
+      ],
+    });
+    // A API grava o arquivo e assina a URL de download (a assinatura usa a permissão de leitura).
+    this.roleDaApi.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:PutObject", "s3:GetObject"],
+        resources: [this.exportacoes.arnForObjects("exportacoes/*")],
+      }),
+    );
+
     // Lê o banco pelo papel `backup` e só grava zips novos: nem apaga nem mexe na retenção.
     this.roleDoBackup = new iam.Role(this, "RoleDoBackup", {
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -133,5 +153,6 @@ export class PilhaDados extends Stack {
     new CfnOutput(this, "UserPoolId", { value: this.usuarios.userPoolId });
     new CfnOutput(this, "ClienteDoAppId", { value: this.clienteDoApp.userPoolClientId });
     new CfnOutput(this, "BucketDoBackup", { value: this.backup.bucketName });
+    new CfnOutput(this, "BucketDeExportacoes", { value: this.exportacoes.bucketName });
   }
 }

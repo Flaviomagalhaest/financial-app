@@ -1,6 +1,9 @@
 """Exemplo fictício para o backup: as tabelas de exemplo têm prefixo `exemplo_` para não
 colidir com as do domínio, e o gerador lê qualquer tabela do banco. Dado real nunca entra aqui (ADR 0012)."""
 
+import io
+import zipfile
+
 import psycopg
 
 ESQUEMA_FICTICIO = [
@@ -38,3 +41,12 @@ def criar_exemplo_ficticio(conn: psycopg.Connection) -> None:
          E'linha 1\\nlinha 2')""",
         {"c": CONTA_CORRENTE},
     )
+
+
+def trocar_arquivo(backup: bytes, nome: str, conteudo: bytes) -> bytes:
+    """O mesmo zip com um arquivo trocado, para simular um backup estragado."""
+    saida = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(backup)) as origem, zipfile.ZipFile(saida, "w") as destino:
+        for info in origem.infolist():
+            destino.writestr(info, conteudo if info.filename == nome else origem.read(info))
+    return saida.getvalue()

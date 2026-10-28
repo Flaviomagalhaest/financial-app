@@ -16,7 +16,7 @@ async function cadastrar(page: Page, formulario: string, nome: string, tipo: str
 test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ page }) => {
   const s = String(Date.now());
   const [conta, mercado, viagem, salario] = [`Corrente ${s}`, `Mercado ${s}`, `Viagem ${s}`, `Salário ${s}`];
-  await page.goto("/#/configuracao");
+  await page.goto("/#/contas-e-categorias");
   await entrar(page);
   await cadastrar(page, "Nova conta", conta, "corrente");
   await cadastrar(page, "Nova categoria", mercado, "despesa");
@@ -84,7 +84,7 @@ test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ pa
 test("lança uma receita e a lista a mostra com sinal de mais", async ({ page }) => {
   const s = String(Date.now());
   const [conta, salario] = [`Poupança ${s}`, `Salário ${s}`];
-  await page.goto("/#/configuracao");
+  await page.goto("/#/contas-e-categorias");
   await entrar(page, "esposa@teste.com");
   await cadastrar(page, "Nova conta", conta, "poupanca");
   await cadastrar(page, "Nova categoria", salario, "receita");
@@ -101,10 +101,10 @@ test("lança uma receita e a lista a mostra com sinal de mais", async ({ page })
   await expect(linha).toContainText("+ R$ 500,00");
 });
 
-test("configuração: cria, renomeia e arquiva categorias, e a arquivada sai das opções do lançamento", async ({ page }) => {
+test("contas e categorias: cria, renomeia e arquiva categorias, e a arquivada sai das opções do lançamento", async ({ page }) => {
   const s = String(Date.now());
   const [conta, despesa, receita, transferencia, renomeada] = [`Conta ${s}`, `Mercado ${s}`, `Salário ${s}`, `Reserva ${s}`, `Feira ${s}`];
-  await page.goto("/#/configuracao");
+  await page.goto("/#/contas-e-categorias");
   await entrar(page);
   await cadastrar(page, "Nova conta", conta, "corrente");
   await cadastrar(page, "Nova categoria", despesa, "despesa");
@@ -127,7 +127,7 @@ test("configuração: cria, renomeia e arquiva categorias, e a arquivada sai das
   await expect(page.getByRole("button", { name: renomeada })).toHaveCount(0);
   await page.getByRole("button", { name: "Receita" }).click();
   await expect(page.getByRole("button", { name: receita })).toBeVisible();
-  await page.goto("/#/configuracao");
+  await page.goto("/#/contas-e-categorias");
   await page.getByRole("button", { name: `Desarquivar ${renomeada}` }).click();
   await page.goto("/#/novo");
   await expect(page.getByRole("button", { name: renomeada })).toBeVisible();

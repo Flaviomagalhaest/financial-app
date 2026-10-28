@@ -21,7 +21,7 @@ def conectar(
     """Abre uma conexão. Sem `url`, usa DSQL_ENDPOINT (token IAM, sem senha) ou DATABASE_URL.
 
     No DSQL a API entra com o papel `api` e o backup diário com o `backup`, só de leitura; só o
-    job de deploy (migrations) pede `admin`.
+    job de deploy (migrations) e a restauração rodada pelo dono pedem `admin`.
     """
     if url is None and os.environ.get("DSQL_ENDPOINT"):
         return _conectar_ao_dsql(os.environ["DSQL_ENDPOINT"], autocommit, admin, papel)

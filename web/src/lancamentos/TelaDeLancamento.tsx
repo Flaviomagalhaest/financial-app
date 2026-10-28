@@ -110,7 +110,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
         ))}
         {carregado && contas.length === 0 && (
           <p className="vazio">
-            Nenhuma conta. <a href="#/configuracao">Cadastrar</a>
+            Nenhuma conta. <a href="#/contas-e-categorias">Cadastrar</a>
           </p>
         )}
       </div>
@@ -123,7 +123,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
         ))}
         {carregado && categoriasDoTipo.length === 0 && (
           <p className="vazio">
-            Nenhuma categoria de {tipo}. <a href="#/configuracao">Cadastrar</a>
+            Nenhuma categoria de {tipo}. <a href="#/contas-e-categorias">Cadastrar</a>
           </p>
         )}
       </div>
