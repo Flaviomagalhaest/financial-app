@@ -32,3 +32,7 @@ Thumbs.db
 
 # Exportações reais do Mobills (nunca commitar)
 data/
+
+# Playwright
+playwright-report/
+test-results/

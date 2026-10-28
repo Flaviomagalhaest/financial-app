@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_app
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: financial_app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Backend, lint e testes
+        working-directory: backend
+        run: |
+          uv sync
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pytest
+
+      - name: Contrato, OpenAPI e tipos em dia
+        run: |
+          (cd backend && uv run python gerar_openapi.py)
+          (cd web && npm ci && npm run gerar-tipos)
+          git diff --exit-code -- openapi.json web/src/api/schema.d.ts \
+            || { echo "::error::OpenAPI ou tipos desatualizados: rode backend/gerar_openapi.py e npm run gerar-tipos (web)"; exit 1; }
+
+      - name: App, tipos e build
+        working-directory: web
+        run: npm run build
+
+      - name: App, testes com navegador
+        working-directory: web
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test

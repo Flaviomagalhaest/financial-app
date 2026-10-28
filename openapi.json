@@ -1,0 +1,49 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Financial App",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/saude": {
+      "get": {
+        "summary": "Saude",
+        "operationId": "saude",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Saude"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Saude": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "migrations": {
+            "type": "integer",
+            "title": "Migrations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "migrations"
+        ],
+        "title": "Saude"
+      }
+    }
+  }
+}
