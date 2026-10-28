@@ -13,6 +13,7 @@ from app.exportacao import Formato, exportar
 from app.lancamentos import router as lancamentos
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
 from app.migrations import total_aplicadas
+from app.transferencias import router as transferencias
 
 
 class Saude(BaseModel):
@@ -76,4 +77,5 @@ def create_app(
         return ExportacaoPronta(url=pronta.url, arquivo=pronta.arquivo, expira_em=pronta.expira_em)
 
     app.include_router(lancamentos)
+    app.include_router(transferencias)
     return app

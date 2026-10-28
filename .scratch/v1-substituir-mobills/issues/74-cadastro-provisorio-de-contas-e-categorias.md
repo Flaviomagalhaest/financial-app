@@ -15,6 +15,7 @@ Telas de configuração de categorias (e das contas, junto com o [ticket 36](36-
 
 ## Checklist
 
+- [ ] Contas: criar, renomear, informar o saldo de abertura e arquivar, com a API que o [ticket 36](36-contas-saldo-e-transferencia.md) entregou (`PUT /api/contas/{id}`)
 - [ ] Categorias: criar, renomear e arquivar (despesa, receita e transferência), só com internet
 - [ ] Remover `TelaDeCadastro` e a rota `#/cadastro`
 - [ ] Testes de API e de navegador
