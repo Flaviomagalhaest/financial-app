@@ -21,3 +21,7 @@ Cada um do casal entra com e-mail e senha num formulário dentro do app e fica l
 - [ ] Só os dois usuários existem, sem cadastro público; o dono consegue desconectar todas as sessões de um celular perdido
 - [ ] Sair da conta com itens não enviados pede confirmação (o aviso só ganha efeito quando a fila existir, [ticket 33](33-lancamento-sem-internet-fila-e-envio.md))
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Comments
+
+- 2026-10-28 (ticket 28): o user pool e o cliente público (SRP, acesso de 15 minutos, refresh de 10 anos) já existem em `infra/lib/pilha-dados.ts`, com IDs nas saídas `UserPoolId` e `ClienteDoAppId` da pilha `financial-<ambiente>-dados`. A HTTP API já exige o JWT desse user pool em `ANY /api/{proxy+}` (emissor e audiência), e só `GET /api/saude` fica aberta. Falta conferir, com um token de verdade, que o CloudFront passa o `Authorization` à HTTP API (`CachingDisabled` com `AllViewerExceptHostHeader` em `/api/*`).
