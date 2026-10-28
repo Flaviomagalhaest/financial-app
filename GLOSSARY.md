@@ -33,9 +33,15 @@ _Avoid_: subcategoria, grupo
 **Categoria arquivada**:
 Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada.
 
+**Juntar (categoria ou tag)**:
+Passar todos os lançamentos de uma categoria (ou tag) para outra do mesmo tipo e excluir a primeira; o lançamento que já tinha as duas fica com uma só.
+_Avoid_: mesclar, unir
+
 **Tag**:
 Rótulo pontual que marca os lançamentos de um projeto ou evento (ex.: "novo ap", a reforma do apartamento novo); um lançamento pode ter nenhuma ou várias, e tag não entra no planejamento.
 _Avoid_: etiqueta, marcador
+
+A tag também pode ser arquivada, como a categoria; excluir categoria ou tag só é possível sem lançamentos.
 
 **Pessoa**:
 O Flávio ou a esposa, quando o lançamento é de um deles; cada lançamento tem no máximo uma.

@@ -75,6 +75,16 @@ class NovoLancamento(BaseModel):
     categoria_ids: list[UUID] = Field(min_length=1)
     # Sem situação, a data decide: futura nasce prevista, de hoje ou do passado, realizada.
     situacao: Literal["previsto", "realizado"] | None = None
+    # Pelo nome: a tag que ainda não existe nasce junto com o lançamento.
+    tags: list[str] = []
+
+    @field_validator("tags")
+    @classmethod
+    def _tags_limpas(cls, nomes: list[str]) -> list[str]:
+        limpos = [nome.strip() for nome in nomes]
+        if "" in limpos:
+            raise ValueError("tag sem nome")
+        return list({nome.casefold(): nome for nome in limpos}.values())
 
     @field_validator("categoria_ids")
     @classmethod
@@ -213,7 +223,7 @@ def criar_categoria(nova: NovaCategoria, usuario: UsuarioLogado, request: Reques
 def listar_categorias(usuario: UsuarioLogado, request: Request) -> list[Categoria]:
     with conectar(url_do_banco(request)) as conn:
         linhas = conn.execute(
-            "SELECT id, nome, tipo, arquivada FROM categorias ORDER BY nome, id"
+            "SELECT id, nome, tipo, arquivada_em IS NOT NULL FROM categorias ORDER BY nome, id"
         ).fetchall()
     return [Categoria(id=i, nome=n, tipo=t, arquivada=a) for i, n, t, a in linhas]
 
@@ -226,9 +236,11 @@ def alterar_categoria(
     linha = em_transacao(
         url_do_banco(request),
         lambda conn: conn.execute(
-            "UPDATE categorias SET nome = COALESCE(%s, nome), arquivada = COALESCE(%s, arquivada)"
-            " WHERE id = %s RETURNING id, nome, tipo, arquivada",
-            (alteracao.nome, alteracao.arquivada, id),
+            "UPDATE categorias SET nome = COALESCE(%s, nome),"
+            " arquivada_em = CASE WHEN %s::boolean IS NULL THEN arquivada_em"
+            " WHEN %s::boolean THEN COALESCE(arquivada_em, now()) END"
+            " WHERE id = %s RETURNING id, nome, tipo, arquivada_em IS NOT NULL",
+            (alteracao.nome, alteracao.arquivada, alteracao.arquivada, id),
         ).fetchone(),
     )
     if not linha:
@@ -264,7 +276,8 @@ def _conferir_ligacoes(
     tipos = {}
     arquivadas = set()
     for id, tipo, arquivada in conn.execute(
-        "SELECT id, tipo, arquivada FROM categorias WHERE id = ANY(%s)", (lancamento.categoria_ids,)
+        "SELECT id, tipo, arquivada_em IS NOT NULL FROM categorias WHERE id = ANY(%s)",
+        (lancamento.categoria_ids,),
     ):
         tipos[id] = tipo
         if arquivada:
@@ -276,6 +289,40 @@ def _conferir_ligacoes(
             raise recusar(f"categoria de {tipos[categoria]} num lançamento de {lancamento.tipo}")
         if categoria in arquivadas and categoria not in categorias_atuais:
             raise recusar("categoria arquivada")
+
+
+def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+    """Acha cada tag pelo nome (sem distinguir maiúsculas) ou a cria. Tag arquivada só vale para
+    quem já a tinha."""
+    existentes = {
+        nome.casefold(): (tag, arquivada)
+        for tag, nome, arquivada in conn.execute(
+            "SELECT id, nome, arquivada_em IS NOT NULL FROM tags"
+        )
+    }
+    ja_tinha = {
+        linha[0]
+        for linha in conn.execute(
+            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
+        )
+    }
+    ids = []
+    for nome in nomes:
+        if nome.casefold() in existentes:
+            tag, arquivada = existentes[nome.casefold()]
+            if arquivada and tag not in ja_tinha:
+                raise recusar(f"tag arquivada: {nome}")
+        else:
+            tag = uuid4()
+            conn.execute(
+                "INSERT INTO tags (id, nome, criado_por) VALUES (%s, %s, %s)", (tag, nome, usuario)
+            )
+        ids.append(tag)
+    conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
+    for tag in ids:
+        conn.execute(
+            "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)", (id, tag)
+        )
 
 
 def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
@@ -323,6 +370,7 @@ def criar_lancamento(
         ).rowcount
         if gravados:
             _gravar_categorias(conn, novo.id, novo.categoria_ids)
+            _gravar_tags(conn, novo.id, novo.tags, usuario)
         response.status_code = 201 if gravados else 200
         return _todos(conn, novo.id)[0]
 
@@ -342,6 +390,13 @@ def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
         parametros,
     ):
         categorias.setdefault(lancamento_id, []).append(categoria_id)
+    tags: dict[UUID, list[str]] = {}
+    for lancamento_id, nome in conn.execute(
+        "SELECT lt.lancamento_id, t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
+        f" {'WHERE lt.lancamento_id = %s' if id else ''} ORDER BY t.nome",
+        parametros,
+    ):
+        tags.setdefault(lancamento_id, []).append(nome)
     return [
         Lancamento(
             id=l[0],
@@ -352,6 +407,7 @@ def _todos(conn, id: UUID | None = None) -> list[Lancamento]:
             descricao=l[5],
             conta_id=l[6],
             categoria_ids=categorias.get(l[0], []),
+            tags=tags.get(l[0], []),
             criado_por=l[7],
             criado_em=l[8],
             alterado_por=l[9],
@@ -411,6 +467,7 @@ def editar_lancamento(
             ),
         )
         _gravar_categorias(conn, id, editado.categoria_ids)
+        _gravar_tags(conn, id, editado.tags, usuario)
         return _todos(conn, id)[0]
 
     return em_transacao(url_do_banco(request), gravar)
@@ -422,6 +479,7 @@ def excluir_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Re
 
     def excluir(conn) -> None:
         conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
+        conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
         conn.execute("DELETE FROM lancamentos WHERE id = %s", (id,))
 
     em_transacao(url_do_banco(request), excluir)

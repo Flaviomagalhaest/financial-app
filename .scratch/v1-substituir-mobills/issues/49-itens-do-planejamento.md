@@ -19,4 +19,5 @@ O casal planeja o mês por item ("R$ 1.000 em alimentação") e vê o realizado,
 - [ ] Por item: realizado, previsto, planejado e %; "ainda dá para gastar" do item é planejado menos realizado e previsto, e o do mês é a soma do que falta em cada item, sem compensar item estourado
 - [ ] Leitura do planejamento de um mês numa chamada só, já somada no servidor
 - [ ] Testes de API com exemplos concretos
+- [ ] Juntar categorias (`POST /api/categorias/{id}/juntar`) também move os itens do planejamento e as escolhas de item, e excluir categoria recusa se há item (hoje a API só olha lançamentos; ticket 40)
 - [ ] Verificações do projeto rodando e PR aberto para `main`

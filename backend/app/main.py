@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.banco import conectar
+from app.classificacao import router as classificacao
 from app.exportacao import Formato, exportar
 from app.lancamentos import router as lancamentos
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
@@ -77,5 +78,6 @@ def create_app(
         return ExportacaoPronta(url=pronta.url, arquivo=pronta.arquivo, expira_em=pronta.expira_em)
 
     app.include_router(lancamentos)
+    app.include_router(classificacao)
     app.include_router(transferencias)
     return app
