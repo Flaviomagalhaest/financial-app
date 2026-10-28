@@ -124,7 +124,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Excluir Categoria
+         * @description Idempotente. Com lançamentos, recusa: arquive ou junte em outra.
+         */
+        delete: operations["excluir_categoria"];
         options?: never;
         head?: never;
         /**
@@ -171,6 +175,85 @@ export interface paths {
          * @description Idempotente: excluir o que já não existe também dá 204.
          */
         delete: operations["excluir_lancamento"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/categorias/{id}/juntar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Juntar Categoria
+         * @description Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem.
+         */
+        post: operations["juntar_categoria"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Tags */
+        get: operations["listar_tags"];
+        put?: never;
+        /** Criar Tag */
+        post: operations["criar_tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir Tag
+         * @description Idempotente. Com lançamentos, recusa: arquive ou junte em outra.
+         */
+        delete: operations["excluir_tag"];
+        options?: never;
+        head?: never;
+        /** Mudar Tag */
+        patch: operations["mudar_tag"];
+        trace?: never;
+    };
+    "/api/tags/{id}/juntar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Juntar Tag
+         * @description Move os lançamentos da tag para o destino e exclui a origem.
+         */
+        post: operations["juntar_tag"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -313,6 +396,14 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** Juncao */
+        Juncao: {
+            /**
+             * Destino Id
+             * Format: uuid
+             */
+            destino_id: string;
+        };
         /** Lancamento */
         Lancamento: {
             /**
@@ -349,6 +440,11 @@ export interface components {
              * @enum {string}
              */
             situacao: "previsto" | "realizado";
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
             /** Criado Por */
             criado_por: string;
             /**
@@ -363,6 +459,13 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+        };
+        /** MudancaDeTag */
+        MudancaDeTag: {
+            /** Nome */
+            nome?: string | null;
+            /** Arquivada */
+            arquivada?: boolean | null;
         };
         /** NovaCategoria */
         NovaCategoria: {
@@ -387,6 +490,11 @@ export interface components {
             saldo_abertura_centavos?: number | null;
             /** Data Abertura */
             data_abertura?: string | null;
+        };
+        /** NovaTag */
+        NovaTag: {
+            /** Nome */
+            nome: string;
         };
         /** NovaTransferencia */
         NovaTransferencia: {
@@ -455,6 +563,11 @@ export interface components {
             categoria_ids: string[];
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
         };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
@@ -470,6 +583,21 @@ export interface components {
             status: string;
             /** Migrations */
             migrations: number;
+        };
+        /** Tag */
+        Tag: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Nome */
+            nome: string;
+            /**
+             * Arquivada
+             * @default false
+             */
+            arquivada: boolean;
         };
         /** Transferencia */
         Transferencia: {
@@ -769,6 +897,35 @@ export interface operations {
             };
         };
     };
+    excluir_categoria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     alterar_categoria: {
         parameters: {
             query?: never;
@@ -909,6 +1066,193 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    juntar_categoria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Juncao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Categoria"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"][];
+                };
+            };
+        };
+    };
+    criar_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaTag"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mudar_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MudancaDeTag"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    juntar_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Juncao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
             };
             /** @description Validation Error */
             422: {

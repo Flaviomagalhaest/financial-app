@@ -1,1 +1,1 @@
-ALTER TABLE categorias ADD COLUMN arquivada boolean NOT NULL DEFAULT false
+ALTER TABLE categorias ADD COLUMN IF NOT EXISTS arquivada_em timestamptz
