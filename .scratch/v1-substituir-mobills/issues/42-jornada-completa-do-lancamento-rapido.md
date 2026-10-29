@@ -1,7 +1,7 @@
 # Jornada completa do lançamento rápido
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 36, 40, 41
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
