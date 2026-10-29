@@ -19,5 +19,6 @@ A história 108 vale para qualquer previsto: "um previsto com data passada sem c
 - [ ] `atrasado` na transferência, com a mesma regra do lançamento (previsto com data antes de hoje em São Paulo, `app.lancamentos.hoje`)
 - [ ] Confirmar a transferência prevista, ajustando valor e data, com as mesmas regras do lançamento: reenvio igual devolve o gravado e ajuste diferente dá 409
 - [ ] Se entrar nas contas da semana: `GET /api/contas-da-semana` e o bloco da Hoje mostram a transferência
+- [ ] A tela de transferência (ticket 42, `TelaDeTransferencia.tsx`) não troca a situação à mão: só a data decide, embora a API aceite `situacao`. Dar a ela a troca Realizado/Previsto do lançamento
 - [ ] Testes de API, e de navegador se a Hoje mudar
 - [ ] Verificações do projeto rodando e PR aberto para `main`

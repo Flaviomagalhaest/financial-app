@@ -45,8 +45,9 @@ test("mudanças em campos diferentes do mesmo lançamento ficam as duas", async 
   await expect(linha(page, descricao)).toContainText("⏳ não enviado");
 
   await linha(dela, descricao).getByRole("link", { name: `Editar ${descricao}` }).click();
-  await dela.getByText("Detalhes").click();
+  await dela.getByRole("button", { name: /^Detalhes/ }).click();
   await dela.getByLabel("Descrição").fill(`Feira ${s}`);
+  await dela.getByRole("button", { name: "Pronto" }).click();
   await dela.getByRole("button", { name: "Salvar" }).click();
   await expect(linha(dela, `Feira ${s}`)).not.toContainText("não enviado");
 
@@ -67,6 +68,8 @@ test("mudança no mesmo campo vira conflito: o aparelho mostra a versão do serv
   await editarValor(page, descricao, "7");
   await editarValor(dela, descricao, "5");
   await expect(linha(dela, descricao)).toContainText("− R$ 10,05");
+  // A dela sobe antes: senão a minha pode chegar primeiro e o conflito fica com ela.
+  await expect(linha(dela, descricao)).not.toContainText("não enviado");
   await context.setOffline(false);
 
   const minha = linha(page, descricao);
@@ -99,6 +102,7 @@ test("descartar a minha mudança deixa a versão da outra pessoa", async ({ page
   await context.setOffline(true);
   await editarValor(page, descricao, "7");
   await editarValor(dela, descricao, "5");
+  await expect(linha(dela, descricao)).not.toContainText("não enviado");
   await context.setOffline(false);
   await linha(page, descricao).getByRole("link", { name: `Decidir ${descricao}` }).click();
   await page.getByRole("button", { name: "Descartar a minha mudança" }).click();
@@ -140,6 +144,7 @@ test("excluir o que a outra pessoa mudou depois pergunta antes", async ({ page, 
 
   await context.setOffline(true);
   await editarValor(dela, descricao, "5");
+  await expect(linha(dela, descricao)).not.toContainText("não enviado");
   page.once("dialog", (dialogo) => void dialogo.accept());
   await linha(page, descricao).getByRole("button", { name: `Excluir ${descricao}` }).click();
   await expect(linha(page, descricao)).toHaveCount(0);
@@ -153,6 +158,9 @@ test("excluir o que a outra pessoa mudou depois pergunta antes", async ({ page, 
   await page.getByRole("button", { name: "Excluir mesmo assim" }).click();
 
   await expect(minha).toHaveCount(0);
+  // A exclusão sobe antes de a outra pessoa recarregar.
+  await aba(page, "Hoje");
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
   await dela.reload();
   await expect(linha(dela, descricao)).toHaveCount(0);
   await contextoDela.close();
@@ -171,9 +179,10 @@ test("confirmar com ajuste o que a outra pessoa já confirmou leva à tela de co
   await digitar(page, "1", "00");
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: luz }).click();
-  await page.getByText("Detalhes").click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
   await page.getByLabel("Descrição").fill(descricao);
   await page.getByLabel("Data").fill(amanha);
+  await page.getByRole("button", { name: "Pronto" }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(linha(page, descricao)).toContainText("previsto");
   await aba(page, "Hoje");

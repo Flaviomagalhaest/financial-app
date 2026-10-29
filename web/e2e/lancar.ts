@@ -19,9 +19,10 @@ export async function lancar(page: Page, { teclas, conta, categoria, descricao, 
   await digitar(page, ...teclas);
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: categoria }).click();
-  await page.getByText("Detalhes").click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
   if (pessoa) await page.getByRole("group", { name: "Pessoa" }).getByRole("button", { name: pessoa }).click();
   await page.getByLabel("Descrição").fill(descricao);
+  await page.getByRole("button", { name: "Pronto" }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
 }

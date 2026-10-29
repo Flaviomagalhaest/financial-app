@@ -9,11 +9,10 @@ import {
   type Campo,
   type Categoria,
   type Conflito,
-  type Conta,
   type NovoLancamento,
 } from "../dados";
 import { nomePorId as nome } from "./apresentacao";
-import { dataPorExtenso, quando } from "./datas";
+import { dataPorExtenso, quando, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 
 const ROTULOS: Record<Campo, string> = {
@@ -29,7 +28,7 @@ const ROTULOS: Record<Campo, string> = {
   fatura_mes: "Fatura",
 };
 
-function valorDoCampo(campo: Campo, l: NovoLancamento, contas: Conta[], categorias: Categoria[], nomeDe: (id: string) => string): string {
+function valorDoCampo(campo: Campo, l: NovoLancamento, contas: { id: string; nome: string }[], categorias: Categoria[], nomeDe: (id: string) => string): string {
   switch (campo) {
     case "tipo":
       return l.tipo === "despesa" ? "Despesa" : "Receita";
@@ -50,7 +49,7 @@ function valorDoCampo(campo: Campo, l: NovoLancamento, contas: Conta[], categori
     case "pessoa":
       return l.pessoa ? nomeDe(l.pessoa) : "Conjunto";
     case "fatura_mes":
-      return l.fatura_mes ? `fatura de ${l.fatura_mes.slice(5, 7)}/${l.fatura_mes.slice(0, 4)}` : "(sem fatura)";
+      return l.fatura_mes ? rotuloDaFatura(l.fatura_mes) : "(sem fatura)";
   }
 }
 
@@ -62,7 +61,7 @@ function outroLado(c: Conflito["campos"][number], nomeDe: (id: string) => string
 
 /** Decide o conflito campo a campo, ou descarta a mudança do aparelho (ADR 0011). */
 export function TelaDeConflito({ id }: { id: string }) {
-  const { contas, categorias } = useCadastro();
+  const { contasECartoes, categorias } = useCadastro();
   const { nomeDe } = usePessoas();
   const item = useFila().find((i) => i.id === id);
   const [escolhas, setEscolhas] = useState<Partial<Record<Campo, "meu" | "deles">>>({});
@@ -103,7 +102,7 @@ export function TelaDeConflito({ id }: { id: string }) {
             <li key={c.campo}>
               <div>
                 <strong>{ROTULOS[c.campo]}</strong>
-                <span>{valorDoCampo(c.campo, servidor, contas, categorias, nomeDe)}</span>
+                <span>{valorDoCampo(c.campo, servidor, contasECartoes, categorias, nomeDe)}</span>
               </div>
             </li>
           ))}
@@ -140,7 +139,7 @@ export function TelaDeConflito({ id }: { id: string }) {
             aria-pressed={escolhas[c.campo] === "meu"}
             onClick={() => setEscolhas({ ...escolhas, [c.campo]: "meu" })}
           >
-            O seu: {valorDoCampo(c.campo, meu, contas, categorias, nomeDe)}
+            O seu: {valorDoCampo(c.campo, meu, contasECartoes, categorias, nomeDe)}
           </button>
           <button
             type="button"
@@ -148,7 +147,7 @@ export function TelaDeConflito({ id }: { id: string }) {
             aria-pressed={escolhas[c.campo] === "deles"}
             onClick={() => setEscolhas({ ...escolhas, [c.campo]: "deles" })}
           >
-            {outroLado(c, nomeDe)}: {valorDoCampo(c.campo, servidor, contas, categorias, nomeDe)}
+            {outroLado(c, nomeDe)}: {valorDoCampo(c.campo, servidor, contasECartoes, categorias, nomeDe)}
           </button>
         </div>
       ))}

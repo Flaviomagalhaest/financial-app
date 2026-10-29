@@ -123,6 +123,8 @@ test("recusado pelo servidor fica 'não enviado: <motivo>' para corrigir ou desc
   await expect(descartar).toHaveCount(0);
   await aba(page, "Hoje");
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  // Uma leitura das contas ainda em andamento não pode estourar no teste seguinte.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 /** O service worker só controla a página depois de uma recarga; aí ela abre sem internet. */
