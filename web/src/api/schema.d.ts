@@ -693,6 +693,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sugestoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Indice De Sugestao */
+        get: operations["indice_de_sugestao"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1121,6 +1138,16 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IndiceDeSugestao */
+        IndiceDeSugestao: {
+            /**
+             * Gerado Em
+             * Format: date-time
+             */
+            gerado_em: string;
+            /** Sugestoes */
+            sugestoes: components["schemas"]["Sugestao"][];
         };
         /** ItemDoModelo */
         ItemDoModelo: {
@@ -1750,6 +1777,43 @@ export interface components {
             status: string;
             /** Migrations */
             migrations: number;
+        };
+        /**
+         * Sugestao
+         * @description O que um lançamento anterior sugere, por inteiro: escolher preenche esses campos.
+         */
+        Sugestao: {
+            /** Chave */
+            chave: string;
+            /** Descricao */
+            descricao: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /** Tags */
+            tags: string[];
+            /** Pessoa */
+            pessoa: string | null;
+            /**
+             * Em
+             * Format: date-time
+             */
+            em: string;
+            /**
+             * Origem
+             * @default historico
+             * @constant
+             */
+            origem: "historico";
         };
         /** Tag */
         Tag: {
@@ -3398,6 +3462,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    indice_de_sugestao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndiceDeSugestao"];
                 };
             };
         };

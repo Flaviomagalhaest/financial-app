@@ -586,3 +586,32 @@ dialog.folha > input {
 .alternancia.quatro {
   grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
 }
+
+/* As sugestões pela descrição, numa lista curta logo abaixo dela; tocar preenche os campos. */
+.sugestoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sugestao {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: 100%;
+  background: transparent;
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  text-align: left;
+  font-weight: 600;
+}
+
+.sugestao .resumo-da-sugestao {
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}

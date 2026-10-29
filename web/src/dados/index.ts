@@ -32,6 +32,7 @@ import {
   LISTA,
   type Remessa,
 } from "./fila";
+import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
@@ -39,6 +40,7 @@ export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
 export type { Campo } from "./fila";
+export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { comoNovo } from "./fila";
 
@@ -79,9 +81,19 @@ const LEITURAS = {
   "/api/pessoas": () => api.GET("/api/pessoas"),
   "/api/tags": () => api.GET("/api/tags"),
   "/api/cartoes": () => api.GET("/api/cartoes"),
+  "/api/sugestoes": () => api.GET("/api/sugestoes"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
+
+/** Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. */
+function buscarEGuardar<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
+  return comTrava("shared", async () => {
+    const { data } = await ler().catch(() => ({ data: undefined }));
+    if (data) await guardarResposta(caminho, data);
+    return data;
+  });
+}
 
 /** A resposta do servidor, ou a última guardada; `aoVivo` diz se a última busca deu certo. */
 function useResposta<C extends Caminho>(caminho: C) {
@@ -101,12 +113,7 @@ function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
   leitor.current = ler;
 
   const buscar = useCallback(async () => {
-    const dados = await comTrava("shared", async () => {
-      const { data } = await leitor.current().catch(() => ({ data: undefined }));
-      if (data) await guardarResposta(caminho, data);
-      return data;
-    });
-    setAoVivo(!!dados);
+    setAoVivo(!!(await buscarEGuardar(caminho, leitor.current)));
   }, [caminho]);
 
   useEffect(() => {
@@ -254,6 +261,28 @@ export function useTags(): string[] {
   }, [dados, lancamentos]);
 }
 
+/**
+ * A sugestão pela descrição, sem internet: o índice do servidor com os lançamentos do aparelho que
+ * ele ainda não tem por cima (os não enviados e os que mudaram no servidor depois de ele ser
+ * montado), para o que se acabou de lançar ou corrigir já ser a sugestão mais recente. Sem índice
+ * guardado, a lista inteira. Do enviado, o aparelho só sabe quando mudou, não o quê: mudar só o
+ * valor dele também o põe primeiro, até o índice ser buscado de novo.
+ */
+export function useSugestao(): FonteDeSugestao {
+  const { dados: indice } = useResposta("/api/sugestoes");
+  const { lancamentos } = useLancamentos();
+  return useMemo(() => {
+    const desde = indice ? Date.parse(indice.gerado_em) : 0;
+    const depois = (lancamentos ?? []).flatMap((l) => {
+      if (l.conflito || l.exclusao) return [];
+      const em = l.naoEnviado ? l.feitoEm : l.alterado_em ? Date.parse(l.alterado_em) : undefined;
+      const sugestao = em && (l.naoEnviado || em > desde) ? sugestaoDe(l, em) : null;
+      return sugestao ? [sugestao] : [];
+    });
+    return fonteDoHistorico([...depois, ...(indice?.sugestoes ?? [])]);
+  }, [indice, lancamentos]);
+}
+
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
 export function useContasComArquivadas() {
   const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
@@ -369,9 +398,12 @@ export async function contarNaoEnviados(): Promise<number> {
 
 export const apagarDadosDoAparelho = apagarTudo;
 
-/** A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta. */
+/**
+ * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão vem
+ * logo depois, para o aparelho tê-lo sem internet mesmo sem ter aberto o novo lançamento.
+ */
 export function iniciarEnvioAutomatico(): () => void {
-  const enviar = () => void enviarAgora();
+  const enviar = () => void enviarAgora().then(() => buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]));
   const aoVoltar = () => document.visibilityState === "visible" && enviar();
   enviar();
   window.addEventListener("online", enviar);

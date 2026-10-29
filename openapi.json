@@ -2203,6 +2203,29 @@
           }
         ]
       }
+    },
+    "/api/sugestoes": {
+      "get": {
+        "summary": "Indice De Sugestao",
+        "operationId": "indice_de_sugestao",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndiceDeSugestao"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3383,6 +3406,28 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "IndiceDeSugestao": {
+        "properties": {
+          "gerado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Gerado Em"
+          },
+          "sugestoes": {
+            "items": {
+              "$ref": "#/components/schemas/Sugestao"
+            },
+            "type": "array",
+            "title": "Sugestoes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gerado_em",
+          "sugestoes"
+        ],
+        "title": "IndiceDeSugestao"
       },
       "ItemDoModelo": {
         "properties": {
@@ -4935,6 +4980,81 @@
           "migrations"
         ],
         "title": "Saude"
+      },
+      "Sugestao": {
+        "properties": {
+          "chave": {
+            "type": "string",
+            "title": "Chave"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Em"
+          },
+          "origem": {
+            "type": "string",
+            "const": "historico",
+            "title": "Origem",
+            "default": "historico"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chave",
+          "descricao",
+          "tipo",
+          "conta_id",
+          "categoria_ids",
+          "tags",
+          "pessoa",
+          "em"
+        ],
+        "title": "Sugestao",
+        "description": "O que um lançamento anterior sugere, por inteiro: escolher preenche esses campos."
       },
       "Tag": {
         "properties": {

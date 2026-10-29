@@ -55,6 +55,9 @@ test("sessões desconectadas pelo dono pedem o login de novo", async ({ page }) 
   await page.goto("/");
   await entrar(page, "esposa@teste.com");
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
+  // Depois do login, o envio da fila e a busca do índice de sugestão ainda podem estar no caminho;
+  // um pedido que saia depois do relógio andar já descobre a sessão encerrada antes do "Verificar".
+  await page.waitForLoadState("networkidle");
 
   await desconectar("esposa@teste.com");
   await page.clock.fastForward("16:00");
