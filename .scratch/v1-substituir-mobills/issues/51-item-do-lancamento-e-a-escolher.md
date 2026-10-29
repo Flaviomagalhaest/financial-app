@@ -1,7 +1,7 @@
 # Item em que o lançamento conta e lista "a escolher"
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 49
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
