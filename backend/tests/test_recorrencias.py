@@ -156,6 +156,8 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
     assert primeira.json() | {"criado_em": None, "alterado_em": None} == nova | {
         "automatico": False,
         "ate": None,
+        "item_id": None,
+        "ocorrencia_do_inicio": 1,
         "criado_por": "flavio",
         "alterado_por": "flavio",
         "criado_em": None,
@@ -327,3 +329,283 @@ def test_recorrencia_no_cartao_conta_cada_previsto_no_mes_da_fatura(casal: Casal
         ("2026-11-26", "2026-12-01", "2026-12-01"),
         ("2026-12-26", "2027-01-01", "2027-01-01"),
     ]
+
+
+def mudar(casal: Casal, id: str, a_partir_da_ocorrencia: int, **campos):
+    return casal.pedir(
+        "esposa",
+        "PATCH",
+        f"/api/recorrencias/{id}",
+        json={"a_partir_da_ocorrencia": a_partir_da_ocorrencia} | campos,
+    )
+
+
+def test_mudar_daqui_para_frente_reajusta_os_previstos_e_deixa_o_passado_como_esta(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-09-10", vezes=6)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    # Setembro e outubro já passaram: o casal confirmou setembro e outubro segue atrasado.
+    setembro = gerados(casal, nova["id"])[0]
+    casal.pedir(
+        "flavio", "POST", f"/api/lancamentos/{setembro['id']}/confirmar", json={"versao": 1}
+    )
+
+    resposta = mudar(casal, nova["id"], 3, valor_centavos=21000, descricao="Luz (reajuste)")
+
+    assert resposta.status_code == 200
+    assert resposta.json()["valor_centavos"] == 21000
+    assert casal.pedir("flavio", "GET", "/api/recorrencias").json() == [resposta.json()]
+    assert [
+        (l["ocorrencia"], l["situacao"], l["valor_centavos"], l["descricao"])
+        for l in gerados(casal, nova["id"])
+    ] == [
+        (1, "realizado", 18990, "Luz"),
+        (2, "previsto", 18990, "Luz"),
+        (3, "previsto", 21000, "Luz (reajuste)"),
+        (4, "previsto", 21000, "Luz (reajuste)"),
+        (5, "previsto", 21000, "Luz (reajuste)"),
+        (6, "previsto", 21000, "Luz (reajuste)"),
+    ]
+
+
+def test_previsto_alterado_a_mao_nao_e_sobrescrito_por_mudanca_daqui_para_frente(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=4)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    [_, dezembro, janeiro, _] = gerados(casal, nova["id"])
+    # A conta de dezembro vem atípica; a de janeiro só ganha uma tag, o que também é à mão.
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{dezembro['id']}",
+        json={"versao": 1, "valor_centavos": 35000},
+    )
+    casal.pedir(
+        "flavio", "PATCH", f"/api/lancamentos/{janeiro['id']}", json={"versao": 1, "tags": ["ap"]}
+    )
+
+    mudar(casal, nova["id"], 1, valor_centavos=21000)
+
+    assert [(l["valor_centavos"], l["versao"]) for l in gerados(casal, nova["id"])] == [
+        (21000, 2),
+        (35000, 2),
+        (18990, 2),
+        (21000, 2),
+    ]
+
+
+def test_mudanca_da_regra_que_colide_com_edicao_sem_internet_vira_conflito_vindo_da_regra(
+    casal: Casal,
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=2)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    novembro = gerados(casal, nova["id"])[0]
+
+    mudar(casal, nova["id"], 1, valor_centavos=21000, descricao="Luz nova")
+
+    # A esposa editou sem internet o valor, sobre a versão 1; a regra já tinha reajustado.
+    resposta = casal.pedir(
+        "esposa",
+        "PATCH",
+        f"/api/lancamentos/{novembro['id']}",
+        json={"versao": 1, "valor_centavos": 20000, "descricao": "Luz do mês"},
+    )
+    assert resposta.status_code == 409
+    assert {(c["campo"], c["origem"], c["alterado_por"]) for c in resposta.json()["campos"]} == {
+        ("valor_centavos", "a recorrência Luz nova", "esposa"),
+        ("descricao", "a recorrência Luz nova", "esposa"),
+    }
+    assert resposta.json()["lancamento"]["valor_centavos"] == 21000
+
+
+def test_encerrar_por_data_tira_os_previstos_depois_dela_e_deixa_o_realizado(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
+    nova = recorrencia(conta, [assinatura], descricao="Netflix", inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    fevereiro = gerados(casal, nova["id"])[3]
+    # Fevereiro foi mexido à mão e março já foi confirmado: o fim vale para o previsto, não
+    # para o que o casal confirmou.
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{fevereiro['id']}",
+        json={"versao": 1, "valor_centavos": 5000},
+    )
+    marco = gerados(casal, nova["id"])[4]
+    casal.pedir("flavio", "POST", f"/api/lancamentos/{marco['id']}/confirmar", json={})
+
+    resposta = mudar(casal, nova["id"], 3, ate="2027-01-10")
+
+    assert resposta.status_code == 200
+    assert (resposta.json()["ate"], resposta.json()["vezes"]) == ("2027-01-10", None)
+    assert [(l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-11-10", "previsto"),
+        ("2026-12-10", "previsto"),
+        ("2027-01-10", "previsto"),
+        ("2027-03-10", "realizado"),
+    ]
+    # A tarefa diária estende o horizonte, mas a regra acabou: nada volta.
+    no_dia(monkeypatch, "2027-02-01")
+    fazer_tarefa_diaria(database_url)
+    assert len(gerados(casal, nova["id"])) == 4
+
+
+def test_encerrar_por_numero_de_vezes_tira_a_data_de_fim_e_vice_versa(casal: Casal):
+    conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
+    nova = recorrencia(conta, [assinatura], inicio="2026-11-10", ate="2027-03-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    assert len(gerados(casal, nova["id"])) == 5
+
+    por_vezes = mudar(casal, nova["id"], 1, vezes=3)
+
+    assert (por_vezes.json()["ate"], por_vezes.json()["vezes"]) == (None, 3)
+    assert len(gerados(casal, nova["id"])) == 3
+    por_data = mudar(casal, nova["id"], 1, ate="2026-12-31")
+    assert (por_data.json()["ate"], por_data.json()["vezes"]) == ("2026-12-31", None)
+    assert len(gerados(casal, nova["id"])) == 2
+
+
+def test_excluir_a_recorrencia_tira_a_regra_e_os_previstos_de_hoje_em_diante(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
+    nova = recorrencia(conta, [assinatura], tags=["streaming"], inicio="2026-08-28")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    agosto = gerados(casal, nova["id"])[0]
+    casal.pedir("flavio", "POST", f"/api/lancamentos/{agosto['id']}/confirmar", json={})
+
+    resposta = casal.pedir("esposa", "DELETE", f"/api/recorrencias/{nova['id']}")
+
+    assert resposta.status_code == 204
+    assert casal.pedir("flavio", "GET", "/api/recorrencias").json() == []
+    # O realizado é o que aconteceu; o atrasado só some quando o casal confirmar ou excluir;
+    # os de hoje (28/10) em diante saem.
+    assert [(l["data"], l["situacao"], l["atrasado"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-08-28", "realizado", False),
+        ("2026-09-28", "previsto", True),
+    ]
+    assert casal.pedir("esposa", "DELETE", f"/api/recorrencias/{nova['id']}").status_code == 204
+    no_dia(monkeypatch, "2026-12-01")
+    fazer_tarefa_diaria(database_url)
+    assert len(gerados(casal, nova["id"])) == 2
+
+
+def test_pular_um_mes_e_excluir_o_previsto_e_ele_nao_volta_por_mudanca_nem_pela_tarefa_diaria(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=3)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    dezembro = gerados(casal, nova["id"])[1]
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{dezembro['id']}")
+
+    mudar(casal, nova["id"], 1, valor_centavos=21000)
+    no_dia(monkeypatch, "2026-12-01")
+    fazer_tarefa_diaria(database_url)
+
+    assert [(l["ocorrencia"], l["valor_centavos"]) for l in gerados(casal, nova["id"])] == [
+        (1, 21000),
+        (3, 21000),
+    ]
+
+
+def test_recorrencia_guarda_o_item_do_planejamento_e_mudar_troca_ou_tira(casal: Casal):
+    conta, luz, item = casal.conta(), casal.categoria("Luz"), str(uuid4())
+    nova = recorrencia(conta, [luz], item_id=item, vezes=2)
+
+    criada = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    assert criada.json()["item_id"] == item
+    outro = str(uuid4())
+    assert mudar(casal, nova["id"], 1, item_id=outro).json()["item_id"] == outro
+    assert mudar(casal, nova["id"], 1, item_id=None).json()["item_id"] is None
+    assert mudar(casal, nova["id"], 1, valor_centavos=1000).json()["item_id"] is None
+
+
+def test_mudar_o_calendario_daqui_para_frente_renumera_sem_mexer_no_passado(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, seguro = casal.conta(), casal.categoria("Seguro")
+    nova = recorrencia(conta, [seguro], inicio="2026-11-10", unidade="meses", vezes=6)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    # Da 3ª em diante (10/01/2027): a cada 2 meses, e o dia passa a ser 15 na 3ª.
+    resposta = mudar(casal, nova["id"], 3, a_cada=2, inicio="2027-01-15")
+
+    assert resposta.status_code == 200
+    assert (resposta.json()["inicio"], resposta.json()["ocorrencia_do_inicio"]) == (
+        "2027-01-15",
+        3,
+    )
+    assert [(l["ocorrencia"], l["data"]) for l in gerados(casal, nova["id"])] == [
+        (1, "2026-11-10"),
+        (2, "2026-12-10"),
+        (3, "2027-01-15"),
+        (4, "2027-03-15"),
+        (5, "2027-05-15"),
+        (6, "2027-07-15"),
+    ]
+
+
+def test_mudar_o_calendario_sem_informar_o_inicio_continua_da_data_que_a_ocorrencia_tinha(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, seguro = casal.conta(), casal.categoria("Seguro")
+    nova = recorrencia(conta, [seguro], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    # A 2ª fica em 10/12/2026 e as outras vêm de 2 em 2 semanas. De 10/12/2026 a 28/10/2028
+    # (o horizonte) cabem 50 quinzenas: da 2ª à 51ª ocorrência, a última em 26/10/2028.
+    mudar(casal, nova["id"], 2, a_cada=2, unidade="semanas")
+
+    previstos = gerados(casal, nova["id"])
+    assert [l["ocorrencia"] for l in previstos] == list(range(1, 52))
+    assert [l["data"] for l in previstos[:4]] == [
+        "2026-11-10",
+        "2026-12-10",
+        "2026-12-24",
+        "2027-01-07",
+    ]
+    assert previstos[-1]["data"] == "2028-10-26"
+    # Dois anos depois, a tarefa diária segue a numeração e o calendário novos até 28/11/2030.
+    no_dia(monkeypatch, "2028-11-28")
+    fazer_tarefa_diaria(database_url)
+    previstos = gerados(casal, nova["id"])
+    assert [l["ocorrencia"] for l in previstos] == list(range(1, 106))
+    assert previstos[-1]["data"] == "2030-11-21"
+
+
+@pytest.mark.parametrize(
+    ("corpo", "motivo"),
+    [
+        ({"a_partir_da_ocorrencia": 0}, "greater than or equal to 1"),
+        ({"a_partir_da_ocorrencia": 5}, "ainda não foi gerada"),
+        ({"a_partir_da_ocorrencia": 1, "valor_centavos": None}, "valid integer"),
+        ({"a_partir_da_ocorrencia": 1, "automatico": True}, "valor fixo"),
+        ({"a_partir_da_ocorrencia": 1, "ate": "2026-11-01"}, "antes do início"),
+        ({"a_partir_da_ocorrencia": 1, "ate": "2027-03-01", "vezes": 2}, "não nos dois"),
+        ({"a_partir_da_ocorrencia": 1, "pessoa": "vizinho"}, "pessoa não encontrada"),
+        ({"a_partir_da_ocorrencia": 1, "conta_id": str(uuid4())}, "conta não encontrada"),
+    ],
+)
+def test_mudar_recorrencia_invalida_e_recusado_sem_gravar(casal: Casal, corpo, motivo):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], vezes=3)
+    criada = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova).json()
+
+    resposta = casal.pedir("esposa", "PATCH", f"/api/recorrencias/{nova['id']}", json=corpo)
+
+    assert resposta.status_code == 422
+    assert motivo in str(resposta.json())
+    assert casal.pedir("flavio", "GET", "/api/recorrencias").json() == [criada]
+    assert [l["versao"] for l in gerados(casal, nova["id"])] == [1, 1, 1]
+
+
+def test_mudar_ou_excluir_recorrencia_que_nao_existe(casal: Casal):
+    resposta = mudar(casal, str(uuid4()), 1, valor_centavos=100)
+
+    assert resposta.status_code == 404
+    assert casal.pedir("esposa", "DELETE", f"/api/recorrencias/{uuid4()}").status_code == 204

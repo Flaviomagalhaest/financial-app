@@ -626,6 +626,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/recorrencias/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir Recorrencia
+         * @description Idempotente. Tira a regra e os previstos de hoje em diante; o realizado e o atrasado
+         *     ficam, como lançamentos que a regra gerou.
+         */
+        delete: operations["excluir_recorrencia"];
+        options?: never;
+        head?: never;
+        /**
+         * Alterar Recorrencia
+         * @description Muda a regra "daqui para frente" (a partir de uma ocorrência), tira os previstos que
+         *     passaram do fim e refaz os que ninguém alterou à mão. Mudar só um mês é editar o previsto, e
+         *     pular um mês é excluí-lo: a geração não o traz de volta.
+         */
+        patch: operations["alterar_recorrencia"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -720,6 +747,62 @@ export interface components {
             fatura_mes?: string | null;
             /** Acao Em */
             acao_em?: string | null;
+        };
+        /**
+         * AlteracaoDeRecorrencia
+         * @description Os campos da regra que mudam "daqui para frente", a partir da ocorrência dada: a regra
+         *     passa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,
+         *     são refeitos. O que já foi realizado e os previstos de antes ficam como estão. Campo
+         *     ausente fica como está; `pessoa` vazia passa a regra para o conjunto.
+         */
+        AlteracaoDeRecorrencia: {
+            /** A Partir Da Ocorrencia */
+            a_partir_da_ocorrencia: number;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo?: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos?: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor?: "fixo" | "estimado";
+            /** Automatico */
+            automatico?: boolean;
+            /** Descricao */
+            descricao?: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id?: string;
+            /** Categoria Ids */
+            categoria_ids?: string[];
+            /** Tags */
+            tags?: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** A Cada */
+            a_cada?: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade?: "semanas" | "meses";
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio?: string;
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
         };
         /**
          * CampoEmConflito
@@ -1190,6 +1273,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Item Id */
+            item_id?: string | null;
         };
         /** NovaTag */
         NovaTag: {
@@ -1397,6 +1482,13 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Item Id */
+            item_id?: string | null;
+            /**
+             * Ocorrencia Do Inicio
+             * @default 1
+             */
+            ocorrencia_do_inicio: number;
             /** Criado Por */
             criado_por: string;
             /**
@@ -2895,6 +2987,70 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recorrencia"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_recorrencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alterar_recorrencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlteracaoDeRecorrencia"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
