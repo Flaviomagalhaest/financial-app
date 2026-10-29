@@ -211,6 +211,7 @@ class ConflitoDeCampos(Exception):
 _REPETIDO_DE = f"""(
     SELECT o.id FROM lancamentos o
     WHERE lancamentos.repetido_mantido_em IS NULL AND o.excluido_em IS NULL
+      AND lancamentos.fonte IS DISTINCT FROM 'mobills' AND o.fonte IS DISTINCT FROM 'mobills'
       AND o.id <> lancamentos.id AND o.criado_por <> lancamentos.criado_por
       AND o.valor_centavos = lancamentos.valor_centavos AND o.tipo = lancamentos.tipo
       AND o.conta_id = lancamentos.conta_id

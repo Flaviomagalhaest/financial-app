@@ -178,3 +178,15 @@ def test_excluir_um_dos_dois_tira_o_aviso_do_outro(casal: Casal):
 
     [restante] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
     assert restante["id"] == da_esposa["id"] and restante["parece_repetido_de"] is None
+
+
+def test_o_importado_do_mobills_nao_parece_repetido(casal: Casal, database_url: str):
+    do_flavio, da_esposa = lancar_dos_dois(casal)
+
+    import psycopg
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute("UPDATE lancamentos SET fonte = 'mobills' WHERE id = %s", (do_flavio["id"],))
+
+    vistos = {l["id"]: l for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()}
+    assert vistos[da_esposa["id"]]["parece_repetido_de"] is None

@@ -75,7 +75,7 @@ export function ListaDeLancamentos() {
                 {" · "}
                 {l.pessoa ? nomeDe(l.pessoa) : "conjunto"}
               </p>
-              {l.parece_repetido_de && l.criado_por !== euId && !l.naoEnviado && (
+              {l.parece_repetido_de && euId && l.criado_por !== euId && !l.naoEnviado && (
                 <div className="aviso" role="group" aria-label={`Parece repetido ${titulo}`}>
                   <p className="erro">Parece repetido: {nomeDe(l.criado_por)} lançou o mesmo valor na mesma conta.</p>
                   <div className="acoes">

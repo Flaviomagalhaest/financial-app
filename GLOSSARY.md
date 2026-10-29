@@ -215,7 +215,7 @@ _Avoid_: duplicado, duplicata
 
 **Fonte do lançamento**:
 De onde o lançamento veio: o "app" ou o "importado do Mobills".
-_Avoid_: origem (é o nome da regra que mudou um campo, na tela de conflito), autoria
+_Avoid_: autoria (é quem criou ou alterou)
 
 **Versão do lançamento**:
 Número que sobe a cada mudança aceita num lançamento; cada campo guarda a versão em que mudou por último, e uma mudança diz sobre qual versão foi feita, para o servidor saber o que o outro lado mudou depois dela.
