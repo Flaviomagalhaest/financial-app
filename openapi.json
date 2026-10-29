@@ -1993,6 +1993,75 @@
           }
         ]
       }
+    },
+    "/api/parcelamentos": {
+      "get": {
+        "summary": "Listar Parcelamentos",
+        "operationId": "listar_parcelamentos",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Parcelamento"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Parcelamentos"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Criar Parcelamento",
+        "description": "Grava o parcelamento e gera todas as parcelas. Reenviar o mesmo id (a fila repete)\ndevolve o gravado, com 200, e completa a geração se ela tiver parado no meio.",
+        "operationId": "criar_parcelamento",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoParcelamento"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcelamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2014,6 +2083,24 @@
           "lancamento"
         ],
         "title": "AcaoCriar"
+      },
+      "AcaoCriarParcelamento": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "criar_parcelamento",
+            "title": "Acao"
+          },
+          "parcelamento": {
+            "$ref": "#/components/schemas/NovoParcelamento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "parcelamento"
+        ],
+        "title": "AcaoCriarParcelamento"
       },
       "AcaoEditar": {
         "properties": {
@@ -3131,6 +3218,40 @@
             "title": "Automatico",
             "default": false
           },
+          "parcelamento_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcelamento Id"
+          },
+          "parcela": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcela"
+          },
+          "parcelas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcelas"
+          },
           "versao": {
             "type": "integer",
             "title": "Versao"
@@ -3207,12 +3328,16 @@
                 },
                 {
                   "$ref": "#/components/schemas/AcaoExcluir"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoCriarParcelamento"
                 }
               ],
               "discriminator": {
                 "propertyName": "acao",
                 "mapping": {
                   "criar": "#/components/schemas/AcaoCriar",
+                  "criar_parcelamento": "#/components/schemas/AcaoCriarParcelamento",
                   "editar": "#/components/schemas/AcaoEditar",
                   "excluir": "#/components/schemas/AcaoExcluir"
                 }
@@ -3782,6 +3907,219 @@
         ],
         "title": "NovoLancamento"
       },
+      "NovoParcelamento": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "const": "despesa",
+            "title": "Tipo",
+            "default": "despesa"
+          },
+          "parcelas": {
+            "type": "integer",
+            "maximum": 420.0,
+            "minimum": 2.0,
+            "title": "Parcelas"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "valor_total_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Total Centavos"
+          },
+          "valor_da_parcela_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Da Parcela Centavos"
+          },
+          "automatico": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automatico"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "parcelas",
+          "data",
+          "conta_id",
+          "categoria_ids"
+        ],
+        "title": "NovoParcelamento"
+      },
+      "Parcelamento": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "const": "despesa",
+            "title": "Tipo",
+            "default": "despesa"
+          },
+          "parcelas": {
+            "type": "integer",
+            "maximum": 420.0,
+            "minimum": 2.0,
+            "title": "Parcelas"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "valor_total_centavos": {
+            "type": "integer",
+            "title": "Valor Total Centavos"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico"
+          },
+          "criado_por": {
+            "type": "string",
+            "title": "Criado Por"
+          },
+          "criado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Criado Em"
+          },
+          "alterado_por": {
+            "type": "string",
+            "title": "Alterado Por"
+          },
+          "alterado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Alterado Em"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "parcelas",
+          "data",
+          "conta_id",
+          "categoria_ids",
+          "valor_total_centavos",
+          "automatico",
+          "criado_por",
+          "criado_em",
+          "alterado_por",
+          "alterado_em"
+        ],
+        "title": "Parcelamento"
+      },
       "PedidoDeExportacao": {
         "properties": {
           "formato": {
@@ -4031,6 +4369,16 @@
               }
             ]
           },
+          "parcelamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Parcelamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "campos": {
             "anyOf": [
               {
@@ -4061,7 +4409,7 @@
           "resultado"
         ],
         "title": "Resultado",
-        "description": "`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os\ncampos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu."
+        "description": "`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os\ncampos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O\nparcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos."
       },
       "ResultadoDoLote": {
         "properties": {

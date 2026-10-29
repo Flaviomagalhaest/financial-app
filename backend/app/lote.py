@@ -1,0 +1,144 @@
+"""O lote da fila do aparelho: as ações feitas sem internet, na ordem, cada uma na sua transação
+e com um resultado por ação (ADR 0011). O parcelamento vai como um pedido só, e o servidor gera
+as parcelas ao receber."""
+
+import logging
+from datetime import datetime
+from typing import Annotated, Literal
+from uuid import UUID
+
+import psycopg
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from app import parcelamentos
+from app.banco import em_transacao
+from app.lancamentos import (
+    AlteracaoDeLancamento,
+    CampoEmConflito,
+    ConflitoDeCampos,
+    Exclusao,
+    Lancamento,
+    LancamentoExcluido,
+    LancamentoNaoEncontrado,
+    NovoLancamento,
+    criar,
+    editar,
+    excluir,
+    url_do_banco,
+)
+from app.login import UsuarioLogado
+from app.parcelamentos import NovoParcelamento, Parcelamento
+
+router = APIRouter(prefix="/api")
+log = logging.getLogger(__name__)
+
+LIMITE_DO_LOTE = 100
+
+
+class AcaoCriar(BaseModel):
+    acao: Literal["criar"]
+    lancamento: NovoLancamento
+
+
+class AcaoEditar(BaseModel):
+    acao: Literal["editar"]
+    id: UUID
+    alteracao: AlteracaoDeLancamento
+
+
+class AcaoExcluir(BaseModel):
+    acao: Literal["excluir"]
+    id: UUID
+    # A versão que o aparelho tinha; sem ela, exclui de qualquer jeito.
+    versao: int | None = None
+    acao_em: datetime | None = None
+
+
+class AcaoCriarParcelamento(BaseModel):
+    acao: Literal["criar_parcelamento"]
+    parcelamento: NovoParcelamento
+
+
+Acao = AcaoCriar | AcaoEditar | AcaoExcluir | AcaoCriarParcelamento
+
+
+class Lote(BaseModel):
+    acoes: list[Annotated[Acao, Field(discriminator="acao")]] = Field(
+        min_length=1, max_length=LIMITE_DO_LOTE
+    )
+
+
+class Resultado(BaseModel):
+    """`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os
+    campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O
+    parcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos."""
+
+    resultado: Literal["aceita", "conflito", "recusada", "descartada"]
+    motivo: str | None = None
+    lancamento: Lancamento | None = None
+    parcelamento: Parcelamento | None = None
+    campos: list[CampoEmConflito] | None = None
+    exclusao: Exclusao | None = None
+
+
+class ResultadoDoLote(BaseModel):
+    resultados: list[Resultado]
+
+
+def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
+    """As mesmas regras das rotas de um lançamento só; a recusa de uma não para as outras.
+
+    Banco fora do ar ou disputa perdida derrubam o lote inteiro, que o aparelho reenvia; outro
+    erro fica só nesta ação, recusada, para não travar a fila para sempre.
+    """
+    try:
+        return _executar(url_do_banco(request), acao, usuario)
+    except LancamentoNaoEncontrado:
+        return Resultado(resultado="recusada", motivo="lançamento não encontrado")
+    except LancamentoExcluido as e:
+        return Resultado(resultado="descartada", motivo=e.exclusao.motivo, exclusao=e.exclusao)
+    except ConflitoDeCampos as e:
+        conflito = e.conflito
+        return Resultado(
+            resultado="conflito",
+            motivo=conflito.motivo,
+            lancamento=conflito.lancamento,
+            campos=conflito.campos,
+        )
+    except HTTPException as erro:
+        if erro.status_code == 422:
+            return Resultado(resultado="recusada", motivo=erro.detail)
+        raise
+    except psycopg.OperationalError:
+        raise
+    except Exception:
+        log.exception("ação do lote falhou")
+        return Resultado(resultado="recusada", motivo="erro no servidor")
+
+
+def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
+    match acao:
+        case AcaoCriarParcelamento(parcelamento=novo):
+            # Grava numa transação e gera as parcelas em outras (o limite de linhas do DSQL).
+            criado, _ = parcelamentos.criar(url, novo, usuario)
+            return Resultado(resultado="aceita", parcelamento=criado)
+        case _:
+            return em_transacao(url, lambda conn: _aplicar_na(conn, acao, usuario))
+
+
+def _aplicar_na(conn, acao: Acao, usuario: str) -> Resultado:
+    match acao:
+        case AcaoCriar(lancamento=novo):
+            return Resultado(resultado="aceita", lancamento=criar(conn, novo, usuario)[0])
+        case AcaoEditar(id=id, alteracao=alteracao):
+            return Resultado(resultado="aceita", lancamento=editar(conn, id, alteracao, usuario))
+        case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
+            excluir(conn, id, versao, usuario, acao_em)
+            return Resultado(resultado="aceita")
+
+
+@router.post("/lancamentos/lote", response_model=ResultadoDoLote, operation_id="enviar_lote")
+def enviar_lote(lote: Lote, usuario: UsuarioLogado, request: Request) -> ResultadoDoLote:
+    """A fila do aparelho: as ações na ordem, cada uma na sua transação, um resultado por ação."""
+    return ResultadoDoLote(resultados=[_aplicar(a, usuario, request) for a in lote.acoes])

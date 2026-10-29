@@ -250,20 +250,21 @@ def _novo_padrao(conn, titular: faturas.Titular, usuario: str) -> None:
 
 
 def _redistribuir(conn, titular: faturas.Titular, meses: list[date], usuario: str) -> None:
-    """Escolhe de novo a fatura das compras desses meses, salvo as trocadas à mão. A compra
-    que muda de fatura conta como mudança do app, com a origem, para a tela de conflito
-    (ADR 0011). Sem dia de fechamento no cartão, toda compra já teve a fatura escolhida."""
+    """Escolhe de novo a fatura das compras desses meses, salvo as trocadas à mão; a parcela n
+    fica n - 1 faturas depois da fatura da compra. A compra que muda de fatura conta como
+    mudança do app, com a origem, para a tela de conflito (ADR 0011). Sem dia de fechamento no
+    cartão, toda compra já teve a fatura escolhida."""
     if titular.dia_fechamento is None:
         return
     compras = conn.execute(
-        "SELECT l.id, l.data, l.mes, COALESCE(l.versao, 1) FROM lancamentos l"
+        "SELECT l.id, l.data, l.mes, COALESCE(l.versao, 1), l.parcela FROM lancamentos l"
         " JOIN cartoes c ON c.id = l.conta_id"
         " WHERE COALESCE(c.titular_id, c.id) = %s AND l.mes = ANY(%s)"
         " AND l.excluido_em IS NULL AND NOT COALESCE(l.fatura_a_mao, false)",
         (titular.id, meses),
     ).fetchall()
-    for id, data, mes, versao in compras:
-        nova = faturas.mes_da_compra(conn, titular, data)
+    for id, data, mes, versao, parcela in compras:
+        nova = faturas.mes_da_parcela(conn, titular, data, parcela)
         if nova == mes:
             continue
         faturas.garantir_fatura(conn, titular, nova)

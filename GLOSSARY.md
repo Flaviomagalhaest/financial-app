@@ -86,7 +86,7 @@ Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lança
 _Avoid_: compra parcelada, financiamento
 
 **Parcela**:
-Lançamento que é uma das N partes de um parcelamento (ex.: 3/10).
+Lançamento que é uma das N partes de um parcelamento (ex.: 3/10). No cartão, todas têm a data da compra e a parcela n cai n − 1 faturas depois da fatura da compra; fora dele (o boleto), a parcela n vence n − 1 meses depois da primeira.
 _Avoid_: prestação
 
 **Automático**:

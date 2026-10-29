@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 12
+VERSAO_FORMATO = 13
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -267,6 +267,46 @@ def _da_versao_11_para_a_12(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_12_para_a_13(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 13 (ticket 46) traz os parcelamentos e liga a parcela ao parcelamento que a
+    gerou. Os lançamentos antigos entram avulsos, sem parcelamento e sem número de parcela."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "parcelamento_id" not in colunas:
+        tabelas["lancamentos"] = (
+            [*colunas, "parcelamento_id", "parcela"],
+            [[*linha, None, None] for linha in linhas],
+        )
+        manifesto["tabelas"]["lancamentos"]["somas"]["parcela"] = "0"
+    novas = {
+        "parcelamentos": (
+            [
+                "id",
+                "tipo",
+                "valor_total_centavos",
+                "parcelas",
+                "data",
+                "automatico",
+                "descricao",
+                "conta_id",
+                "pessoa",
+                "geradas",
+                "criado_por",
+                "criado_em",
+                "alterado_por",
+                "alterado_em",
+            ],
+            {"valor_total_centavos": "0", "parcelas": "0", "geradas": "0"},
+        ),
+        "parcelamento_categorias": (["parcelamento_id", "categoria_id"], {}),
+        "parcelamento_tags": (["parcelamento_id", "tag_id"], {}),
+    }
+    for tabela, (colunas_novas, somas) in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas_novas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -281,6 +321,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     9: _da_versao_9_para_a_10,
     10: _da_versao_10_para_a_11,
     11: _da_versao_11_para_a_12,
+    12: _da_versao_12_para_a_13,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

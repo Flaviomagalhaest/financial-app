@@ -211,6 +211,43 @@ def test_planilha_traz_todo_o_historico_com_nomes_no_lugar_dos_ids(
     ]
 
 
+def test_planilha_traz_cada_parcela_com_o_numero_dela_como_no_mobills(
+    database_url: str, emissor: Emissor, casal: Casal
+):
+    cartao = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/cartoes",
+        json={"nome": "Nubank", "dia_fechamento": 25, "dia_vencimento": 5},
+    ).json()["id"]
+    casal.pedir(
+        "flavio",
+        "POST",
+        "/api/parcelamentos",
+        json={
+            "id": str(uuid.uuid4()),
+            "valor_total_centavos": 300001,
+            "parcelas": 2,
+            "data": "2026-03-28",
+            "descricao": "Geladeira",
+            "conta_id": cartao,
+            "categoria_ids": [casal.categoria("Casa")],
+        },
+    )
+    s3 = S3Falso()
+
+    _cliente(database_url, emissor, s3).post(
+        "/api/exportacoes", json={"formato": "planilha"}, headers=emissor.cabecalho("flavio")
+    )
+
+    linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")
+    assert linhas[1:] == [
+        "2026-03-28;Geladeira (1/2);-1500,01;Nubank;2026-04;Casa;;;efetivado;Flávio;Flávio",
+        "2026-03-28;Geladeira (2/2);-1500,00;Nubank;2026-05;Casa;;;efetivado;Flávio;Flávio",
+        "",
+    ]
+
+
 def test_exportar_sem_token_e_recusado(database_url: str, emissor: Emissor, banco_ficticio):
     s3 = S3Falso()
 

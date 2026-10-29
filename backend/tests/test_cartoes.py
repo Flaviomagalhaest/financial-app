@@ -428,6 +428,7 @@ def test_compra_no_cartao_arquivado_pela_fila_fica_recusada_com_o_motivo(casal: 
             "resultado": "recusada",
             "motivo": "cartão arquivado",
             "lancamento": None,
+            "parcelamento": None,
             "campos": None,
             "exclusao": None,
         }

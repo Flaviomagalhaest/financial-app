@@ -138,7 +138,12 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             l["situacao"],
             l["criado_por"],
             l["alterado_por"],
-            descricao=l["descricao"],
+            # A parcela como o Mobills a escreve: "Geladeira (3/10)".
+            descricao=(
+                f"{l['descricao']} ({l['parcela']}/{l['parcelas']})".lstrip()
+                if l["parcela"]
+                else l["descricao"]
+            ),
             valor=_reais(-l["valor"] if l["tipo"] == "despesa" else l["valor"]),
             conta_ou_cartao=contas.get(l["conta_id"], ""),
             fatura=l["mes"].strftime("%Y-%m") if l["no_cartao"] else "",
@@ -150,7 +155,10 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             conn,
             "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id,"
             f" pessoa, criado_por, alterado_por, criado_em, {MES_EM_QUE_CONTA} AS mes,"
-            f" {NO_CARTAO} AS no_cartao FROM lancamentos WHERE excluido_em IS NULL",
+            f" {NO_CARTAO} AS no_cartao, parcela, (SELECT p.parcelas FROM parcelamentos p"
+            " WHERE p.id = lancamentos.parcelamento_id) AS parcelas"
+            # As parcelas no cartão têm a mesma data: a ordem delas fica a do número.
+            " FROM lancamentos WHERE excluido_em IS NULL ORDER BY parcela",
         )
     ] + [
         linha(
