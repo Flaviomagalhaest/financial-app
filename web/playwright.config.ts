@@ -20,7 +20,12 @@ export default defineConfig({
         "uv run python -m app.migrations && uv run uvicorn app.main:create_app --factory --port 8765",
       cwd: "../backend",
       url: "http://127.0.0.1:8765/api/saude",
-      env: { DATABASE_URL: urlDoBanco ?? "", JWT_EMISSOR: emissor, JWT_AUDIENCIA: clienteId },
+      env: {
+        DATABASE_URL: urlDoBanco ?? "",
+        JWT_EMISSOR: emissor,
+        JWT_AUDIENCIA: clienteId,
+        PESSOAS: JSON.stringify({ "sub-flavio": "Flávio", "sub-esposa": "Fulana" }),
+      },
       reuseExistingServer: !process.env.CI,
     },
     {

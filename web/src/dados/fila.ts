@@ -28,7 +28,7 @@ export const LISTA = "/api/lancamentos";
 /** O mesmo limite do servidor (`LIMITE_DO_LOTE`). */
 const LIMITE_DO_LOTE = 100;
 /** Os campos que o servidor versiona um a um (`CAMPOS` em `lancamentos.py`). */
-export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags"];
+export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags", "pessoa", "fatura_mes"];
 
 type Proximo = Omit<ItemDaFila, "id" | "desde" | "revisao"> | null;
 
@@ -37,7 +37,7 @@ async function mudar(id: string, proximo: (atual: ItemDaFila | undefined) => Pro
     const atual: ItemDaFila | undefined = await pedido(fila.get(id));
     const item = proximo(atual);
     if (!item) await pedido(fila.delete(id));
-    else await pedido(fila.put({ ...item, id, desde: atual?.desde ?? Date.now(), revisao: (atual?.revisao ?? 0) + 1 }));
+    else await pedido(fila.put({ ...item, id, desde: atual?.desde ?? Date.now(), feitoEm: Date.now(), revisao: (atual?.revisao ?? 0) + 1 }));
   });
 }
 
@@ -57,15 +57,17 @@ export function alteracao(lancamento: NovoLancamento, base: Base | undefined): A
   const mudou: Record<string, unknown> = {};
   for (const campo of CAMPOS) {
     const valor = lancamento[campo];
-    if (campo === "situacao" && !valor) continue;
-    if (!base || comparavel(campo, valor) !== comparavel(campo, base[campo])) mudou[campo] = valor;
+    // Sem fatura, o servidor escolhe; mandar a fatura é trocá-la à mão.
+    if ((campo === "situacao" || campo === "fatura_mes") && !valor) continue;
+    // O servidor lê `pessoa` ausente como "fica" e vazia como "do conjunto".
+    if (!base || comparavel(campo, valor) !== comparavel(campo, base[campo])) mudou[campo] = campo === "pessoa" ? (valor ?? "") : valor;
   }
   return { versao: base?.versao ?? 0, ...mudou };
 }
 
 export function comoNovo(l: Lancamento): NovoLancamento {
-  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags } = l;
-  return { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags };
+  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa } = l;
+  return { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa };
 }
 
 /**
@@ -125,7 +127,9 @@ export function lancarDeNovo(id: string): Promise<void> {
     const atual: ItemDaFila | undefined = await pedido(fila.get(id));
     if (!atual?.exclusao || !atual.lancamento) return;
     await pedido(fila.delete(id));
-    await pedido(fila.put({ id: novoId, acao: "criar", lancamento: { ...atual.lancamento, id: novoId }, desde: Date.now(), revisao: 1 }));
+    await pedido(
+      fila.put({ id: novoId, acao: "criar", lancamento: { ...atual.lancamento, id: novoId }, desde: Date.now(), feitoEm: Date.now(), revisao: 1 }),
+    );
   });
 }
 
@@ -149,7 +153,16 @@ export function guardarConflito(lancamento: NovoLancamento, base: Base, conflito
   return emTransacao("readwrite", async (fila, respostas) => {
     const atual: ItemDaFila | undefined = await pedido(fila.get(lancamento.id));
     await pedido(
-      fila.put({ id: lancamento.id, acao: "editar", lancamento, base, conflito, desde: atual?.desde ?? Date.now(), revisao: (atual?.revisao ?? 0) + 1 }),
+      fila.put({
+        id: lancamento.id,
+        acao: "editar",
+        lancamento,
+        base,
+        conflito,
+        desde: atual?.desde ?? Date.now(),
+        feitoEm: Date.now(),
+        revisao: (atual?.revisao ?? 0) + 1,
+      }),
     );
     await trocarNaLista(respostas, conflito.lancamento);
   });
@@ -163,9 +176,11 @@ export const esperaAPessoa = (item: ItemDaFila) => !!(item.recusa || item.confli
  * a edição atrás: no servidor, reenviar o criar devolve o que já está gravado.
  */
 function acoesDo(item: ItemDaFila): Acao[] {
-  if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao }];
-  const lancamento = item.lancamento!;
-  const editar: Acao = { acao: "editar", id: item.id, alteracao: alteracao(lancamento, item.base) };
+  // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
+  const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
+  if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
+  const lancamento = { ...item.lancamento!, acao_em };
+  const editar: Acao = { acao: "editar", id: item.id, alteracao: { ...alteracao(lancamento, item.base), acao_em } };
   if (item.acao === "editar") return [editar];
   const comEdicao = item.talvezNoServidor !== undefined && item.talvezNoServidor !== item.revisao;
   return comEdicao ? [{ acao: "criar", lancamento }, editar] : [{ acao: "criar", lancamento }];

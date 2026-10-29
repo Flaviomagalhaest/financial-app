@@ -478,3 +478,17 @@ def test_adicional_de_titular_arquivado_recusa_compra_nova(casal: Casal):
 
     assert resposta.status_code == 422
     assert resposta.json()["detail"] == "cartão arquivado"
+
+
+def test_mesma_compra_no_mesmo_cartao_pelos_dois_parece_repetida(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    mercado = casal.categoria()
+    do_flavio = casal.pedir(
+        "flavio", "POST", "/api/lancamentos", json=lancamento(cartao, [mercado], data="2026-04-02")
+    ).json()
+
+    da_esposa = casal.pedir(
+        "esposa", "POST", "/api/lancamentos", json=lancamento(cartao, [mercado], data="2026-04-03")
+    ).json()
+
+    assert da_esposa["parece_repetido_de"] == do_flavio["id"]

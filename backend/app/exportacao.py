@@ -18,6 +18,7 @@ from psycopg import IsolationLevel
 
 from app.backup import conferir_backup, gerar_backup
 from app.banco import conectar, em_transacao
+from app.pessoas import configuradas
 
 Formato = Literal["backup", "planilha"]
 VALIDADE_DA_URL = 300
@@ -89,19 +90,102 @@ def exportar(s3, bucket: str, usuario: str, formato: Formato, url: str | None = 
 
 
 def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
-    """Lançamentos com nomes no lugar dos ids, de todo o histórico (sem filtro por período).
+    """Lançamentos e transferências com nomes no lugar dos ids, de todo o histórico (sem filtro
+    por período), em ordem de data. O excluído fica de fora, como em todas as leituras.
 
-    As tabelas de contas, cartões, faturas, categorias e tags já existem, mas a pessoa do
-    lançamento ainda não (ticket 41): enquanto a coluna faltar, a planilha sai só com o
-    cabeçalho. Ligar a consulta ao esquema real é o ticket 77, junto com o 41.
+    A transferência sai numa linha, com "origem → destino" e o valor sem sinal: não é despesa
+    nem receita (ADR 0014). A pessoa, quem criou e quem alterou saem pelo nome de `PESSOAS`.
     """
-    tem_pessoa = conn.execute(
-        "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'public'"
-        " AND table_name = 'lancamentos' AND column_name = 'pessoa')"
-    ).fetchone()[0]
-    if not tem_pessoa:
-        return []
-    raise NotImplementedError("consulta da planilha: ticket 77")
+    pessoas = configuradas()
+    contas = dict(conn.execute("SELECT id, nome FROM contas").fetchall())
+    contas |= dict(conn.execute("SELECT id, nome FROM cartoes").fetchall())
+    categorias: dict = {}
+    for lancamento_id, nome in conn.execute(
+        "SELECT lc.lancamento_id, c.nome FROM lancamento_categorias lc"
+        " JOIN categorias c ON c.id = lc.categoria_id ORDER BY c.nome"
+    ):
+        categorias.setdefault(lancamento_id, []).append(nome)
+    tags: dict = {}
+    for lancamento_id, nome in conn.execute(
+        "SELECT lt.lancamento_id, t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
+        " ORDER BY t.nome"
+    ):
+        tags.setdefault(lancamento_id, []).append(nome)
+
+    def nome(pessoa: str | None) -> str:
+        return pessoas.get(pessoa, pessoa) if pessoa else ""
+
+    situacao = {"previsto": "previsto", "realizado": "efetivado"}
+    linhas = []
+    for (
+        id,
+        tipo,
+        sit,
+        valor,
+        data,
+        descricao,
+        conta,
+        pessoa,
+        por,
+        alterou,
+        mes,
+        cartao,
+        em,
+    ) in conn.execute(
+        "SELECT id, tipo, situacao, valor_centavos, data, descricao, conta_id, pessoa,"
+        " criado_por, alterado_por, COALESCE(mes, date_trunc('month', data)::date),"
+        " EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id), criado_em"
+        " FROM lancamentos WHERE excluido_em IS NULL"
+    ):
+        linhas.append(
+            (
+                data,
+                em,
+                {
+                    "data": data.isoformat(),
+                    "descricao": descricao,
+                    "valor": _reais(-valor if tipo == "despesa" else valor),
+                    "conta_ou_cartao": contas.get(conta, ""),
+                    "fatura": mes.strftime("%Y-%m") if cartao else "",
+                    "categorias": categorias.get(id, []),
+                    "tags": tags.get(id, []),
+                    "pessoa": nome(pessoa),
+                    "situacao": situacao[sit],
+                    "criado_por": nome(por),
+                    "alterado_por": nome(alterou),
+                },
+            )
+        )
+    for sit, valor, data, descricao, origem, destino, categoria, por, alterou, em in conn.execute(
+        "SELECT t.situacao, t.valor_centavos, t.data, t.descricao, t.conta_origem_id,"
+        " t.conta_destino_id, c.nome, t.criado_por, t.alterado_por, t.criado_em"
+        " FROM transferencias t LEFT JOIN categorias c ON c.id = t.categoria_id"
+    ):
+        linhas.append(
+            (
+                data,
+                em,
+                {
+                    "data": data.isoformat(),
+                    "descricao": descricao,
+                    "valor": _reais(valor),
+                    "conta_ou_cartao": f"{contas.get(origem, '')} → {contas.get(destino, '')}",
+                    "fatura": "",
+                    "categorias": [categoria] if categoria else [],
+                    "tags": [],
+                    "pessoa": "",
+                    "situacao": situacao[sit],
+                    "criado_por": nome(por),
+                    "alterado_por": nome(alterou),
+                },
+            )
+        )
+    return [linha for _, _, linha in sorted(linhas, key=lambda linha: linha[:2])]
+
+
+def _reais(centavos: int) -> str:
+    sinal = "-" if centavos < 0 else ""
+    return f"{sinal}{abs(centavos) // 100}.{abs(centavos) % 100:02d}"
 
 
 def formatar_planilha(linhas: list[dict]) -> bytes:

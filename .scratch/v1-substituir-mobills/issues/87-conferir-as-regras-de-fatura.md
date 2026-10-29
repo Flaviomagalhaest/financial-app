@@ -7,7 +7,7 @@ Skills: `grilling`, `domain-modeling` (HITL: decisões do dono)
 Modelo recomendado: Opus
 Effort recomendado: medium
 Issue: #165
-Origem: [ticket 37](37-cartoes-e-faturas.md): a spec e a [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md) não dizem o que fazer nestes casos, e o ticket 37 escolheu um comportamento provisório para cada um (já em `backend/app/cartoes.py` e `backend/app/faturas.py`, com teste)
+Origem: [ticket 37](37-cartoes-e-faturas.md) (e o [77](77-ligar-o-csv-de-planilha-ao-esquema-real.md), feito com ele): a spec e a [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md) não dizem o que fazer nestes casos, e o ticket 37 escolheu um comportamento provisório para cada um (já em `backend/app/cartoes.py` e `backend/app/faturas.py`, com teste)
 
 ## O que decidir
 
@@ -24,4 +24,5 @@ Para cada regra abaixo, o dono confirma o comportamento provisório ou pede outr
 - [ ] **Troca de fatura sem volta**: não há "voltar para a fatura que o app escolheria"; trocar para a fatura certa continua marcado como à mão (só trocar de cartão desfaz a marca)
 - [ ] **Trocar para a fatura que o app já escolheu não marca a troca**: o pedido não muda nada, então a próxima mudança de data escolhe a fatura de novo. Alternativa: marcar como à mão mesmo assim
 - [ ] **Cartão sem dia de fechamento** (os inativos do histórico) recusa a compra sem a fatura escolhida
+- [ ] **CSV de planilha** ([ticket 77](77-ligar-o-csv-de-planilha-ao-esquema-real.md), feito com o 37): a transferência sai numa linha só ("Corrente → Poupança", valor sem sinal), os nomes das colunas ficam sem acento (`descricao`, `situacao`) e a coluna `fonte` (importado do Mobills ou app) fica de fora. Alternativas: duas linhas por transferência (saída e entrada), cabeçalho com acento, coluna `fonte`
 - [ ] **Fatura fechada no próprio dia do fechamento** (`situacao: fechada` a partir dele), como a compra desse dia, que já vai para a seguinte

@@ -262,16 +262,27 @@ def _redistribuir(conn, titular: faturas.Titular, meses: list[date], usuario: st
         " AND l.excluido_em IS NULL AND NOT COALESCE(l.fatura_a_mao, false)",
         (titular.id, meses),
     ).fetchall()
+    agora = datetime.now(UTC)
     for id, data, mes, versao in compras:
         nova = faturas.mes_da_compra(conn, titular, data)
         if nova == mes:
             continue
         faturas.garantir_fatura(conn, titular, nova)
         versao = lancamentos.subir_versao(
-            conn, id, versao, "mes = %s, alterado_por = %s, alterado_em = now()", (nova, usuario)
+            conn,
+            id,
+            versao,
+            "mes = %s, alterado_por = %s, alterado_em = %s",
+            (nova, usuario, agora),
         )
         lancamentos.registrar_mudancas(
-            conn, id, ["fatura_mes"], versao, usuario, origem=f"datas do cartão {titular.nome}"
+            conn,
+            id,
+            ["fatura_mes"],
+            versao,
+            usuario,
+            agora,
+            origem=f"datas do cartão {titular.nome}",
         )
 
 

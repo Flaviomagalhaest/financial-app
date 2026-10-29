@@ -190,6 +190,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "contas": 0,
             "exportacoes": 0,
             "faturas": 0,
+            "itens_do_planejamento": 0,
             "lancamento_campos": 0,
             "lancamento_categorias": 0,
             "lancamento_tags": 0,
@@ -296,9 +297,9 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
             if nome in ("lancamento_campos.csv", "cartoes.csv", "faturas.csv"):
                 continue
             if nome == "lancamentos.csv":
-                # Sem as colunas da versão 7 nem as da 8 (mes e fatura_a_mao), as últimas.
+                # Sem as colunas das versões 7, 9 e 10, as últimas.
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-5]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-8]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -318,7 +319,74 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
         ).fetchall() == [(1000, None, None)]
 
 
-def test_backup_da_versao_7_sem_cartoes_restaura_cada_lancamento_no_mes_da_data(database_url):
+def test_backup_da_versao_7_sem_itens_do_planejamento_restaura_com_o_planejamento_vazio(
+    database_url,
+):
+    # O que `prod` gravava antes do ticket 49: nenhuma tabela de itens do planejamento.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        atual = gerar_backup(conn)
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            if nome == "itens_do_planejamento.csv":
+                continue
+            conteudo = origem.read(nome)
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 7
+                del manifesto["tabelas"]["itens_do_planejamento"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert manifesto["tabelas"]["itens_do_planejamento"]["linhas"] == 0
+        assert conn.execute("SELECT count(*) FROM itens_do_planejamento").fetchone() == (0,)
+
+
+def test_backup_da_versao_8_sem_pessoa_nem_fonte_restaura_do_conjunto_e_do_app(database_url):
+    # O que `prod` gravava antes do ticket 41: lançamentos sem pessoa, sem fonte e sem conferência.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, conta_id,"
+            " criado_por, alterado_por, versao) VALUES ('00000000-0000-0000-0000-000000000001',"
+            " 'despesa', 'realizado', 1000, '2026-10-02', '00000000-0000-0000-0000-000000000002',"
+            " 'flavio', 'flavio', 1)"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome in ("cartoes.csv", "faturas.csv"):
+                continue
+            if nome == "lancamentos.csv":
+                # Sem as colunas das versões 9 e 10, as últimas.
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-5]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 8
+                del manifesto["tabelas"]["cartoes"], manifesto["tabelas"]["faturas"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute(
+            "SELECT valor_centavos, pessoa, fonte, repetido_mantido_em FROM lancamentos"
+        ).fetchall() == [(1000, None, None, None)]
+
+
+def test_backup_da_versao_9_sem_cartoes_restaura_cada_lancamento_no_mes_da_data(database_url):
     # O que `prod` gravava antes do ticket 37: sem cartões nem faturas, e o lançamento sem o mês
     # em que conta. Antes dos cartões todo lançamento era de conta, e conta no mês da data.
     aplicar_migrations(database_url)
@@ -343,7 +411,7 @@ def test_backup_da_versao_7_sem_cartoes_restaura_cada_lancamento_no_mes_da_data(
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
-                manifesto["versao_formato"] = 7
+                manifesto["versao_formato"] = 9
                 del manifesto["tabelas"]["cartoes"], manifesto["tabelas"]["faturas"]
                 conteudo = json.dumps(manifesto).encode()
             destino.writestr(nome, conteudo)

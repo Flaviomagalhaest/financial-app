@@ -80,7 +80,7 @@ test("mudança no mesmo campo vira conflito: o aparelho mostra a versão do serv
   await minha.getByRole("link", { name: `Decidir ${descricao}` }).click();
   const valor = page.getByRole("group", { name: "Valor" });
   await expect(valor.getByRole("button", { name: "O seu: R$ 10,07" })).toBeVisible();
-  await expect(valor.getByRole("button", { name: /^O da outra pessoa, às \d\d:\d\d: R\$ 10,05$/ })).toBeVisible();
+  await expect(valor.getByRole("button", { name: /^O de Fulana, às \d\d:\d\d: R\$ 10,05$/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Salvar a decisão" })).toBeDisabled();
   await valor.getByRole("button", { name: "O seu: R$ 10,07" }).click();
   await page.getByRole("button", { name: "Salvar a decisão" }).click();
@@ -121,7 +121,7 @@ test("a exclusão vence a edição, com aviso e 'Lançar de novo'", async ({ pag
   await context.setOffline(false);
 
   const minha = linha(page, descricao);
-  await expect(minha).toContainText("A outra pessoa excluiu este lançamento; sua alteração não foi salva.");
+  await expect(minha).toContainText("Fulana excluiu este lançamento; sua alteração não foi salva.");
   await aba(page, "Hoje");
   await expect(page.getByTestId("nao-enviados")).toContainText("1 excluído pela outra pessoa");
   await aba(page, "Histórico");
@@ -149,7 +149,7 @@ test("excluir o que a outra pessoa mudou depois pergunta antes", async ({ page, 
   await expect(minha).toContainText("⚠ conflito");
   await expect(minha).toContainText("− R$ 10,05");
   await minha.getByRole("link", { name: `Decidir ${descricao}` }).click();
-  await expect(page.getByText("A outra pessoa alterou este lançamento depois da versão que você excluiu: valor.")).toBeVisible();
+  await expect(page.getByText("Fulana alterou este lançamento depois da versão que você excluiu: valor.")).toBeVisible();
   await page.getByRole("button", { name: "Excluir mesmo assim" }).click();
 
   await expect(minha).toHaveCount(0);
@@ -192,7 +192,7 @@ test("confirmar com ajuste o que a outra pessoa já confirmou leva à tela de co
   await page.getByRole("button", { name: "Confirmar com ajuste" }).click();
 
   const valor = page.getByRole("group", { name: "Valor" });
-  await expect(valor.getByRole("button", { name: /^O da outra pessoa, às \d\d:\d\d: R\$ 1,00$/ })).toBeVisible();
+  await expect(valor.getByRole("button", { name: /^O de Fulana, às \d\d:\d\d: R\$ 1,00$/ })).toBeVisible();
   await valor.getByRole("button", { name: "O seu: R$ 10,07" }).click();
   await page.getByRole("button", { name: "Salvar a decisão" }).click();
 

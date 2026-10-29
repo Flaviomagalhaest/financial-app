@@ -41,6 +41,9 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
         "alterado_por": "flavio",
         "criado_em": None,
         "alterado_em": None,
+        "pessoa": None,
+        "fonte": "app",
+        "parece_repetido_de": None,
     }
 
 

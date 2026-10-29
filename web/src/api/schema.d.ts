@@ -224,6 +224,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lancamentos/{id}/manter-os-dois": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manter Os Dois
+         * @description O casal conferiu o "Parece repetido" e os dois lançamentos ficam. Não é uma mudança do
+         *     lançamento: não sobe a versão nem entra no conflito.
+         */
+        post: operations["manter_os_dois"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lancamentos/lote": {
         parameters: {
             query?: never;
@@ -255,7 +276,8 @@ export interface paths {
         put?: never;
         /**
          * Juntar Categoria
-         * @description Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem.
+         * @description Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,
+         *     do mesmo tipo, e exclui a origem.
          */
         post: operations["juntar_categoria"];
         delete?: never;
@@ -449,6 +471,78 @@ export interface paths {
         patch: operations["editar_fatura"];
         trace?: never;
     };
+    "/api/planejamento/{mes}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Planejamento */
+        get: operations["ler_planejamento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}/itens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Criar Item */
+        post: operations["criar_item_do_planejamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/itens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir Item
+         * @description Idempotente. Os lançamentos ficam como estão: só deixam de contar no item.
+         */
+        delete: operations["excluir_item_do_planejamento"];
+        options?: never;
+        head?: never;
+        /** Mudar Item */
+        patch: operations["mudar_item_do_planejamento"];
+        trace?: never;
+    };
+    "/api/pessoas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Pessoas */
+        get: operations["listar_pessoas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -490,6 +584,8 @@ export interface components {
             id: string;
             /** Versao */
             versao?: number | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * AlteracaoDeCategoria
@@ -535,8 +631,12 @@ export interface components {
             situacao?: ("previsto" | "realizado") | null;
             /** Tags */
             tags?: string[] | null;
+            /** Pessoa */
+            pessoa?: string | null;
             /** Fatura Mes */
             fatura_mes?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * CampoEmConflito
@@ -548,7 +648,7 @@ export interface components {
              * Campo
              * @enum {string}
              */
-            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "fatura_mes";
+            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa" | "fatura_mes";
             /** Alterado Por */
             alterado_por: string;
             /**
@@ -620,6 +720,8 @@ export interface components {
             data?: string | null;
             /** Conta Id */
             conta_id?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * Conflito
@@ -764,6 +866,29 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** ItemDoPlanejamento */
+        ItemDoPlanejamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Planejado Centavos */
+            planejado_centavos: number;
+            /** Realizado Centavos */
+            realizado_centavos: number;
+            /** Previsto Centavos */
+            previsto_centavos: number;
+            /** Percentual */
+            percentual: number;
+            /** Ainda Da Para Gastar Centavos */
+            ainda_da_para_gastar_centavos: number;
+        };
         /** Juncao */
         Juncao: {
             /**
@@ -813,6 +938,8 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
             /** Fatura Mes */
             fatura_mes?: string | null;
             /**
@@ -838,11 +965,24 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+            /**
+             * Fonte
+             * @default app
+             * @enum {string}
+             */
+            fonte: "app" | "mobills";
+            /** Parece Repetido De */
+            parece_repetido_de?: string | null;
         };
         /** Lote */
         Lote: {
             /** Acoes */
             acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"])[];
+        };
+        /** MudancaDeItem */
+        MudancaDeItem: {
+            /** Valor Centavos */
+            valor_centavos: number;
         };
         /** MudancaDeTag */
         MudancaDeTag: {
@@ -936,6 +1076,21 @@ export interface components {
             /** Titular Id */
             titular_id?: string | null;
         };
+        /** NovoItem */
+        NovoItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+        };
         /** NovoLancamento */
         NovoLancamento: {
             /**
@@ -974,8 +1129,12 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
             /** Fatura Mes */
             fatura_mes?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
@@ -984,6 +1143,24 @@ export interface components {
              * @enum {string}
              */
             formato: "backup" | "planilha";
+        };
+        /** Pessoa */
+        Pessoa: {
+            /** Id */
+            id: string;
+            /** Nome */
+            nome: string;
+            /** Eu */
+            eu: boolean;
+        };
+        /** Planejamento */
+        Planejamento: {
+            /** Mes */
+            mes: string;
+            /** Itens */
+            itens: components["schemas"]["ItemDoPlanejamento"][];
+            /** Ainda Da Para Gastar Centavos */
+            ainda_da_para_gastar_centavos: number;
         };
         /**
          * Resultado
@@ -1458,6 +1635,7 @@ export interface operations {
         parameters: {
             query?: {
                 versao?: number | null;
+                acao_em?: string | null;
             };
             header?: never;
             path: {
@@ -1598,6 +1776,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conflito"];
+                };
+            };
+            /** @description O lançamento foi excluído */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exclusao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manter_os_dois: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"];
                 };
             };
             /** @description O lançamento foi excluído */
@@ -2119,6 +2337,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Planejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    criar_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoItem"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mudar_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MudancaDeItem"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_pessoas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pessoa"][];
                 };
             };
         };

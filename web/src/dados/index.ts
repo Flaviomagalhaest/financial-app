@@ -35,6 +35,7 @@ import {
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
+export type Pessoa = components["schemas"]["Pessoa"];
 export type { Campo } from "./fila";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { comoNovo } from "./fila";
@@ -46,6 +47,16 @@ export type LancamentoNaTela = NovoLancamento & {
   atrasado?: boolean;
   /** A versão do servidor que a tela mostra; o não enviado não tem. */
   versao?: number;
+  /** Autoria e origem, como o servidor as tem; o criado só no aparelho ainda não tem. */
+  criado_por?: string;
+  criado_em?: string;
+  alterado_por?: string;
+  alterado_em?: string;
+  fonte?: Lancamento["fonte"];
+  /** O lançamento da outra pessoa que este parece repetir. */
+  parece_repetido_de?: string | null;
+  /** A hora da última ação no aparelho, enquanto a mudança não subiu. */
+  feitoEm?: number;
   naoEnviado: boolean;
   recusa?: string;
   /** A mudança do aparelho espera decisão; enquanto isso, a tela mostra a versão do servidor. */
@@ -59,6 +70,7 @@ const LEITURAS = {
   "/api/contas": () => api.GET("/api/contas"),
   "/api/contas?arquivadas=true": () => api.GET("/api/contas", { params: { query: { arquivadas: true } } }),
   "/api/categorias": () => api.GET("/api/categorias"),
+  "/api/pessoas": () => api.GET("/api/pessoas"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -154,7 +166,7 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
     const situacao = situacaoNoAparelho(lancamento, anterior);
     // O atraso é regra do servidor: vale o dele enquanto a mudança não mexe em data nem situação.
     const atrasado = anterior?.data === lancamento.data && anterior.situacao === situacao ? anterior.atrasado : undefined;
-    const mostrado = { ...lancamento, situacao, atrasado, naoEnviado: true, recusa: item.recusa, exclusao: item.exclusao };
+    const mostrado = { ...anterior, ...lancamento, situacao, atrasado, naoEnviado: true, recusa: item.recusa, exclusao: item.exclusao, feitoEm: item.feitoEm };
     if (anterior) porId.set(item.id, mostrado);
     else novos.unshift(mostrado);
   }
@@ -184,6 +196,14 @@ export function useCadastro() {
     atualizadoEm: contas.atualizadoEm ?? categorias.atualizadoEm,
     recarregar,
   };
+}
+
+/** As duas pessoas do casal; `euId` é a que está usando o aparelho. */
+export function usePessoas() {
+  const { dados } = useResposta("/api/pessoas");
+  const pessoas = dados ?? [];
+  const nomeDe = (id: string | null | undefined) => pessoas.find((p) => p.id === id)?.nome ?? "a outra pessoa";
+  return { pessoas, euId: pessoas.find((p) => p.eu)?.id, nomeDe };
 }
 
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
@@ -247,6 +267,15 @@ export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<voi
 }
 
 export const descartarNaoEnviado = descartar;
+
+/** O casal conferiu o "Parece repetido": exige internet, porque não é uma mudança do lançamento. */
+export async function manterOsDois(id: string): Promise<boolean> {
+  const { data } = await api.POST("/api/lancamentos/{id}/manter-os-dois", { params: { path: { id } } }).catch(() => ({ data: undefined }));
+  if (!data) return false;
+  const { data: lista } = await api.GET("/api/lancamentos");
+  if (lista) await comTrava("shared", () => guardarResposta(LISTA, lista));
+  return true;
+}
 
 /** A mudança na fila sobe na hora, se houver internet. */
 function eEnvia<A extends unknown[]>(mudar: (...args: A) => Promise<void>) {
