@@ -308,6 +308,28 @@ def test_excluir_categoria_de_transferencia_com_transferencia_e_recusado(casal: 
     assert casal.pedir("flavio", "DELETE", f"/api/categorias/{guardar}").status_code == 409
 
 
+def test_compra_no_cartao_conta_no_item_do_mes_da_fatura(casal: Casal):
+    # "Alimentação de abril" é o débito de abril mais o cartão de 26/03 a 25/04 (ADR 0003).
+    conta, alimentacao = casal.conta(), casal.categoria("Alimentação")
+    cartao = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/cartoes",
+        json={"nome": "Nubank", "dia_fechamento": 25, "dia_vencimento": 5},
+    ).json()["id"]
+    item(casal, alimentacao, 100000, mes="2026-04")
+    item(casal, alimentacao, 100000, mes="2026-03")
+    lancar(casal, cartao, [alimentacao], 12000, "2026-03-28")
+    lancar(casal, conta, [alimentacao], 3000, "2026-04-02")
+    lancar(casal, cartao, [alimentacao], 5000, "2026-04-26")  # fatura de maio
+
+    [abril] = ler(casal, "2026-04")["itens"]
+    [marco] = ler(casal, "2026-03")["itens"]
+
+    assert abril["realizado_centavos"] == 15000
+    assert marco["realizado_centavos"] == 0
+
+
 def test_copia_o_planejamento_do_mes_anterior_para_um_mes_vazio(casal: Casal):
     alimentacao, lazer = casal.categoria("Alimentação"), casal.categoria("Lazer")
     item(casal, alimentacao, 100000, mes="2026-09")

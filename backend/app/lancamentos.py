@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app import faturas
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.login import UsuarioLogado
@@ -84,12 +85,17 @@ def sem_repetidas(ids: list[UUID] | None) -> list[UUID] | None:
     return ids
 
 
+def _primeiro_dia(mes: date | None) -> date | None:
+    return mes and faturas.mes_de(mes)
+
+
 class DadosDoLancamento(BaseModel):
     id: UUID
     tipo: Literal["despesa", "receita"]
     valor_centavos: int = Field(gt=0)
     data: date
     descricao: str = ""
+    # A conta ou o cartão; no cartão, `data` é a data da compra.
     conta_id: UUID
     categoria_ids: list[UUID] = Field(min_length=1)
     # Sem situação, a data decide: futura nasce prevista, de hoje ou do passado, realizada.
@@ -98,9 +104,13 @@ class DadosDoLancamento(BaseModel):
     tags: list[str] = []
     # O id de uma pessoa do casal; sem ela, o lançamento é do conjunto.
     pessoa: str | None = None
+    # Só no cartão: o mês da fatura, que o servidor escolhe pela data da compra e pelo
+    # fechamento. Mandar o mês é trocar a fatura à mão (o banco lançou a compra com atraso).
+    fatura_mes: date | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
+    _fatura = field_validator("fatura_mes")(_primeiro_dia)
 
 
 class NovoLancamento(DadosDoLancamento):
@@ -110,6 +120,9 @@ class NovoLancamento(DadosDoLancamento):
 
 class Lancamento(DadosDoLancamento):
     situacao: Literal["previsto", "realizado"]
+    # O mês em que o lançamento conta (planejamento, categorias, tags, resumo): o mês da fatura
+    # no cartão, o da data no resto (ADR 0003). Gravado como o primeiro dia do mês.
+    mes: date
     # Previsto que pede confirmação e cuja data já passou sem ela; continua previsto (e contando)
     # até confirmar. O automático não pede: a tarefa diária o realiza na data.
     atrasado: bool
@@ -141,6 +154,7 @@ Campo = Literal[
     "categoria_ids",
     "tags",
     "pessoa",
+    "fatura_mes",
 ]
 CAMPOS: tuple[Campo, ...] = get_args(Campo)
 
@@ -161,10 +175,13 @@ class AlteracaoDeLancamento(BaseModel):
     tags: list[str] | None = None
     # Sem o campo, a pessoa fica; vazia, o lançamento passa a ser do conjunto.
     pessoa: str | None = None
+    # Troca a fatura à mão; mudar a data ou o cartão sem ele escolhe a fatura de novo.
+    fatura_mes: date | None = None
     acao_em: datetime | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
+    _fatura = field_validator("fatura_mes")(_primeiro_dia)
 
 
 class CampoEmConflito(BaseModel):
@@ -228,11 +245,15 @@ _REPETIDO_DE = f"""(
 
 # Lançamento de antes do ticket 34 não tem versão: está como nasceu, na 1.
 VERSAO = "COALESCE(versao, 1)"
+# O mês em que o lançamento conta. Gravado pela migration 0034 nos de antes; a data cobre o que
+# sobrou dela e o que a API antiga gravar durante o deploy.
+MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
+NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
-    f" {_REPETIDO_DE}"
+    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}"
 )
 
 
@@ -398,18 +419,27 @@ def conferir_conta(conn, id: UUID, ja_ligada: bool = False) -> None:
         raise recusar("conta arquivada")
 
 
+def _conferir_conta_ou_cartao(conn, id: UUID, ja_ligado: bool) -> None:
+    if cartao := faturas.ler_cartao(conn, id):
+        if cartao.arquivado and not ja_ligado:
+            raise recusar("cartão arquivado")
+        return
+    conferir_conta(conn, id, ja_ligada=ja_ligado)
+
+
 def conferir_ligacoes(
     conn,
     lancamento,
     conta_atual: UUID | None = None,
     categorias_atuais: frozenset[UUID] = frozenset(),
 ) -> None:
-    """Conta e categoria arquivadas só valem num lançamento que já as tinha. Serve a quem tem
-    `tipo`, `conta_id`, `categoria_ids` e `pessoa`: o lançamento e a regra que gera lançamentos."""
+    """Conta, cartão e categoria arquivados só valem num lançamento que já os tinha. Serve a quem
+    tem `tipo`, `conta_id`, `categoria_ids` e `pessoa`: o lançamento e a regra que gera
+    lançamentos."""
     pessoas = configuradas()
     if lancamento.pessoa and pessoas and lancamento.pessoa not in pessoas:
         raise recusar("pessoa não encontrada")
-    conferir_conta(conn, lancamento.conta_id, ja_ligada=lancamento.conta_id == conta_atual)
+    _conferir_conta_ou_cartao(conn, lancamento.conta_id, lancamento.conta_id == conta_atual)
     tipos = {}
     arquivadas = set()
     for id, tipo, arquivada in conn.execute(
@@ -519,6 +549,16 @@ def subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) -
     return de + 1
 
 
+def mudar_fatura(conn, id: UUID, versao: int, mes: date, usuario: str, origem: str) -> None:
+    """A fatura que o app escolheu de novo (as datas do cartão mudaram): sobe a versão e conta
+    como mudança do outro lado, com a origem, na tela de conflito (ADR 0011)."""
+    agora = _momento(None)
+    nova = subir_versao(
+        conn, id, versao, "mes = %s, alterado_por = %s, alterado_em = %s", (mes, usuario, agora)
+    )
+    registrar_mudancas(conn, id, ["fatura_mes"], nova, usuario, agora, origem=origem)
+
+
 class _VersaoDoCampo(BaseModel):
     versao: int
     alterado_por: str
@@ -579,7 +619,72 @@ def _atual(conn, id: UUID, usuario: str) -> Lancamento:
         raise LancamentoExcluido(
             Exclusao(excluido_por=por, excluido_em=em, por_voce=por == usuario)
         )
-    return _um(conn, id)
+    # No Postgres em READ COMMITTED (local e CI), a exclusão do outro lado pode ser confirmada
+    # entre as duas leituras; lida de novo, ela vira o 410. O DSQL lê tudo do mesmo instante.
+    lidos = _todos(conn, "id = %s", (id,))
+    return lidos[0] if lidos else _atual(conn, id, usuario)
+
+
+def mes_em_que_conta(conn, conta_id: UUID, data: date) -> date:
+    """O mês em que conta um lançamento pela data: no cartão, o da fatura que fecha depois dela,
+    que nasce aqui se faltar; no resto, o da data (ADR 0003). Serve também à regra que gera
+    lançamentos (recorrência)."""
+    cartao = faturas.ler_cartao(conn, conta_id)
+    if cartao is None:
+        return faturas.mes_de(data)
+    mes = faturas.mes_da_compra(conn, cartao.titular, data)
+    faturas.garantir_fatura(conn, cartao.titular, mes)
+    return mes
+
+
+def _onde_conta(
+    conn, lancamento: DadosDoLancamento, mantida: date | None = None
+) -> tuple[date, date | None, bool]:
+    """O mês em que conta, o mês da fatura (só no cartão) e se a fatura foi escolhida à mão.
+
+    No cartão, a fatura é a pedida, a `mantida` de uma troca à mão anterior ou a que fecha
+    depois da data da compra, e nasce aqui se ainda não existe; no resto, o mês da data.
+    """
+    cartao = faturas.ler_cartao(conn, lancamento.conta_id)
+    if cartao is None:
+        if lancamento.fatura_mes:
+            raise recusar("fatura só em compra no cartão")
+        return faturas.mes_de(lancamento.data), None, False
+    if lancamento.fatura_mes:
+        (fechamento,) = faturas.fechamentos(conn, cartao.titular, [lancamento.fatura_mes]).values()
+        if fechamento and fechamento <= lancamento.data:
+            raise recusar("a fatura escolhida fechou antes da compra")
+    a_mao = lancamento.fatura_mes or mantida
+    mes = a_mao or faturas.mes_da_compra(conn, cartao.titular, lancamento.data)
+    faturas.garantir_fatura(conn, cartao.titular, mes)
+    return mes, mes, bool(a_mao)
+
+
+def _com_mudancas(atual: Lancamento, mudancas: dict) -> DadosDoLancamento:
+    """O lançamento com as mudanças; a fatura só vale como troca à mão quando foi pedida."""
+    return DadosDoLancamento(
+        **atual.model_dump(include=set(DadosDoLancamento.model_fields))
+        | mudancas
+        | {"fatura_mes": mudancas.get("fatura_mes")}
+    )
+
+
+def _fatura_depois(
+    conn, atual: Lancamento, depois: DadosDoLancamento, mudancas: dict
+) -> tuple[date, bool]:
+    """O mês em que conta e a marca da troca à mão de um lançamento que mudou: só a conta (ou o
+    cartão), a data e a troca de fatura mexem nela, e a troca à mão fica enquanto o cartão não
+    muda. A fatura que mudou entra em `mudancas`, para a versão por campo (ADR 0011)."""
+    (a_mao,) = conn.execute(
+        "SELECT COALESCE(fatura_a_mao, false) FROM lancamentos WHERE id = %s", (atual.id,)
+    ).fetchone()
+    if not {"conta_id", "data", "fatura_mes"} & mudancas.keys():
+        return atual.mes, a_mao
+    mantida = atual.fatura_mes if a_mao and "conta_id" not in mudancas else None
+    mes, fatura_mes, a_mao = _onde_conta(conn, depois, mantida)
+    if fatura_mes != atual.fatura_mes:
+        mudancas["fatura_mes"] = fatura_mes
+    return mes, a_mao
 
 
 def _iguais(campo: Campo, pedido, gravado) -> bool:
@@ -601,11 +706,13 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
         )
     )
     conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
+    mes, _, a_mao = _onde_conta(conn, novo)
     momento = _momento(novo.acao_em)
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
-        " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app')"
+        " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte,"
+        " mes, fatura_a_mao)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s)"
         " ON CONFLICT (id) DO NOTHING",
         (
             novo.id,
@@ -620,6 +727,8 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             novo.pessoa,
             momento,
             momento,
+            mes,
+            a_mao,
         ),
     ).rowcount
     if gravados:
@@ -663,17 +772,17 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
         mudancas["situacao"] = situacao_pela_data(mudancas["data"])
     if not mudancas:
         return atual
-    editado = NovoLancamento(
-        **atual.model_dump(include=set(DadosDoLancamento.model_fields)) | mudancas
-    )
+    editado = _com_mudancas(atual, mudancas)
     momento = _momento(alteracao.acao_em)
     conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
+    mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
     versao = subir_versao(
         conn,
         id,
         atual.versao,
         "tipo = %s, situacao = %s, valor_centavos = %s, data = %s, descricao = %s,"
-        " conta_id = %s, pessoa = %s, alterado_por = %s, alterado_em = %s",
+        " conta_id = %s, pessoa = %s, mes = %s, fatura_a_mao = %s, alterado_por = %s,"
+        " alterado_em = %s",
         (
             editado.tipo,
             editado.situacao,
@@ -682,6 +791,8 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
             editado.descricao,
             editado.conta_id,
             editado.pessoa,
+            mes,
+            a_mao,
             usuario,
             momento,
         ),
@@ -806,6 +917,8 @@ def _todos(
             ocorrencia=l[15],
             automatico=l[16],
             parece_repetido_de=l[17],
+            mes=l[18],
+            fatura_mes=l[18] if l[19] else None,
         )
         for l in linhas
     ]
@@ -887,16 +1000,27 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
         if depois:
             raise _conflito("o outro lado mudou os mesmos campos depois", atual, depois, usuario)
     if confirmacao.conta_id:
-        conferir_conta(conn, confirmacao.conta_id, ja_ligada=confirmacao.conta_id == atual.conta_id)
+        _conferir_conta_ou_cartao(
+            conn, confirmacao.conta_id, confirmacao.conta_id == atual.conta_id
+        )
+    mes, a_mao = _fatura_depois(conn, atual, _com_mudancas(atual, ajustes), ajustes)
     momento = _momento(confirmacao.acao_em)
     versao = subir_versao(
         conn,
         id,
         atual.versao,
         "situacao = 'realizado', valor_centavos = COALESCE(%s, valor_centavos),"
-        " data = COALESCE(%s, data), conta_id = COALESCE(%s, conta_id),"
-        " alterado_por = %s, alterado_em = %s",
-        (confirmacao.valor_centavos, confirmacao.data, confirmacao.conta_id, usuario, momento),
+        " data = COALESCE(%s, data), conta_id = COALESCE(%s, conta_id), mes = %s,"
+        " fatura_a_mao = %s, alterado_por = %s, alterado_em = %s",
+        (
+            confirmacao.valor_centavos,
+            confirmacao.data,
+            confirmacao.conta_id,
+            mes,
+            a_mao,
+            usuario,
+            momento,
+        ),
     )
     registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
     return _um(conn, id)

@@ -1,5 +1,6 @@
 import csv
 import io
+import uuid
 import zipfile
 from datetime import datetime
 from urllib.parse import parse_qs, urlparse
@@ -9,7 +10,9 @@ from fastapi.testclient import TestClient
 
 from app.exportacao import formatar_planilha
 from app.main import create_app
+from tests.conftest import Casal
 from tests.emissor import Emissor
+from tests.test_lancamentos import lancamento
 
 
 class S3Falso:
@@ -121,6 +124,91 @@ def test_exportar_a_planilha_envia_um_csv_que_abre_no_excel_em_portugues(
     assert enviado["ContentType"] == "text/csv; charset=utf-8"
     assert enviado["Body"].startswith(b"\xef\xbb\xbfdata;descricao;valor;")
     assert resposta.json()["arquivo"].startswith("financial-app-lancamentos-")
+
+
+def test_planilha_traz_todo_o_historico_com_nomes_no_lugar_dos_ids(
+    database_url: str, emissor: Emissor, casal: Casal
+):
+    corrente, poupanca = casal.conta("Corrente"), casal.conta("Poupança", "poupanca")
+    mercado, casa = casal.categoria("Mercado"), casal.categoria("Casa")
+    salario, reserva = (
+        casal.categoria("Salário", "receita"),
+        casal.categoria("Reserva", "transferencia"),
+    )
+    cartao = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/cartoes",
+        json={"nome": "Nubank", "dia_fechamento": 25, "dia_vencimento": 5},
+    ).json()["id"]
+    feira = lancamento(
+        corrente,
+        [mercado, casa],
+        valor_centavos=12035,
+        data="2026-03-02",
+        descricao="Feira",
+        tags=["sábado", "casa nova"],
+        pessoa="flavio",
+    )
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=feira)
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{feira['id']}",
+        json={"versao": 1, "descricao": "Feira!"},
+    )
+    for quem, dados in [
+        ("esposa", lancamento(cartao, [mercado], valor_centavos=5000, data="2026-03-28")),
+        (
+            "flavio",
+            lancamento(
+                corrente,
+                [salario],
+                tipo="receita",
+                valor_centavos=500000,
+                data="2026-03-05",
+                descricao="Salário",
+            ),
+        ),
+        ("flavio", lancamento(corrente, [mercado], data="2099-01-01", descricao="Futuro")),
+    ]:
+        assert casal.pedir(quem, "POST", "/api/lancamentos", json=dados).status_code == 201
+    excluido = lancamento(corrente, [mercado], data="2026-03-03", descricao="Excluído")
+    casal.pedir("flavio", "POST", "/api/lancamentos", json=excluido)
+    casal.pedir("flavio", "DELETE", f"/api/lancamentos/{excluido['id']}")
+    casal.pedir(
+        "esposa",
+        "POST",
+        "/api/transferencias",
+        json={
+            "id": str(uuid.uuid4()),
+            "conta_origem_id": corrente,
+            "conta_destino_id": poupanca,
+            "valor_centavos": 100000,
+            "data": "2026-03-10",
+            "descricao": "Guardar",
+            "categoria_id": reserva,
+        },
+    )
+    s3 = S3Falso()
+
+    resposta = _cliente(database_url, emissor, s3).post(
+        "/api/exportacoes", json={"formato": "planilha"}, headers=emissor.cabecalho("flavio")
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")
+    assert linhas[1:] == [
+        (
+            "2026-03-02;Feira!;-120,35;Corrente;;Casa | Mercado;casa nova | sábado;Flávio;"
+            "efetivado;Flávio;Flávio"
+        ),
+        "2026-03-05;Salário;5000,00;Corrente;;Salário;;;efetivado;Flávio;Flávio",
+        "2026-03-10;Guardar;1000,00;Corrente → Poupança;;Reserva;;;efetivado;Fulana;Fulana",
+        "2026-03-28;Mercado;-50,00;Nubank;2026-04;Mercado;;;efetivado;Fulana;Fulana",
+        "2099-01-01;Futuro;-120,35;Corrente;;Mercado;;;previsto;Flávio;Flávio",
+        "",
+    ]
 
 
 def test_exportar_sem_token_e_recusado(database_url: str, emissor: Emissor, banco_ficticio):

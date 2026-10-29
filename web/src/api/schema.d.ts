@@ -387,6 +387,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cartoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Cartoes
+         * @description Os arquivados só vêm com `arquivados=true`.
+         */
+        get: operations["listar_cartoes"];
+        put?: never;
+        /** Criar Cartao */
+        post: operations["criar_cartao"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cartoes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Editar Cartao
+         * @description Arquivar tira o cartão das opções e mantém o histórico. Mudar o dia padrão ou a regra do
+         *     mês vale só para as faturas abertas e futuras, e redistribui as compras delas.
+         */
+        put: operations["editar_cartao"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cartoes/{id}/faturas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Faturas
+         * @description As faturas que já nasceram, da mais antiga à mais nova. As do adicional são as do
+         *     titular.
+         */
+        get: operations["listar_faturas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cartoes/{id}/faturas/{mes}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar Fatura
+         * @description Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e
+         *     redistribui as compras dela e das abertas e futuras; o mês da fatura não muda.
+         */
+        patch: operations["editar_fatura"];
+        trace?: never;
+    };
     "/api/planejamento/modelo": {
         parameters: {
             query?: never;
@@ -597,6 +681,16 @@ export interface components {
             arquivada?: boolean | null;
         };
         /**
+         * AlteracaoDeFatura
+         * @description Fechamento ou vencimento que escorregou (feriado); o mês da fatura não muda.
+         */
+        AlteracaoDeFatura: {
+            /** Fechamento */
+            fechamento?: string | null;
+            /** Vencimento */
+            vencimento?: string | null;
+        };
+        /**
          * AlteracaoDeLancamento
          * @description Só os campos que a pessoa mudou, feitos sobre a `versao` que o aparelho tinha; o campo
          *     ausente fica como está no servidor, com o que o outro lado tiver mudado nele (ADR 0011).
@@ -622,6 +716,8 @@ export interface components {
             tags?: string[] | null;
             /** Pessoa */
             pessoa?: string | null;
+            /** Fatura Mes */
+            fatura_mes?: string | null;
             /** Acao Em */
             acao_em?: string | null;
         };
@@ -635,7 +731,7 @@ export interface components {
              * Campo
              * @enum {string}
              */
-            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa";
+            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa" | "fatura_mes";
             /** Alterado Por */
             alterado_por: string;
             /**
@@ -647,6 +743,31 @@ export interface components {
             por_voce: boolean;
             /** Origem */
             origem?: string | null;
+        };
+        /** Cartao */
+        Cartao: {
+            /** Nome */
+            nome: string;
+            /** Dia Fechamento */
+            dia_fechamento?: number | null;
+            /** Dia Vencimento */
+            dia_vencimento?: number | null;
+            /** Limite Centavos */
+            limite_centavos?: number | null;
+            /**
+             * Mes Anterior Ao Fechamento
+             * @default false
+             */
+            mes_anterior_ao_fechamento: boolean;
+            /** Titular Id */
+            titular_id?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Arquivado */
+            arquivado: boolean;
         };
         /** Categoria */
         Categoria: {
@@ -737,6 +858,26 @@ export interface components {
              */
             de: string;
         };
+        /** EdicaoDeCartao */
+        EdicaoDeCartao: {
+            /** Nome */
+            nome: string;
+            /** Dia Fechamento */
+            dia_fechamento?: number | null;
+            /** Dia Vencimento */
+            dia_vencimento?: number | null;
+            /** Limite Centavos */
+            limite_centavos?: number | null;
+            /**
+             * Mes Anterior Ao Fechamento
+             * @default false
+             */
+            mes_anterior_ao_fechamento: boolean;
+            /** Titular Id */
+            titular_id?: string | null;
+            /** Arquivado */
+            arquivado?: boolean | null;
+        };
         /** EdicaoDeConta */
         EdicaoDeConta: {
             /** Nome */
@@ -789,6 +930,28 @@ export interface components {
              * Format: date-time
              */
             expira_em: string;
+        };
+        /** Fatura */
+        Fatura: {
+            /**
+             * Cartao Id
+             * Format: uuid
+             */
+            cartao_id: string;
+            /**
+             * Mes
+             * Format: date
+             */
+            mes: string;
+            /** Fechamento */
+            fechamento: string | null;
+            /** Vencimento */
+            vencimento: string | null;
+            /**
+             * Situacao
+             * @enum {string}
+             */
+            situacao: "aberta" | "fechada";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -879,6 +1042,13 @@ export interface components {
             tags: string[];
             /** Pessoa */
             pessoa?: string | null;
+            /** Fatura Mes */
+            fatura_mes?: string | null;
+            /**
+             * Mes
+             * Format: date
+             */
+            mes: string;
             /** Atrasado */
             atrasado: boolean;
             /** Recorrencia Id */
@@ -1060,6 +1230,28 @@ export interface components {
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
         };
+        /**
+         * NovoCartao
+         * @description O titular tem os dias padrão, a regra do mês e o limite; o adicional (`titular_id`) usa
+         *     os do titular e as compras dele caem na fatura do titular.
+         */
+        NovoCartao: {
+            /** Nome */
+            nome: string;
+            /** Dia Fechamento */
+            dia_fechamento?: number | null;
+            /** Dia Vencimento */
+            dia_vencimento?: number | null;
+            /** Limite Centavos */
+            limite_centavos?: number | null;
+            /**
+             * Mes Anterior Ao Fechamento
+             * @default false
+             */
+            mes_anterior_ao_fechamento: boolean;
+            /** Titular Id */
+            titular_id?: string | null;
+        };
         /** NovoItem */
         NovoItem: {
             /**
@@ -1115,6 +1307,8 @@ export interface components {
             tags: string[];
             /** Pessoa */
             pessoa?: string | null;
+            /** Fatura Mes */
+            fatura_mes?: string | null;
             /** Acao Em */
             acao_em?: string | null;
         };
@@ -2219,6 +2413,172 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_cartoes: {
+        parameters: {
+            query?: {
+                arquivados?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cartao"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    criar_cartao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoCartao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cartao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_cartao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdicaoDeCartao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cartao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_faturas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fatura"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_fatura: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlteracaoDeFatura"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fatura"];
+                };
             };
             /** @description Validation Error */
             422: {

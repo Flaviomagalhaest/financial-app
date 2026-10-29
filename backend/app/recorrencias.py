@@ -164,7 +164,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         gravado = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
             " conta_id, criado_por, alterado_por, versao, recorrencia_id, ocorrencia, automatico,"
-            " pessoa, fonte) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app')"
+            " pessoa, fonte, mes)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s)"
             " ON CONFLICT (id) DO NOTHING",
             (
                 lancamento_id,
@@ -180,6 +181,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 n,
                 regra.automatico,
                 regra.pessoa,
+                # No cartão, o mês da fatura em que o previsto cai (ADR 0003).
+                lancamentos.mes_em_que_conta(conn, regra.conta_id, dia),
             ),
         ).rowcount
         if not gravado:
