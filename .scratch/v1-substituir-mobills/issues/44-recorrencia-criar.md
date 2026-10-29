@@ -1,7 +1,7 @@
 # Recorrência: criar
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 43
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
