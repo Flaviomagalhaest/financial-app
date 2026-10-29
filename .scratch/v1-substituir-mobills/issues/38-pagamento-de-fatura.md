@@ -1,7 +1,7 @@
 # Pagamento de fatura
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 37
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Sonnet
