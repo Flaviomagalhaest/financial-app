@@ -51,6 +51,8 @@ class NovaRecorrencia(BaseModel):
     # Sem os dois, não tem fim; `ate` é a última data possível e `vezes`, o número de ocorrências.
     ate: date | None = None
     vezes: int | None = Field(default=None, ge=1)
+    # A escolha do item do planejamento, com que os previstos já nascem (ADR 0006).
+    item_categoria_id: UUID | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
@@ -63,6 +65,8 @@ class NovaRecorrencia(BaseModel):
             raise ValueError("a recorrência termina numa data ou depois de N vezes, não nos dois")
         if self.ate is not None and self.ate < self.inicio:
             raise ValueError("a data de fim vem antes do início")
+        if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
+            raise ValueError(lancamentos.ITEM_FORA_DAS_CATEGORIAS)
         return self
 
 
@@ -75,7 +79,7 @@ class Recorrencia(NovaRecorrencia):
 
 _COLUNAS = (
     "id, tipo, valor_centavos, tipo_do_valor, automatico, descricao, conta_id, inicio, a_cada, unidade,"
-    " ate, vezes, criado_por, criado_em, alterado_por, alterado_em, pessoa"
+    " ate, vezes, criado_por, criado_em, alterado_por, alterado_em, pessoa, item_categoria_id"
 )
 _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
 
@@ -164,8 +168,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         gravado = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
             " conta_id, criado_por, alterado_por, versao, recorrencia_id, ocorrencia, automatico,"
-            " pessoa, fonte, mes)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s)"
+            " pessoa, fonte, mes, item_categoria_id, item_explicito)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s, %s, %s)"
             " ON CONFLICT (id) DO NOTHING",
             (
                 lancamento_id,
@@ -183,6 +187,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 regra.pessoa,
                 # No cartão, o mês da fatura em que o previsto cai (ADR 0003).
                 lancamentos.mes_em_que_conta(conn, regra.conta_id, dia),
+                regra.item_categoria_id,
+                regra.item_categoria_id is not None,
             ),
         ).rowcount
         if not gravado:
@@ -291,7 +297,7 @@ def criar_recorrencia(
         tags = ids_das_tags(conn, nova.tags, usuario, set())
         gravada = conn.execute(
             f"INSERT INTO recorrencias ({_COLUNAS}, geradas)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, 0)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, %s, 0)"
             # Dois reenvios ao mesmo tempo: o segundo fica com a regra que o primeiro gravou.
             " ON CONFLICT (id) DO NOTHING",
             (
@@ -310,6 +316,7 @@ def criar_recorrencia(
                 usuario,
                 usuario,
                 nova.pessoa,
+                nova.item_categoria_id,
             ),
         ).rowcount
         if not gravada:

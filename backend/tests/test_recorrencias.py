@@ -156,6 +156,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
     assert primeira.json() | {"criado_em": None, "alterado_em": None} == nova | {
         "automatico": False,
         "ate": None,
+        "item_categoria_id": None,
         "criado_por": "flavio",
         "alterado_por": "flavio",
         "criado_em": None,

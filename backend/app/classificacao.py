@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.banco import conectar, em_transacao
+from app.item_em_que_conta import fixar
 from app.lancamentos import Categoria, url_do_banco
 from app.login import UsuarioLogado
 
@@ -65,6 +66,29 @@ def _juntar_item_do_modelo(conn, origem: UUID, destino: UUID) -> None:
     )
 
 
+def _juntar_escolhas_de_item(conn, origem: UUID, destino: UUID) -> None:
+    """A escolha de item na origem passa para o destino, nos lançamentos e nas recorrências, que
+    levam junto as categorias. O lançamento que contava sozinho num item fica nele, mesmo que a
+    junção dê item a outra categoria dele."""
+    fixar(
+        conn,
+        "l.id IN (SELECT lancamento_id FROM lancamento_categorias WHERE categoria_id = ANY(%s))",
+        ([origem, destino],),
+    )
+    for tabela in ("lancamentos", "recorrencias"):
+        conn.execute(
+            f"UPDATE {tabela} SET item_categoria_id = %s WHERE item_categoria_id = %s",
+            (destino, origem),
+        )
+    conn.execute(
+        "INSERT INTO recorrencia_categorias (recorrencia_id, categoria_id)"
+        " SELECT recorrencia_id, %s FROM recorrencia_categorias WHERE categoria_id = %s"
+        " ON CONFLICT DO NOTHING",
+        (destino, origem),
+    )
+    conn.execute("DELETE FROM recorrencia_categorias WHERE categoria_id = %s", (origem,))
+
+
 class Juncao(BaseModel):
     destino_id: UUID
 
@@ -73,8 +97,8 @@ class Juncao(BaseModel):
 def juntar_categoria(
     id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Request
 ) -> Categoria:
-    """Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,
-    do mesmo tipo, e exclui a origem."""
+    """Move os lançamentos, as recorrências, as transferências, os itens do planejamento e as
+    escolhas de item da categoria para o destino, do mesmo tipo, e exclui a origem."""
 
     def trabalho(conn):
         origem, destino = _categoria(conn, id), _categoria(conn, juncao.destino_id)
@@ -86,6 +110,7 @@ def juntar_categoria(
             raise HTTPException(status_code=422, detail="categorias de tipos diferentes")
         if destino.arquivada:
             raise HTTPException(status_code=422, detail="categoria de destino arquivada")
+        _juntar_escolhas_de_item(conn, origem.id, destino.id)
         conn.execute(
             "INSERT INTO lancamento_categorias (lancamento_id, categoria_id)"
             " SELECT lancamento_id, %s FROM lancamento_categorias WHERE categoria_id = %s"

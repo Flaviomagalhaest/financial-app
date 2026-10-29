@@ -276,8 +276,8 @@ export interface paths {
         put?: never;
         /**
          * Juntar Categoria
-         * @description Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,
-         *     do mesmo tipo, e exclui a origem.
+         * @description Move os lançamentos, as recorrências, as transferências, os itens do planejamento e as
+         *     escolhas de item da categoria para o destino, do mesmo tipo, e exclui a origem.
          */
         post: operations["juntar_categoria"];
         delete?: never;
@@ -648,6 +648,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AEscolher
+         * @description Lançamento com duas ou mais categorias com item no mês e sem escolha explícita.
+         */
+        AEscolher: {
+            /**
+             * Lancamento Id
+             * Format: uuid
+             */
+            lancamento_id: string;
+            /** Item Categoria Id */
+            item_categoria_id: string | null;
+            /** Categorias Com Item */
+            categorias_com_item: string[];
+        };
         /** AcaoCriar */
         AcaoCriar: {
             /**
@@ -739,6 +754,8 @@ export interface components {
             pessoa?: string | null;
             /** Fatura Mes */
             fatura_mes?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
             /** Acao Em */
             acao_em?: string | null;
         };
@@ -752,7 +769,7 @@ export interface components {
              * Campo
              * @enum {string}
              */
-            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa" | "fatura_mes";
+            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa" | "fatura_mes" | "item_categoria_id";
             /** Alterado Por */
             alterado_por: string;
             /**
@@ -1079,6 +1096,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Estorno De */
             estorno_de?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
             /**
              * Mes
              * Format: date
@@ -1225,6 +1244,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
         };
         /** NovaTag */
         NovaTag: {
@@ -1348,6 +1369,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Estorno De */
             estorno_de?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
             /** Acao Em */
             acao_em?: string | null;
         };
@@ -1374,6 +1397,11 @@ export interface components {
             mes: string;
             /** Itens */
             itens: components["schemas"]["ItemDoPlanejamento"][];
+            /**
+             * A Escolher
+             * @default []
+             */
+            a_escolher: components["schemas"]["AEscolher"][];
             /** Ainda Da Para Gastar Centavos */
             ainda_da_para_gastar_centavos: number;
             /**
@@ -1441,6 +1469,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
             /** Criado Por */
             criado_por: string;
             /**

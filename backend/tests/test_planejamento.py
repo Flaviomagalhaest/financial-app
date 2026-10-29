@@ -45,6 +45,7 @@ def test_item_planejado_aparece_no_mes_com_realizado_previsto_e_percentual(casal
         "mes": "2026-10",
         "ainda_da_para_gastar_centavos": 25000,
         "ajustes_de_fatura_centavos": 0,
+        "a_escolher": [],
         "itens": [
             {
                 "id": criado["id"],
@@ -120,7 +121,7 @@ def test_so_conta_no_item_o_lancamento_do_mes_ainda_nao_excluido_e_so_com_uma_ca
     excluido = lancar(casal, conta, [mercado], 16000, "2026-10-10")
     casal.pedir("flavio", "DELETE", f"/api/lancamentos/{excluido['id']}?versao=1")
     item(casal, viagem, 50000)
-    lancar(casal, conta, [mercado, viagem], 32000, "2026-10-12")  # dois itens: escolha é do 51
+    lancar(casal, conta, [mercado, viagem], 32000, "2026-10-12")  # dois itens, sem escolha
 
     [mercado_lido, viagem_lido] = ler(casal)["itens"]
 
@@ -164,6 +165,7 @@ def test_mes_sem_itens_vem_vazio_e_mes_invalido_e_recusado(casal: Casal):
         "itens": [],
         "ainda_da_para_gastar_centavos": 0,
         "ajustes_de_fatura_centavos": 0,
+        "a_escolher": [],
     }
     assert casal.pedir("flavio", "GET", "/api/planejamento/2026-13").status_code == 422
     assert casal.pedir("flavio", "GET", "/api/planejamento/outubro").status_code == 422
