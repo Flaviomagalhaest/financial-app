@@ -20,3 +20,7 @@ O histórico importado já traz o futuro e as faturas certos, e o importador ger
 - [ ] `Reajuste de fatura` vira ajuste de fatura; faturas importadas nascem com o mês da fatura do rótulo, fechadas e pagas, sem datas nem pagamento de fatura
 - [ ] Saída é um backup válido; teste de que ele restaura num banco vazio
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 46](46-parcelamento-criar.md): o backup (versão 13) traz `parcelamentos` (sem coluna de tipo; `valor_total_centavos`, `parcelas`, `data` da compra ou da 1ª parcela, `automatico`, `geradas`), `parcelamento_categorias`, `parcelamento_tags` e, em `lancamentos`, `parcelamento_id` e `parcela`. Para a tarefa diária não gerar de novo, `geradas` = `parcelas`, e o id da parcela gerada pelo importador deve ser `uuid5(parcelamento, número)`, como o do app. No cartão, o parcelamento é sempre automático.

@@ -20,3 +20,7 @@ O casal corrige um parcelamento errado sem refazer tudo.
 - [ ] Excluir o parcelamento inteiro
 - [ ] Testes de API
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 46](46-parcelamento-criar.md): as parcelas de um parcelamento são os lançamentos com o `parcelamento_id` dele; o id de cada uma é `uuid5(parcelamento, número)` e `parcelamentos.geradas` diz até que parcela já gerou. Ainda não há marca de alterado à mão no lançamento (a mesma falta do [45](45-recorrencia-mudar.md)). `PATCH` numa parcela do cartão já mantém a distância de n - 1 faturas (`faturas.mes_da_parcela`). A tabela `parcelamentos` não tem marca de exclusão. A regeração precisa recalcular a fatura das parcelas com a data nova e, na parcela automática, o `realiza_em`.

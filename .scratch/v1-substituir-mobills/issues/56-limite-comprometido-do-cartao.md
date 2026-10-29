@@ -19,3 +19,7 @@ O casal vê quanto do limite já está ocupado, só na aba Cartões, como decidi
 - [ ] Barra na linha do cartão (só com limite informado) e, no detalhe, as três partes, os parcelamentos em andamento e a lista dos próximos 12 meses
 - [ ] Testes de API com exemplos concretos
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 46](46-parcelamento-criar.md): as parcelas futuras do cartão são os lançamentos previstos com `parcelamento_id` num cartão; a parcela vira realizada quando entra na fatura aberta (regra provisória, [ticket 94](94-parcelamento-regras-provisorias.md)).

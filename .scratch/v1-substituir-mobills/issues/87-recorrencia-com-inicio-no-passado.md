@@ -29,3 +29,7 @@ Quem cadastra hoje o salário que caiu no dia 5 com início em 05/10 ganha o de 
 
 - [ ] O dono escolhe a regra e ela vai para `## Answer`
 - [ ] Se a regra mudar: teste de API em `backend/tests/test_recorrencias.py` e ajuste em `_gerar_um_lote` ou na validação de `NovaRecorrencia` (`backend/app/recorrencias.py`)
+
+## Notas
+
+- Do [ticket 46](46-parcelamento-criar.md): a mesma pergunta vale para o parcelamento em boleto com a data no passado (pergunta 5 do [ticket 94](94-parcelamento-regras-provisorias.md)); decidir as duas juntas.
