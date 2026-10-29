@@ -2041,6 +2041,99 @@
           }
         ]
       }
+    },
+    "/api/recorrencias/{id}": {
+      "patch": {
+        "summary": "Alterar Recorrencia",
+        "description": "Muda a regra \"daqui para frente\" (a partir de uma ocorrência), tira os previstos que\npassaram do fim e refaz os que ninguém alterou à mão. Mudar só um mês é editar o previsto, e\npular um mês é excluí-lo: a geração não o traz de volta.",
+        "operationId": "alterar_recorrencia",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlteracaoDeRecorrencia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recorrencia"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Excluir Recorrencia",
+        "description": "Idempotente. Tira a regra e os previstos de hoje em diante; o realizado e o atrasado\nficam, como lançamentos que a regra gerou.",
+        "operationId": "excluir_recorrencia",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2361,6 +2454,136 @@
         ],
         "title": "AlteracaoDeLancamento",
         "description": "Só os campos que a pessoa mudou, feitos sobre a `versao` que o aparelho tinha; o campo\nausente fica como está no servidor, com o que o outro lado tiver mudado nele (ADR 0011)."
+      },
+      "AlteracaoDeRecorrencia": {
+        "properties": {
+          "a_partir_da_ocorrencia": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Partir Da Ocorrencia"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "tipo_do_valor": {
+            "type": "string",
+            "enum": [
+              "fixo",
+              "estimado"
+            ],
+            "title": "Tipo Do Valor"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "a_cada": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Cada"
+          },
+          "unidade": {
+            "type": "string",
+            "enum": [
+              "semanas",
+              "meses"
+            ],
+            "title": "Unidade"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "title": "Inicio"
+          },
+          "ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "vezes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vezes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "a_partir_da_ocorrencia"
+        ],
+        "title": "AlteracaoDeRecorrencia",
+        "description": "Os campos da regra que mudam \"daqui para frente\", a partir da ocorrência dada: a regra\npassa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,\nsão refeitos. O que já foi realizado e os previstos de antes ficam como estão. Campo\nausente fica como está; `pessoa` vazia passa a regra para o conjunto."
       },
       "CampoEmConflito": {
         "properties": {
@@ -3576,6 +3799,18 @@
               }
             ],
             "title": "Vezes"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           }
         },
         "type": "object",
@@ -4093,6 +4328,23 @@
               }
             ],
             "title": "Vezes"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "ocorrencia_do_inicio": {
+            "type": "integer",
+            "title": "Ocorrencia Do Inicio",
+            "default": 1
           },
           "criado_por": {
             "type": "string",

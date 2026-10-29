@@ -506,7 +506,7 @@ def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
         )
 
 
-def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
+def gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
     conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
     for categoria in categorias:
         conn.execute(
@@ -799,7 +799,7 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
         ),
     ).rowcount
     if gravados:
-        _gravar_categorias(conn, novo.id, novo.categoria_ids)
+        gravar_categorias(conn, novo.id, novo.categoria_ids)
         _gravar_tags(conn, novo.id, novo.tags, usuario)
     return _atual(conn, novo.id, usuario), bool(gravados)
 
@@ -873,13 +873,13 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
     )
     registrar_mudancas(conn, id, mudancas, versao, usuario, momento)
     if "categoria_ids" in mudancas:
-        _gravar_categorias(conn, id, editado.categoria_ids)
+        gravar_categorias(conn, id, editado.categoria_ids)
     if "tags" in mudancas:
         _gravar_tags(conn, id, editado.tags, usuario)
     return _um(conn, id)
 
 
-def _excluir(
+def excluir(
     conn, id: UUID, versao: int | None, usuario: str, acao_em: datetime | None = None
 ) -> None:
     """Marca a exclusão: sem a marca, a edição que chega depois não saberia que perdeu para
@@ -1131,7 +1131,7 @@ def excluir_lancamento(
 ) -> Response:
     """Idempotente: excluir o que já não existe também dá 204. Com `versao`, o que o outro lado
     mudou depois dela é 409, para perguntar antes."""
-    resposta = _na_rota(request, lambda conn: _excluir(conn, id, versao, usuario, acao_em))
+    resposta = _na_rota(request, lambda conn: excluir(conn, id, versao, usuario, acao_em))
     return resposta if isinstance(resposta, JSONResponse) else Response(status_code=204)
 
 
@@ -1241,7 +1241,7 @@ def _aplicar_na(conn, acao: Acao, usuario: str) -> Resultado:
         case AcaoEditar(id=id, alteracao=alteracao):
             return Resultado(resultado="aceita", lancamento=_editar(conn, id, alteracao, usuario))
         case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
-            _excluir(conn, id, versao, usuario, acao_em)
+            excluir(conn, id, versao, usuario, acao_em)
             return Resultado(resultado="aceita")
 
 

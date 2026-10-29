@@ -73,6 +73,14 @@ _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a excluída não volta.
 _Avoid_: instância, repetição
 
+**Daqui para frente**:
+Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número.
+_Avoid_: a partir de agora, mudar tudo
+
+**Alterado à mão**:
+Previsto de uma recorrência que uma pessoa editou (qualquer campo): uma mudança "daqui para frente" não o sobrescreve, nem o mês pulado volta. Mudar só um mês é editar o previsto; pular um mês é excluí-lo.
+_Avoid_: customizado, manual
+
 **Horizonte**:
 Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária.
 _Avoid_: janela, limite

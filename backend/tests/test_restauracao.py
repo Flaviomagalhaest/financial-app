@@ -585,3 +585,44 @@ def test_backup_da_versao_13_sem_estorno_nem_ajuste_restaura_com_os_dois_vazios(
         assert conn.execute("SELECT mes::text, ajuste_centavos FROM faturas").fetchall() == [
             ("2026-04-01", None)
         ]
+
+
+def test_backup_da_versao_14_sem_item_na_recorrencia_restaura_com_o_calendario_do_inicio(
+    database_url,
+):
+    # O que `prod` gravava antes do ticket 45: a recorrência sem o item do planejamento e sem a
+    # ocorrência em que o calendário começa (a 1ª).
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO recorrencias (id, tipo, valor_centavos, tipo_do_valor, automatico,"
+            " conta_id, inicio, a_cada, unidade, geradas, criado_por, alterado_por)"
+            " VALUES ('00000000-0000-0000-0000-000000000001', 'despesa', 1000, 'fixo', false,"
+            " '00000000-0000-0000-0000-000000000002', '2026-11-02', 1, 'meses', 0, 'flavio',"
+            " 'flavio')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM recorrencias")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "recorrencias.csv":
+                # Sem as 2 colunas da versão 15 (item e ocorrência do início), as últimas.
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-2]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 14
+                del manifesto["tabelas"]["recorrencias"]["somas"]["ocorrencia_do_inicio"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute(
+            "SELECT valor_centavos, item_id, ocorrencia_do_inicio FROM recorrencias"
+        ).fetchall() == [(1000, None, None)]
