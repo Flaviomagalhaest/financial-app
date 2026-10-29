@@ -75,7 +75,7 @@ class AlteracaoDeFatura(BaseModel):
     fechamento: date | None = None
     vencimento: date | None = None
     # Sem o campo, o ajuste fica como está; 0 desfaz.
-    ajuste_centavos: int | None = None
+    ajuste_centavos: int | None = Field(default=None, ge=-(10**12), le=10**12)
 
 
 _COLUNAS = (
@@ -220,7 +220,7 @@ def _faturas(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
         for cartao_id, mes, fechamento, vencimento, ajuste, compras in conn.execute(
             "SELECT f.cartao_id, f.mes, f.fechamento, f.vencimento,"
             " COALESCE(f.ajuste_centavos, 0), COALESCE(("
-            f"  SELECT SUM({lancamentos.GASTO_NO_CARTAO}) FROM lancamentos"
+            f"  SELECT SUM({lancamentos.VALOR_COM_SINAL}) FROM lancamentos"
             "   JOIN cartoes c ON c.id = lancamentos.conta_id"
             "   WHERE COALESCE(c.titular_id, c.id) = f.cartao_id"
             "     AND lancamentos.excluido_em IS NULL"

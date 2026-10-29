@@ -107,7 +107,7 @@ class DadosDoLancamento(BaseModel):
     # Só no cartão: o mês da fatura, que o servidor escolhe pela data da compra e pelo
     # fechamento. Mandar o mês é trocar a fatura à mão (o banco lançou a compra com atraso).
     fatura_mes: date | None = None
-    # O estorno: crédito de uma compra no cartão, ligado a ela (ADR 0008). É uma despesa que
+    # O estorno: crédito de uma compra no cartão, ligado a ela (ADR 0016). É uma despesa que
     # diminui, com as mesmas categorias e tags da compra original, na fatura em que aparece.
     estorno_de: UUID | None = None
 
@@ -251,9 +251,9 @@ VERSAO = "COALESCE(versao, 1)"
 # O mês em que o lançamento conta. Gravado pela migration 0034 nos de antes; a data cobre o que
 # sobrou dela e o que a API antiga gravar durante o deploy.
 MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
-# O que o lançamento soma numa fatura ou num mês de despesas: a despesa soma, o estorno e a
-# receita (crédito) diminuem.
-GASTO_NO_CARTAO = (
+# O valor com o sinal de quem soma despesas (fatura, mês): a despesa soma, o estorno e a receita
+# (crédito) diminuem.
+VALOR_COM_SINAL = (
     "CASE WHEN lancamentos.tipo = 'despesa' AND lancamentos.estorno_de IS NULL"
     " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
 )
@@ -711,6 +711,8 @@ def _conferir_estorno(
     categorias e tags dela e, somado aos outros estornos dela, não passa do valor da compra.
     Devolve as categorias da compra, que valem no estorno mesmo arquivadas. Na edição de valor
     ou cartão, categorias e tags já foram travadas e a compra que sumiu não impede o ajuste."""
+    if dados.tipo != "despesa" or not faturas.ler_cartao(conn, dados.conta_id):
+        raise recusar("estorno é um crédito no cartão")
     original = conn.execute(
         "SELECT tipo, valor_centavos, conta_id, estorno_de FROM lancamentos"
         " WHERE id = %s AND excluido_em IS NULL",
@@ -725,8 +727,6 @@ def _conferir_estorno(
         raise recusar("estorno de estorno")
     if tipo != "despesa" or not faturas.ler_cartao(conn, conta):
         raise recusar("só compra no cartão tem estorno")
-    if dados.tipo != "despesa" or not faturas.ler_cartao(conn, dados.conta_id):
-        raise recusar("estorno é um crédito no cartão")
     categorias = frozenset(
         c
         for (c,) in conn.execute(
@@ -841,7 +841,9 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
         return atual
     editado = _com_mudancas(atual, mudancas)
     if atual.estorno_de:
-        if {"tipo", "categoria_ids", "tags"} & mudancas.keys():
+        if "tipo" in mudancas:
+            raise recusar("estorno é um crédito no cartão")
+        if {"categoria_ids", "tags"} & mudancas.keys():
             raise recusar("estorno leva as mesmas categorias e tags da compra")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             _conferir_estorno(conn, id, editado, atual.estorno_de, edicao=True)

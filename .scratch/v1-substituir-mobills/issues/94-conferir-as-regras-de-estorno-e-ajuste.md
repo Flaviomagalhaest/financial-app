@@ -26,3 +26,6 @@ Para cada regra abaixo, o dono confirma o comportamento provisório ou pede outr
 - [ ] **O total da fatura soma também os previstos** (as parcelas futuras que já estão nela), além dos realizados
 - [ ] **"Ainda dá para gastar" desconta os ajustes do mês** (soma dos itens menos os ajustes, sem passar de zero); um ajuste negativo (fatura menor que a soma das compras) também entra, e desconta menos
 - [ ] **Despesas do mês** (`/api/meses/{mes}/totais`): compras e estornos, previstos e realizados, mais os ajustes; receita, transferência e pagamento de fatura ficam de fora. A compra com mais de uma categoria ou tag conta inteira em cada uma
+- [ ] **Compra com mais de uma categoria**: `totais` a conta inteira em cada categoria e tag, enquanto o planejamento ainda não a conta em item nenhum (ticket 51); as duas leituras discordam até o 51
+- [ ] **A planilha de exportação não leva o ajuste de fatura**: ele não é lançamento, então o total do mês na planilha fica abaixo de `despesas_centavos`. Alternativa: uma linha por ajuste, sem categoria
+- [ ] **"Ainda dá para gastar" não passa de zero para baixo**: ajuste maior que a soma dos itens mostra 0, sem dizer quanto estourou (o valor está em `ajustes_de_fatura_centavos`)

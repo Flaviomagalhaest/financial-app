@@ -3,6 +3,7 @@ não bate sem inventar categoria."""
 
 from tests.conftest import Casal
 from tests.test_cartoes import comprar, novo_cartao
+from tests.test_lancamentos import lancamento
 
 
 def fatura(casal: Casal, cartao: str, mes: str) -> dict:
@@ -163,8 +164,6 @@ def test_ajuste_conta_nas_despesas_do_mes_e_no_ainda_da_para_gastar_mas_nao_em_c
 
 
 def estornar(casal: Casal, original: dict, data: str, **campos):
-    from tests.test_lancamentos import lancamento
-
     return casal.pedir(
         "flavio",
         "POST",
@@ -275,7 +274,13 @@ def test_estorno_nao_e_de_estorno_nem_de_compra_na_conta_nem_passa_do_valor(casa
     ).json()
 
     de_estorno = estornar(casal, estorno, "2026-04-27", valor_centavos=100)
-    de_compra_na_conta = estornar(casal, da_conta | {"tags": []}, "2026-04-27", valor_centavos=100)
+    de_compra_na_conta = estornar(
+        casal,
+        da_conta | {"tags": []},
+        "2026-04-27",
+        valor_centavos=100,
+        conta_id=original["conta_id"],
+    )
     passa_do_valor = estornar(casal, original, "2026-04-27", valor_centavos=4001)
     cabe = estornar(casal, original, "2026-04-27", valor_centavos=4000)
 
@@ -326,3 +331,52 @@ def test_estorno_nao_muda_de_categoria_nem_de_tag_mas_o_valor_respeita_a_compra(
     assert categoria.status_code == tags.status_code == valor_demais.status_code == 422
     assert valor_certo.status_code == 200
     assert valor_certo.json()["estorno_de"] == original["id"]
+
+
+def test_estorno_da_compra_que_sumiu_continua_editavel_mas_so_no_cartao(casal: Casal):
+    original = compra_no_cartao(casal)
+    estorno = estornar(casal, original, "2026-04-26", valor_centavos=5000).json()
+    casal.pedir("flavio", "DELETE", f"/api/lancamentos/{original['id']}")
+
+    menor = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{estorno['id']}",
+        json={"versao": 1, "valor_centavos": 4000},
+    )
+    para_a_conta = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{estorno['id']}",
+        json={"versao": 1, "conta_id": casal.conta()},
+    )
+
+    assert menor.status_code == 200
+    assert para_a_conta.status_code == 422
+    assert para_a_conta.json()["detail"] == "estorno é um crédito no cartão"
+
+
+def test_estorno_chega_pelo_lote_da_fila_e_o_reenvio_nao_duplica(casal: Casal):
+    original = compra_no_cartao(casal)
+    novo = lancamento(
+        original["conta_id"],
+        original["categoria_ids"],
+        data="2026-04-26",
+        valor_centavos=3000,
+        tags=["viagem"],
+        estorno_de=original["id"],
+    )
+    lote = {"acoes": [{"acao": "criar", "lancamento": novo}]}
+
+    primeiro = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json=lote)
+    reenvio = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json=lote)
+
+    assert primeiro.json()["resultados"][0]["resultado"] == "aceita"
+    assert reenvio.json()["resultados"][0]["resultado"] == "aceita"
+    assert fatura(casal, original["conta_id"], "2026-05-01")["total_centavos"] == -3000
+
+
+def test_ajuste_absurdo_e_recusado(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+
+    assert ajustar(casal, cartao, "2026-04-01", 10**15).status_code == 422

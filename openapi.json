@@ -2190,7 +2190,9 @@
           "ajuste_centavos": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 1000000000000.0,
+                "minimum": -1000000000000.0
               },
               {
                 "type": "null"

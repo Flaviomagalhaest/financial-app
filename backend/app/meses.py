@@ -1,4 +1,4 @@
-"""O que um mês gastou, para as telas do mês e do fechamento. Despesa conta pelo mês em que o
+"""As despesas de um mês, para as telas do mês e do fechamento. Despesa conta pelo mês em que o
 lançamento conta (no cartão, o da fatura, ADR 0003); o estorno diminui; o ajuste de fatura entra
 nas despesas do mês, mas não em categoria nem em tag (ADR 0008)."""
 
@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app import faturas
 from app.banco import conectar
-from app.lancamentos import GASTO_NO_CARTAO, MES_EM_QUE_CONTA, url_do_banco
+from app.lancamentos import MES_EM_QUE_CONTA, VALOR_COM_SINAL, url_do_banco
 from app.login import UsuarioLogado
 from app.planejamento import Mes, primeiro_dia
 
@@ -47,11 +47,11 @@ _DESPESAS_DO_MES = (
 def _totais(conn, mes: str) -> TotaisDoMes:
     dia = primeiro_dia(mes)
     (compras,) = conn.execute(
-        f"SELECT COALESCE(SUM({GASTO_NO_CARTAO}), 0)::bigint {_DESPESAS_DO_MES}", (dia,)
+        f"SELECT COALESCE(SUM({VALOR_COM_SINAL}), 0)::bigint {_DESPESAS_DO_MES}", (dia,)
     ).fetchone()
     ajustes = faturas.ajustes_do_mes(conn, dia)
     por_categoria = conn.execute(
-        f"SELECT lc.categoria_id, SUM({GASTO_NO_CARTAO})::bigint AS centavos"
+        f"SELECT lc.categoria_id, SUM({VALOR_COM_SINAL})::bigint AS centavos"
         f" FROM lancamento_categorias lc JOIN lancamentos ON lancamentos.id = lc.lancamento_id"
         f" WHERE lancamentos.excluido_em IS NULL AND lancamentos.tipo = 'despesa'"
         f" AND {MES_EM_QUE_CONTA} = %s GROUP BY lc.categoria_id"
@@ -59,7 +59,7 @@ def _totais(conn, mes: str) -> TotaisDoMes:
         (dia,),
     ).fetchall()
     por_tag = conn.execute(
-        f"SELECT t.nome, SUM({GASTO_NO_CARTAO})::bigint AS centavos"
+        f"SELECT t.nome, SUM({VALOR_COM_SINAL})::bigint AS centavos"
         f" FROM lancamento_tags lt JOIN lancamentos ON lancamentos.id = lt.lancamento_id"
         f" JOIN tags t ON t.id = lt.tag_id"
         f" WHERE lancamentos.excluido_em IS NULL AND lancamentos.tipo = 'despesa'"
