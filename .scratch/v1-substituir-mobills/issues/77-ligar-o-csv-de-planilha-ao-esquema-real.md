@@ -36,4 +36,4 @@ Decidir aqui também a grafia dos nomes das colunas (hoje sem acento: `descricao
 - Colunas como fixadas no ticket 25, sem acento (`descricao`, `situacao`); datas `AAAA-MM-DD` e fatura `AAAA-MM` (vazia fora do cartão). Valor com sinal: despesa negativa, receita positiva. Situação `previsto` ou `efetivado`.
 - Pessoa, quem criou e quem alterou saem pelo nome de `PESSOAS`; sem nome configurado, sai o id.
 - Transferência numa linha só, com "Origem → Destino" em `conta_ou_cartao`, o valor sem sinal, a categoria dela e pessoa vazia (ADR 0014). O pagamento de fatura ainda não existe (ticket 38) e vai sair como transferência para o cartão.
-- Escolhas para o dono conferir no [ticket 87](87-conferir-as-regras-de-fatura.md): a transferência numa linha, os nomes das colunas sem acento e a coluna `fonte` de fora.
+- Escolhas para o dono conferir no [ticket 89](89-conferir-as-regras-de-fatura.md): a transferência numa linha, os nomes das colunas sem acento e a coluna `fonte` de fora.

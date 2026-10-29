@@ -79,7 +79,7 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
     for id, situacao, valor, categoria_id in conn.execute(
         "SELECT l.id, l.situacao, l.valor_centavos, lc.categoria_id FROM lancamentos l"
         " JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"
-        # Pelo índice do mês; o de antes da migration 0027 sem mês, pela data.
+        # Pelo índice do mês; o de antes da migration 0034 sem mês, pela data.
         " WHERE l.excluido_em IS NULL AND lc.categoria_id = ANY(%s)"
         " AND (l.mes = %s OR (l.mes IS NULL AND l.data >= %s AND l.data < %s))",
         (list(categorias_com_item), mes, mes, ate),

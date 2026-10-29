@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 11
+VERSAO_FORMATO = 12
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -188,7 +188,52 @@ def _da_versao_9_para_a_10(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tab
 
 
 def _da_versao_10_para_a_11(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 11 (ticket 37) traz os cartões e as faturas e grava no lançamento o mês em que
+    """A versão 11 (ticket 44) traz as recorrências e liga o lançamento à regra que o gerou. Os
+    lançamentos antigos entram avulsos (sem regra e sem ocorrência) e sem o automático."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "recorrencia_id" not in colunas:
+        novas = ["recorrencia_id", "ocorrencia", "automatico"]
+        tabelas["lancamentos"] = (
+            colunas + novas,
+            [linha + [None] * len(novas) for linha in linhas],
+        )
+        manifesto["tabelas"]["lancamentos"]["somas"]["ocorrencia"] = "0"
+    novas_tabelas = {
+        "recorrencias": (
+            [
+                "id",
+                "tipo",
+                "valor_centavos",
+                "tipo_do_valor",
+                "automatico",
+                "descricao",
+                "conta_id",
+                "inicio",
+                "a_cada",
+                "unidade",
+                "ate",
+                "vezes",
+                "geradas",
+                "criado_por",
+                "criado_em",
+                "alterado_por",
+                "alterado_em",
+                "pessoa",
+            ],
+            {"valor_centavos": "0", "a_cada": "0", "vezes": "0", "geradas": "0"},
+        ),
+        "recorrencia_categorias": (["recorrencia_id", "categoria_id"], {}),
+        "recorrencia_tags": (["recorrencia_id", "tag_id"], {}),
+    }
+    for tabela, (colunas_novas, somas) in novas_tabelas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas_novas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
+def _da_versao_11_para_a_12(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 12 (ticket 37) traz os cartões e as faturas e grava no lançamento o mês em que
     ele conta. Antes dela todo lançamento era de conta, que conta no mês da data."""
     colunas, linhas = tabelas["lancamentos"]
     if "mes" not in colunas:
@@ -235,6 +280,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     8: _da_versao_8_para_a_9,
     9: _da_versao_9_para_a_10,
     10: _da_versao_10_para_a_11,
+    11: _da_versao_11_para_a_12,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

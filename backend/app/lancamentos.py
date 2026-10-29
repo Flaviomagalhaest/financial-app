@@ -70,7 +70,7 @@ class AlteracaoDeCategoria(BaseModel):
         return nome.strip() if nome else nome
 
 
-def _tags_limpas(nomes: list[str] | None) -> list[str] | None:
+def tags_limpas(nomes: list[str] | None) -> list[str] | None:
     if nomes is None:
         return None
     limpos = [nome.strip() for nome in nomes]
@@ -79,7 +79,7 @@ def _tags_limpas(nomes: list[str] | None) -> list[str] | None:
     return list({nome.casefold(): nome for nome in limpos}.values())
 
 
-def _sem_repetidas(ids: list[UUID] | None) -> list[UUID] | None:
+def sem_repetidas(ids: list[UUID] | None) -> list[UUID] | None:
     if ids is not None and len(set(ids)) != len(ids):
         raise ValueError("categoria repetida")
     return ids
@@ -108,8 +108,8 @@ class DadosDoLancamento(BaseModel):
     # fechamento. Mandar o mês é trocar a fatura à mão (o banco lançou a compra com atraso).
     fatura_mes: date | None = None
 
-    _tags = field_validator("tags")(_tags_limpas)
-    _categorias = field_validator("categoria_ids")(_sem_repetidas)
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
     _fatura = field_validator("fatura_mes")(_primeiro_dia)
 
 
@@ -123,8 +123,14 @@ class Lancamento(DadosDoLancamento):
     # O mês em que o lançamento conta (planejamento, categorias, tags, resumo): o mês da fatura
     # no cartão, o da data no resto (ADR 0003). Gravado como o primeiro dia do mês.
     mes: date
-    # Previsto cuja data já passou sem confirmação; continua previsto (e contando) até confirmar.
+    # Previsto que pede confirmação e cuja data já passou sem ela; continua previsto (e contando)
+    # até confirmar. O automático não pede: a tarefa diária o realiza na data.
     atrasado: bool
+    # A regra que gerou o lançamento e o número da ocorrência nela (1, 2...); o avulso não tem.
+    recorrencia_id: UUID | None = None
+    ocorrencia: int | None = None
+    # Vira realizado sozinho na data, sem confirmação (recorrência de valor fixo).
+    automatico: bool = False
     # Sobe a cada mudança aceita; a edição e a exclusão dizem sobre qual versão foram feitas.
     versao: int
     criado_por: str
@@ -173,8 +179,8 @@ class AlteracaoDeLancamento(BaseModel):
     fatura_mes: date | None = None
     acao_em: datetime | None = None
 
-    _tags = field_validator("tags")(_tags_limpas)
-    _categorias = field_validator("categoria_ids")(_sem_repetidas)
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
     _fatura = field_validator("fatura_mes")(_primeiro_dia)
 
 
@@ -238,14 +244,15 @@ _REPETIDO_DE = f"""(
 ) AS repetido_de"""
 
 # Lançamento de antes do ticket 34 não tem versão: está como nasceu, na 1.
-_VERSAO = "COALESCE(versao, 1)"
-# O mês em que o lançamento conta. Gravado pela migration 0027 nos de antes; a data cobre o que
+VERSAO = "COALESCE(versao, 1)"
+# O mês em que o lançamento conta. Gravado pela migration 0034 nos de antes; a data cobre o que
 # sobrou dela e o que a API antiga gravar durante o deploy.
 MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
-    f" criado_por, criado_em, alterado_por, alterado_em, {_VERSAO}, pessoa, fonte,"
+    f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
+    " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
     f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}"
 )
 
@@ -420,13 +427,15 @@ def _conferir_conta_ou_cartao(conn, id: UUID, ja_ligado: bool) -> None:
     conferir_conta(conn, id, ja_ligada=ja_ligado)
 
 
-def _conferir_ligacoes(
+def conferir_ligacoes(
     conn,
-    lancamento: DadosDoLancamento,
+    lancamento,
     conta_atual: UUID | None = None,
     categorias_atuais: frozenset[UUID] = frozenset(),
 ) -> None:
-    """Conta, cartão e categoria arquivados só valem num lançamento que já os tinha."""
+    """Conta, cartão e categoria arquivados só valem num lançamento que já os tinha. Serve a quem
+    tem `tipo`, `conta_id`, `categoria_ids` e `pessoa`: o lançamento e a regra que gera
+    lançamentos."""
     pessoas = configuradas()
     if lancamento.pessoa and pessoas and lancamento.pessoa not in pessoas:
         raise recusar("pessoa não encontrada")
@@ -449,19 +458,13 @@ def _conferir_ligacoes(
             raise recusar("categoria arquivada")
 
 
-def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+def ids_das_tags(conn, nomes: list[str], usuario: str, ja_tinha: set[UUID]) -> list[UUID]:
     """Acha cada tag pelo nome (sem distinguir maiúsculas) ou a cria. Tag arquivada só vale para
     quem já a tinha."""
     existentes = {
         nome.casefold(): (tag, arquivada)
         for tag, nome, arquivada in conn.execute(
             "SELECT id, nome, arquivada_em IS NOT NULL FROM tags"
-        )
-    }
-    ja_tinha = {
-        linha[0]
-        for linha in conn.execute(
-            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
         )
     }
     ids = []
@@ -476,6 +479,17 @@ def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
                 "INSERT INTO tags (id, nome, criado_por) VALUES (%s, %s, %s)", (tag, nome, usuario)
             )
         ids.append(tag)
+    return ids
+
+
+def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+    ja_tinha = {
+        linha[0]
+        for linha in conn.execute(
+            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
+        )
+    }
+    ids = ids_das_tags(conn, nomes, usuario, ja_tinha)
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
     for tag in ids:
         conn.execute(
@@ -527,7 +541,7 @@ def subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) -
     """Grava a mudança só se ninguém mudou o lançamento desde a leitura; senão a transação
     recomeça (`em_transacao`) e a nova leitura vê a outra mudança."""
     gravadas = conn.execute(
-        f"UPDATE lancamentos SET {atribuicoes}, versao = %s WHERE id = %s AND {_VERSAO} = %s",
+        f"UPDATE lancamentos SET {atribuicoes}, versao = %s WHERE id = %s AND {VERSAO} = %s",
         (*parametros, de + 1, id, de),
     ).rowcount
     if not gravadas:
@@ -611,6 +625,18 @@ def _atual(conn, id: UUID, usuario: str) -> Lancamento:
     return lidos[0] if lidos else _atual(conn, id, usuario)
 
 
+def mes_em_que_conta(conn, conta_id: UUID, data: date) -> date:
+    """O mês em que conta um lançamento pela data: no cartão, o da fatura que fecha depois dela,
+    que nasce aqui se faltar; no resto, o da data (ADR 0003). Serve também à regra que gera
+    lançamentos (recorrência)."""
+    cartao = faturas.ler_cartao(conn, conta_id)
+    if cartao is None:
+        return faturas.mes_de(data)
+    mes = faturas.mes_da_compra(conn, cartao.titular, data)
+    faturas.garantir_fatura(conn, cartao.titular, mes)
+    return mes
+
+
 def _onde_conta(
     conn, lancamento: DadosDoLancamento, mantida: date | None = None
 ) -> tuple[date, date | None, bool]:
@@ -679,7 +705,7 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             (novo.id,),
         )
     )
-    _conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
+    conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
     mes, _, a_mao = _onde_conta(conn, novo)
     momento = _momento(novo.acao_em)
     gravados = conn.execute(
@@ -748,7 +774,7 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
         return atual
     editado = _com_mudancas(atual, mudancas)
     momento = _momento(alteracao.acao_em)
-    _conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
+    conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
     mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
     versao = subir_versao(
         conn,
@@ -785,7 +811,7 @@ def _excluir(
     """Marca a exclusão: sem a marca, a edição que chega depois não saberia que perdeu para
     ela. Com `versao`, excluir o que o outro lado mudou depois é conflito."""
     linha = conn.execute(
-        f"SELECT {_VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
+        f"SELECT {VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
     ).fetchone()
     if not linha or linha[1]:
         return
@@ -873,7 +899,7 @@ def _todos(
             id=l[0],
             tipo=l[1],
             situacao=l[2],
-            atrasado=l[2] == "previsto" and l[4] < dia,
+            atrasado=l[2] == "previsto" and l[4] < dia and not l[16],
             valor_centavos=l[3],
             data=l[4],
             descricao=l[5],
@@ -887,9 +913,12 @@ def _todos(
             versao=l[11],
             pessoa=l[12],
             fonte=l[13] or "app",
-            parece_repetido_de=l[14],
-            mes=l[15],
-            fatura_mes=l[15] if l[16] else None,
+            recorrencia_id=l[14],
+            ocorrencia=l[15],
+            automatico=l[16],
+            parece_repetido_de=l[17],
+            mes=l[18],
+            fatura_mes=l[18] if l[19] else None,
         )
         for l in linhas
     ]
@@ -920,7 +949,8 @@ def editar_lancamento(
 
 
 class ContasDaSemana(BaseModel):
-    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."""
+    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
+    automático fica de fora: não pede confirmação."""
 
     lancamentos: list[Lancamento]
 
@@ -931,7 +961,7 @@ def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana
     with conectar(url_do_banco(request)) as conn:
         lancamentos = _todos(
             conn,
-            "situacao = 'previsto' AND data <= %s",
+            "situacao = 'previsto' AND NOT COALESCE(automatico, false) AND data <= %s",
             (ate,),
             ordem="data, criado_em, id",
         )
