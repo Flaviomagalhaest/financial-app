@@ -1,6 +1,6 @@
 // A camada de dados do aparelho: o único ponto de leitura e escrita das telas (ADR 0011). Lê do
 // servidor guardando a última resposta, escreve pela fila e a sobe sozinha quando dá.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/cliente";
 import type { components } from "../api/schema";
 import { hoje } from "../lancamentos/datas";
@@ -37,6 +37,7 @@ export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
+export type Fatura = components["schemas"]["Fatura"];
 export type { Campo } from "./fila";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { comoNovo } from "./fila";
@@ -46,6 +47,8 @@ export type LancamentoNaTela = NovoLancamento & {
   situacao: "previsto" | "realizado";
   /** O do servidor; o não enviado repete o da versão que o servidor tem. */
   atrasado?: boolean;
+  /** O mês em que o lançamento conta (o da fatura, no cartão); o criado só no aparelho ainda não tem. */
+  mes?: string;
   /** A versão do servidor que a tela mostra; o não enviado não tem. */
   versao?: number;
   /** Autoria e origem, como o servidor as tem; o criado só no aparelho ainda não tem. */
@@ -82,12 +85,24 @@ type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)
 
 /** A resposta do servidor, ou a última guardada; `aoVivo` diz se a última busca deu certo. */
 function useResposta<C extends Caminho>(caminho: C) {
-  const [guardada, setGuardada] = useState<Guardada<Dados<C>> | null>(null);
+  return useRespostaDe<Dados<C>>(caminho, LEITURAS[caminho] as () => Promise<{ data?: Dados<C> }>);
+}
+
+/** As faturas de um cartão, da mais antiga à mais nova; as do adicional são as do titular. */
+export function useFaturas(cartaoId: string) {
+  const ler = () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id: cartaoId } } });
+  return useRespostaDe<Fatura[]>(`/api/cartoes/${cartaoId}/faturas`, ler);
+}
+
+function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
+  const [guardada, setGuardada] = useState<Guardada<D> | null>(null);
   const [aoVivo, setAoVivo] = useState<boolean | null>(null);
+  const leitor = useRef(ler);
+  leitor.current = ler;
 
   const buscar = useCallback(async () => {
     const dados = await comTrava("shared", async () => {
-      const { data } = await LEITURAS[caminho]().catch(() => ({ data: undefined }));
+      const { data } = await leitor.current().catch(() => ({ data: undefined }));
       if (data) await guardarResposta(caminho, data);
       return data;
     });
@@ -96,13 +111,13 @@ function useResposta<C extends Caminho>(caminho: C) {
 
   useEffect(() => {
     let ativo = true;
-    const ler = () =>
-      void lerResposta<Dados<C>>(caminho).then((g) => {
+    const lerGuardada = () =>
+      void lerResposta<D>(caminho).then((g) => {
         if (ativo && g) setGuardada(g);
       });
-    ler();
+    lerGuardada();
     void buscar();
-    const parar = ouvirMudancas(ler);
+    const parar = ouvirMudancas(lerGuardada);
     // A rede voltou ou o app voltou à frente: a resposta guardada pode estar velha.
     const buscarDeNovo = () => document.visibilityState === "visible" && void buscar();
     window.addEventListener("online", buscarDeNovo);

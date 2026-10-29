@@ -498,3 +498,23 @@ def test_mesma_compra_no_mesmo_cartao_pelos_dois_parece_repetida(casal: Casal):
     ).json()
 
     assert da_esposa["parece_repetido_de"] == do_flavio["id"]
+
+
+def test_faturas_vem_em_ordem_com_situacao_e_total_somando_o_adicional(casal: Casal, hoje_10_04):
+    # A aba Cartões lê isto: a atual é a primeira aberta, a anterior e a próxima são as vizinhas.
+    titular = novo_cartao(casal)["id"]
+    adicional = casal.pedir(
+        "esposa", "POST", "/api/cartoes", json={"nome": "Nubank da esposa", "titular_id": titular}
+    ).json()["id"]
+    comprar(casal, titular, "2026-02-26", valor_centavos=10000)  # fatura de 03/2026
+    comprar(casal, titular, "2026-03-28", valor_centavos=2500)  # fatura de 04/2026
+    comprar(casal, adicional, "2026-04-02", valor_centavos=40000, quem="esposa")  # 04/2026
+    comprar(casal, titular, "2026-04-28", valor_centavos=7000)  # fatura de 05/2026
+
+    faturas = casal.pedir("esposa", "GET", f"/api/cartoes/{titular}/faturas").json()
+
+    assert [(f["mes"], f["situacao"], f["total_centavos"]) for f in faturas] == [
+        ("2026-03-01", "fechada", 10000),
+        ("2026-04-01", "aberta", 42500),
+        ("2026-05-01", "aberta", 7000),
+    ]

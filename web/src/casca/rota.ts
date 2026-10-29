@@ -11,8 +11,8 @@ export const ABAS = [
 export type Rota = (typeof ABAS)[number]["id"] | "novo" | "conflito" | "contas-e-categorias" | "configuracoes";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
-export function lerRota(hash: string): { rota: Rota; id?: string } {
-  const [tela, id] = hash.replace(/^#\/?/, "").split("/");
+export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string } {
+  const [tela, id, mes] = hash.replace(/^#\/?/, "").split("/");
   const conhecida =
     tela === "novo" ||
     (tela === "conflito" && !!id) ||
@@ -20,10 +20,12 @@ export function lerRota(hash: string): { rota: Rota; id?: string } {
     tela === "configuracoes" ||
     ABAS.some((aba) => aba.id === tela);
   // `#/novo/<id>` edita o lançamento de identidade `<id>`; `#/conflito/<id>` decide o conflito dele.
+  // `#/cartoes/<cartão>/<AAAA-MM-01>` abre a fatura desse mês do cartão.
+  if (conhecida && tela === "cartoes") return id && mes ? { rota: "cartoes", id, mes } : { rota: "cartoes" };
   return conhecida ? { rota: tela as Rota, id: tela === "novo" || tela === "conflito" ? id : undefined } : { rota: "hoje" };
 }
 
-export function useRota(): { rota: Rota; id?: string } {
+export function useRota(): { rota: Rota; id?: string; mes?: string } {
   const [rota, setRota] = useState(() => lerRota(window.location.hash));
   useEffect(() => {
     const aoMudar = () => setRota(lerRota(window.location.hash));
