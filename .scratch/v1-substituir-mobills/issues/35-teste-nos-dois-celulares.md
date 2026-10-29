@@ -25,4 +25,5 @@ Fecha a etapa 1 com o teste de verdade nos aparelhos do casal (HITL, do dono). S
 - [ ] Lançar pela jornada do [ticket 42](42-jornada-completa-do-lancamento-rapido.md) nos dois celulares (atalho do ícone no Android, botão na Hoje no iPhone, folha de detalhes, "Repetir último", transferência) e confirmar as escolhas sem protótipo: "Transferência" no seletor de tipo, "Repetir último" só com os lançamentos de quem está no aparelho e a data do resumo em `dd/mm/aaaa`
 - [ ] Resultado e decisão sobre seguir ou acionar o plano B em `## Answer`
 - [ ] Conferir no DSQL se `itens_do_planejamento` aceita um índice único em (`mes`, `categoria_id`) (ticket 49: hoje a unicidade é só da rota)
+- [ ] No DSQL, criar um item do planejamento num mês cheio e juntar uma categoria com muito histórico: as duas gravam, numa transação só, o item atual de cada lançamento afetado (`guardar_item_atual`, ticket 51), e a junção já movia todas as ligações da categoria de uma vez; conferir que cabem nas 3.000 linhas, senão gravar em lotes
 - [ ] Verificações do projeto rodando e PR aberto para `main`

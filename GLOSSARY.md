@@ -123,6 +123,14 @@ _Avoid_: orçamento, meta
 Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: R$ 1.000 em alimentação), comparada com os lançamentos realizados e previstos do mês que contam nele; cada lançamento conta em no máximo um item, mesmo tendo várias categorias.
 _Avoid_: teto, limite, meta
 
+**Escolha do item**:
+A categoria, entre as do lançamento, cujo item do planejamento o casal escolheu para ele contar quando duas ou mais têm item no mês. Vale em qualquer mês em que essa categoria tem item, nunca muda sozinha e sai quando a categoria sai do lançamento; a recorrência e o parcelamento a guardam, e seus lançamentos já nascem com ela.
+_Avoid_: item principal, categoria principal
+
+**A escolher**:
+A lista dos lançamentos do mês com duas ou mais categorias com item e sem escolha do item que valha. O lançamento que já contava sozinho num item quando a ambiguidade surgiu (item criado no meio do mês, categorias editadas, outro mês) continua nele até o casal escolher.
+_Avoid_: pendentes, sem item
+
 **Modelo padrão do planejamento**:
 Conjunto de itens (categoria e valor) que o casal mantém nas configurações e aplica a um mês vazio para não começar o planejamento do zero; vale para qualquer mês e não é um mês. Não é um **Favorito**, que é um lançamento-modelo.
 _Avoid_: modelo (sozinho), template

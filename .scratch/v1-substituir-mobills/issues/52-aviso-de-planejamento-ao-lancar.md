@@ -22,3 +22,7 @@ A cada toque na tela de lançar, o casal vê o efeito no planejamento ("Mercado:
 - [ ] Testes de tabela e de navegador
 - [ ] Sem internet, o aviso da compra no cartão precisa da fatura: a regra está só no servidor (`backend/app/faturas.py`, ticket 37). Decidir se o aparelho repete a regra com as faturas guardadas (`GET /api/cartoes/{id}/faturas`) ou mostra o mês só depois do envio (ADR 0011 rejeitou repetir as regras no aparelho)
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 51](51-item-do-lancamento-e-a-escolher.md): a escolha vai em `item_categoria_id` (a categoria do item, uma das do lançamento) no `POST /api/lancamentos`, no `PATCH` e no lote; "a última escolha para aquele conjunto" sai dos lançamentos guardados, que trazem `item_categoria_id` quando o casal escolheu. A regra de onde o lançamento conta (escolha, item atual, uma categoria só com item) está em `backend/app/item_em_que_conta.py` (`onde_conta`), para o cálculo puro do aviso repetir.

@@ -25,3 +25,4 @@ Ao abrir o app o casal vê o essencial, e os favoritos entram aqui no ticket de 
 ## Notas
 
 - Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): `ainda_da_para_gastar_centavos` do planejamento já desconta os ajustes de fatura do mês (`ajustes_de_fatura_centavos`, ADR 0008) e os itens contam o estorno com sinal contrário; a leitura da tela lê isso, sem recalcular.
+- Do [ticket 51](51-item-do-lancamento-e-a-escolher.md): a lista "a escolher" sai pronta de `GET /api/planejamento/{mes}` (`a_escolher`: `lancamento_id`, `item_categoria_id` com o item em que ele conta enquanto ninguém escolhe, e `categorias_com_item`). Escolher é `PATCH /api/lancamentos/{id}` com `item_categoria_id`, que também vai pela fila (`CAMPOS` em `web/src/dados/fila.ts`).
