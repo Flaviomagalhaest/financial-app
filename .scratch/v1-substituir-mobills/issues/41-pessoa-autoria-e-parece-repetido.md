@@ -20,4 +20,5 @@ Cada lançamento diz de quem é (ou que é do casal), quem o criou e quem o alte
 - [ ] "Parece repetido" quando chega lançamento da outra pessoa com mesmo valor, mesma conta ou cartão e data a até 1 dia, com "Manter os dois" ou "Excluir este"
 - [ ] A tela de conflito e o aviso de exclusão (ticket 34, `TelaDeConflito.tsx` e `ListaDeLancamentos.tsx`) dizem o nome ("o da Fulana, às 14:32", "Fulana excluiu este lançamento") no lugar de "a outra pessoa", e a hora é a da ação no aparelho, não a da chegada ao servidor (`alterado_em` de `lancamento_campos` é o `now()` do servidor)
 - [ ] Testes de API e de navegador com dois contextos
+- [ ] A pessoa entra como a coluna `lancamentos.pessoa`, que abre a guarda de `ler_lancamentos` (`backend/app/exportacao.py`, ticket 37): faça o [ticket 77](77-ligar-o-csv-de-planilha-ao-esquema-real.md) no mesmo PR, senão `POST /api/exportacoes` com `planilha` responde 500
 - [ ] Verificações do projeto rodando e PR aberto para `main`

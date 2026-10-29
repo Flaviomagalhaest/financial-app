@@ -18,4 +18,5 @@ O casal vê o que deve em cada cartão e confere a fatura com o app do banco.
 - [ ] Uma linha por cartão com a fatura atual, a próxima e a anterior e a situação (aberta, fechada ou paga)
 - [ ] Detalhe da fatura com as compras agrupadas por dia e filtro por categoria e tag; atalho "ver os lançamentos" (liga à busca quando ela existir)
 - [ ] Testes de API e de navegador
+- [ ] Lê `GET /api/cartoes` e `GET /api/cartoes/{id}/faturas` (ticket 37); a fatura atual é a primeira `aberta`. Totais por fatura ainda não existem na API: entram na leitura da tela, somando os lançamentos pelo `mes` e pelo cartão (com os adicionais)
 - [ ] Verificações do projeto rodando e PR aberto para `main`
