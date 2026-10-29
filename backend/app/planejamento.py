@@ -137,6 +137,12 @@ def _gravar_itens(conn, dia: date, itens, usuario: str) -> None:
         )
 
 
+def _gravar_itens_no_mes_vazio(conn, dia: date, itens, usuario: str) -> None:
+    if conn.execute("SELECT 1 FROM itens_do_planejamento WHERE mes = %s", (dia,)).fetchone():
+        raise HTTPException(status_code=409, detail="o mês já tem itens")
+    _gravar_itens(conn, dia, itens, usuario)
+
+
 def _item(conn, id: UUID) -> ItemDoPlanejamento:
     mes = conn.execute("SELECT mes FROM itens_do_planejamento WHERE id = %s", (id,)).fetchone()
     if not mes:
@@ -204,9 +210,7 @@ def aplicar_modelo(mes: Mes, usuario: UsuarioLogado, request: Request) -> Planej
         itens = [(i.categoria_id, i.valor_centavos) for i in _modelo(conn).itens]
         if not itens:
             raise recusar("o modelo padrão está vazio")
-        if conn.execute("SELECT 1 FROM itens_do_planejamento WHERE mes = %s", (dia,)).fetchone():
-            raise HTTPException(status_code=409, detail="o mês já tem itens")
-        _gravar_itens(conn, dia, itens, usuario)
+        _gravar_itens_no_mes_vazio(conn, dia, itens, usuario)
         return _ler(conn, mes)
 
     return em_transacao(url_do_banco(request), gravar)
@@ -279,9 +283,7 @@ def copiar_planejamento(
         ).fetchall()
         if not itens:
             raise recusar("o mês de origem não tem itens")
-        if conn.execute("SELECT 1 FROM itens_do_planejamento WHERE mes = %s", (dia,)).fetchone():
-            raise HTTPException(status_code=409, detail="o mês já tem itens")
-        _gravar_itens(conn, dia, itens, usuario)
+        _gravar_itens_no_mes_vazio(conn, dia, itens, usuario)
         return _ler(conn, mes)
 
     return em_transacao(url_do_banco(request), gravar)

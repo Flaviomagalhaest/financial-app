@@ -26,3 +26,4 @@ O casal monta o mês copiando o anterior ou um modelo padrão em vez de começar
 - Modelo padrão: tabela `modelo_do_planejamento` (migration 0022, uma linha por categoria), `GET`/`PUT /api/planejamento/modelo` (o PUT troca o conjunto inteiro) e `POST /api/planejamento/{mes}/aplicar-modelo` (mês vazio). Juntar categorias soma o item do modelo e excluir categoria com item no modelo é recusado.
 - Backup na versão 10, com conversor da 9 (modelo vazio).
 - Só a API; a tela de configurações e o botão de copiar/aplicar ficam para a interface do planejamento.
+- **Pendências**: a tela de configurações do modelo e os botões de copiar/aplicar ficam como linha nova no ticket [54](54-aba-mes.md). O formato do modelo (um conjunto de itens com valor) é provisório até o casal usar. `copiar` e `aplicar-modelo` não são idempotentes: um reenvio devolve 409 (a escolha é só online, como a edição de itens). Copiar e aplicar não olham categoria arquivada, como `criar_item`.
