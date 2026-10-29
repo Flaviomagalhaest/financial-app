@@ -31,3 +31,7 @@ O [ADR 0012](../../../docs/adr/0012-exportacao-unica-zip-de-csvs-e-restauracao-s
 - [ ] Refazer apaga só o que veio do Mobills e grava de novo
 - [ ] Teste: importar, lançar algo pelo app, refazer, e o lançado pelo app continua
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): O backup gerado pelo importador sai na versão 14 do formato (`ajuste_centavos` na fatura e `estorno_de` no lançamento, ticket 39).

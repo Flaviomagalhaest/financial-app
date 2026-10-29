@@ -15,6 +15,7 @@ from app.exportacao import Formato, exportar
 from app.lancamentos import router as lancamentos
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
 from app.lote import router as lote
+from app.meses import router as meses
 from app.migrations import total_aplicadas
 from app.parcelamentos import router as parcelamentos
 from app.pessoas import router as pessoas
@@ -89,6 +90,7 @@ def create_app(
     app.include_router(transferencias)
     app.include_router(cartoes)
     app.include_router(planejamento)
+    app.include_router(meses)
     app.include_router(pessoas)
     app.include_router(recorrencias)
     app.include_router(parcelamentos)

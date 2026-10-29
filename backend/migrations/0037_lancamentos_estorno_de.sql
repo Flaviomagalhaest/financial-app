@@ -1,0 +1,1 @@
+ALTER TABLE lancamentos ADD COLUMN IF NOT EXISTS estorno_de uuid

@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 14
+VERSAO_FORMATO = 15
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -277,7 +277,20 @@ def _da_versao_12_para_a_13(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
 
 
 def _da_versao_13_para_a_14(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 14 (ticket 46) traz os parcelamentos e liga a parcela ao parcelamento que a
+    """A versão 14 (ticket 39) traz o estorno, que guarda o lançamento original, e o ajuste da
+    fatura. Antes dela nenhum lançamento era estorno e nenhuma fatura tinha ajuste."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "estorno_de" not in colunas:
+        tabelas["lancamentos"] = ([*colunas, "estorno_de"], [[*linha, None] for linha in linhas])
+    colunas, linhas = tabelas["faturas"]
+    if "ajuste_centavos" not in colunas:
+        tabelas["faturas"] = ([*colunas, "ajuste_centavos"], [[*linha, None] for linha in linhas])
+        manifesto["tabelas"]["faturas"]["somas"]["ajuste_centavos"] = "0"
+    return manifesto, tabelas
+
+
+def _da_versao_14_para_a_15(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 15 (ticket 46) traz os parcelamentos e liga a parcela ao parcelamento que a
     gerou. Os lançamentos antigos entram avulsos, sem parcelamento e sem número de parcela."""
     colunas, linhas = tabelas["lancamentos"]
     if "parcelamento_id" not in colunas:
@@ -331,6 +344,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     11: _da_versao_11_para_a_12,
     12: _da_versao_12_para_a_13,
     13: _da_versao_13_para_a_14,
+    14: _da_versao_14_para_a_15,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

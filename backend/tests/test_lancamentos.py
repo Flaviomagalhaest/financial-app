@@ -37,6 +37,7 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
         "recorrencia_id": None,
         "ocorrencia": None,
         "automatico": False,
+        "estorno_de": None,
         "parcelamento_id": None,
         "parcela": None,
         "parcelas": None,

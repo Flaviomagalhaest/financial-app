@@ -1464,7 +1464,7 @@
     "/api/cartoes/{id}/faturas/{mes}": {
       "patch": {
         "summary": "Editar Fatura",
-        "description": "Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e\nredistribui as compras dela e das abertas e futuras; o mês da fatura não muda.",
+        "description": "Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e\nredistribui as compras dela e das abertas e futuras, ou grava o ajuste dela (ADR 0008); o mês\nda fatura não muda.",
         "operationId": "editar_fatura",
         "security": [
           {
@@ -1898,6 +1898,54 @@
         }
       }
     },
+    "/api/meses/{mes}/totais": {
+      "get": {
+        "summary": "Ler Totais",
+        "operationId": "ler_totais_do_mes",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotaisDoMes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/pessoas": {
       "get": {
         "summary": "Listar Pessoas",
@@ -2225,11 +2273,24 @@
               }
             ],
             "title": "Vencimento"
+          },
+          "ajuste_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000000000.0,
+                "minimum": -1000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ajuste Centavos"
           }
         },
         "type": "object",
         "title": "AlteracaoDeFatura",
-        "description": "Fechamento ou vencimento que escorregou (feriado); o mês da fatura não muda."
+        "description": "Fechamento ou vencimento que escorregou (feriado), ou o ajuste da fatura; o mês da fatura\nnão muda."
       },
       "AlteracaoDeLancamento": {
         "properties": {
@@ -2996,6 +3057,14 @@
             ],
             "title": "Situacao"
           },
+          "compras_centavos": {
+            "type": "integer",
+            "title": "Compras Centavos"
+          },
+          "ajuste_centavos": {
+            "type": "integer",
+            "title": "Ajuste Centavos"
+          },
           "total_centavos": {
             "type": "integer",
             "title": "Total Centavos"
@@ -3020,6 +3089,8 @@
           "fechamento",
           "vencimento",
           "situacao",
+          "compras_centavos",
+          "ajuste_centavos",
           "total_centavos",
           "saldo_anterior_centavos",
           "pago_centavos",
@@ -3201,6 +3272,18 @@
               }
             ],
             "title": "Fatura Mes"
+          },
+          "estorno_de": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno De"
           },
           "mes": {
             "type": "string",
@@ -3916,6 +3999,18 @@
             ],
             "title": "Fatura Mes"
           },
+          "estorno_de": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno De"
+          },
           "acao_em": {
             "anyOf": [
               {
@@ -4209,6 +4304,11 @@
           "ainda_da_para_gastar_centavos": {
             "type": "integer",
             "title": "Ainda Da Para Gastar Centavos"
+          },
+          "ajustes_de_fatura_centavos": {
+            "type": "integer",
+            "title": "Ajustes De Fatura Centavos",
+            "default": 0
           }
         },
         "type": "object",
@@ -4501,6 +4601,82 @@
           "nome"
         ],
         "title": "Tag"
+      },
+      "TotaisDoMes": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "title": "Mes"
+          },
+          "despesas_centavos": {
+            "type": "integer",
+            "title": "Despesas Centavos"
+          },
+          "ajustes_de_fatura_centavos": {
+            "type": "integer",
+            "title": "Ajustes De Fatura Centavos"
+          },
+          "por_categoria": {
+            "items": {
+              "$ref": "#/components/schemas/TotalDeCategoria"
+            },
+            "type": "array",
+            "title": "Por Categoria"
+          },
+          "por_tag": {
+            "items": {
+              "$ref": "#/components/schemas/TotalDeTag"
+            },
+            "type": "array",
+            "title": "Por Tag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "despesas_centavos",
+          "ajustes_de_fatura_centavos",
+          "por_categoria",
+          "por_tag"
+        ],
+        "title": "TotaisDoMes"
+      },
+      "TotalDeCategoria": {
+        "properties": {
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "centavos": {
+            "type": "integer",
+            "title": "Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoria_id",
+          "centavos"
+        ],
+        "title": "TotalDeCategoria"
+      },
+      "TotalDeTag": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "title": "Tag"
+          },
+          "centavos": {
+            "type": "integer",
+            "title": "Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "centavos"
+        ],
+        "title": "TotalDeTag"
       },
       "Transferencia": {
         "properties": {

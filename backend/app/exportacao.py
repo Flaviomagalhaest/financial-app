@@ -144,7 +144,9 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
                 if l["parcela"]
                 else l["descricao"]
             ),
-            valor=_reais(-l["valor"] if l["tipo"] == "despesa" else l["valor"]),
+            valor=_reais(
+                -l["valor"] if l["tipo"] == "despesa" and not l["estorno_de"] else l["valor"]
+            ),
             conta_ou_cartao=contas.get(l["conta_id"], ""),
             fatura=l["mes"].strftime("%Y-%m") if l["no_cartao"] else "",
             categorias=categorias.get(l["id"], []),
@@ -153,7 +155,7 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
         )
         for l in _dicionarios(
             conn,
-            "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id,"
+            "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id, estorno_de,"
             f" pessoa, criado_por, alterado_por, criado_em, {MES_EM_QUE_CONTA} AS mes,"
             f" {NO_CARTAO} AS no_cartao, parcela, {PARCELAS} AS parcelas"
             # As parcelas no cartão têm a mesma data: a ordem delas fica a do número.

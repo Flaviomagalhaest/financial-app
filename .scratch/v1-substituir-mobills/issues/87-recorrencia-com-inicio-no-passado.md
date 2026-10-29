@@ -32,4 +32,4 @@ Quem cadastra hoje o salário que caiu no dia 5 com início em 05/10 ganha o de 
 
 ## Notas
 
-- Do [ticket 46](46-parcelamento-criar.md): a mesma pergunta vale para o parcelamento em boleto com a data no passado (pergunta 5 do [ticket 94](94-parcelamento-regras-provisorias.md)); decidir as duas juntas.
+- Do [ticket 46](46-parcelamento-criar.md): a mesma pergunta vale para o parcelamento em boleto com a data no passado (pergunta 5 do [ticket 99](99-parcelamento-regras-provisorias.md)); decidir as duas juntas.
