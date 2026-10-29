@@ -65,6 +65,16 @@ Pagamento de fatura (ticket 38): é `POST /api/transferencias` com a conta de or
 
 `backend/app/planejamento.py` guarda os itens do planejamento de cada mês: uma categoria (de despesa, receita ou transferência) e um valor, no máximo um item por categoria e mês. `POST /api/planejamento/{mes}/itens` cria (reenviar o mesmo id devolve o gravado), `PATCH` e `DELETE /api/planejamento/itens/{id}` mudam o valor e excluem, e `GET /api/planejamento/{mes}` (`AAAA-MM`) devolve o mês numa chamada só, já somado: por item o planejado, o realizado, o previsto (inclusive o atrasado), a porcentagem `(realizado + previsto) / planejado` e o "ainda dá para gastar" (planejado menos realizado e previsto, negativo se estoura); o do mês soma o que falta em cada item, sem abater item estourado. Hoje o lançamento conta no item quando só uma das categorias dele tem item no mês; com duas ou mais, a escolha é do ticket 51. Juntar categorias soma os itens do mesmo mês no destino, e excluir categoria recusa se há item. Só a API existe: as telas são dos tickets 52 e 54.
 
+## Importador do Mobills
+
+`backend/app/mobills/` lê os exports do Mobills e cruza cada linha de fatura com o seu par no geral ([ADR 0007](docs/adr/0007-historico-do-mobills-cruzado-e-sem-saldo.md), `## Answer` do ticket 18). O dono roda localmente, com os exports fora do repositório (`data/` está no `.gitignore`):
+
+```sh
+(cd backend && uv run python -m app.mobills <pasta do geral> <pasta das faturas> <planilha.xlsx>)
+```
+
+A pasta do geral tem os XLSX de "todas as transações"; a das faturas, uma subpasta por cartão com os arquivos `<cartão>_-_<AAAAMM>.xlsx`. Cada rodada lê a planilha de revisão da anterior, se existir, e a reescreve mantendo o que o dono editou: as abas Conta e Cartões (o cadastro, com cada pasta ligada a um cartão e os inativos arquivados), De-para (papel e nome no app de cada categoria e tag), Pares prováveis (`juntar` ou `separar`), Parcelamentos sem cartão (o cartão escolhido) e a coluna Mobills das abas Conferência e Faturas, que dá a diferença na rodada seguinte. Grupos ambíguos, Categoria diferente e Parcelas quebradas só informam. A saída da linha de comando mostra a taxa de casamento e o que ainda impede gravar (sai com código 2 enquanto houver impedimento); um export ou uma planilha que não dá para ler sai com código 1 e a mensagem do arquivo. A Conferência vai até o último mês com lançamento pago (a virada). Por enquanto o resultado fica em memória (`importar` devolve a `Importacao`): gravar no banco e refazer apagando só o importado dependem dos cartões e faturas (ticket 37). `openpyxl` fica no grupo `dev`, fora do pacote da Lambda.
+
 ## Contrato (OpenAPI e tipos)
 
 A FastAPI gera o OpenAPI; `openapi.json` fica versionado e o app gera os tipos dele. Depois de mudar uma rota ou um modelo:

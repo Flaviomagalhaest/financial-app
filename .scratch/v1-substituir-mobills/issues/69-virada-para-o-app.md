@@ -2,7 +2,7 @@
 
 Type: task
 Status: ready-for-human
-Blocked by: 68, 35, 64, 76
+Blocked by: 68, 35, 64, 76, 91, 92
 Skills: `run` (HITL: o dono faz no aparelho/na AWS e registra o resultado); apoio: `wizard`
 Modelo recomendado: Sonnet
 Effort recomendado: medium
