@@ -19,7 +19,7 @@ from psycopg.rows import dict_row
 
 from app.backup import conferir_backup, gerar_backup
 from app.banco import conectar, em_transacao
-from app.lancamentos import MES_EM_QUE_CONTA, NO_CARTAO
+from app.lancamentos import MES_EM_QUE_CONTA, NO_CARTAO, PARCELAS
 from app.pessoas import configuradas
 
 Formato = Literal["backup", "planilha"]
@@ -138,7 +138,12 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             l["situacao"],
             l["criado_por"],
             l["alterado_por"],
-            descricao=l["descricao"],
+            # A parcela como o Mobills a escreve: "Geladeira (3/10)".
+            descricao=(
+                f"{l['descricao']} ({l['parcela']}/{l['parcelas']})".lstrip()
+                if l["parcela"]
+                else l["descricao"]
+            ),
             valor=_reais(
                 -l["valor"] if l["tipo"] == "despesa" and not l["estorno_de"] else l["valor"]
             ),
@@ -152,7 +157,9 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             conn,
             "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id, estorno_de,"
             f" pessoa, criado_por, alterado_por, criado_em, {MES_EM_QUE_CONTA} AS mes,"
-            f" {NO_CARTAO} AS no_cartao FROM lancamentos WHERE excluido_em IS NULL",
+            f" {NO_CARTAO} AS no_cartao, parcela, {PARCELAS} AS parcelas"
+            # As parcelas no cartão têm a mesma data: a ordem delas fica a do número.
+            " FROM lancamentos WHERE excluido_em IS NULL ORDER BY parcela",
         )
     ] + [
         linha(

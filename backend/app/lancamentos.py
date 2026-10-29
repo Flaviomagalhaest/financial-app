@@ -1,10 +1,9 @@
 """Contas, categorias e lançamentos simples. Sem chave estrangeira nem trigger (subconjunto do
 DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no aparelho."""
 
-import logging
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated, Literal, get_args
+from typing import Literal, get_args
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -20,7 +19,6 @@ from app.login import UsuarioLogado
 from app.pessoas import configuradas
 
 router = APIRouter(prefix="/api")
-log = logging.getLogger(__name__)
 
 
 class NovaConta(BaseModel):
@@ -132,8 +130,12 @@ class Lancamento(DadosDoLancamento):
     # A regra que gerou o lançamento e o número da ocorrência nela (1, 2...); o avulso não tem.
     recorrencia_id: UUID | None = None
     ocorrencia: int | None = None
-    # Vira realizado sozinho na data, sem confirmação (recorrência de valor fixo).
+    # Vira realizado sozinho na data, sem confirmação (recorrência de valor fixo, parcelamento).
     automatico: bool = False
+    # O parcelamento que gerou a parcela, o número dela (3 em 3/10) e o total de parcelas.
+    parcelamento_id: UUID | None = None
+    parcela: int | None = None
+    parcelas: int | None = None
     # Sobe a cada mudança aceita; a edição e a exclusão dizem sobre qual versão foram feitas.
     versao: int
     criado_por: str
@@ -258,11 +260,14 @@ VALOR_COM_SINAL = (
     " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
 )
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
+# Quantas parcelas tem o parcelamento da parcela (o 10 de 3/10); o avulso não tem.
+PARCELAS = "(SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
-    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de"
+    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de, parcelamento_id, parcela,"
+    f" {PARCELAS}"
 )
 
 
@@ -634,25 +639,26 @@ def _atual(conn, id: UUID, usuario: str) -> Lancamento:
     return lidos[0] if lidos else _atual(conn, id, usuario)
 
 
-def mes_em_que_conta(conn, conta_id: UUID, data: date) -> date:
-    """O mês em que conta um lançamento pela data: no cartão, o da fatura que fecha depois dela,
-    que nasce aqui se faltar; no resto, o da data (ADR 0003). Serve também à regra que gera
-    lançamentos (recorrência)."""
+def mes_em_que_conta(conn, conta_id: UUID, data: date, parcela: int | None = None) -> date:
+    """O mês em que conta um lançamento pela data: no cartão, o da fatura que fecha depois dela
+    (a parcela n, n - 1 faturas depois), que nasce aqui se faltar; no resto, o da data (ADR
+    0003). Serve também às regras que geram lançamentos (recorrência e parcelamento)."""
     cartao = faturas.ler_cartao(conn, conta_id)
     if cartao is None:
         return faturas.mes_de(data)
-    mes = faturas.mes_da_compra(conn, cartao.titular, data)
+    mes = faturas.mes_da_parcela(conn, cartao.titular, data, parcela)
     faturas.garantir_fatura(conn, cartao.titular, mes)
     return mes
 
 
 def _onde_conta(
-    conn, lancamento: DadosDoLancamento, mantida: date | None = None
+    conn, lancamento: DadosDoLancamento, mantida: date | None = None, parcela: int | None = None
 ) -> tuple[date, date | None, bool]:
     """O mês em que conta, o mês da fatura (só no cartão) e se a fatura foi escolhida à mão.
 
     No cartão, a fatura é a pedida, a `mantida` de uma troca à mão anterior ou a que fecha
-    depois da data da compra, e nasce aqui se ainda não existe; no resto, o mês da data.
+    depois da data da compra (a da `parcela` n, n - 1 faturas depois), e nasce aqui se ainda
+    não existe; no resto, o mês da data.
     """
     cartao = faturas.ler_cartao(conn, lancamento.conta_id)
     if cartao is None:
@@ -664,7 +670,7 @@ def _onde_conta(
         if fechamento and fechamento <= lancamento.data:
             raise recusar("a fatura escolhida fechou antes da compra")
     a_mao = lancamento.fatura_mes or mantida
-    mes = a_mao or faturas.mes_da_compra(conn, cartao.titular, lancamento.data)
+    mes = a_mao or faturas.mes_da_parcela(conn, cartao.titular, lancamento.data, parcela)
     faturas.garantir_fatura(conn, cartao.titular, mes)
     return mes, mes, bool(a_mao)
 
@@ -690,7 +696,7 @@ def _fatura_depois(
     if not {"conta_id", "data", "fatura_mes"} & mudancas.keys():
         return atual.mes, a_mao
     mantida = atual.fatura_mes if a_mao and "conta_id" not in mudancas else None
-    mes, fatura_mes, a_mao = _onde_conta(conn, depois, mantida)
+    mes, fatura_mes, a_mao = _onde_conta(conn, depois, mantida, atual.parcela)
     if fatura_mes != atual.fatura_mes:
         mudancas["fatura_mes"] = fatura_mes
     return mes, a_mao
@@ -756,7 +762,7 @@ def _conferir_estorno(
     return categorias
 
 
-def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
+def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, sem criar de novo."""
     # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
     ja_ligadas = frozenset(
@@ -804,7 +810,7 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     return _atual(conn, novo.id, usuario), bool(gravados)
 
 
-def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> Lancamento:
+def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> Lancamento:
     """Aplica os campos pedidos sobre o que o servidor tem. Campo que o outro lado mudou depois
     da versão do pedido, para outro valor, recusa a mudança inteira como conflito; mudança igual
     à gravada não conta."""
@@ -935,7 +941,7 @@ def criar_lancamento(
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, com 200."""
 
     def gravar(conn) -> Lancamento:
-        criado, gravado = _criar(conn, novo, usuario)
+        criado, gravado = criar(conn, novo, usuario)
         response.status_code = 201 if gravado else 200
         return criado
 
@@ -994,6 +1000,9 @@ def _todos(
             mes=l[18],
             fatura_mes=l[18] if l[19] else None,
             estorno_de=l[20],
+            parcelamento_id=l[21],
+            parcela=l[22],
+            parcelas=l[23],
         )
         for l in linhas
     ]
@@ -1020,7 +1029,7 @@ def editar_lancamento(
 ) -> Lancamento | JSONResponse:
     """Só os campos mudados, sobre uma versão: campos diferentes se mesclam, o mesmo campo
     mudado depois pelo outro lado é 409, e o excluído é 410 (ADR 0011)."""
-    return _na_rota(request, lambda conn: _editar(conn, id, alteracao, usuario))
+    return _na_rota(request, lambda conn: editar(conn, id, alteracao, usuario))
 
 
 class ContasDaSemana(BaseModel):
@@ -1155,97 +1164,3 @@ def manter_os_dois(id: UUID, usuario: UsuarioLogado, request: Request) -> Lancam
         return _um(conn, id)
 
     return _na_rota(request, gravar)
-
-
-LIMITE_DO_LOTE = 100
-
-
-class AcaoCriar(BaseModel):
-    acao: Literal["criar"]
-    lancamento: NovoLancamento
-
-
-class AcaoEditar(BaseModel):
-    acao: Literal["editar"]
-    id: UUID
-    alteracao: AlteracaoDeLancamento
-
-
-class AcaoExcluir(BaseModel):
-    acao: Literal["excluir"]
-    id: UUID
-    # A versão que o aparelho tinha; sem ela, exclui de qualquer jeito.
-    versao: int | None = None
-    acao_em: datetime | None = None
-
-
-Acao = AcaoCriar | AcaoEditar | AcaoExcluir
-
-
-class Lote(BaseModel):
-    acoes: list[Annotated[Acao, Field(discriminator="acao")]] = Field(
-        min_length=1, max_length=LIMITE_DO_LOTE
-    )
-
-
-class Resultado(BaseModel):
-    """`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os
-    campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu."""
-
-    resultado: Literal["aceita", "conflito", "recusada", "descartada"]
-    motivo: str | None = None
-    lancamento: Lancamento | None = None
-    campos: list[CampoEmConflito] | None = None
-    exclusao: Exclusao | None = None
-
-
-class ResultadoDoLote(BaseModel):
-    resultados: list[Resultado]
-
-
-def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
-    """As mesmas regras das rotas de um lançamento só; a recusa de uma não para as outras.
-
-    Banco fora do ar ou disputa perdida derrubam o lote inteiro, que o aparelho reenvia; outro
-    erro fica só nesta ação, recusada, para não travar a fila para sempre.
-    """
-    try:
-        return em_transacao(url_do_banco(request), lambda conn: _aplicar_na(conn, acao, usuario))
-    except LancamentoNaoEncontrado:
-        return Resultado(resultado="recusada", motivo="lançamento não encontrado")
-    except LancamentoExcluido as e:
-        return Resultado(resultado="descartada", motivo=e.exclusao.motivo, exclusao=e.exclusao)
-    except ConflitoDeCampos as e:
-        conflito = e.conflito
-        return Resultado(
-            resultado="conflito",
-            motivo=conflito.motivo,
-            lancamento=conflito.lancamento,
-            campos=conflito.campos,
-        )
-    except HTTPException as erro:
-        if erro.status_code == 422:
-            return Resultado(resultado="recusada", motivo=erro.detail)
-        raise
-    except psycopg.OperationalError:
-        raise
-    except Exception:
-        log.exception("ação do lote falhou")
-        return Resultado(resultado="recusada", motivo="erro no servidor")
-
-
-def _aplicar_na(conn, acao: Acao, usuario: str) -> Resultado:
-    match acao:
-        case AcaoCriar(lancamento=novo):
-            return Resultado(resultado="aceita", lancamento=_criar(conn, novo, usuario)[0])
-        case AcaoEditar(id=id, alteracao=alteracao):
-            return Resultado(resultado="aceita", lancamento=_editar(conn, id, alteracao, usuario))
-        case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
-            excluir(conn, id, versao, usuario, acao_em)
-            return Resultado(resultado="aceita")
-
-
-@router.post("/lancamentos/lote", response_model=ResultadoDoLote, operation_id="enviar_lote")
-def enviar_lote(lote: Lote, usuario: UsuarioLogado, request: Request) -> ResultadoDoLote:
-    """A fila do aparelho: as ações na ordem, cada uma na sua transação, um resultado por ação."""
-    return ResultadoDoLote(resultados=[_aplicar(a, usuario, request) for a in lote.acoes])

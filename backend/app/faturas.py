@@ -115,6 +115,12 @@ def mes_da_compra(conn, titular: Titular, data: date) -> date:
     raise HTTPException(status_code=422, detail="nenhuma fatura fecha depois da compra")
 
 
+def mes_da_parcela(conn, titular: Titular, data: date, parcela: int | None) -> date:
+    """A parcela n de um parcelamento cai n - 1 faturas depois da fatura da compra; a compra
+    à vista (sem parcela) cai na da compra."""
+    return somar_meses(mes_da_compra(conn, titular, data), (parcela or 1) - 1)
+
+
 def aberta(fechamento: date | None, hoje: date) -> bool:
     """Fatura aberta: o fechamento ainda não chegou. A importada, sem datas, é fechada."""
     return fechamento is not None and fechamento > hoje

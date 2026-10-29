@@ -1,7 +1,8 @@
 """Recorrência: a regra que gera um previsto a cada N semanas ou N meses (o salário, a luz, o
 seguro anual). Ela não é um lançamento (ADR 0004): os previstos são lançamentos comuns, ligados a
 ela pelo `recorrencia_id` e pelo número da ocorrência. A recorrência sem fim gera até o horizonte
-(`horizonteDaRecorrenciaMeses`), e a tarefa diária o estende e realiza os automáticos."""
+(`horizonteDaRecorrenciaMeses`), e a tarefa diária o estende; os automáticos se realizam em
+`app.automaticos`."""
 
 from calendar import monthrange
 from datetime import UTC, date, datetime, timedelta
@@ -275,44 +276,6 @@ def _campos_da_regra(nova: NovaRecorrencia) -> dict:
 def origem(descricao: str) -> str:
     """Como a tela de conflito nomeia a regra que mudou o lançamento ("O da regra ...")."""
     return f"a recorrência {descricao}".strip()
-
-
-def _realizar(conn, id: UUID) -> bool:
-    """Realiza o previsto automático, se ele ainda for um: a leitura fora da transação pode ter
-    envelhecido (alguém confirmou ou excluiu no meio)."""
-    linha = conn.execute(
-        f"SELECT {lancamentos.VERSAO}, r.descricao, r.alterado_por FROM lancamentos l"
-        " JOIN recorrencias r ON r.id = l.recorrencia_id"
-        " WHERE l.id = %s AND l.situacao = 'previsto' AND COALESCE(l.automatico, false)"
-        " AND l.excluido_em IS NULL AND l.data <= %s",
-        (id, lancamentos.hoje()),
-    ).fetchone()
-    if not linha:
-        return False
-    versao, descricao, quem = linha
-    # Quem responde pela regra é quem a mudou por último; a `origem` diz que foi a regra.
-    nova = subir_versao(
-        conn, id, versao, "situacao = 'realizado', alterado_por = %s, alterado_em = now()", (quem,)
-    )
-    registrar_mudancas(
-        conn, id, ["situacao"], nova, quem, datetime.now(UTC), origem=origem(descricao)
-    )
-    return True
-
-
-def realizar_automaticos(url: str | None) -> int:
-    """Vira realizado, sem confirmação, cada previsto automático com data até hoje, um por
-    transação; devolve quantos."""
-    with conectar(url) as conn:
-        devidos = [
-            id
-            for (id,) in conn.execute(
-                "SELECT id FROM lancamentos WHERE situacao = 'previsto'"
-                " AND COALESCE(automatico, false) AND excluido_em IS NULL AND data <= %s",
-                (lancamentos.hoje(),),
-            )
-        ]
-    return sum(em_transacao(url, lambda conn, id=id: _realizar(conn, id)) for id in devidos)
 
 
 def estender_todas(url: str | None) -> int:
