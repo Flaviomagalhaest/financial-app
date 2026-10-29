@@ -125,6 +125,12 @@ test("'Repetir último' aparece enquanto o lançamento está vazio e lança de n
   await page.getByRole("button", { name: mercado }).click();
   await expect(repetir).toHaveCount(0);
   await page.getByRole("button", { name: mercado }).click();
+  // A data escolhida antes de repetir dá lugar à de hoje; tocar fora da folha a fecha.
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await folha.getByRole("button", { name: "Ontem" }).click();
+  await page.mouse.click(5, 5);
+  await expect(folha).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Detalhes/ })).toHaveText("Detalhes: ontem");
 
   await repetir.click();
   await expect(page.getByTestId("valor")).toHaveText("R$ 45,00");
@@ -182,6 +188,8 @@ test("transferência entre duas contas, com categoria opcional, move o saldo e p
   // Voltar para despesa leva ao lançamento comum, que funciona sem internet.
   await page.getByRole("group", { name: "Tipo" }).getByRole("button", { name: "Despesa" }).click();
   await expect(page.getByRole("heading", { name: "Novo lançamento", level: 2 })).toBeVisible();
+  // O valor digitado segue na troca de tipo.
+  await expect(page.getByTestId("valor")).toHaveText("R$ 1,00");
 });
 
 test("sem internet, o atalho do ícone abre o novo lançamento e a jornada inteira vai para a fila", async ({ page, context }) => {

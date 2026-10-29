@@ -209,6 +209,9 @@ export function usePessoas() {
   return { pessoas, euId: pessoas.find((p) => p.eu)?.id, nomeDe };
 }
 
+/** A tag é a mesma com outra caixa ("Novo ap" e "novo ap"), como no servidor. */
+export const chaveDaTag = (nome: string) => nome.toLocaleLowerCase("pt-BR");
+
 /**
  * Os nomes das tags para escolher no lançamento: as do servidor que não estão arquivadas e as dos
  * lançamentos do aparelho, para a tag criada num lançamento ainda não enviado já aparecer no próximo.
@@ -217,10 +220,10 @@ export function useTags(): string[] {
   const { dados } = useResposta("/api/tags");
   const { lancamentos } = useLancamentos();
   return useMemo(() => {
-    const arquivadas = new Set((dados ?? []).filter((t) => t.arquivada).map((t) => t.nome.toLocaleLowerCase("pt-BR")));
+    const arquivadas = new Set((dados ?? []).filter((t) => t.arquivada).map((t) => chaveDaTag(t.nome)));
     const porNome = new Map<string, string>();
     for (const nome of [...(dados ?? []).filter((t) => !t.arquivada).map((t) => t.nome), ...(lancamentos ?? []).flatMap((l) => l.tags ?? [])]) {
-      const chave = nome.toLocaleLowerCase("pt-BR");
+      const chave = chaveDaTag(nome);
       if (!arquivadas.has(chave) && !porNome.has(chave)) porNome.set(chave, nome);
     }
     return [...porNome.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));

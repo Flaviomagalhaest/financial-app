@@ -23,12 +23,14 @@ function ultimoCriado(lancamentos: LancamentoNaTela[], euId?: string): Lancament
 type Props = {
   id?: string;
   tipoInicial?: Tipo;
-  /** No lançamento novo, a troca para a tela de transferência. */
-  onTransferencia?: () => void;
+  /** O valor já digitado na tela de transferência, ao voltar dela. */
+  centavosIniciais?: number;
+  /** No lançamento novo, a troca para a tela de transferência, levando o valor digitado. */
+  onTransferencia?: (centavos: number) => void;
 };
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
-export function TelaDeLancamento({ id, tipoInicial = "despesa", onTransferencia }: Props) {
+export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
   const { contas, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
@@ -37,7 +39,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", onTransferencia 
   const [novoId] = useState(() => crypto.randomUUID());
   const [existente, setExistente] = useState<LancamentoNaTela | null>(null);
   const [tipo, setTipo] = useState<Tipo>(tipoInicial);
-  const [centavos, setCentavos] = useState(0);
+  const [centavos, setCentavos] = useState(centavosIniciais);
   const [contaId, setContaId] = useState("");
   const [categoriaIds, setCategoriaIds] = useState<string[]>([]);
   const [data, setData] = useState(hoje);
@@ -93,9 +95,11 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", onTransferencia 
   const ultimo = useMemo(() => (id ? undefined : ultimoCriado(lancamentos ?? [], euId)), [id, lancamentos, euId]);
   const mostraRepetir = !!ultimo && centavos === 0 && categoriaIds.length === 0;
 
-  /** Preenche com o último lançamento; a data e a situação ficam as de agora. */
+  /** Preenche com o último lançamento, com a data de hoje e a situação que ela dá. */
   function repetirUltimo(u: LancamentoNaTela) {
     setTipo(u.tipo);
+    setData(hoje());
+    setSituacaoEscolhida(null);
     setCentavos(u.valor_centavos);
     if (contas.some((c) => c.id === u.conta_id)) setContaId(u.conta_id);
     setCategoriaIds(u.categoria_ids.filter((c) => categorias.some((cat) => cat.id === c && !cat.arquivada)));
@@ -147,7 +151,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", onTransferencia 
   return (
     <section className="lancamento">
       <h2>{id ? "Editar lançamento" : "Novo lançamento"}</h2>
-      <EscolhaDoTipo tipo={tipo} comTransferencia={!!onTransferencia} onMudar={(t) => (t === "transferencia" ? onTransferencia?.() : trocarTipo(t))} />
+      <EscolhaDoTipo tipo={tipo} comTransferencia={!!onTransferencia} onMudar={(t) => (t === "transferencia" ? onTransferencia?.(centavos) : trocarTipo(t))} />
       <p className="valor" data-testid="valor" aria-live="polite">
         {formatarCentavos(centavos)}
       </p>

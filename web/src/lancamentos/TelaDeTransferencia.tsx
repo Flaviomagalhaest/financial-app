@@ -25,12 +25,18 @@ function Fileira({ nome, opcoes, marcada, onMarcar }: { nome: string; opcoes: Fi
 }
 
 /** Nova transferência entre duas contas do casal (ADR 0014). Precisa de internet (ADR 0011). */
-export function TelaDeTransferencia({ onTipo }: { onTipo: (tipo: TipoDaEntrada) => void }) {
+type Props = {
+  centavosIniciais: number;
+  /** A troca para despesa ou receita, levando o valor digitado. */
+  onTipo: (tipo: TipoDaEntrada, centavos: number) => void;
+};
+
+export function TelaDeTransferencia({ centavosIniciais, onTipo }: Props) {
   const { contas, categorias } = useCadastro();
   const online = useConexao();
   // A identidade nasce no aparelho: tentar de novo depois de uma falha não duplica.
   const [id] = useState(() => crypto.randomUUID());
-  const [centavos, setCentavos] = useState(0);
+  const [centavos, setCentavos] = useState(centavosIniciais);
   const [origem, setOrigem] = useState<string | null>(null);
   const [destino, setDestino] = useState<string | null>(null);
   const [categoria, setCategoria] = useState<string | null>(null);
@@ -68,7 +74,7 @@ export function TelaDeTransferencia({ onTipo }: { onTipo: (tipo: TipoDaEntrada) 
   return (
     <section className="lancamento">
       <h2>Nova transferência</h2>
-      <EscolhaDoTipo tipo="transferencia" comTransferencia onMudar={onTipo} />
+      <EscolhaDoTipo tipo="transferencia" comTransferencia onMudar={(t) => onTipo(t, centavos)} />
       <p className="valor" data-testid="valor" aria-live="polite">
         {formatarCentavos(centavos)}
       </p>
