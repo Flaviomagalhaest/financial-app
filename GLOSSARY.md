@@ -115,6 +115,10 @@ _Avoid_: orçamento, meta
 Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: R$ 1.000 em alimentação), comparada com os lançamentos realizados e previstos do mês que contam nele; cada lançamento conta em no máximo um item, mesmo tendo várias categorias.
 _Avoid_: teto, limite, meta
 
+**Modelo padrão do planejamento**:
+Conjunto de itens (categoria e valor) que o casal mantém nas configurações e aplica a um mês vazio para não começar o planejamento do zero; vale para qualquer mês e não é um mês. Não é um **Favorito**, que é um lançamento-modelo.
+_Avoid_: modelo (sozinho), template
+
 ### Consulta
 
 **Filtro salvo**:

@@ -1264,6 +1264,120 @@
         }
       }
     },
+    "/api/planejamento/modelo": {
+      "get": {
+        "summary": "Ler Modelo",
+        "operationId": "ler_modelo_padrao",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeloPadrao"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Definir Modelo",
+        "description": "Troca o modelo padrão inteiro pelo conjunto enviado (categoria e valor, sem repetir).",
+        "operationId": "definir_modelo_padrao",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeloPadrao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeloPadrao"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/planejamento/{mes}/aplicar-modelo": {
+      "post": {
+        "summary": "Aplicar Modelo",
+        "description": "Cria os itens do modelo padrão neste mês, que precisa estar vazio.",
+        "operationId": "aplicar_modelo_padrao",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/planejamento/{mes}": {
       "get": {
         "summary": "Ler Planejamento",
@@ -1353,6 +1467,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ItemDoPlanejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/{mes}/copiar": {
+      "post": {
+        "summary": "Copiar Planejamento",
+        "description": "Copia os itens (categoria e valor) de outro mês para este, que precisa estar vazio.",
+        "operationId": "copiar_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopiaDeMes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planejamento"
                 }
               }
             }
@@ -2082,6 +2255,23 @@
         "title": "ContasDaSemana",
         "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O\nautomático fica de fora: não pede confirmação."
       },
+      "CopiaDeMes": {
+        "properties": {
+          "de": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "De",
+            "examples": [
+              "2026-09"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "de"
+        ],
+        "title": "CopiaDeMes"
+      },
       "EdicaoDeConta": {
         "properties": {
           "nome": {
@@ -2219,6 +2409,26 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ItemDoModelo": {
+        "properties": {
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoria_id",
+          "valor_centavos"
+        ],
+        "title": "ItemDoModelo"
       },
       "ItemDoPlanejamento": {
         "properties": {
@@ -2479,6 +2689,22 @@
           "acoes"
         ],
         "title": "Lote"
+      },
+      "ModeloPadrao": {
+        "properties": {
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoModelo"
+            },
+            "type": "array",
+            "title": "Itens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "itens"
+        ],
+        "title": "ModeloPadrao"
       },
       "MudancaDeItem": {
         "properties": {
