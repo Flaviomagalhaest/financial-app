@@ -32,7 +32,10 @@ class NovaTransferencia(BaseModel):
     # Só no pagamento de fatura (destino num cartão): o mês da fatura que ele quita.
     fatura_mes: date | None = None
 
-    _fatura = field_validator("fatura_mes")(lambda mes: mes and faturas.mes_de(mes))
+    @field_validator("fatura_mes")
+    @classmethod
+    def _primeiro_dia_do_mes(cls, mes: date | None) -> date | None:
+        return mes and faturas.mes_de(mes)
 
 
 class Transferencia(NovaTransferencia):

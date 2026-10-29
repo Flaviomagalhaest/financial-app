@@ -31,3 +31,4 @@ Para cada regra abaixo, o dono confirma o comportamento provisório ou pede outr
 - [ ] **Saldo anterior pula meses sem fatura**: a fatura de um mês sem compra não nasce, e o que sobrou passa para a próxima fatura que existir
 - [ ] **Só pagamento realizado conta como pago**; o previsto (data futura) não quita nem mexe no saldo da conta
 - [ ] **Situação "paga"**: fatura fechada com o devido (saldo anterior mais compras) maior que zero e nada a pagar; fatura fechada de total zero fica "fechada"
+- [ ] **Pagar a fatura seguinte com o saldo anterior dentro**: o pagamento quita só a fatura que ele aponta. Pagar o total da fatura de maio (saldo anterior de abril mais compras) com `fatura_mes` de maio deixa abril "fechada" e devendo, sem contar em dobro. Alternativa: o pagamento abate primeiro a fatura mais antiga em aberto
