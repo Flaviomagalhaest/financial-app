@@ -118,24 +118,21 @@ def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
 
 
 def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
+    """A ação aceita; a do lançamento numa transação, a do parcelamento em várias."""
     match acao:
+        case AcaoCriar(lancamento=novo):
+            criado = em_transacao(url, lambda conn: criar(conn, novo, usuario)[0])
+            return Resultado(resultado="aceita", lancamento=criado)
+        case AcaoEditar(id=id, alteracao=alteracao):
+            editado = em_transacao(url, lambda conn: editar(conn, id, alteracao, usuario))
+            return Resultado(resultado="aceita", lancamento=editado)
+        case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
+            em_transacao(url, lambda conn: excluir(conn, id, versao, usuario, acao_em))
+            return Resultado(resultado="aceita")
         case AcaoCriarParcelamento(parcelamento=novo):
             # Grava numa transação e gera as parcelas em outras (o limite de linhas do DSQL).
             criado, _ = parcelamentos.criar(url, novo, usuario)
             return Resultado(resultado="aceita", parcelamento=criado)
-        case _:
-            return em_transacao(url, lambda conn: _aplicar_na(conn, acao, usuario))
-
-
-def _aplicar_na(conn, acao: Acao, usuario: str) -> Resultado:
-    match acao:
-        case AcaoCriar(lancamento=novo):
-            return Resultado(resultado="aceita", lancamento=criar(conn, novo, usuario)[0])
-        case AcaoEditar(id=id, alteracao=alteracao):
-            return Resultado(resultado="aceita", lancamento=editar(conn, id, alteracao, usuario))
-        case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
-            excluir(conn, id, versao, usuario, acao_em)
-            return Resultado(resultado="aceita")
 
 
 @router.post("/lancamentos/lote", response_model=ResultadoDoLote, operation_id="enviar_lote")

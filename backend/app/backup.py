@@ -281,7 +281,6 @@ def _da_versao_12_para_a_13(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
         "parcelamentos": (
             [
                 "id",
-                "tipo",
                 "valor_total_centavos",
                 "parcelas",
                 "data",

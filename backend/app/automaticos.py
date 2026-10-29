@@ -34,9 +34,21 @@ def _realizar(conn, id: UUID) -> bool:
         f" WHERE l.id = %s AND {_DEVIDO}",
         (id, lancamentos.hoje()),
     ).fetchone()
-    if not linha or not _chegou(conn, *linha[1:5]):
+    if not linha:
         return False
-    versao, *_, recorrencia, quem_na_recorrencia, parcelamento, quem_no_parcelamento = linha
+    (
+        versao,
+        conta_id,
+        parcela,
+        mes,
+        data,
+        recorrencia,
+        quem_na_recorrencia,
+        parcelamento,
+        quem_no_parcelamento,
+    ) = linha
+    if not _chegou(conn, conta_id, parcela, mes, data):
+        return False
     if parcelamento is not None:
         origem, quem = parcelamentos.origem(parcelamento), quem_no_parcelamento
     else:
@@ -55,11 +67,11 @@ def realizar_automaticos(url: str | None) -> int:
     with conectar(url) as conn:
         devidos = [
             id
-            for id, *quando in conn.execute(
+            for id, conta_id, parcela, mes, data in conn.execute(
                 "SELECT l.id, l.conta_id, l.parcela, l.mes, l.data FROM lancamentos l"
                 f" WHERE {_DEVIDO}",
                 (lancamentos.hoje(),),
             ).fetchall()
-            if _chegou(conn, *quando)
+            if _chegou(conn, conta_id, parcela, mes, data)
         ]
     return sum(em_transacao(url, lambda conn, id=id: _realizar(conn, id)) for id in devidos)

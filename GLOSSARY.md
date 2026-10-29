@@ -90,7 +90,7 @@ Lançamento que é uma das N partes de um parcelamento (ex.: 3/10). No cartão, 
 _Avoid_: prestação
 
 **Automático**:
-Recorrência de valor fixo ou parcelamento cujos previstos viram realizados sozinhos na data, sem confirmação.
+Recorrência de valor fixo ou parcelamento cujos previstos viram realizados sozinhos na data, sem confirmação; a parcela no cartão, que tem a data da compra, vira realizada quando entra na fatura aberta (a fatura de antes fechou).
 _Avoid_: débito automático, efetivação automática
 
 **Confirmação**:

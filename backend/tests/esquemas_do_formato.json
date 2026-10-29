@@ -1002,7 +1002,6 @@
     },
     "parcelamentos": {
       "id": "uuid",
-      "tipo": "text",
       "valor_total_centavos": "bigint",
       "parcelas": "integer",
       "data": "date",

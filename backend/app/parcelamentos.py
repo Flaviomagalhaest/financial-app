@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app import faturas, lancamentos
 from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
+from app.config import valores_iniciais
 from app.lancamentos import (
     conferir_ligacoes,
     ids_das_tags,
@@ -28,13 +29,14 @@ from app.recorrencias import mais_meses
 
 router = APIRouter(prefix="/api")
 
-# Um financiamento de 35 anos; o limite só protege a geração de um número sem sentido.
-MAXIMO_DE_PARCELAS = 420
+# 35 anos de prestações da casa; o limite só protege a geração de um número sem sentido.
+MAXIMO_DE_PARCELAS = valores_iniciais()["maximoDeParcelas"]
 
 
 class DadosDoParcelamento(BaseModel):
     id: UUID
-    # Compra ou dívida: as parcelas são despesas.
+    # Compra ou dívida: as parcelas são despesas. Não é gravado: a receita parcelada, se vier,
+    # ganha a coluna.
     tipo: Literal["despesa"] = "despesa"
     parcelas: int = Field(ge=2, le=MAXIMO_DE_PARCELAS)
     # No cartão, a data da compra, a mesma em todas as parcelas; fora dele, a da 1ª parcela.
@@ -83,7 +85,7 @@ class Parcelamento(DadosDoParcelamento):
 
 
 _COLUNAS = (
-    "id, tipo, valor_total_centavos, parcelas, data, automatico, descricao, conta_id, pessoa,"
+    "id, valor_total_centavos, parcelas, data, automatico, descricao, conta_id, pessoa,"
     " criado_por, criado_em, alterado_por, alterado_em"
 )
 _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
@@ -96,13 +98,18 @@ def valor_da_parcela(total: int, parcelas: int, n: int) -> int:
 
 def realiza_em(conn, conta_id: UUID, parcela: int, mes: date, data: date) -> date:
     """O dia em que a parcela automática vira realizada. No cartão, a parcela n > 1 entra na
-    fatura aberta quando a fatura de antes fecha (a importada, sem datas, já está fechada);
-    a 1ª e a do boleto, na data."""
+    fatura aberta quando a fatura de antes fecha (a importada, sem datas, já está fechada, e
+    a que ainda não nasceu fecha no dia padrão); a 1ª e a do boleto, na data."""
     cartao = faturas.ler_cartao(conn, conta_id)
     if cartao is None or parcela == 1:
         return data
     anterior = faturas.somar_meses(mes, -1)
-    return faturas.fechamentos(conn, cartao.titular, [anterior])[anterior] or data
+    gravada = conn.execute(
+        "SELECT fechamento FROM faturas WHERE cartao_id = %s AND mes = %s",
+        (cartao.titular.id, anterior),
+    ).fetchone()
+    fechamento = gravada[0] if gravada else faturas.datas_padrao(cartao.titular, anterior)[0]
+    return fechamento or data
 
 
 def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
@@ -180,8 +187,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 dia,
                 regra.descricao,
                 regra.conta_id,
-                regra.criado_por,
-                regra.criado_por,
+                regra.alterado_por,
+                regra.alterado_por,
                 id,
                 n,
                 regra.automatico,
@@ -243,15 +250,18 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
     no_cartao = faturas.ler_cartao(conn, novo.conta_id) is not None
     if no_cartao and novo.automatico is False:
         raise recusar("o parcelamento no cartão é automático")
+    # A fatura da 1ª parcela (no cartão sem dia de fechamento, não há como escolher) é
+    # conferida antes de gravar: senão a regra ficaria sem parcelas, e a tarefa diária
+    # tentaria gerá-las todo dia.
+    lancamentos.mes_em_que_conta(conn, novo.conta_id, novo.data)
     tags = ids_das_tags(conn, novo.tags, usuario, set())
     gravado = conn.execute(
         f"INSERT INTO parcelamentos ({_COLUNAS}, geradas)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), 0)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), 0)"
         # Dois reenvios ao mesmo tempo: o segundo fica com o que o primeiro gravou.
         " ON CONFLICT (id) DO NOTHING",
         (
             novo.id,
-            novo.tipo,
             novo.total,
             novo.parcelas,
             novo.data,
@@ -280,9 +290,9 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
 
 def criar(url: str | None, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bool]:
     """Grava o parcelamento e gera as parcelas; serve à rota e ao lote da fila."""
-    criado, novo_mesmo = em_transacao(url, lambda conn: gravar(conn, novo, usuario))
+    criado, gravado = em_transacao(url, lambda conn: gravar(conn, novo, usuario))
     gerar_as_parcelas(url, novo.id)
-    return criado, novo_mesmo
+    return criado, gravado
 
 
 @router.post(
@@ -296,8 +306,8 @@ def criar_parcelamento(
 ) -> Parcelamento:
     """Grava o parcelamento e gera todas as parcelas. Reenviar o mesmo id (a fila repete)
     devolve o gravado, com 200, e completa a geração se ela tiver parado no meio."""
-    criado, novo_mesmo = criar(url_do_banco(request), novo, usuario)
-    response.status_code = 201 if novo_mesmo else 200
+    criado, gravado = criar(url_do_banco(request), novo, usuario)
+    response.status_code = 201 if gravado else 200
     return criado
 
 

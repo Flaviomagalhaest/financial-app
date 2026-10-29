@@ -116,8 +116,8 @@ def mes_da_compra(conn, titular: Titular, data: date) -> date:
 
 
 def mes_da_parcela(conn, titular: Titular, data: date, parcela: int | None) -> date:
-    """A parcela n de uma compra parcelada cai n - 1 faturas depois da fatura da compra; a
-    compra à vista (sem parcela) cai na da compra."""
+    """A parcela n de um parcelamento cai n - 1 faturas depois da fatura da compra; a compra
+    à vista (sem parcela) cai na da compra."""
     return somar_meses(mes_da_compra(conn, titular, data), (parcela or 1) - 1)
 
 

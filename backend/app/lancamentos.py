@@ -251,12 +251,13 @@ VERSAO = "COALESCE(versao, 1)"
 # sobrou dela e o que a API antiga gravar durante o deploy.
 MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
+# Quantas parcelas tem o parcelamento da parcela (o 10 de 3/10); o avulso não tem.
+PARCELAS = "(SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
-    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, parcelamento_id, parcela,"
-    " (SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
+    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, parcelamento_id, parcela, {PARCELAS}"
 )
 
 

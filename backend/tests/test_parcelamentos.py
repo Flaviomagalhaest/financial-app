@@ -293,7 +293,7 @@ def test_mudar_o_fechamento_do_cartao_ou_a_data_da_parcela_mantem_cada_parcela_n
     assert (resposta.json()["fatura_mes"], resposta.json()["mes"]) == ("2027-01-01", "2027-01-01")
 
 
-def test_financiamento_longo_com_muitas_categorias_e_tags_gera_em_mais_de_uma_transacao(
+def test_parcelamento_longo_com_muitas_categorias_e_tags_gera_em_mais_de_uma_transacao(
     casal: Casal,
 ):
     # 1 parcela + 5 categorias + 5 tags (+ a fatura, no cartão) = 12 linhas: 83 parcelas por lote.
@@ -354,3 +354,18 @@ def test_sem_internet_o_parcelamento_sobe_no_lote_como_um_pedido_so(casal: Casal
     ]
     assert len(parcelas(casal, geladeira["id"])) == 10
     assert len(casal.pedir("esposa", "GET", "/api/lancamentos").json()) == 11
+
+
+def test_cartao_sem_dia_de_fechamento_recusa_o_parcelamento_sem_gravar_nada(
+    casal: Casal, database_url: str
+):
+    # O cartão do histórico, sem dias padrão: não há como escolher a fatura da 1ª parcela.
+    antigo = cartao(casal, dia_fechamento=None, dia_vencimento=None)
+    novo = parcelamento(antigo, [casal.categoria()])
+
+    resposta = casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+
+    assert resposta.status_code == 422
+    assert "fechamento" in resposta.json()["detail"]
+    assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
