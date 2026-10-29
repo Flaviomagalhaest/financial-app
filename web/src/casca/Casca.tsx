@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Configuracoes } from "../configuracoes/Configuracoes";
 import { ContasDaSemana } from "../lancamentos/ContasDaSemana";
 import { ListaDeLancamentos } from "../lancamentos/ListaDeLancamentos";
+import { NovoLancamento } from "../lancamentos/NovoLancamento";
 import { TelaDeContasECategorias } from "../contas-e-categorias/TelaDeContasECategorias";
 import { TelaDeConflito } from "../lancamentos/TelaDeConflito";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
@@ -52,7 +53,7 @@ export function Casca({ email, onSair, hoje }: Props) {
             <a href="#/contas-e-categorias">Contas e categorias</a>
           </section>
         )}
-        {rota === "novo" && <TelaDeLancamento key={id ?? "novo"} id={id} />}
+        {rota === "novo" && (id ? <TelaDeLancamento key={id} id={id} /> : <NovoLancamento />)}
         {rota === "conflito" && id && <TelaDeConflito key={id} id={id} />}
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}

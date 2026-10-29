@@ -16,3 +16,17 @@ export function dataPorExtenso(iso: string): string {
   const [ano, mes, dia] = iso.split("-");
   return `${dia}/${mes}/${ano}`;
 }
+
+/** O dia antes de `iso` (`AAAA-MM-DD`), sem passar pelo fuso do aparelho. */
+export function diaAnterior(iso: string): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1, dia - 1)).toISOString().slice(0, 10);
+}
+
+/** "hoje", "ontem" ou `02/10/2026`. */
+export function rotuloDaData(iso: string): string {
+  const dia = hoje();
+  if (iso === dia) return "hoje";
+  if (iso === diaAnterior(dia)) return "ontem";
+  return dataPorExtenso(iso);
+}

@@ -71,6 +71,7 @@ export function ListaDeLancamentos() {
               </div>
               <p className="vazio">
                 {dataPorExtenso(l.data)} · {nome(contas, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
+                {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
                 {" · "}
                 {l.pessoa ? nomeDe(l.pessoa) : "conjunto"}

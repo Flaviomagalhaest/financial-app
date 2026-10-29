@@ -1,26 +1,49 @@
-import { useEffect, useState } from "react";
-import { salvarLancamento, useCadastro, useLancamentos, usePessoas, type LancamentoNaTela } from "../dados";
-import { hoje } from "./datas";
+import { useEffect, useMemo, useState } from "react";
+import { salvarLancamento, useCadastro, useLancamentos, usePessoas, useTags, type LancamentoNaTela } from "../dados";
+import { nomePorId, tituloDoLancamento } from "./apresentacao";
+import { hoje, rotuloDaData } from "./datas";
 import { formatarCentavos } from "./dinheiro";
+import { EscolhaDoTipo } from "./EscolhaDoTipo";
+import { FolhaDeDetalhes } from "./FolhaDeDetalhes";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
 type Situacao = LancamentoNaTela["situacao"];
 
+/** O último lançamento que quem está com o aparelho criou à mão (o que a recorrência gerou fica de fora). */
+function ultimoCriado(lancamentos: LancamentoNaTela[], euId?: string): LancamentoNaTela | undefined {
+  // O criado só no aparelho ainda não tem autor nem hora do servidor: é deste aparelho, e o mais novo.
+  const criadoEm = (l: LancamentoNaTela) => (l.criado_em ? Date.parse(l.criado_em) : (l.feitoEm ?? Infinity));
+  const meus = lancamentos.filter(
+    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
+  );
+  return meus.reduce<LancamentoNaTela | undefined>((ultimo, l) => (!ultimo || criadoEm(l) > criadoEm(ultimo) ? l : ultimo), undefined);
+}
+
+type Props = {
+  id?: string;
+  tipoInicial?: Tipo;
+  /** No lançamento novo, a troca para a tela de transferência. */
+  onTransferencia?: () => void;
+};
+
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
-export function TelaDeLancamento({ id }: { id?: string }) {
+export function TelaDeLancamento({ id, tipoInicial = "despesa", onTransferencia }: Props) {
   const { contas, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
-  const { pessoas } = usePessoas();
+  const { pessoas, nomeDe, euId } = usePessoas();
+  const opcoesDeTags = useTags();
   // A identidade nasce no aparelho: reenviar o mesmo pedido nunca duplica.
   const [novoId] = useState(() => crypto.randomUUID());
   const [existente, setExistente] = useState<LancamentoNaTela | null>(null);
-  const [tipo, setTipo] = useState<Tipo>("despesa");
+  const [tipo, setTipo] = useState<Tipo>(tipoInicial);
   const [centavos, setCentavos] = useState(0);
   const [contaId, setContaId] = useState("");
   const [categoriaIds, setCategoriaIds] = useState<string[]>([]);
   const [data, setData] = useState(hoje);
   const [descricao, setDescricao] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [detalhesAbertos, setDetalhesAbertos] = useState(false);
   // Sem pessoa, o lançamento é do conjunto (do casal).
   const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
@@ -44,6 +67,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
     setCategoriaIds(achado.categoria_ids);
     setData(achado.data);
     setDescricao(achado.descricao ?? "");
+    setTags(achado.tags ?? []);
     setPessoa(achado.pessoa ?? null);
   }, [id, existente, lancamentos, semDados]);
 
@@ -54,6 +78,31 @@ export function TelaDeLancamento({ id }: { id?: string }) {
     situacaoEscolhida ??
     (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
   const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null);
+
+  // O que a folha de detalhes preencheu, numa linha; a data de hoje e o realizado são o normal e não aparecem.
+  const resumo = [
+    descricao.trim(),
+    ...tags.map((t) => `#${t}`),
+    pessoa ? nomeDe(pessoa) : "",
+    data === hoje() ? "" : rotuloDaData(data),
+    situacao === "previsto" ? "previsto" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const ultimo = useMemo(() => (id ? undefined : ultimoCriado(lancamentos ?? [], euId)), [id, lancamentos, euId]);
+  const mostraRepetir = !!ultimo && centavos === 0 && categoriaIds.length === 0;
+
+  /** Preenche com o último lançamento; a data e a situação ficam as de agora. */
+  function repetirUltimo(u: LancamentoNaTela) {
+    setTipo(u.tipo);
+    setCentavos(u.valor_centavos);
+    if (contas.some((c) => c.id === u.conta_id)) setContaId(u.conta_id);
+    setCategoriaIds(u.categoria_ids.filter((c) => categorias.some((cat) => cat.id === c && !cat.arquivada)));
+    setDescricao(u.descricao ?? "");
+    setTags(u.tags ?? []);
+    setPessoa(u.pessoa ?? null);
+  }
 
   function trocarTipo(novo: Tipo) {
     setTipo(novo);
@@ -82,8 +131,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
           categoria_ids: categoriaIds,
           pessoa,
           ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
-          // A tela ainda não edita tags (ticket 78): devolve as que o lançamento já tem.
-          tags: existente?.tags ?? [],
+          tags,
         },
         !existente,
         existente ?? undefined,
@@ -99,20 +147,21 @@ export function TelaDeLancamento({ id }: { id?: string }) {
   return (
     <section className="lancamento">
       <h2>{id ? "Editar lançamento" : "Novo lançamento"}</h2>
-      <div className="alternancia" role="group" aria-label="Tipo">
-        <button type="button" className={tipo === "despesa" ? "" : "secundario"} aria-pressed={tipo === "despesa"} onClick={() => trocarTipo("despesa")}>
-          Despesa
-        </button>
-        <button type="button" className={tipo === "receita" ? "" : "secundario"} aria-pressed={tipo === "receita"} onClick={() => trocarTipo("receita")}>
-          Receita
-        </button>
-      </div>
+      <EscolhaDoTipo tipo={tipo} comTransferencia={!!onTransferencia} onMudar={(t) => (t === "transferencia" ? onTransferencia?.() : trocarTipo(t))} />
       <p className="valor" data-testid="valor" aria-live="polite">
         {formatarCentavos(centavos)}
       </p>
-      <Teclado centavos={centavos} onMudar={setCentavos} />
+      <button type="button" className="resumo" onClick={() => setDetalhesAbertos(true)}>
+        Detalhes: {resumo || "+ descrição, tags, pessoa, data"}
+      </button>
+      {mostraRepetir && (
+        <button type="button" className="repetir" onClick={() => repetirUltimo(ultimo)}>
+          Repetir último: {tituloDoLancamento(ultimo, categorias)},{" "}
+          {formatarCentavos(ultimo.valor_centavos)} · {ultimo.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {nomePorId(contas, ultimo.conta_id)}
+        </button>
+      )}
       <h3>Conta</h3>
-      <div className="fileira">
+      <div className="fileira rolavel">
         {contas.map((c) => (
           <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} onClick={() => setContaId(c.id)}>
             {c.nome}
@@ -125,7 +174,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
         )}
       </div>
       <h3>Categorias</h3>
-      <div className="fileira">
+      <div className="fileira rolavel">
         {categoriasDoTipo.map((c) => (
           <button type="button" key={c.id} className={`ficha${categoriaIds.includes(c.id) ? " marcada" : ""}`} aria-pressed={categoriaIds.includes(c.id)} onClick={() => alternar(c.id)}>
             {c.nome}
@@ -137,27 +186,24 @@ export function TelaDeLancamento({ id }: { id?: string }) {
           </p>
         )}
       </div>
-      <details>
-        <summary>Detalhes</summary>
-        <div className="alternancia" role="group" aria-label="Pessoa">
-          {[{ id: null, nome: "Conjunto" }, ...pessoas].map((p) => (
-            <button type="button" key={p.id ?? "conjunto"} className={pessoa === p.id ? "" : "secundario"} aria-pressed={pessoa === p.id} onClick={() => setPessoa(p.id)}>
-              {p.nome}
-            </button>
-          ))}
-        </div>
-        <label htmlFor="descricao">Descrição</label>
-        <input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-        <label htmlFor="data">Data</label>
-        <input id="data" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
-        <div className="alternancia" role="group" aria-label="Situação">
-          {(["realizado", "previsto"] as const).map((s) => (
-            <button type="button" key={s} className={situacao === s ? "" : "secundario"} aria-pressed={situacao === s} onClick={() => setSituacaoEscolhida(s)}>
-              {s === "realizado" ? "Realizado" : "Previsto"}
-            </button>
-          ))}
-        </div>
-      </details>
+      <Teclado centavos={centavos} onMudar={setCentavos} />
+      {detalhesAbertos && (
+        <FolhaDeDetalhes
+          descricao={descricao}
+          onDescricao={setDescricao}
+          tags={tags}
+          opcoesDeTags={opcoesDeTags}
+          onTags={setTags}
+          pessoas={pessoas}
+          pessoa={pessoa}
+          onPessoa={setPessoa}
+          data={data}
+          onData={setData}
+          situacao={situacao}
+          onSituacao={setSituacaoEscolhida}
+          onFechar={() => setDetalhesAbertos(false)}
+        />
+      )}
       {erro && (
         <p role="alert" className="erro">
           {erro}
