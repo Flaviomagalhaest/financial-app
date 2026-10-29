@@ -466,7 +466,8 @@ export interface paths {
         /**
          * Editar Fatura
          * @description Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e
-         *     redistribui as compras dela e das abertas e futuras; o mês da fatura não muda.
+         *     redistribui as compras dela e das abertas e futuras, ou grava o ajuste dela (ADR 0008); o mês
+         *     da fatura não muda.
          */
         patch: operations["editar_fatura"];
         trace?: never;
@@ -587,6 +588,23 @@ export interface paths {
         patch: operations["mudar_item_do_planejamento"];
         trace?: never;
     };
+    "/api/meses/{mes}/totais": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Totais */
+        get: operations["ler_totais_do_mes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pessoas": {
         parameters: {
             query?: never;
@@ -682,13 +700,16 @@ export interface components {
         };
         /**
          * AlteracaoDeFatura
-         * @description Fechamento ou vencimento que escorregou (feriado); o mês da fatura não muda.
+         * @description Fechamento ou vencimento que escorregou (feriado), ou o ajuste da fatura; o mês da fatura
+         *     não muda.
          */
         AlteracaoDeFatura: {
             /** Fechamento */
             fechamento?: string | null;
             /** Vencimento */
             vencimento?: string | null;
+            /** Ajuste Centavos */
+            ajuste_centavos?: number | null;
         };
         /**
          * AlteracaoDeLancamento
@@ -952,6 +973,10 @@ export interface components {
              * @enum {string}
              */
             situacao: "aberta" | "fechada" | "paga";
+            /** Compras Centavos */
+            compras_centavos: number;
+            /** Ajuste Centavos */
+            ajuste_centavos: number;
             /** Total Centavos */
             total_centavos: number;
             /** Saldo Anterior Centavos */
@@ -1052,6 +1077,8 @@ export interface components {
             pessoa?: string | null;
             /** Fatura Mes */
             fatura_mes?: string | null;
+            /** Estorno De */
+            estorno_de?: string | null;
             /**
              * Mes
              * Format: date
@@ -1319,6 +1346,8 @@ export interface components {
             pessoa?: string | null;
             /** Fatura Mes */
             fatura_mes?: string | null;
+            /** Estorno De */
+            estorno_de?: string | null;
             /** Acao Em */
             acao_em?: string | null;
         };
@@ -1347,6 +1376,11 @@ export interface components {
             itens: components["schemas"]["ItemDoPlanejamento"][];
             /** Ainda Da Para Gastar Centavos */
             ainda_da_para_gastar_centavos: number;
+            /**
+             * Ajustes De Fatura Centavos
+             * @default 0
+             */
+            ajustes_de_fatura_centavos: number;
         };
         /** Recorrencia */
         Recorrencia: {
@@ -1466,6 +1500,36 @@ export interface components {
              * @default false
              */
             arquivada: boolean;
+        };
+        /** TotaisDoMes */
+        TotaisDoMes: {
+            /** Mes */
+            mes: string;
+            /** Despesas Centavos */
+            despesas_centavos: number;
+            /** Ajustes De Fatura Centavos */
+            ajustes_de_fatura_centavos: number;
+            /** Por Categoria */
+            por_categoria: components["schemas"]["TotalDeCategoria"][];
+            /** Por Tag */
+            por_tag: components["schemas"]["TotalDeTag"][];
+        };
+        /** TotalDeCategoria */
+        TotalDeCategoria: {
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Centavos */
+            centavos: number;
+        };
+        /** TotalDeTag */
+        TotalDeTag: {
+            /** Tag */
+            tag: string;
+            /** Centavos */
+            centavos: number;
         };
         /** Transferencia */
         Transferencia: {
@@ -2839,6 +2903,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_totais_do_mes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotaisDoMes"];
                 };
             };
             /** @description Validation Error */

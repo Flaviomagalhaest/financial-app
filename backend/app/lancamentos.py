@@ -107,6 +107,9 @@ class DadosDoLancamento(BaseModel):
     # Só no cartão: o mês da fatura, que o servidor escolhe pela data da compra e pelo
     # fechamento. Mandar o mês é trocar a fatura à mão (o banco lançou a compra com atraso).
     fatura_mes: date | None = None
+    # O estorno: crédito de uma compra no cartão, ligado a ela (ADR 0016). É uma despesa que
+    # diminui, com as mesmas categorias e tags da compra original, na fatura em que aparece.
+    estorno_de: UUID | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
@@ -248,12 +251,18 @@ VERSAO = "COALESCE(versao, 1)"
 # O mês em que o lançamento conta. Gravado pela migration 0034 nos de antes; a data cobre o que
 # sobrou dela e o que a API antiga gravar durante o deploy.
 MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
+# O valor com o sinal de quem soma despesas (fatura, mês): a despesa soma, o estorno e a receita
+# (crédito) diminuem.
+VALOR_COM_SINAL = (
+    "CASE WHEN lancamentos.tipo = 'despesa' AND lancamentos.estorno_de IS NULL"
+    " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
+)
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
-    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}"
+    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de"
 )
 
 
@@ -695,6 +704,58 @@ def _iguais(campo: Campo, pedido, gravado) -> bool:
     return pedido == gravado
 
 
+def _conferir_estorno(
+    conn, id: UUID, dados: DadosDoLancamento, original_id: UUID, edicao: bool = False
+) -> frozenset[UUID]:
+    """O estorno é de uma compra no cartão que ainda existe, vai para um cartão, leva as mesmas
+    categorias e tags dela e, somado aos outros estornos dela, não passa do valor da compra.
+    Devolve as categorias da compra, que valem no estorno mesmo arquivadas. Na edição de valor
+    ou cartão, categorias e tags já foram travadas e a compra que sumiu não impede o ajuste."""
+    if dados.tipo != "despesa" or not faturas.ler_cartao(conn, dados.conta_id):
+        raise recusar("estorno é um crédito no cartão")
+    original = conn.execute(
+        "SELECT tipo, valor_centavos, conta_id, estorno_de FROM lancamentos"
+        " WHERE id = %s AND excluido_em IS NULL",
+        (original_id,),
+    ).fetchone()
+    if not original:
+        if edicao:
+            return frozenset()
+        raise recusar("compra original não encontrada")
+    tipo, valor, conta, estorno_de = original
+    if estorno_de:
+        raise recusar("estorno de estorno")
+    if tipo != "despesa" or not faturas.ler_cartao(conn, conta):
+        raise recusar("só compra no cartão tem estorno")
+    categorias = frozenset(
+        c
+        for (c,) in conn.execute(
+            "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
+            (original_id,),
+        )
+    )
+    tags = {
+        nome.casefold()
+        for (nome,) in conn.execute(
+            "SELECT t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
+            " WHERE lt.lancamento_id = %s",
+            (original_id,),
+        )
+    }
+    if not edicao and (
+        set(dados.categoria_ids) != categorias or {t.casefold() for t in dados.tags} != tags
+    ):
+        raise recusar("estorno leva as mesmas categorias e tags da compra")
+    (outros,) = conn.execute(
+        "SELECT COALESCE(SUM(valor_centavos), 0) FROM lancamentos"
+        " WHERE estorno_de = %s AND excluido_em IS NULL AND id <> %s",
+        (original_id, id),
+    ).fetchone()
+    if outros + dados.valor_centavos > valor:
+        raise recusar("estornos somam mais que a compra")
+    return categorias
+
+
 def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, sem criar de novo."""
     # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
@@ -705,14 +766,19 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             (novo.id,),
         )
     )
+    if (
+        novo.estorno_de
+        and not conn.execute("SELECT 1 FROM lancamentos WHERE id = %s", (novo.id,)).fetchone()
+    ):
+        ja_ligadas |= _conferir_estorno(conn, novo.id, novo, novo.estorno_de)
     conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
     mes, _, a_mao = _onde_conta(conn, novo)
     momento = _momento(novo.acao_em)
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
         " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte,"
-        " mes, fatura_a_mao)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s)"
+        " mes, fatura_a_mao, estorno_de)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s, %s)"
         " ON CONFLICT (id) DO NOTHING",
         (
             novo.id,
@@ -729,6 +795,7 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             momento,
             mes,
             a_mao,
+            novo.estorno_de,
         ),
     ).rowcount
     if gravados:
@@ -773,6 +840,13 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
     if not mudancas:
         return atual
     editado = _com_mudancas(atual, mudancas)
+    if atual.estorno_de:
+        if "tipo" in mudancas:
+            raise recusar("estorno é um crédito no cartão")
+        if {"categoria_ids", "tags"} & mudancas.keys():
+            raise recusar("estorno leva as mesmas categorias e tags da compra")
+        if {"valor_centavos", "conta_id"} & mudancas.keys():
+            _conferir_estorno(conn, id, editado, atual.estorno_de, edicao=True)
     momento = _momento(alteracao.acao_em)
     conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
     mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
@@ -919,6 +993,7 @@ def _todos(
             parece_repetido_de=l[17],
             mes=l[18],
             fatura_mes=l[18] if l[19] else None,
+            estorno_de=l[20],
         )
         for l in linhas
     ]

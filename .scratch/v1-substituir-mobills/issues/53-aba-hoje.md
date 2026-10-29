@@ -21,3 +21,7 @@ Ao abrir o app o casal vê o essencial, e os favoritos entram aqui no ticket de 
 - [ ] Testes de API e de navegador; fonte da interface: branch `prototipo/dashboards`
 - [ ] Verificações do projeto rodando e PR aberto para `main`
 - [ ] O bloco `ContasDaSemana` (ticket 43, `web/src/lancamentos/ContasDaSemana.tsx`) já está na Hoje com a leitura própria `GET /api/contas-da-semana`: juntá-lo à leitura única da tela, e mostrar os atrasados pelo campo `atrasado` do lançamento
+
+## Notas
+
+- Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): `ainda_da_para_gastar_centavos` do planejamento já desconta os ajustes de fatura do mês (`ajustes_de_fatura_centavos`, ADR 0008) e os itens contam o estorno com sinal contrário; a leitura da tela lê isso, sem recalcular.

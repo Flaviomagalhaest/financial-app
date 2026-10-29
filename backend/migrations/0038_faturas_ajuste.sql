@@ -1,0 +1,1 @@
+ALTER TABLE faturas ADD COLUMN IF NOT EXISTS ajuste_centavos bigint
