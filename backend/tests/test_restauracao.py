@@ -295,7 +295,7 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
                 continue
             if nome == "lancamentos.csv":
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-3]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-6]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -312,3 +312,38 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
         assert conn.execute(
             "SELECT valor_centavos, versao, excluido_em FROM lancamentos"
         ).fetchall() == [(1000, None, None)]
+
+
+def test_backup_da_versao_7_sem_pessoa_nem_fonte_restaura_do_conjunto_e_do_app(database_url):
+    # O que `prod` gravava antes do ticket 41: lançamentos sem pessoa e sem fonte.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, conta_id,"
+            " criado_por, alterado_por, versao) VALUES ('00000000-0000-0000-0000-000000000001',"
+            " 'despesa', 'realizado', 1000, '2026-10-02', '00000000-0000-0000-0000-000000000002',"
+            " 'flavio', 'flavio', 1)"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "lancamentos.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-3]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 7
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute(
+            "SELECT valor_centavos, pessoa, fonte, repetido_mantido_em FROM lancamentos"
+        ).fetchall() == [(1000, None, None, None)]

@@ -20,4 +20,5 @@ O casal cadastra cartões e cada compra cai na fatura certa pelo fechamento e co
 - [ ] Mudar o dia padrão redistribui só faturas abertas e futuras; fatura fechada nunca muda
 - [ ] O lançamento grava o mês em que conta (mês da fatura no cartão, a data no resto), com índice por esse mês
 - [ ] Teste com o exemplo do glossário: compra de 28/03 em fatura que fecha em 25/04 conta em abril
+- [ ] O "Parece repetido" (ticket 41, `_REPETIDO_DE` em `backend/app/lancamentos.py`) compara hoje só a conta; com cartões, comparar conta **ou cartão** (a spec, história 61)
 - [ ] Verificações do projeto rodando e PR aberto para `main`

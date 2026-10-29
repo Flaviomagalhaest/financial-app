@@ -224,6 +224,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lancamentos/{id}/manter-os-dois": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manter Os Dois
+         * @description O casal conferiu o "Parece repetido" e os dois lançamentos ficam. Não é uma mudança do
+         *     lançamento: não sobe a versão nem entra no conflito.
+         */
+        post: operations["manter_os_dois"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lancamentos/lote": {
         parameters: {
             query?: never;
@@ -365,6 +386,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pessoas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Pessoas */
+        get: operations["listar_pessoas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -406,6 +444,8 @@ export interface components {
             id: string;
             /** Versao */
             versao?: number | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * AlteracaoDeCategoria
@@ -441,6 +481,10 @@ export interface components {
             situacao?: ("previsto" | "realizado") | null;
             /** Tags */
             tags?: string[] | null;
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * CampoEmConflito
@@ -452,7 +496,7 @@ export interface components {
              * Campo
              * @enum {string}
              */
-            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags";
+            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa";
             /** Alterado Por */
             alterado_por: string;
             /**
@@ -499,6 +543,8 @@ export interface components {
             data?: string | null;
             /** Conta Id */
             conta_id?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * Conflito
@@ -650,6 +696,8 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
             /** Atrasado */
             atrasado: boolean;
             /** Versao */
@@ -668,6 +716,14 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+            /**
+             * Fonte
+             * @default app
+             * @enum {string}
+             */
+            fonte: "app" | "mobills";
+            /** Parece Repetido De */
+            parece_repetido_de?: string | null;
         };
         /** Lote */
         Lote: {
@@ -782,6 +838,10 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
@@ -790,6 +850,15 @@ export interface components {
              * @enum {string}
              */
             formato: "backup" | "planilha";
+        };
+        /** Pessoa */
+        Pessoa: {
+            /** Id */
+            id: string;
+            /** Nome */
+            nome: string;
+            /** Eu */
+            eu: boolean;
         };
         /**
          * Resultado
@@ -1264,6 +1333,7 @@ export interface operations {
         parameters: {
             query?: {
                 versao?: number | null;
+                acao_em?: string | null;
             };
             header?: never;
             path: {
@@ -1404,6 +1474,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conflito"];
+                };
+            };
+            /** @description O lançamento foi excluído */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exclusao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manter_os_dois: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"];
                 };
             };
             /** @description O lançamento foi excluído */
@@ -1759,6 +1869,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_pessoas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pessoa"][];
                 };
             };
         };

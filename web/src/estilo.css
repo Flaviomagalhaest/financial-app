@@ -425,3 +425,31 @@ fieldset.sem-moldura {
 .campo-em-conflito .ficha {
   text-align: left;
 }
+
+.aviso {
+  border: 1px solid var(--erro);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.menu summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.5rem 0.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.informacoes {
+  margin: 0.5rem 0 0;
+}
+
+.informacoes dt {
+  font-weight: 600;
+}
+
+.informacoes dd {
+  margin: 0 0 0.5rem;
+}

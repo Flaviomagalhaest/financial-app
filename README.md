@@ -22,7 +22,7 @@ Com o Cognito falso, `flavio@teste.com` e `esposa@teste.com` entram com qualquer
 
 ## Login
 
-O app entra no Cognito por um formulário próprio (SRP, cliente público), e só o módulo `web/src/login/` conhece o Cognito. A sessão fica no IndexedDB do aparelho, nunca em cookie: refresh token de 10 anos e token de acesso de 15 minutos, renovado quando vence; sem internet, o app segue logado com o acesso vencido. A API só confere um JWT padrão, com emissor e audiência em `JWT_EMISSOR` e `JWT_AUDIENCIA` (chaves em `<emissor>/.well-known/jwks.json`), e tira o usuário do `sub`. Rota nova protegida recebe `usuario: UsuarioLogado` (`app/login.py`).
+O app entra no Cognito por um formulário próprio (SRP, cliente público), e só o módulo `web/src/login/` conhece o Cognito. A sessão fica no IndexedDB do aparelho, nunca em cookie: refresh token de 10 anos e token de acesso de 15 minutos, renovado quando vence; sem internet, o app segue logado com o acesso vencido. A API só confere um JWT padrão, com emissor e audiência em `JWT_EMISSOR` e `JWT_AUDIENCIA` (chaves em `<emissor>/.well-known/jwks.json`), e tira o usuário do `sub`. Rota nova protegida recebe `usuario: UsuarioLogado` (`app/login.py`). O token não traz nome: `PESSOAS` (JSON `{"<sub>": "<nome>"}`) diz quem é quem para o app (`app/pessoas.py`, `GET /api/pessoas`); sem ela, o seletor de pessoa só tem "Conjunto" e os avisos dizem "a outra pessoa" (ticket 84).
 
 O app lê o user pool no build: `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENTE_ID` e, só para o falso, `VITE_COGNITO_ENDPOINT`. O deploy preenche os dois primeiros com as saídas da pilha de dados.
 

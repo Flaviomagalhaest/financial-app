@@ -18,6 +18,8 @@ O dono roda localmente o importador sobre os exports do Mobills e recebe a plani
 - [ ] Lê o XLSX geral e as faturas por cartão e mês; cruza (esperado ~97,7% de casamento) e grava cada compra de cartão uma vez, com a data real, o cartão da fatura, as tags, a parcela e a situação do geral
 - [ ] Planilha de revisão com de-para de categorias e tags (contagem e papel proposto), pares prováveis, grupos ambíguos, sequências de parcela quebradas e parcelamentos sem cartão; abas Conferência (mês a mês, com coluna para os totais do Mobills) e Faturas
 - [ ] Cadastro prévio da conta e dos 7 cartões ligando cada pasta de fatura (5 inativos ficam arquivados); tudo entra como conjunto e com autoria "importado do Mobills"
+- [ ] A autoria "importado do Mobills" é `fonte = 'mobills'` no lançamento (coluna criada no ticket 41; `NULL` é "app"), sem pessoa; o menu ⋯ > Informações já a mostra
+- [ ] O importador grava tudo com um único `criado_por`: o "Parece repetido" (ticket 41) só compara lançamentos de `criado_por` diferentes, e a importação não pode disparar avisos em massa
 - [ ] Refazer a importação apaga só o que tem essa autoria
 - [ ] Testes com XLSX fictícios cobrindo o cruzamento e a Conferência
 - [ ] Verificações do projeto rodando e PR aberto para `main`

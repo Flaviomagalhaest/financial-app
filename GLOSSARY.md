@@ -209,6 +209,14 @@ _Avoid_: pendente, offline, na fila, não sincronizado
 Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica.
 _Avoid_: colisão, divergência
 
+**Parece repetido**:
+Aviso, para quem não o criou, de um lançamento que chegou depois de outro da outra pessoa com o mesmo valor, a mesma conta e data a até 1 dia; o casal escolhe "Manter os dois" ou "Excluir este".
+_Avoid_: duplicado, duplicata
+
+**Fonte do lançamento**:
+De onde o lançamento veio: o "app" ou o "importado do Mobills".
+_Avoid_: origem (é o nome da regra que mudou um campo, na tela de conflito), autoria
+
 **Versão do lançamento**:
 Número que sobe a cada mudança aceita num lançamento; cada campo guarda a versão em que mudou por último, e uma mudança diz sobre qual versão foi feita, para o servidor saber o que o outro lado mudou depois dela.
 _Avoid_: revisão, timestamp
