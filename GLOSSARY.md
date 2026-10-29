@@ -213,7 +213,7 @@ O limite menos o comprometido; pagar a fatura, receber um estorno, pagar uma par
 _Avoid_: limite restante, saldo do cartão
 
 **Pagamento de fatura**:
-Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos.
+Transferência de uma conta para um cartão que quita a fatura; não conta como saída nem tem categoria, porque as compras da fatura já são lançamentos. Pode ser feito antes do vencimento ou com a fatura aberta (adiantar), e mexe só no saldo da conta, no dia do pagamento real. Se for menor que o devido, o que faltou é o **saldo anterior** da fatura seguinte. A fatura fechada e quitada é **paga**.
 
 ### Exportação
 

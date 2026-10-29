@@ -84,6 +84,9 @@ def test_fatura_nasce_na_primeira_compra_com_as_datas_padrao(casal: Casal):
             "compras_centavos": 24070,
             "ajuste_centavos": 0,
             "total_centavos": 24070,
+            "saldo_anterior_centavos": 0,
+            "pago_centavos": 0,
+            "a_pagar_centavos": 24070,
         }
     ]
 

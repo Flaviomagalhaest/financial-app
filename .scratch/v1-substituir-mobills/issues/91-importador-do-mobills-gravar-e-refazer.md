@@ -34,4 +34,4 @@ O [ADR 0012](../../../docs/adr/0012-exportacao-unica-zip-de-csvs-e-restauracao-s
 
 ## Notas
 
-- Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): O backup gerado pelo importador sai na versão 13 do formato (`ajuste_centavos` na fatura e `estorno_de` no lançamento, ticket 39).
+- Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): O backup gerado pelo importador sai na versão 14 do formato (`ajuste_centavos` na fatura e `estorno_de` no lançamento, ticket 39).

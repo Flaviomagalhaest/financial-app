@@ -972,13 +972,19 @@ export interface components {
              * Situacao
              * @enum {string}
              */
-            situacao: "aberta" | "fechada";
+            situacao: "aberta" | "fechada" | "paga";
             /** Compras Centavos */
             compras_centavos: number;
             /** Ajuste Centavos */
             ajuste_centavos: number;
             /** Total Centavos */
             total_centavos: number;
+            /** Saldo Anterior Centavos */
+            saldo_anterior_centavos: number;
+            /** Pago Centavos */
+            pago_centavos: number;
+            /** A Pagar Centavos */
+            a_pagar_centavos: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1258,6 +1264,8 @@ export interface components {
             categoria_id?: string | null;
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
+            /** Fatura Mes */
+            fatura_mes?: string | null;
         };
         /**
          * NovoCartao
@@ -1559,6 +1567,8 @@ export interface components {
              * @enum {string}
              */
             situacao: "previsto" | "realizado";
+            /** Fatura Mes */
+            fatura_mes?: string | null;
             /** Criado Por */
             criado_por: string;
             /**

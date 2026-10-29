@@ -17,4 +17,4 @@ O estorno (crédito de uma compra devolvida) é uma linha de `lancamentos` com `
 - Toda soma de despesa precisa do sinal: `VALOR_COM_SINAL` em `app/lancamentos.py` serve às somas do cartão e do mês, e o planejamento tem o seu `CASE`. Quem criar uma soma nova de despesa trata `estorno_de`.
 - O saldo da conta não muda, porque o estorno só existe no cartão e o saldo do cartão não é de uma conta.
 - A planilha exporta o estorno com o sinal contrário ao da compra (crédito).
-- O backup sobe para a versão 13 (`estorno_de` no lançamento e `ajuste_centavos` na fatura).
+- O backup sobe para a versão 14 (`estorno_de` no lançamento e `ajuste_centavos` na fatura).

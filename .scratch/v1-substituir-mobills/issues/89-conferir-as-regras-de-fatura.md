@@ -7,7 +7,7 @@ Skills: `grilling`, `domain-modeling` (HITL: decisões do dono)
 Modelo recomendado: Opus
 Effort recomendado: medium
 Issue: #165
-Origem: [ticket 37](37-cartoes-e-faturas.md) (e o [77](77-ligar-o-csv-de-planilha-ao-esquema-real.md), feito com ele): a spec e a [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md) não dizem o que fazer nestes casos, e o ticket 37 escolheu um comportamento provisório para cada um (já em `backend/app/cartoes.py` e `backend/app/faturas.py`, com teste)
+Origem: [ticket 37](37-cartoes-e-faturas.md) e [ticket 38](38-pagamento-de-fatura.md) (o 37 com o [77](77-ligar-o-csv-de-planilha-ao-esquema-real.md), feito com ele): a spec e a [ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md) não dizem o que fazer nestes casos, e o ticket 37 escolheu um comportamento provisório para cada um (já em `backend/app/cartoes.py` e `backend/app/faturas.py`, com teste)
 
 ## O que decidir
 
@@ -26,3 +26,9 @@ Para cada regra abaixo, o dono confirma o comportamento provisório ou pede outr
 - [ ] **Cartão sem dia de fechamento** (os inativos do histórico) recusa a compra sem a fatura escolhida
 - [ ] **CSV de planilha** ([ticket 77](77-ligar-o-csv-de-planilha-ao-esquema-real.md), feito com o 37): a transferência sai numa linha só ("Corrente → Poupança", valor sem sinal), os nomes das colunas ficam sem acento (`descricao`, `situacao`) e a coluna `fonte` (importado do Mobills ou app) fica de fora. Alternativas: duas linhas por transferência (saída e entrada), cabeçalho com acento, coluna `fonte`
 - [ ] **Fatura fechada no próprio dia do fechamento** (`situacao: fechada` a partir dele), como a compra desse dia, que já vai para a seguinte
+- [ ] **Pagamento a mais que o devido** ([ticket 38](38-pagamento-de-fatura.md)): o excesso não vira crédito; o saldo anterior da fatura seguinte fica em zero e a fatura mostra `pago_centavos` maior que o total. Alternativa: saldo anterior negativo (crédito que abate a fatura seguinte)
+- [ ] **Só a fatura fechada passa o saldo anterior**: enquanto a fatura não fecha ela ainda recebe compras, então o que falta pagar dela não aparece na seguinte. Alternativa: mostrar uma estimativa na seguinte
+- [ ] **Saldo anterior pula meses sem fatura**: a fatura de um mês sem compra não nasce, e o que sobrou passa para a próxima fatura que existir
+- [ ] **Só pagamento realizado conta como pago**; o previsto (data futura) não quita nem mexe no saldo da conta
+- [ ] **Situação "paga"**: fatura fechada com o devido (saldo anterior mais compras) maior que zero e nada a pagar; fatura fechada de total zero fica "fechada"
+- [ ] **Pagar a fatura seguinte com o saldo anterior dentro**: o pagamento quita só a fatura que ele aponta. Pagar o total da fatura de maio (saldo anterior de abril mais compras) com `fatura_mes` de maio deixa abril "fechada" e devendo, sem contar em dobro. Alternativa: o pagamento abate primeiro a fatura mais antiga em aberto

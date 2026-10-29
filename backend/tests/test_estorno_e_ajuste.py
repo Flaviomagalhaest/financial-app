@@ -103,7 +103,19 @@ def test_ajuste_em_fatura_que_ainda_nao_nasceu_cria_ela_sem_mexer_nas_datas(casa
         "compras_centavos": 0,
         "ajuste_centavos": 500,
         "total_centavos": 500,
+        "saldo_anterior_centavos": 0,
+        "pago_centavos": 0,
+        "a_pagar_centavos": 500,
     }
+
+
+def test_ajuste_entra_no_que_falta_pagar_da_fatura(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-02", valor_centavos=10000)
+
+    ajustada = ajustar(casal, cartao, "2026-04-01", 2350).json()
+
+    assert (ajustada["total_centavos"], ajustada["a_pagar_centavos"]) == (12350, 12350)
 
 
 def test_ajuste_do_adicional_vai_para_a_fatura_do_titular(casal: Casal):
