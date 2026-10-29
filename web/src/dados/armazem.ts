@@ -18,6 +18,8 @@ export interface ItemDaFila {
   lancamento?: NovoLancamento;
   /** Quando a primeira mudança ainda não enviada foi feita (ms), para o aviso de 24 h. */
   desde: number;
+  /** A hora da última ação no aparelho (ms): é a hora que o servidor grava, não a da chegada. */
+  feitoEm?: number;
   /** Sobe a cada mudança no aparelho: o envio só tira da fila o que não mudou no caminho. */
   revisao: number;
   /** Motivo da recusa do servidor; recusado não sobe até ser corrigido ou descartado. */

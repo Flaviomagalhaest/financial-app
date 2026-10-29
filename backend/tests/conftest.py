@@ -32,7 +32,8 @@ def database_url() -> str:
 
 
 @pytest.fixture
-def client(database_url: str, emissor: Emissor) -> TestClient:
+def client(database_url: str, emissor: Emissor, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("PESSOAS", '{"flavio": "Flávio", "esposa": "Fulana"}')
     aplicar_migrations(database_url)
     return TestClient(create_app(database_url, verificador=emissor.verificador()))
 

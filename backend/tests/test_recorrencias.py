@@ -144,7 +144,9 @@ def test_recorrencia_de_valor_estimado_nao_pode_ser_automatica(casal: Casal):
 
 def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal: Casal):
     conta, luz = casal.conta(), casal.categoria("Luz")
-    nova = recorrencia(conta, [luz], tags=["casa nova"], inicio="2026-11-10", vezes=3)
+    nova = recorrencia(
+        conta, [luz], tags=["casa nova"], pessoa="esposa", inicio="2026-11-10", vezes=3
+    )
 
     primeira = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
     segunda = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
@@ -162,7 +164,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
     assert casal.pedir("esposa", "GET", "/api/recorrencias").json() == [primeira.json()]
     previstos = gerados(casal, nova["id"])
     assert len(previstos) == 3
-    assert {tuple(l["tags"]) for l in previstos} == {("casa nova",)}
+    assert {(tuple(l["tags"]), l["pessoa"]) for l in previstos} == {(("casa nova",), "esposa")}
 
 
 @pytest.mark.parametrize(
@@ -173,6 +175,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
             "categoria de receita",
         ),
         (lambda casal, conta: {"conta_id": str(uuid4())}, "conta não encontrada"),
+        (lambda casal, conta: {"pessoa": "vizinho"}, "pessoa não encontrada"),
         (lambda casal, conta: {"ate": "2026-11-01", "vezes": 2}, "não nos dois"),
         (lambda casal, conta: {"ate": "2026-11-01"}, "antes do início"),
         (lambda casal, conta: {"a_cada": 0}, "a_cada"),

@@ -4,7 +4,7 @@ ela pelo `recorrencia_id` e pelo número da ocorrência. A recorrência sem fim 
 (`horizonteDaRecorrenciaMeses`), e a tarefa diária o estende e realiza os automáticos."""
 
 from calendar import monthrange
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid5
 
@@ -42,6 +42,8 @@ class NovaRecorrencia(BaseModel):
     conta_id: UUID
     categoria_ids: list[UUID] = Field(min_length=1)
     tags: list[str] = []
+    # O id de uma pessoa do casal, que os previstos herdam; sem ela, a regra é do conjunto.
+    pessoa: str | None = None
     # A primeira ocorrência; o dia dela vale para todas, e 31 em mês curto cai no último dia.
     inicio: date
     a_cada: int = Field(ge=1)
@@ -73,7 +75,7 @@ class Recorrencia(NovaRecorrencia):
 
 _COLUNAS = (
     "id, tipo, valor_centavos, tipo_do_valor, automatico, descricao, conta_id, inicio, a_cada, unidade,"
-    " ate, vezes, criado_por, criado_em, alterado_por, alterado_em"
+    " ate, vezes, criado_por, criado_em, alterado_por, alterado_em, pessoa"
 )
 _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
 
@@ -161,8 +163,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         situacao = "realizado" if regra.automatico and dia <= dia_de_hoje else "previsto"
         gravado = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
-            " conta_id, criado_por, alterado_por, versao, recorrencia_id, ocorrencia, automatico)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s)"
+            " conta_id, criado_por, alterado_por, versao, recorrencia_id, ocorrencia, automatico,"
+            " pessoa, fonte) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app')"
             " ON CONFLICT (id) DO NOTHING",
             (
                 lancamento_id,
@@ -177,6 +179,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 id,
                 n,
                 regra.automatico,
+                regra.pessoa,
             ),
         ).rowcount
         if not gravado:
@@ -229,7 +232,9 @@ def _realizar(conn, id: UUID) -> bool:
     nova = subir_versao(
         conn, id, versao, "situacao = 'realizado', alterado_por = %s, alterado_em = now()", (quem,)
     )
-    registrar_mudancas(conn, id, ["situacao"], nova, quem, origem=origem(descricao))
+    registrar_mudancas(
+        conn, id, ["situacao"], nova, quem, datetime.now(UTC), origem=origem(descricao)
+    )
     return True
 
 
@@ -283,7 +288,7 @@ def criar_recorrencia(
         tags = ids_das_tags(conn, nova.tags, usuario, set())
         gravada = conn.execute(
             f"INSERT INTO recorrencias ({_COLUNAS}, geradas)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), 0)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, 0)"
             # Dois reenvios ao mesmo tempo: o segundo fica com a regra que o primeiro gravou.
             " ON CONFLICT (id) DO NOTHING",
             (
@@ -301,6 +306,7 @@ def criar_recorrencia(
                 nova.vezes,
                 usuario,
                 usuario,
+                nova.pessoa,
             ),
         ).rowcount
         if not gravada:
