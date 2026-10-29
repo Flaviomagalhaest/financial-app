@@ -1,13 +1,17 @@
 """Transferência entre duas contas do casal: não é despesa nem receita, só move o saldo.
-Tabela própria porque o DSQL não altera o `CHECK` do tipo dos lançamentos (ADR 0014)."""
+Tabela própria porque o DSQL não altera o `CHECK` do tipo dos lançamentos (ADR 0014).
+
+O pagamento de fatura é a transferência de uma conta para um cartão: leva o mês da fatura que
+quita, não tem categoria e só mexe no saldo da conta."""
 
 from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from app import faturas
 from app.banco import conectar, em_transacao
 from app.lancamentos import conferir_conta, recusar, situacao_pela_data, url_do_banco
 from app.login import UsuarioLogado
@@ -25,6 +29,13 @@ class NovaTransferencia(BaseModel):
     # Opcional, e só da lista de categorias de transferência.
     categoria_id: UUID | None = None
     situacao: Literal["previsto", "realizado"] | None = None
+    # Só no pagamento de fatura (destino num cartão): o mês da fatura que ele quita.
+    fatura_mes: date | None = None
+
+    @field_validator("fatura_mes")
+    @classmethod
+    def _primeiro_dia_do_mes(cls, mes: date | None) -> date | None:
+        return mes and faturas.mes_de(mes)
 
 
 class Transferencia(NovaTransferencia):
@@ -37,7 +48,7 @@ class Transferencia(NovaTransferencia):
 
 _COLUNAS = (
     "id, conta_origem_id, conta_destino_id, valor_centavos, data, descricao, categoria_id,"
-    " situacao, criado_por, criado_em, alterado_por, alterado_em"
+    " situacao, fatura_mes, criado_por, criado_em, alterado_por, alterado_em"
 )
 
 _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
@@ -59,9 +70,13 @@ def _conferir_transferencia(
         raise recusar("origem e destino são a mesma conta")
     # Arquivada só segue com quem já estava nela (o histórico se edita).
     conferir_conta(conn, t.conta_origem_id, ja_ligada=bool(atual) and t.conta_origem_id == atual[0])
-    conferir_conta(
-        conn, t.conta_destino_id, ja_ligada=bool(atual) and t.conta_destino_id == atual[1]
-    )
+    ja_no_destino = bool(atual) and t.conta_destino_id == atual[1]
+    if cartao := faturas.ler_cartao(conn, t.conta_destino_id):
+        _conferir_pagamento_de_fatura(conn, t, cartao, ja_no_destino)
+    else:
+        conferir_conta(conn, t.conta_destino_id, ja_ligada=ja_no_destino)
+        if t.fatura_mes:
+            raise recusar("fatura só no pagamento de fatura, com o destino num cartão")
     if t.categoria_id:
         tipo = conn.execute(
             "SELECT tipo FROM categorias WHERE id = %s", (t.categoria_id,)
@@ -70,6 +85,22 @@ def _conferir_transferencia(
             raise recusar("categoria não encontrada")
         if tipo[0] != "transferencia":
             raise recusar(f"categoria de {tipo[0]} numa transferência")
+
+
+def _conferir_pagamento_de_fatura(
+    conn, t: NovaTransferencia, cartao: faturas.CartaoComTitular, ja_no_destino: bool
+) -> None:
+    if cartao.arquivado and not ja_no_destino:
+        raise recusar("cartão arquivado")
+    if t.categoria_id:
+        raise recusar("pagamento de fatura não tem categoria")
+    if not t.fatura_mes:
+        raise recusar("pagamento de fatura precisa do mês da fatura")
+    existe = conn.execute(
+        "SELECT 1 FROM faturas WHERE cartao_id = %s AND mes = %s", (cartao.titular.id, t.fatura_mes)
+    ).fetchone()
+    if not existe:
+        raise recusar("fatura não encontrada")
 
 
 @router.post(
@@ -87,8 +118,8 @@ def criar_transferencia(
         _conferir_transferencia(conn, nova)
         gravadas = conn.execute(
             "INSERT INTO transferencias (id, conta_origem_id, conta_destino_id, valor_centavos,"
-            " data, descricao, categoria_id, situacao, criado_por, alterado_por)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (id) DO NOTHING",
+            " data, descricao, categoria_id, situacao, fatura_mes, criado_por, alterado_por)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (id) DO NOTHING",
             (
                 nova.id,
                 nova.conta_origem_id,
@@ -98,6 +129,7 @@ def criar_transferencia(
                 nova.descricao,
                 nova.categoria_id,
                 nova.situacao or situacao_pela_data(nova.data),
+                nova.fatura_mes,
                 usuario,
                 usuario,
             ),
@@ -146,7 +178,7 @@ def editar_transferencia(
         conn.execute(
             "UPDATE transferencias SET conta_origem_id = %s, conta_destino_id = %s,"
             " valor_centavos = %s, data = %s, descricao = %s, categoria_id = %s, situacao = %s,"
-            " alterado_por = %s, alterado_em = now() WHERE id = %s",
+            " fatura_mes = %s, alterado_por = %s, alterado_em = now() WHERE id = %s",
             (
                 editada.conta_origem_id,
                 editada.conta_destino_id,
@@ -155,6 +187,7 @@ def editar_transferencia(
                 editada.descricao,
                 editada.categoria_id,
                 situacao,
+                editada.fatura_mes,
                 usuario,
                 id,
             ),
