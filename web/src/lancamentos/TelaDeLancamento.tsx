@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { salvarLancamento, useCadastro, useLancamentos, usePessoas, useTags, type LancamentoNaTela } from "../dados";
+import { salvarLancamento, useCadastro, useLancamentos, usePessoas, useSugestao, useTags, type LancamentoNaTela, type Sugestao } from "../dados";
 import { nomePorId, tituloDoLancamento } from "./apresentacao";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
-import { FolhaDeDetalhes } from "./FolhaDeDetalhes";
+import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
@@ -35,6 +35,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const { lancamentos, semDados } = useLancamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
   const opcoesDeTags = useTags();
+  const sugerir = useSugestao();
   // A identidade nasce no aparelho: reenviar o mesmo pedido nunca duplica.
   const [novoId] = useState(() => crypto.randomUUID());
   const [existente, setExistente] = useState<LancamentoNaTela | null>(null);
@@ -48,6 +49,8 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   // A fatura escolhida à mão (o mês, `AAAA-MM-01`); sem ela, o servidor escolhe pela data (ADR 0015).
   const [faturaMes, setFaturaMes] = useState<string | null>(null);
   const [detalhesAbertos, setDetalhesAbertos] = useState(false);
+  // A sugestão aparece quando se digita a descrição e some ao escolher uma.
+  const [sugerindo, setSugerindo] = useState(false);
   // Sem pessoa, o lançamento é do conjunto (do casal).
   const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
@@ -111,6 +114,32 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setTags(u.tags ?? []);
     setPessoa(u.pessoa ?? null);
   }
+
+  /** Preenche conta, categorias, tags e pessoa do pacote; o valor e a data ficam como estão. */
+  function escolher(s: Sugestao) {
+    setTipo(s.tipo);
+    if (contasECartoes.some((c) => c.id === s.conta_id)) trocarConta(s.conta_id);
+    setCategoriaIds(s.categoria_ids.filter((c) => categorias.some((cat) => cat.id === c && !cat.arquivada)));
+    setTags(s.tags);
+    setPessoa(s.pessoa ?? null);
+    setSugerindo(false);
+  }
+
+  const sugestoes: SugestaoNaFolha[] = sugerindo
+    ? sugerir(descricao, { tipo, valor_centavos: centavos, conta_id: conta, data }).map((s) => ({
+        descricao: s.descricao.trim(),
+        // A conta ou categoria que não se pode mais escolher fica de fora, como ao escolher.
+        pacote: [
+          categorias.filter((c) => !c.arquivada && s.categoria_ids.includes(c.id)).map((c) => c.nome).join(", "),
+          ...s.tags.map((t) => `#${t}`),
+          contasECartoes.find((c) => c.id === s.conta_id)?.nome ?? "",
+          s.pessoa ? nomeDe(s.pessoa) : "Conjunto",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        onEscolher: () => escolher(s),
+      }))
+    : [];
 
   const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
@@ -215,7 +244,11 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
       {detalhesAbertos && (
         <FolhaDeDetalhes
           descricao={descricao}
-          onDescricao={setDescricao}
+          onDescricao={(d) => {
+            setDescricao(d);
+            setSugerindo(true);
+          }}
+          sugestoes={sugestoes}
           tags={tags}
           opcoesDeTags={opcoesDeTags}
           onTags={setTags}

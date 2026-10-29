@@ -32,12 +32,14 @@ import {
   LISTA,
   type Remessa,
 } from "./fila";
+import { fonteDoHistorico, pacoteDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type { Campo } from "./fila";
+export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { comoNovo } from "./fila";
 
@@ -76,6 +78,7 @@ const LEITURAS = {
   "/api/pessoas": () => api.GET("/api/pessoas"),
   "/api/tags": () => api.GET("/api/tags"),
   "/api/cartoes": () => api.GET("/api/cartoes"),
+  "/api/sugestoes": () => api.GET("/api/sugestoes"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -120,6 +123,8 @@ function useResposta<C extends Caminho>(caminho: C) {
     /** Hora da resposta guardada, só quando o servidor não respondeu agora. */
     atualizadoEm: aoVivo === false && guardada ? guardada.em : null,
     semDados: aoVivo === false && !guardada,
+    /** Quando o servidor deu a resposta guardada (ms), nova ou não. */
+    guardadaEm: guardada?.em ?? null,
     buscar,
   };
 }
@@ -237,6 +242,25 @@ export function useTags(): string[] {
     }
     return [...porNome.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [dados, lancamentos]);
+}
+
+/**
+ * A sugestão pela descrição, sem internet: o índice do servidor com os lançamentos que o aparelho
+ * mudou depois dele por cima (os não enviados e os que o envio já acertou na lista), para o que se
+ * acabou de lançar ou corrigir já ser a sugestão mais recente. Sem índice guardado, a lista inteira.
+ */
+export function useSugestao(): FonteDeSugestao {
+  const indice = useResposta("/api/sugestoes");
+  const { lancamentos } = useLancamentos();
+  return useMemo(() => {
+    const desde = indice.guardadaEm ?? 0;
+    const depois = (lancamentos ?? []).flatMap((l) => {
+      if (l.conflito || l.exclusao) return [];
+      const em = l.naoEnviado ? l.feitoEm : l.alterado_em && Date.parse(l.alterado_em);
+      return em && em > desde ? [pacoteDe(l, em)] : [];
+    });
+    return fonteDoHistorico([...depois, ...(indice.dados?.pacotes ?? [])]);
+  }, [indice.dados, indice.guardadaEm, lancamentos]);
 }
 
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */

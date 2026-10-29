@@ -2134,6 +2134,29 @@
           }
         }
       }
+    },
+    "/api/sugestoes": {
+      "get": {
+        "summary": "Indice De Sugestao",
+        "operationId": "indice_de_sugestao",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndiceDeSugestao"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3247,6 +3270,22 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "IndiceDeSugestao": {
+        "properties": {
+          "pacotes": {
+            "items": {
+              "$ref": "#/components/schemas/Pacote"
+            },
+            "type": "array",
+            "title": "Pacotes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pacotes"
+        ],
+        "title": "IndiceDeSugestao"
+      },
       "ItemDoModelo": {
         "properties": {
           "categoria_id": {
@@ -4144,6 +4183,81 @@
           "categoria_ids"
         ],
         "title": "NovoLancamento"
+      },
+      "Pacote": {
+        "properties": {
+          "chave": {
+            "type": "string",
+            "title": "Chave"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Em"
+          },
+          "origem": {
+            "type": "string",
+            "const": "historico",
+            "title": "Origem",
+            "default": "historico"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chave",
+          "descricao",
+          "tipo",
+          "conta_id",
+          "categoria_ids",
+          "tags",
+          "pessoa",
+          "em"
+        ],
+        "title": "Pacote",
+        "description": "O que um lançamento anterior sugere, por inteiro: escolhê-lo preenche esses campos."
       },
       "PedidoDeExportacao": {
         "properties": {

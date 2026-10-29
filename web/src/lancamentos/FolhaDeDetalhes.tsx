@@ -4,9 +4,14 @@ import { EscolhaDaData } from "./EscolhaDaData";
 
 type Situacao = LancamentoNaTela["situacao"];
 
+/** Uma sugestão pela descrição, já com o texto que a tela mostra. */
+export type SugestaoNaFolha = { descricao: string; pacote: string; onEscolher: () => void };
+
 type Props = {
   descricao: string;
   onDescricao: (descricao: string) => void;
+  /** As sugestões para o que se digitou na descrição, da mais provável para a menos. */
+  sugestoes: SugestaoNaFolha[];
   tags: string[];
   /** As tags que se pode escolher; as marcadas aparecem mesmo fora dela. */
   opcoesDeTags: string[];
@@ -68,6 +73,18 @@ export function FolhaDeDetalhes(props: Props) {
       <h3 id="titulo-dos-detalhes">Detalhes</h3>
       <label htmlFor="descricao">Descrição</label>
       <input id="descricao" value={props.descricao} onChange={(e) => props.onDescricao(e.target.value)} autoComplete="off" />
+      {props.sugestoes.length > 0 && (
+        <ul className="sugestoes" aria-label="Sugestões">
+          {props.sugestoes.map((s, i) => (
+            <li key={i}>
+              <button type="button" className="sugestao" onClick={s.onEscolher}>
+                <span>{s.descricao}</span>
+                <span className="pacote">{s.pacote}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <h4>Tags</h4>
       {opcoes.length > 0 && (
