@@ -1190,6 +1190,75 @@
           }
         }
       }
+    },
+    "/api/recorrencias": {
+      "get": {
+        "summary": "Listar Recorrencias",
+        "operationId": "listar_recorrencias",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Recorrencia"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Recorrencias"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Criar Recorrencia",
+        "description": "Grava a regra e gera os previstos até o horizonte. Reenviar o mesmo id (a fila repete)\ndevolve a regra gravada, com 200, e completa a geração se ela tiver parado no meio.",
+        "operationId": "criar_recorrencia",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaRecorrencia"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recorrencia"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1665,7 +1734,7 @@
           "lancamentos"
         ],
         "title": "ContasDaSemana",
-        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."
+        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O\nautomático fica de fora: não pede confirmação."
       },
       "EdicaoDeConta": {
         "properties": {
@@ -1883,6 +1952,34 @@
             "type": "boolean",
             "title": "Atrasado"
           },
+          "recorrencia_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorrencia Id"
+          },
+          "ocorrencia": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocorrencia"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico",
+            "default": false
+          },
           "versao": {
             "type": "integer",
             "title": "Versao"
@@ -2059,6 +2156,123 @@
           "tipo"
         ],
         "title": "NovaConta"
+      },
+      "NovaRecorrencia": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "valor": {
+            "type": "string",
+            "enum": [
+              "fixo",
+              "estimado"
+            ],
+            "title": "Valor"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico",
+            "default": false
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "title": "Inicio"
+          },
+          "a_cada": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Cada"
+          },
+          "unidade": {
+            "type": "string",
+            "enum": [
+              "semanas",
+              "meses"
+            ],
+            "title": "Unidade"
+          },
+          "ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "vezes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vezes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "valor_centavos",
+          "valor",
+          "conta_id",
+          "categoria_ids",
+          "inicio",
+          "a_cada",
+          "unidade"
+        ],
+        "title": "NovaRecorrencia"
       },
       "NovaTag": {
         "properties": {
@@ -2239,6 +2453,145 @@
           "formato"
         ],
         "title": "PedidoDeExportacao"
+      },
+      "Recorrencia": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "valor": {
+            "type": "string",
+            "enum": [
+              "fixo",
+              "estimado"
+            ],
+            "title": "Valor"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico",
+            "default": false
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "title": "Inicio"
+          },
+          "a_cada": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Cada"
+          },
+          "unidade": {
+            "type": "string",
+            "enum": [
+              "semanas",
+              "meses"
+            ],
+            "title": "Unidade"
+          },
+          "ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "vezes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vezes"
+          },
+          "criado_por": {
+            "type": "string",
+            "title": "Criado Por"
+          },
+          "criado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Criado Em"
+          },
+          "alterado_por": {
+            "type": "string",
+            "title": "Alterado Por"
+          },
+          "alterado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Alterado Em"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "valor_centavos",
+          "valor",
+          "conta_id",
+          "categoria_ids",
+          "inicio",
+          "a_cada",
+          "unidade",
+          "criado_por",
+          "criado_em",
+          "alterado_por",
+          "alterado_em"
+        ],
+        "title": "Recorrencia"
       },
       "Resultado": {
         "properties": {

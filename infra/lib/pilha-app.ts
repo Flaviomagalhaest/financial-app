@@ -41,7 +41,8 @@ export interface PilhaAppProps extends StackProps {
 
 /**
  * A PWA num S3 privado atrás do CloudFront, e `/api/*` no mesmo endereço indo à HTTP API
- * e a uma Lambda com a API inteira (ADR 0010). O backup diário usa o mesmo pacote (ADR 0012).
+ * e a uma Lambda com a API inteira (ADR 0010). O backup diário (ADR 0012) e a tarefa diária das
+ * recorrências usam o mesmo pacote.
  */
 export class PilhaApp extends Stack {
   constructor(scope: Construct, id: string, props: PilhaAppProps) {
@@ -155,6 +156,7 @@ export class PilhaApp extends Stack {
     });
 
     this.backupDiario(props, avisos);
+    this.tarefaDiaria(props, avisos);
 
     new CfnOutput(this, "Endereco", { value: `https://${distribuicao.distributionDomainName}` });
   }
@@ -235,5 +237,47 @@ export class PilhaApp extends Stack {
     }).addAlarmAction(avisar);
 
     new CfnOutput(this, "FuncaoDoBackup", { value: funcao.functionName });
+  }
+
+  /**
+   * Logo depois da meia-noite de São Paulo, o EventBridge Scheduler chama a tarefa diária: ela
+   * estende as recorrências até o horizonte e realiza os previstos automáticos do dia
+   * (backend/app/tarefa_diaria.py). Um e-mail avisa se ela falhar; rodar de novo não duplica.
+   */
+  private tarefaDiaria(props: PilhaAppProps, avisos: sns.Topic) {
+    const funcao = new lambda.Function(this, "TarefaDiaria", {
+      runtime: lambda.Runtime.PYTHON_3_14,
+      architecture: lambda.Architecture.ARM_64,
+      handler: "app.tarefa_diaria.handler",
+      code: lambda.Code.fromAsset(props.pacoteDaLambda),
+      // Escreve nos lançamentos com o papel `api` do banco, como a API.
+      role: props.dados.roleDaApi,
+      memorySize: 512,
+      timeout: Duration.minutes(5),
+      environment: { DSQL_ENDPOINT: props.dados.banco.attrEndpoint },
+      logGroup: new logs.LogGroup(this, "LogsDaTarefaDiaria", {
+        retention: logs.RetentionDays.THREE_MONTHS,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
+    });
+
+    // 00:07: o automático vira realizado no próprio dia, antes do backup das 03:07.
+    new scheduler.Schedule(this, "TarefaTodoDia", {
+      schedule: scheduler.ScheduleExpression.cron({
+        minute: "7",
+        hour: "0",
+        timeZone: TimeZone.AMERICA_SAO_PAULO,
+      }),
+      target: new schedulerTargets.LambdaInvoke(funcao, { retryAttempts: 2 }),
+    });
+
+    new cloudwatch.Alarm(this, "TarefaDiariaFalhou", {
+      alarmDescription: `A tarefa diária das recorrências de ${props.ambiente} falhou (logs da Lambda ${funcao.functionName}).`,
+      metric: funcao.metricErrors({ period: Duration.hours(1), statistic: "Sum" }),
+      threshold: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cwactions.SnsAction(avisos));
   }
 }

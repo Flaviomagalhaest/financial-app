@@ -10,6 +10,8 @@ from app.backup import RestauracaoDesfeita, RestauracaoRecusada, gerar_backup, r
 from app.migrations import aplicar_migrations
 from tests.exemplo_ficticio import trocar_arquivo
 
+DA_VERSAO_8 = {"recorrencias", "recorrencia_categorias", "recorrencia_tags"}
+
 
 def apagar_os_dados(conn: psycopg.Connection) -> None:
     """Deixa o banco fictício como um banco novo: as tabelas das migrations, sem linhas."""
@@ -194,6 +196,9 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "lancamentos": 0,
             "tags": 0,
             "transferencias": 0,
+            "recorrencias": 0,
+            "recorrencia_categorias": 0,
+            "recorrencia_tags": 0,
         }
 
 
@@ -291,16 +296,18 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
     with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
         for nome in origem.namelist():
             conteudo = origem.read(nome)
-            if nome == "lancamento_campos.csv":
+            # Nem as tabelas e colunas da versão 8 (ticket 44), que vêm depois.
+            if nome.removesuffix(".csv") in {"lancamento_campos", *DA_VERSAO_8}:
                 continue
             if nome == "lancamentos.csv":
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-3]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-6]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
                 manifesto["versao_formato"] = 6
-                del manifesto["tabelas"]["lancamento_campos"]
+                for tabela in {"lancamento_campos", *DA_VERSAO_8}:
+                    del manifesto["tabelas"][tabela]
                 manifesto["tabelas"]["lancamentos"]["somas"] = {"valor_centavos": "1000"}
                 conteudo = json.dumps(manifesto).encode()
             destino.writestr(nome, conteudo)
@@ -312,3 +319,45 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
         assert conn.execute(
             "SELECT valor_centavos, versao, excluido_em FROM lancamentos"
         ).fetchall() == [(1000, None, None)]
+
+
+def test_backup_da_versao_7_DA_VERSAO_8_restaura_com_os_lancamentos_avulsos(database_url):
+    # O que `prod` gravava antes do ticket 44: sem as tabelas das recorrências e sem a ligação do
+    # lançamento à regra.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, conta_id,"
+            " criado_por, alterado_por, versao) VALUES ('00000000-0000-0000-0000-000000000001',"
+            " 'despesa', 'previsto', 1000, '2026-11-02', '00000000-0000-0000-0000-000000000002',"
+            " 'flavio', 'flavio', 1)"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome.removesuffix(".csv") in DA_VERSAO_8:
+                continue
+            if nome == "lancamentos.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-3]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 7
+                for tabela in DA_VERSAO_8:
+                    del manifesto["tabelas"][tabela]
+                del manifesto["tabelas"]["lancamentos"]["somas"]["ocorrencia"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute(
+            "SELECT valor_centavos, recorrencia_id, ocorrencia, automatico FROM lancamentos"
+        ).fetchall() == [(1000, None, None, None)]
+        assert conn.execute("SELECT count(*) FROM recorrencias").fetchone() == (0,)

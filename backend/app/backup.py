@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 7
+VERSAO_FORMATO = 8
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -135,6 +135,50 @@ def _da_versao_6_para_a_7(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
     return manifesto, tabelas
 
 
+def _da_versao_7_para_a_8(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 8 (ticket 44) traz as recorrências e liga o lançamento à regra que o gerou. Os
+    lançamentos antigos entram avulsos (sem regra e sem ocorrência) e sem o automático."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "recorrencia_id" not in colunas:
+        novas = ["recorrencia_id", "ocorrencia", "automatico"]
+        tabelas["lancamentos"] = (
+            colunas + novas,
+            [linha + [None] * len(novas) for linha in linhas],
+        )
+        manifesto["tabelas"]["lancamentos"]["somas"]["ocorrencia"] = "0"
+    novas_tabelas = {
+        "recorrencias": (
+            [
+                "id",
+                "tipo",
+                "valor_centavos",
+                "valor",
+                "automatico",
+                "descricao",
+                "conta_id",
+                "inicio",
+                "a_cada",
+                "unidade",
+                "ate",
+                "vezes",
+                "geradas",
+                "criado_por",
+                "criado_em",
+                "alterado_por",
+                "alterado_em",
+            ],
+            {"valor_centavos": "0", "a_cada": "0", "vezes": "0", "geradas": "0"},
+        ),
+        "recorrencia_categorias": (["recorrencia_id", "categoria_id"], {}),
+        "recorrencia_tags": (["recorrencia_id", "tag_id"], {}),
+    }
+    for tabela, (colunas_novas, somas) in novas_tabelas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas_novas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -144,6 +188,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     4: _da_versao_4_para_a_5,
     5: _da_versao_5_para_a_6,
     6: _da_versao_6_para_a_7,
+    7: _da_versao_7_para_a_8,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
