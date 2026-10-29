@@ -520,6 +520,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/recorrencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Recorrencias */
+        get: operations["listar_recorrencias"];
+        put?: never;
+        /**
+         * Criar Recorrencia
+         * @description Grava a regra e gera os previstos até o horizonte. Reenviar o mesmo id (a fila repete)
+         *     devolve a regra gravada, com 200, e completa a geração se ela tiver parado no meio.
+         */
+        post: operations["criar_recorrencia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -700,7 +722,8 @@ export interface components {
         };
         /**
          * ContasDaSemana
-         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo.
+         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
+         *     automático fica de fora: não pede confirmação.
          */
         ContasDaSemana: {
             /** Lancamentos */
@@ -858,6 +881,15 @@ export interface components {
             pessoa?: string | null;
             /** Atrasado */
             atrasado: boolean;
+            /** Recorrencia Id */
+            recorrencia_id?: string | null;
+            /** Ocorrencia */
+            ocorrencia?: number | null;
+            /**
+             * Automatico
+             * @default false
+             */
+            automatico: boolean;
             /** Versao */
             versao: number;
             /** Criado Por */
@@ -928,6 +960,66 @@ export interface components {
             saldo_abertura_centavos?: number | null;
             /** Data Abertura */
             data_abertura?: string | null;
+        };
+        /** NovaRecorrencia */
+        NovaRecorrencia: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor: "fixo" | "estimado";
+            /**
+             * Automatico
+             * @default false
+             */
+            automatico: boolean;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio: string;
+            /** A Cada */
+            a_cada: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade: "semanas" | "meses";
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
         };
         /** NovaTag */
         NovaTag: {
@@ -1051,6 +1143,80 @@ export interface components {
             itens: components["schemas"]["ItemDoPlanejamento"][];
             /** Ainda Da Para Gastar Centavos */
             ainda_da_para_gastar_centavos: number;
+        };
+        /** Recorrencia */
+        Recorrencia: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor: "fixo" | "estimado";
+            /**
+             * Automatico
+             * @default false
+             */
+            automatico: boolean;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio: string;
+            /** A Cada */
+            a_cada: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade: "semanas" | "meses";
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
         };
         /**
          * Resultado
@@ -2330,6 +2496,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Pessoa"][];
+                };
+            };
+        };
+    };
+    listar_recorrencias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recorrencia"][];
+                };
+            };
+        };
+    };
+    criar_recorrencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaRecorrencia"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recorrencia"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

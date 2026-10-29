@@ -69,7 +69,7 @@ class AlteracaoDeCategoria(BaseModel):
         return nome.strip() if nome else nome
 
 
-def _tags_limpas(nomes: list[str] | None) -> list[str] | None:
+def tags_limpas(nomes: list[str] | None) -> list[str] | None:
     if nomes is None:
         return None
     limpos = [nome.strip() for nome in nomes]
@@ -78,7 +78,7 @@ def _tags_limpas(nomes: list[str] | None) -> list[str] | None:
     return list({nome.casefold(): nome for nome in limpos}.values())
 
 
-def _sem_repetidas(ids: list[UUID] | None) -> list[UUID] | None:
+def sem_repetidas(ids: list[UUID] | None) -> list[UUID] | None:
     if ids is not None and len(set(ids)) != len(ids):
         raise ValueError("categoria repetida")
     return ids
@@ -99,8 +99,8 @@ class DadosDoLancamento(BaseModel):
     # O id de uma pessoa do casal; sem ela, o lançamento é do conjunto.
     pessoa: str | None = None
 
-    _tags = field_validator("tags")(_tags_limpas)
-    _categorias = field_validator("categoria_ids")(_sem_repetidas)
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
 
 
 class NovoLancamento(DadosDoLancamento):
@@ -110,8 +110,14 @@ class NovoLancamento(DadosDoLancamento):
 
 class Lancamento(DadosDoLancamento):
     situacao: Literal["previsto", "realizado"]
-    # Previsto cuja data já passou sem confirmação; continua previsto (e contando) até confirmar.
+    # Previsto que pede confirmação e cuja data já passou sem ela; continua previsto (e contando)
+    # até confirmar. O automático não pede: a tarefa diária o realiza na data.
     atrasado: bool
+    # A regra que gerou o lançamento e o número da ocorrência nela (1, 2...); o avulso não tem.
+    recorrencia_id: UUID | None = None
+    ocorrencia: int | None = None
+    # Vira realizado sozinho na data, sem confirmação (recorrência de valor fixo).
+    automatico: bool = False
     # Sobe a cada mudança aceita; a edição e a exclusão dizem sobre qual versão foram feitas.
     versao: int
     criado_por: str
@@ -157,8 +163,8 @@ class AlteracaoDeLancamento(BaseModel):
     pessoa: str | None = None
     acao_em: datetime | None = None
 
-    _tags = field_validator("tags")(_tags_limpas)
-    _categorias = field_validator("categoria_ids")(_sem_repetidas)
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
 
 
 class CampoEmConflito(BaseModel):
@@ -221,10 +227,11 @@ _REPETIDO_DE = f"""(
 ) AS repetido_de"""
 
 # Lançamento de antes do ticket 34 não tem versão: está como nasceu, na 1.
-_VERSAO = "COALESCE(versao, 1)"
+VERSAO = "COALESCE(versao, 1)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
-    f" criado_por, criado_em, alterado_por, alterado_em, {_VERSAO}, pessoa, fonte,"
+    f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
+    " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
     f" {_REPETIDO_DE}"
 )
 
@@ -391,13 +398,14 @@ def conferir_conta(conn, id: UUID, ja_ligada: bool = False) -> None:
         raise recusar("conta arquivada")
 
 
-def _conferir_ligacoes(
+def conferir_ligacoes(
     conn,
-    lancamento: NovoLancamento,
+    lancamento,
     conta_atual: UUID | None = None,
     categorias_atuais: frozenset[UUID] = frozenset(),
 ) -> None:
-    """Conta e categoria arquivadas só valem num lançamento que já as tinha."""
+    """Conta e categoria arquivadas só valem num lançamento que já as tinha. Serve a quem tem
+    `tipo`, `conta_id`, `categoria_ids` e `pessoa`: o lançamento e a regra que gera lançamentos."""
     pessoas = configuradas()
     if lancamento.pessoa and pessoas and lancamento.pessoa not in pessoas:
         raise recusar("pessoa não encontrada")
@@ -420,19 +428,13 @@ def _conferir_ligacoes(
             raise recusar("categoria arquivada")
 
 
-def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+def ids_das_tags(conn, nomes: list[str], usuario: str, ja_tinha: set[UUID]) -> list[UUID]:
     """Acha cada tag pelo nome (sem distinguir maiúsculas) ou a cria. Tag arquivada só vale para
     quem já a tinha."""
     existentes = {
         nome.casefold(): (tag, arquivada)
         for tag, nome, arquivada in conn.execute(
             "SELECT id, nome, arquivada_em IS NOT NULL FROM tags"
-        )
-    }
-    ja_tinha = {
-        linha[0]
-        for linha in conn.execute(
-            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
         )
     }
     ids = []
@@ -447,6 +449,17 @@ def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
                 "INSERT INTO tags (id, nome, criado_por) VALUES (%s, %s, %s)", (tag, nome, usuario)
             )
         ids.append(tag)
+    return ids
+
+
+def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+    ja_tinha = {
+        linha[0]
+        for linha in conn.execute(
+            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
+        )
+    }
+    ids = ids_das_tags(conn, nomes, usuario, ja_tinha)
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
     for tag in ids:
         conn.execute(
@@ -473,7 +486,7 @@ def _momento(acao_em: datetime | None) -> datetime:
     return min(acao_em, agora)
 
 
-def _registrar_mudancas(
+def registrar_mudancas(
     conn,
     id: UUID,
     campos: Iterable[str],
@@ -494,11 +507,11 @@ def _registrar_mudancas(
         )
 
 
-def _subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) -> int:
+def subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) -> int:
     """Grava a mudança só se ninguém mudou o lançamento desde a leitura; senão a transação
     recomeça (`em_transacao`) e a nova leitura vê a outra mudança."""
     gravadas = conn.execute(
-        f"UPDATE lancamentos SET {atribuicoes}, versao = %s WHERE id = %s AND {_VERSAO} = %s",
+        f"UPDATE lancamentos SET {atribuicoes}, versao = %s WHERE id = %s AND {VERSAO} = %s",
         (*parametros, de + 1, id, de),
     ).rowcount
     if not gravadas:
@@ -587,7 +600,7 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             (novo.id,),
         )
     )
-    _conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
+    conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
     momento = _momento(novo.acao_em)
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
@@ -654,8 +667,8 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
         **atual.model_dump(include=set(DadosDoLancamento.model_fields)) | mudancas
     )
     momento = _momento(alteracao.acao_em)
-    _conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
-    versao = _subir_versao(
+    conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
+    versao = subir_versao(
         conn,
         id,
         atual.versao,
@@ -673,7 +686,7 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
             momento,
         ),
     )
-    _registrar_mudancas(conn, id, mudancas, versao, usuario, momento)
+    registrar_mudancas(conn, id, mudancas, versao, usuario, momento)
     if "categoria_ids" in mudancas:
         _gravar_categorias(conn, id, editado.categoria_ids)
     if "tags" in mudancas:
@@ -687,7 +700,7 @@ def _excluir(
     """Marca a exclusão: sem a marca, a edição que chega depois não saberia que perdeu para
     ela. Com `versao`, excluir o que o outro lado mudou depois é conflito."""
     linha = conn.execute(
-        f"SELECT {_VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
+        f"SELECT {VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
     ).fetchone()
     if not linha or linha[1]:
         return
@@ -695,7 +708,7 @@ def _excluir(
         atual = _um(conn, id)
         depois = {c: v for c, v in _versoes(conn, atual).items() if v.versao > versao}
         raise _conflito("alterado depois da sua versão", atual, depois, usuario)
-    _subir_versao(
+    subir_versao(
         conn,
         id,
         linha[0],
@@ -775,7 +788,7 @@ def _todos(
             id=l[0],
             tipo=l[1],
             situacao=l[2],
-            atrasado=l[2] == "previsto" and l[4] < dia,
+            atrasado=l[2] == "previsto" and l[4] < dia and not l[16],
             valor_centavos=l[3],
             data=l[4],
             descricao=l[5],
@@ -789,7 +802,10 @@ def _todos(
             versao=l[11],
             pessoa=l[12],
             fonte=l[13] or "app",
-            parece_repetido_de=l[14],
+            recorrencia_id=l[14],
+            ocorrencia=l[15],
+            automatico=l[16],
+            parece_repetido_de=l[17],
         )
         for l in linhas
     ]
@@ -820,7 +836,8 @@ def editar_lancamento(
 
 
 class ContasDaSemana(BaseModel):
-    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."""
+    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
+    automático fica de fora: não pede confirmação."""
 
     lancamentos: list[Lancamento]
 
@@ -831,7 +848,7 @@ def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana
     with conectar(url_do_banco(request)) as conn:
         lancamentos = _todos(
             conn,
-            "situacao = 'previsto' AND data <= %s",
+            "situacao = 'previsto' AND NOT COALESCE(automatico, false) AND data <= %s",
             (ate,),
             ordem="data, criado_em, id",
         )
@@ -872,7 +889,7 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
     if confirmacao.conta_id:
         conferir_conta(conn, confirmacao.conta_id, ja_ligada=confirmacao.conta_id == atual.conta_id)
     momento = _momento(confirmacao.acao_em)
-    versao = _subir_versao(
+    versao = subir_versao(
         conn,
         id,
         atual.versao,
@@ -881,7 +898,7 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
         " alterado_por = %s, alterado_em = %s",
         (confirmacao.valor_centavos, confirmacao.data, confirmacao.conta_id, usuario, momento),
     )
-    _registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
+    registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
     return _um(conn, id)
 
 

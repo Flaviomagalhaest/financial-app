@@ -16,6 +16,7 @@ from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configurac
 from app.migrations import total_aplicadas
 from app.pessoas import router as pessoas
 from app.planejamento import router as planejamento
+from app.recorrencias import router as recorrencias
 from app.transferencias import router as transferencias
 
 
@@ -84,4 +85,5 @@ def create_app(
     app.include_router(transferencias)
     app.include_router(planejamento)
     app.include_router(pessoas)
+    app.include_router(recorrencias)
     return app

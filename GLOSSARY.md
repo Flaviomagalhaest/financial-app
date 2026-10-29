@@ -69,6 +69,18 @@ _Avoid_: motor de sugestão
 Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz).
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 
+**Ocorrência**:
+Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a excluída não volta.
+_Avoid_: instância, repetição
+
+**Horizonte**:
+Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária.
+_Avoid_: janela, limite
+
+**Tarefa diária**:
+Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o horizonte das recorrências e realiza os automáticos do dia. Rodar de novo no mesmo dia não muda nada.
+_Avoid_: job, cron, rotina noturna
+
 **Parcelamento**:
 Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela.
 _Avoid_: compra parcelada, financiamento
