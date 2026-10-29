@@ -26,7 +26,7 @@ class Titular:
 
 
 @dataclass(frozen=True)
-class Cartao:
+class CartaoComTitular:
     id: UUID
     arquivado: bool
     titular: Titular
@@ -47,8 +47,12 @@ def _no_mes(mes: date, dia: int) -> date:
     return mes.replace(day=min(dia, calendar.monthrange(mes.year, mes.month)[1]))
 
 
+def _meses_ate_o_fechamento(titular: Titular) -> int:
+    return 1 if titular.mes_anterior_ao_fechamento else 0
+
+
 def mes_do_fechamento(titular: Titular, mes: date) -> date:
-    return somar_meses(mes, 1 if titular.mes_anterior_ao_fechamento else 0)
+    return somar_meses(mes, _meses_ate_o_fechamento(titular))
 
 
 def datas_padrao(titular: Titular, mes: date) -> tuple[date | None, date | None]:
@@ -66,10 +70,11 @@ def datas_padrao(titular: Titular, mes: date) -> tuple[date | None, date | None]
     return fechamento, vencimento
 
 
-def ler_cartao(conn, id: UUID) -> Cartao | None:
-    """O cartão com o titular das faturas; `None` se o id não é de um cartão."""
+def ler_cartao(conn, id: UUID) -> CartaoComTitular | None:
+    """O cartão com o titular das faturas; `None` se o id não é de um cartão. O adicional de
+    um titular arquivado conta como arquivado."""
     linha = conn.execute(
-        "SELECT c.id, c.arquivado_em IS NOT NULL, t.id, t.nome, t.dia_fechamento,"
+        "SELECT c.id, c.arquivado_em IS NOT NULL OR t.arquivado_em IS NOT NULL, t.id, t.nome, t.dia_fechamento,"
         " t.dia_vencimento, t.mes_anterior_ao_fechamento"
         " FROM cartoes c JOIN cartoes t ON t.id = COALESCE(c.titular_id, c.id)"
         " WHERE c.id = %s",
@@ -78,7 +83,7 @@ def ler_cartao(conn, id: UUID) -> Cartao | None:
     if not linha:
         return None
     id, arquivado, *titular = linha
-    return Cartao(id=id, arquivado=arquivado, titular=Titular(*titular))
+    return CartaoComTitular(id=id, arquivado=arquivado, titular=Titular(*titular))
 
 
 def fechamentos(conn, titular: Titular, meses: list[date]) -> dict[date, date | None]:
@@ -98,7 +103,7 @@ def mes_da_compra(conn, titular: Titular, data: date) -> date:
     """A primeira fatura que fecha depois da data da compra: compra feita no próprio dia do
     fechamento já vai para a seguinte. Começa pela fatura do mês anterior, porque um
     fechamento editado pode ter escorregado para o mês da compra."""
-    primeiro = somar_meses(mes_de(data), -1 - (1 if titular.mes_anterior_ao_fechamento else 0))
+    primeiro = somar_meses(mes_de(data), -1 - _meses_ate_o_fechamento(titular))
     meses = [somar_meses(primeiro, n) for n in range(4)]
     for mes, fechamento in fechamentos(conn, titular, meses).items():
         if fechamento is None:
@@ -108,6 +113,18 @@ def mes_da_compra(conn, titular: Titular, data: date) -> date:
         if fechamento > data:
             return mes
     raise HTTPException(status_code=422, detail="nenhuma fatura fecha depois da compra")
+
+
+def aberta(fechamento: date | None, hoje: date) -> bool:
+    """Fatura aberta: o fechamento ainda não chegou. A importada, sem datas, é fechada."""
+    return fechamento is not None and fechamento > hoje
+
+
+def gravar_datas(conn, titular: Titular, mes: date, fechamento, vencimento) -> None:
+    conn.execute(
+        "UPDATE faturas SET fechamento = %s, vencimento = %s WHERE cartao_id = %s AND mes = %s",
+        (fechamento, vencimento, titular.id, mes),
+    )
 
 
 def garantir_fatura(conn, titular: Titular, mes: date) -> None:

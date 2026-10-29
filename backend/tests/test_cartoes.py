@@ -432,3 +432,49 @@ def test_compra_no_cartao_arquivado_pela_fila_fica_recusada_com_o_motivo(casal: 
             "exclusao": None,
         }
     ]
+
+
+def test_troca_a_mao_recusa_fatura_que_fechou_antes_da_compra(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(cartao, [casal.categoria()], data="2026-04-20", fatura_mes="2026-03-01"),
+    )
+
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "a fatura escolhida fechou antes da compra"
+
+
+def test_fechamento_editado_fica_entre_o_da_fatura_anterior_e_o_da_seguinte(
+    casal: Casal, hoje_10_04
+):
+    cartao = novo_cartao(casal)["id"]
+
+    for fechamento in ["2026-05-25", "2026-03-25"]:
+        resposta = casal.pedir(
+            "flavio",
+            "PATCH",
+            f"/api/cartoes/{cartao}/faturas/2026-04-01",
+            json={"fechamento": fechamento, "vencimento": "2026-06-30"},
+        )
+        assert resposta.status_code == 422, fechamento
+
+
+def test_adicional_de_titular_arquivado_recusa_compra_nova(casal: Casal):
+    titular = novo_cartao(casal)
+    adicional = casal.pedir(
+        "esposa", "POST", "/api/cartoes", json={"nome": "Adicional", "titular_id": titular["id"]}
+    ).json()["id"]
+    casal.pedir(
+        "flavio", "PUT", f"/api/cartoes/{titular['id']}", json=titular | {"arquivado": True}
+    )
+
+    resposta = casal.pedir(
+        "esposa", "POST", "/api/lancamentos", json=lancamento(adicional, [casal.categoria()])
+    )
+
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "cartão arquivado"

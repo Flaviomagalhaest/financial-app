@@ -14,7 +14,7 @@ def aplicar_migrations(url: str | None = None) -> None:
     O DSQL só cria índice com `CREATE INDEX ASYNC`, que o Postgres local e o do CI não
     conhecem: fora do DSQL, o índice é criado na hora.
     """
-    no_dsql = url is None and bool(os.environ.get("DSQL_ENDPOINT"))
+    em_dsql = url is None and bool(os.environ.get("DSQL_ENDPOINT"))
     with conectar(url, autocommit=True, admin=True) as conn:
         ja_aplicadas: set[str] = set()
         if conn.execute("SELECT to_regclass('controle_de_migrations') IS NOT NULL").fetchone()[0]:
@@ -25,7 +25,7 @@ def aplicar_migrations(url: str | None = None) -> None:
             if arquivo.name in ja_aplicadas:
                 continue
             sql = arquivo.read_text()
-            conn.execute(sql if no_dsql else sql.replace("CREATE INDEX ASYNC", "CREATE INDEX"))
+            conn.execute(sql if em_dsql else sql.replace("CREATE INDEX ASYNC", "CREATE INDEX"))
             conn.execute("INSERT INTO controle_de_migrations (nome) VALUES (%s)", (arquivo.name,))
         if os.environ.get("DSQL_ENDPOINT"):
             if papel_arn := os.environ.get("API_ROLE_ARN"):

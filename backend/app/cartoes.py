@@ -22,7 +22,7 @@ class NovoCartao(BaseModel):
     os do titular e as compras dele caem na fatura do titular."""
 
     nome: str = Field(min_length=1)
-    # Opcionais para o cartão inativo do histórico; sem eles, a compra precisa escolher a fatura.
+    # Opcionais para o cartão arquivado do histórico; sem eles, a compra escolhe a fatura.
     dia_fechamento: int | None = Field(default=None, ge=1, le=31)
     dia_vencimento: int | None = Field(default=None, ge=1, le=31)
     limite_centavos: int | None = Field(default=None, gt=0)
@@ -204,7 +204,7 @@ def _faturas(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
             mes=mes,
             fechamento=fechamento,
             vencimento=vencimento,
-            situacao="aberta" if fechamento and fechamento > dia else "fechada",
+            situacao="aberta" if faturas.aberta(fechamento, dia) else "fechada",
         )
         for cartao_id, mes, fechamento, vencimento in conn.execute(
             "SELECT cartao_id, mes, fechamento, vencimento FROM faturas WHERE cartao_id = %s"
@@ -214,7 +214,7 @@ def _faturas(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
     ]
 
 
-def _cartao(conn, id: UUID) -> faturas.Cartao:
+def _cartao(conn, id: UUID) -> faturas.CartaoComTitular:
     cartao = faturas.ler_cartao(conn, id)
     if not cartao:
         raise HTTPException(status_code=404, detail="cartão não encontrado")
@@ -231,12 +231,13 @@ def listar_faturas(id: UUID, usuario: UsuarioLogado, request: Request) -> list[F
 
 def _abertas(conn, titular: faturas.Titular) -> list[date]:
     """Os meses das faturas abertas e futuras: as que ainda não fecharam."""
+    dia = lancamentos.hoje()
     return [
         mes
-        for (mes,) in conn.execute(
-            "SELECT mes FROM faturas WHERE cartao_id = %s AND fechamento > %s ORDER BY mes",
-            (titular.id, lancamentos.hoje()),
+        for mes, fechamento in conn.execute(
+            "SELECT mes, fechamento FROM faturas WHERE cartao_id = %s ORDER BY mes", (titular.id,)
         )
+        if faturas.aberta(fechamento, dia)
     ]
 
 
@@ -244,10 +245,7 @@ def _novo_padrao(conn, titular: faturas.Titular, usuario: str) -> None:
     """As faturas abertas e futuras passam a ter as datas do novo padrão; a fechada nunca muda."""
     abertas = _abertas(conn, titular)
     for mes in abertas:
-        conn.execute(
-            "UPDATE faturas SET fechamento = %s, vencimento = %s WHERE cartao_id = %s AND mes = %s",
-            (*faturas.datas_padrao(titular, mes), titular.id, mes),
-        )
+        faturas.gravar_datas(conn, titular, mes, *faturas.datas_padrao(titular, mes))
     _redistribuir(conn, titular, abertas, usuario)
 
 
@@ -297,10 +295,15 @@ def editar_fatura(
         vencimento = alteracao.vencimento or vencimento
         if fechamento and vencimento and vencimento <= fechamento:
             raise recusar("vencimento antes do fechamento")
-        conn.execute(
-            "UPDATE faturas SET fechamento = %s, vencimento = %s WHERE cartao_id = %s AND mes = %s",
-            (fechamento, vencimento, titular.id, mes),
-        )
+        # A escolha da fatura (`faturas.mes_da_compra`) conta com fechamentos em ordem.
+        anterior, seguinte = faturas.fechamentos(
+            conn, titular, [faturas.somar_meses(mes, -1), faturas.somar_meses(mes, 1)]
+        ).values()
+        if fechamento and (
+            (anterior and fechamento <= anterior) or (seguinte and fechamento >= seguinte)
+        ):
+            raise recusar("fechamento fora do intervalo entre a fatura anterior e a seguinte")
+        faturas.gravar_datas(conn, titular, mes, fechamento, vencimento)
         _redistribuir(conn, titular, sorted({*abertas, mes}), usuario)
         return _faturas(conn, titular.id, mes)[0]
 

@@ -559,25 +559,41 @@ def _onde_conta(
         if lancamento.fatura_mes:
             raise recusar("fatura só em compra no cartão")
         return faturas.mes_de(lancamento.data), None, False
+    if lancamento.fatura_mes:
+        (fechamento,) = faturas.fechamentos(conn, cartao.titular, [lancamento.fatura_mes]).values()
+        if fechamento and fechamento <= lancamento.data:
+            raise recusar("a fatura escolhida fechou antes da compra")
     a_mao = lancamento.fatura_mes or mantida
     mes = a_mao or faturas.mes_da_compra(conn, cartao.titular, lancamento.data)
     faturas.garantir_fatura(conn, cartao.titular, mes)
     return mes, mes, bool(a_mao)
 
 
+def _com_mudancas(atual: Lancamento, mudancas: dict) -> NovoLancamento:
+    """O lançamento com as mudanças; a fatura só vale como troca à mão quando foi pedida."""
+    return NovoLancamento(
+        **atual.model_dump(include=set(NovoLancamento.model_fields))
+        | mudancas
+        | {"fatura_mes": mudancas.get("fatura_mes")}
+    )
+
+
 def _fatura_depois(
-    conn, atual: Lancamento, depois: NovoLancamento, mudados: Iterable[str]
-) -> tuple[date, date | None, bool]:
-    """`_onde_conta` de um lançamento que mudou: só a conta (ou o cartão), a data e a troca de
-    fatura mexem nela, e a troca à mão fica enquanto o cartão não muda."""
+    conn, atual: Lancamento, depois: NovoLancamento, mudancas: dict
+) -> tuple[date, bool]:
+    """O mês em que conta e a marca da troca à mão de um lançamento que mudou: só a conta (ou o
+    cartão), a data e a troca de fatura mexem nela, e a troca à mão fica enquanto o cartão não
+    muda. A fatura que mudou entra em `mudancas`, para a versão por campo (ADR 0011)."""
     (a_mao,) = conn.execute(
         "SELECT COALESCE(fatura_a_mao, false) FROM lancamentos WHERE id = %s", (atual.id,)
     ).fetchone()
-    mudados = set(mudados)
-    if not {"conta_id", "data", "fatura_mes"} & mudados:
-        return atual.mes, atual.fatura_mes, a_mao
-    mantida = atual.fatura_mes if a_mao and "conta_id" not in mudados else None
-    return _onde_conta(conn, depois, mantida)
+    if not {"conta_id", "data", "fatura_mes"} & mudancas.keys():
+        return atual.mes, a_mao
+    mantida = atual.fatura_mes if a_mao and "conta_id" not in mudancas else None
+    mes, fatura_mes, a_mao = _onde_conta(conn, depois, mantida)
+    if fatura_mes != atual.fatura_mes:
+        mudancas["fatura_mes"] = fatura_mes
+    return mes, a_mao
 
 
 def _iguais(campo: Campo, pedido, gravado) -> bool:
@@ -657,16 +673,9 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
         mudancas["situacao"] = situacao_pela_data(mudancas["data"])
     if not mudancas:
         return atual
-    # A fatura do lançamento só vale como troca à mão quando foi pedida.
-    editado = NovoLancamento(
-        **atual.model_dump(include=set(NovoLancamento.model_fields))
-        | mudancas
-        | {"fatura_mes": mudancas.get("fatura_mes")}
-    )
+    editado = _com_mudancas(atual, mudancas)
     _conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
-    mes, fatura_mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
-    if fatura_mes != atual.fatura_mes:
-        mudancas["fatura_mes"] = fatura_mes
+    mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
     versao = subir_versao(
         conn,
         id,
@@ -873,14 +882,7 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
         _conferir_conta_ou_cartao(
             conn, confirmacao.conta_id, confirmacao.conta_id == atual.conta_id
         )
-    confirmado = NovoLancamento(
-        **atual.model_dump(include=set(NovoLancamento.model_fields))
-        | ajustes
-        | {"fatura_mes": None}
-    )
-    mes, fatura_mes, a_mao = _fatura_depois(conn, atual, confirmado, ajustes)
-    if fatura_mes != atual.fatura_mes:
-        ajustes["fatura_mes"] = fatura_mes
+    mes, a_mao = _fatura_depois(conn, atual, _com_mudancas(atual, ajustes), ajustes)
     versao = subir_versao(
         conn,
         id,
