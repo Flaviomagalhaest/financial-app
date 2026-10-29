@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { salvarLancamento, useCadastro, useLancamentos, type LancamentoNaTela } from "../dados";
+import { salvarLancamento, useCadastro, useLancamentos, usePessoas, type LancamentoNaTela } from "../dados";
 import { hoje } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
@@ -11,6 +11,7 @@ type Situacao = LancamentoNaTela["situacao"];
 export function TelaDeLancamento({ id }: { id?: string }) {
   const { contas, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
+  const { pessoas } = usePessoas();
   // A identidade nasce no aparelho: reenviar o mesmo pedido nunca duplica.
   const [novoId] = useState(() => crypto.randomUUID());
   const [existente, setExistente] = useState<LancamentoNaTela | null>(null);
@@ -20,6 +21,8 @@ export function TelaDeLancamento({ id }: { id?: string }) {
   const [categoriaIds, setCategoriaIds] = useState<string[]>([]);
   const [data, setData] = useState(hoje);
   const [descricao, setDescricao] = useState("");
+  // Sem pessoa, o lançamento é do conjunto (do casal).
+  const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
   const [erro, setErro] = useState("");
@@ -41,6 +44,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
     setCategoriaIds(achado.categoria_ids);
     setData(achado.data);
     setDescricao(achado.descricao ?? "");
+    setPessoa(achado.pessoa ?? null);
   }, [id, existente, lancamentos, semDados]);
 
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
@@ -76,6 +80,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
           descricao,
           conta_id: conta,
           categoria_ids: categoriaIds,
+          pessoa,
           ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
           // A tela ainda não edita tags (ticket 78): devolve as que o lançamento já tem.
           tags: existente?.tags ?? [],
@@ -134,6 +139,13 @@ export function TelaDeLancamento({ id }: { id?: string }) {
       </div>
       <details>
         <summary>Detalhes</summary>
+        <div className="alternancia" role="group" aria-label="Pessoa">
+          {[{ id: null, nome: "Conjunto" }, ...pessoas].map((p) => (
+            <button type="button" key={p.id ?? "conjunto"} className={pessoa === p.id ? "" : "secundario"} aria-pressed={pessoa === p.id} onClick={() => setPessoa(p.id)}>
+              {p.nome}
+            </button>
+          ))}
+        </div>
         <label htmlFor="descricao">Descrição</label>
         <input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         <label htmlFor="data">Data</label>

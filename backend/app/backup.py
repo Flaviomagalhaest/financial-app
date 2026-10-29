@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 8
+VERSAO_FORMATO = 9
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -158,6 +158,20 @@ def _da_versao_7_para_a_8(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
     return manifesto, tabelas
 
 
+def _da_versao_8_para_a_9(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 9 (ticket 41) dá ao lançamento a pessoa, a fonte e a conferência do "Parece
+    repetido". Os antigos entram do conjunto (sem pessoa), sem fonte (lida como "app") e sem
+    conferência."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "pessoa" not in colunas:
+        novas = ["pessoa", "fonte", "repetido_mantido_em"]
+        tabelas["lancamentos"] = (
+            colunas + novas,
+            [linha + [None] * len(novas) for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -168,6 +182,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     5: _da_versao_5_para_a_6,
     6: _da_versao_6_para_a_7,
     7: _da_versao_7_para_a_8,
+    8: _da_versao_8_para_a_9,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

@@ -586,6 +586,23 @@
               ],
               "title": "Versao"
             }
+          },
+          {
+            "name": "acao_em",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Acao Em"
+            }
           }
         ],
         "responses": {
@@ -687,6 +704,62 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Conflito"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "O lançamento foi excluído",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exclusao"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lancamentos/{id}/manter-os-dois": {
+      "post": {
+        "summary": "Manter Os Dois",
+        "description": "O casal conferiu o \"Parece repetido\" e os dois lançamentos ficam. Não é uma mudança do\nlançamento: não sobe a versão nem entra no conflito.",
+        "operationId": "manter_os_dois",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lancamento"
                 }
               }
             }
@@ -1388,6 +1461,33 @@
           }
         }
       }
+    },
+    "/api/pessoas": {
+      "get": {
+        "summary": "Listar Pessoas",
+        "operationId": "listar_pessoas",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Pessoa"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Pessoas"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1456,6 +1556,18 @@
               }
             ],
             "title": "Versao"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -1609,6 +1721,29 @@
               }
             ],
             "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -1630,7 +1765,8 @@
               "descricao",
               "conta_id",
               "categoria_ids",
-              "tags"
+              "tags",
+              "pessoa"
             ],
             "title": "Campo"
           },
@@ -1753,6 +1889,18 @@
               }
             ],
             "title": "Conta Id"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -2122,6 +2270,17 @@
             "title": "Tags",
             "default": []
           },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
           "atrasado": {
             "type": "boolean",
             "title": "Atrasado"
@@ -2147,6 +2306,27 @@
             "type": "string",
             "format": "date-time",
             "title": "Alterado Em"
+          },
+          "fonte": {
+            "type": "string",
+            "enum": [
+              "app",
+              "mobills"
+            ],
+            "title": "Fonte",
+            "default": "app"
+          },
+          "parece_repetido_de": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parece Repetido De"
           }
         },
         "type": "object",
@@ -2493,6 +2673,29 @@
             "type": "array",
             "title": "Tags",
             "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -2522,6 +2725,29 @@
           "formato"
         ],
         "title": "PedidoDeExportacao"
+      },
+      "Pessoa": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "eu": {
+            "type": "boolean",
+            "title": "Eu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nome",
+          "eu"
+        ],
+        "title": "Pessoa"
       },
       "Planejamento": {
         "properties": {
