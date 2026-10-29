@@ -36,7 +36,6 @@ COLUNAS_DA_PLANILHA = [
     "criado_por",
     "alterado_por",
 ]
-TABELAS_DA_PLANILHA = {"lancamentos", "contas", "cartoes", "faturas", "categorias", "tags"}
 
 
 @dataclass
@@ -92,16 +91,15 @@ def exportar(s3, bucket: str, usuario: str, formato: Formato, url: str | None = 
 def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
     """Lançamentos com nomes no lugar dos ids, de todo o histórico (sem filtro por período).
 
-    As tabelas de cartões, faturas e tags ainda não existem (tickets 37 e 40): enquanto
-    faltarem, a planilha sai só com o cabeçalho. Ligar a consulta ao esquema real é o ticket 77.
+    As tabelas de contas, cartões, faturas, categorias e tags já existem, mas a pessoa do
+    lançamento ainda não (ticket 41): enquanto a coluna faltar, a planilha sai só com o
+    cabeçalho. Ligar a consulta ao esquema real é o ticket 77, junto com o 41.
     """
-    existentes = {
-        nome
-        for (nome,) in conn.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-        )
-    }
-    if not TABELAS_DA_PLANILHA <= existentes:
+    tem_pessoa = conn.execute(
+        "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'public'"
+        " AND table_name = 'lancamentos' AND column_name = 'pessoa')"
+    ).fetchone()[0]
+    if not tem_pessoa:
         return []
     raise NotImplementedError("consulta da planilha: ticket 77")
 

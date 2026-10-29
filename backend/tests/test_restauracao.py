@@ -185,9 +185,11 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
         assert {
             tabela: conferido["linhas"] for tabela, conferido in manifesto["tabelas"].items()
         } == {
+            "cartoes": 0,
             "categorias": 0,
             "contas": 0,
             "exportacoes": 0,
+            "faturas": 0,
             "lancamento_campos": 0,
             "lancamento_categorias": 0,
             "lancamento_tags": 0,
@@ -291,16 +293,18 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
     with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
         for nome in origem.namelist():
             conteudo = origem.read(nome)
-            if nome == "lancamento_campos.csv":
+            if nome in ("lancamento_campos.csv", "cartoes.csv", "faturas.csv"):
                 continue
             if nome == "lancamentos.csv":
+                # Sem as colunas da versão 7 nem as da 8 (mes e fatura_a_mao), as últimas.
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-3]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-5]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
                 manifesto["versao_formato"] = 6
-                del manifesto["tabelas"]["lancamento_campos"]
+                for tabela in ("lancamento_campos", "cartoes", "faturas"):
+                    del manifesto["tabelas"][tabela]
                 manifesto["tabelas"]["lancamentos"]["somas"] = {"valor_centavos": "1000"}
                 conteudo = json.dumps(manifesto).encode()
             destino.writestr(nome, conteudo)
@@ -312,3 +316,43 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
         assert conn.execute(
             "SELECT valor_centavos, versao, excluido_em FROM lancamentos"
         ).fetchall() == [(1000, None, None)]
+
+
+def test_backup_da_versao_7_sem_cartoes_restaura_cada_lancamento_no_mes_da_data(database_url):
+    # O que `prod` gravava antes do ticket 37: sem cartões nem faturas, e o lançamento sem o mês
+    # em que conta. Antes dos cartões todo lançamento era de conta, e conta no mês da data.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, conta_id,"
+            " criado_por, alterado_por, versao) VALUES ('00000000-0000-0000-0000-000000000001',"
+            " 'despesa', 'realizado', 1000, '2026-03-28', '00000000-0000-0000-0000-000000000002',"
+            " 'flavio', 'flavio', 1)"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome in ("cartoes.csv", "faturas.csv"):
+                continue
+            if nome == "lancamentos.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-2]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 7
+                del manifesto["tabelas"]["cartoes"], manifesto["tabelas"]["faturas"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT mes::text, fatura_a_mao FROM lancamentos").fetchall() == [
+            ("2026-03-01", None)
+        ]
+        assert conn.execute("SELECT count(*) FROM cartoes").fetchone() == (0,)

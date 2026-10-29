@@ -1190,6 +1190,269 @@
           }
         }
       }
+    },
+    "/api/cartoes": {
+      "post": {
+        "summary": "Criar Cartao",
+        "operationId": "criar_cartao",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoCartao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cartao"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Listar Cartoes",
+        "description": "Os arquivados só vêm com `arquivados=true`.",
+        "operationId": "listar_cartoes",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "arquivados",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Arquivados"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Cartao"
+                  },
+                  "title": "Response Listar Cartoes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cartoes/{id}": {
+      "put": {
+        "summary": "Editar Cartao",
+        "description": "Arquivar tira o cartão das opções e mantém o histórico. Mudar o dia padrão ou a regra do\nmês vale só para as faturas abertas e futuras, e redistribui as compras delas.",
+        "operationId": "editar_cartao",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoDeCartao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cartao"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cartoes/{id}/faturas": {
+      "get": {
+        "summary": "Listar Faturas",
+        "description": "As faturas que já nasceram, da mais antiga à mais nova. As do adicional são as do\ntitular.",
+        "operationId": "listar_faturas",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Fatura"
+                  },
+                  "title": "Response Listar Faturas"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cartoes/{id}/faturas/{mes}": {
+      "patch": {
+        "summary": "Editar Fatura",
+        "description": "Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e\nredistribui as compras dela e das abertas e futuras; o mês da fatura não muda.",
+        "operationId": "editar_fatura",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          },
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Mes"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlteracaoDeFatura"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fatura"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1297,6 +1560,37 @@
         "type": "object",
         "title": "AlteracaoDeCategoria",
         "description": "Só o nome e o arquivamento mudam; o tipo é fixo porque os lançamentos dependem dele."
+      },
+      "AlteracaoDeFatura": {
+        "properties": {
+          "fechamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechamento"
+          },
+          "vencimento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vencimento"
+          }
+        },
+        "type": "object",
+        "title": "AlteracaoDeFatura",
+        "description": "Fechamento ou vencimento que escorregou (feriado); o mês da fatura não muda."
       },
       "AlteracaoDeLancamento": {
         "properties": {
@@ -1411,6 +1705,18 @@
               }
             ],
             "title": "Tags"
+          },
+          "fatura_mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatura Mes"
           }
         },
         "type": "object",
@@ -1432,7 +1738,8 @@
               "descricao",
               "conta_id",
               "categoria_ids",
-              "tags"
+              "tags",
+              "fatura_mes"
             ],
             "title": "Campo"
           },
@@ -1470,6 +1777,86 @@
         ],
         "title": "CampoEmConflito",
         "description": "Um campo que o outro lado mudou depois da versão do pedido; o valor dele está no\nlançamento que acompanha o conflito."
+      },
+      "Cartao": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "dia_fechamento": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Fechamento"
+          },
+          "dia_vencimento": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Vencimento"
+          },
+          "limite_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limite Centavos"
+          },
+          "mes_anterior_ao_fechamento": {
+            "type": "boolean",
+            "title": "Mes Anterior Ao Fechamento",
+            "default": false
+          },
+          "titular_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titular Id"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "arquivado": {
+            "type": "boolean",
+            "title": "Arquivado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome",
+          "id",
+          "arquivado"
+        ],
+        "title": "Cartao"
       },
       "Categoria": {
         "properties": {
@@ -1667,6 +2054,86 @@
         "title": "ContasDaSemana",
         "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."
       },
+      "EdicaoDeCartao": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "dia_fechamento": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Fechamento"
+          },
+          "dia_vencimento": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Vencimento"
+          },
+          "limite_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limite Centavos"
+          },
+          "mes_anterior_ao_fechamento": {
+            "type": "boolean",
+            "title": "Mes Anterior Ao Fechamento",
+            "default": false
+          },
+          "titular_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titular Id"
+          },
+          "arquivado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arquivado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome"
+        ],
+        "title": "EdicaoDeCartao"
+      },
       "EdicaoDeConta": {
         "properties": {
           "nome": {
@@ -1792,6 +2259,61 @@
         ],
         "title": "ExportacaoPronta"
       },
+      "Fatura": {
+        "properties": {
+          "cartao_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Cartao Id"
+          },
+          "mes": {
+            "type": "string",
+            "format": "date",
+            "title": "Mes"
+          },
+          "fechamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechamento"
+          },
+          "vencimento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vencimento"
+          },
+          "situacao": {
+            "type": "string",
+            "enum": [
+              "aberta",
+              "fechada"
+            ],
+            "title": "Situacao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cartao_id",
+          "mes",
+          "fechamento",
+          "vencimento",
+          "situacao"
+        ],
+        "title": "Fatura"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1879,6 +2401,23 @@
             "title": "Tags",
             "default": []
           },
+          "fatura_mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatura Mes"
+          },
+          "mes": {
+            "type": "string",
+            "format": "date",
+            "title": "Mes"
+          },
           "atrasado": {
             "type": "boolean",
             "title": "Atrasado"
@@ -1915,6 +2454,7 @@
           "conta_id",
           "categoria_ids",
           "situacao",
+          "mes",
           "atrasado",
           "versao",
           "criado_por",
@@ -2144,6 +2684,76 @@
         ],
         "title": "NovaTransferencia"
       },
+      "NovoCartao": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "dia_fechamento": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Fechamento"
+          },
+          "dia_vencimento": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Vencimento"
+          },
+          "limite_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limite Centavos"
+          },
+          "mes_anterior_ao_fechamento": {
+            "type": "boolean",
+            "title": "Mes Anterior Ao Fechamento",
+            "default": false
+          },
+          "titular_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titular Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome"
+        ],
+        "title": "NovoCartao",
+        "description": "O titular tem os dias padrão, a regra do mês e o limite; o adicional (`titular_id`) usa\nos do titular e as compras dele caem na fatura do titular."
+      },
       "NovoLancamento": {
         "properties": {
           "id": {
@@ -2210,6 +2820,18 @@
             "type": "array",
             "title": "Tags",
             "default": []
+          },
+          "fatura_mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatura Mes"
           }
         },
         "type": "object",
