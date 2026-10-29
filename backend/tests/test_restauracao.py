@@ -321,7 +321,7 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
         ).fetchall() == [(1000, None, None)]
 
 
-def test_backup_da_versao_7_DA_VERSAO_8_restaura_com_os_lancamentos_avulsos(database_url):
+def test_backup_da_versao_7_sem_recorrencias_restaura_com_os_lancamentos_avulsos(database_url):
     # O que `prod` gravava antes do ticket 44: sem as tabelas das recorrências e sem a ligação do
     # lançamento à regra.
     aplicar_migrations(database_url)

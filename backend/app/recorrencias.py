@@ -13,6 +13,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app import lancamentos
+from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import (
@@ -28,9 +29,6 @@ from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
 
-# O DSQL aceita até 3.000 linhas por transação: a geração grava em lotes, com folga.
-LINHAS_POR_LOTE = 1000
-
 
 class NovaRecorrencia(BaseModel):
     id: UUID
@@ -38,7 +36,7 @@ class NovaRecorrencia(BaseModel):
     valor_centavos: int = Field(gt=0)
     # Fixo (o Spotify) ou estimado (o salário, a luz). Só o fixo pode ser automático: o estimado
     # sempre pede confirmação, para o saldo nunca mostrar uma estimativa como real.
-    valor: Literal["fixo", "estimado"]
+    tipo_do_valor: Literal["fixo", "estimado"]
     automatico: bool = False
     descricao: str = ""
     conta_id: UUID
@@ -57,7 +55,7 @@ class NovaRecorrencia(BaseModel):
 
     @model_validator(mode="after")
     def _regra_coerente(self):
-        if self.automatico and self.valor != "fixo":
+        if self.automatico and self.tipo_do_valor != "fixo":
             raise ValueError("só a recorrência de valor fixo pode ser automática")
         if self.ate is not None and self.vezes is not None:
             raise ValueError("a recorrência termina numa data ou depois de N vezes, não nos dois")
@@ -74,7 +72,7 @@ class Recorrencia(NovaRecorrencia):
 
 
 _COLUNAS = (
-    "id, tipo, valor_centavos, valor, automatico, descricao, conta_id, inicio, a_cada, unidade,"
+    "id, tipo, valor_centavos, tipo_do_valor, automatico, descricao, conta_id, inicio, a_cada, unidade,"
     " ate, vezes, criado_por, criado_em, alterado_por, alterado_em"
 )
 _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
@@ -144,6 +142,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
             "SELECT tag_id FROM recorrencia_tags WHERE recorrencia_id = %s", (id,)
         )
     ]
+    # O DSQL aceita até 3.000 linhas por transação: a mesma folga da restauração.
     por_lote = max(1, LINHAS_POR_LOTE // (1 + len(categorias) + len(tags)))
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     proximas: list[tuple[int, date]] = []
@@ -282,14 +281,16 @@ def criar_recorrencia(
             return ja[0]
         conferir_ligacoes(conn, nova)
         tags = ids_das_tags(conn, nova.tags, usuario, set())
-        conn.execute(
+        gravada = conn.execute(
             f"INSERT INTO recorrencias ({_COLUNAS}, geradas)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), 0)",
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), 0)"
+            # Dois reenvios ao mesmo tempo: o segundo fica com a regra que o primeiro gravou.
+            " ON CONFLICT (id) DO NOTHING",
             (
                 nova.id,
                 nova.tipo,
                 nova.valor_centavos,
-                nova.valor,
+                nova.tipo_do_valor,
                 nova.automatico,
                 nova.descricao,
                 nova.conta_id,
@@ -301,7 +302,10 @@ def criar_recorrencia(
                 usuario,
                 usuario,
             ),
-        )
+        ).rowcount
+        if not gravada:
+            response.status_code = 200
+            return _ler(conn, "id = %s", (nova.id,))[0]
         for categoria in nova.categoria_ids:
             conn.execute(
                 "INSERT INTO recorrencia_categorias (recorrencia_id, categoria_id) VALUES (%s, %s)",

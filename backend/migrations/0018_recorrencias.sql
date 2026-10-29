@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS recorrencias (
     id uuid PRIMARY KEY,
     tipo text NOT NULL CHECK (tipo IN ('despesa', 'receita')),
     valor_centavos bigint NOT NULL CHECK (valor_centavos > 0),
-    valor text NOT NULL CHECK (valor IN ('fixo', 'estimado')),
+    tipo_do_valor text NOT NULL CHECK (tipo_do_valor IN ('fixo', 'estimado')),
     automatico boolean NOT NULL,
     descricao text NOT NULL DEFAULT '',
     conta_id uuid NOT NULL,

@@ -404,7 +404,7 @@
       "id": "uuid",
       "tipo": "text",
       "valor_centavos": "bigint",
-      "valor": "text",
+      "tipo_do_valor": "text",
       "automatico": "boolean",
       "descricao": "text",
       "conta_id": "uuid",

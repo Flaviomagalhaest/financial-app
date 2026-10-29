@@ -152,7 +152,7 @@ def _da_versao_7_para_a_8(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
                 "id",
                 "tipo",
                 "valor_centavos",
-                "valor",
+                "tipo_do_valor",
                 "automatico",
                 "descricao",
                 "conta_id",

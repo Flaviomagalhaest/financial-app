@@ -2177,13 +2177,13 @@
             "exclusiveMinimum": 0.0,
             "title": "Valor Centavos"
           },
-          "valor": {
+          "tipo_do_valor": {
             "type": "string",
             "enum": [
               "fixo",
               "estimado"
             ],
-            "title": "Valor"
+            "title": "Tipo Do Valor"
           },
           "automatico": {
             "type": "boolean",
@@ -2265,7 +2265,7 @@
           "id",
           "tipo",
           "valor_centavos",
-          "valor",
+          "tipo_do_valor",
           "conta_id",
           "categoria_ids",
           "inicio",
@@ -2474,13 +2474,13 @@
             "exclusiveMinimum": 0.0,
             "title": "Valor Centavos"
           },
-          "valor": {
+          "tipo_do_valor": {
             "type": "string",
             "enum": [
               "fixo",
               "estimado"
             ],
-            "title": "Valor"
+            "title": "Tipo Do Valor"
           },
           "automatico": {
             "type": "boolean",
@@ -2580,7 +2580,7 @@
           "id",
           "tipo",
           "valor_centavos",
-          "valor",
+          "tipo_do_valor",
           "conta_id",
           "categoria_ids",
           "inicio",

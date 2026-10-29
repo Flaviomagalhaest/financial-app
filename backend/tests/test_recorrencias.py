@@ -23,7 +23,7 @@ def recorrencia(conta: str, categorias: list[str], **campos) -> dict:
         "id": str(uuid4()),
         "tipo": "despesa",
         "valor_centavos": 18990,
-        "valor": "estimado",
+        "tipo_do_valor": "estimado",
         "descricao": "Luz",
         "conta_id": conta,
         "categoria_ids": categorias,
@@ -108,7 +108,7 @@ def test_automatico_de_valor_fixo_ja_realiza_o_que_passou_e_nao_pede_confirmacao
         [assinatura],
         descricao="Spotify",
         valor_centavos=2190,
-        valor="fixo",
+        tipo_do_valor="fixo",
         automatico=True,
         inicio="2026-10-05",
     )
@@ -133,7 +133,7 @@ def test_automatico_de_valor_fixo_ja_realiza_o_que_passou_e_nao_pede_confirmacao
 
 def test_recorrencia_de_valor_estimado_nao_pode_ser_automatica(casal: Casal):
     conta, salario = casal.conta(), casal.categoria("Salário", "receita")
-    nova = recorrencia(conta, [salario], tipo="receita", valor="estimado", automatico=True)
+    nova = recorrencia(conta, [salario], tipo="receita", tipo_do_valor="estimado", automatico=True)
 
     resposta = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
 
@@ -232,7 +232,7 @@ def test_tarefa_diaria_realiza_o_automatico_na_data_e_deixa_o_estimado_pedindo_c
         [assinatura],
         descricao="Spotify",
         valor_centavos=2190,
-        valor="fixo",
+        tipo_do_valor="fixo",
         automatico=True,
         inicio="2026-11-05",
     )
@@ -269,7 +269,7 @@ def test_tarefa_diaria_nao_traz_de_volta_nem_realiza_o_previsto_excluido(
 ):
     conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
     spotify = recorrencia(
-        conta, [assinatura], valor="fixo", automatico=True, inicio="2026-11-05", vezes=2
+        conta, [assinatura], tipo_do_valor="fixo", automatico=True, inicio="2026-11-05", vezes=2
     )
     casal.pedir("flavio", "POST", "/api/recorrencias", json=spotify)
     novembro = gerados(casal, spotify["id"])[0]

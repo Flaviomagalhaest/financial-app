@@ -752,10 +752,10 @@ export interface components {
             /** Valor Centavos */
             valor_centavos: number;
             /**
-             * Valor
+             * Tipo Do Valor
              * @enum {string}
              */
-            valor: "fixo" | "estimado";
+            tipo_do_valor: "fixo" | "estimado";
             /**
              * Automatico
              * @default false
@@ -896,10 +896,10 @@ export interface components {
             /** Valor Centavos */
             valor_centavos: number;
             /**
-             * Valor
+             * Tipo Do Valor
              * @enum {string}
              */
-            valor: "fixo" | "estimado";
+            tipo_do_valor: "fixo" | "estimado";
             /**
              * Automatico
              * @default false
