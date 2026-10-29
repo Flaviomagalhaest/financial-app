@@ -502,3 +502,41 @@ def test_backup_da_versao_11_sem_cartoes_restaura_cada_lancamento_no_mes_da_data
             ("2026-03-01", None)
         ]
         assert conn.execute("SELECT count(*) FROM cartoes").fetchone() == (0,)
+
+
+def test_backup_da_versao_12_sem_o_mes_da_fatura_na_transferencia_restaura_sem_fatura(
+    database_url,
+):
+    # O que `prod` gravava antes do ticket 38: nenhuma transferência ia para um cartão.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO transferencias (id, situacao, valor_centavos, data, conta_origem_id,"
+            " conta_destino_id, criado_por, alterado_por)"
+            " VALUES ('00000000-0000-0000-0000-000000000001', 'realizado', 3000, '2026-03-28',"
+            " '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003',"
+            " 'flavio', 'flavio')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM transferencias")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "transferencias.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-1]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 12
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT valor_centavos, fatura_mes FROM transferencias").fetchall() == [
+            (3000, None)
+        ]

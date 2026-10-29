@@ -15,6 +15,6 @@ A **transferência** (dinheiro de uma conta do casal para outra) tem duas contas
 
 - As somas de despesa e receita (planejamento, estatísticas, resumo da busca) não precisam excluir transferências: elas nem estão na tabela.
 - Busca, histórico, edição em lote e o CSV de planilha terão de juntar as duas tabelas para mostrar a transferência (tickets 24, 57 e 59).
-- O pagamento de fatura (ticket 38) é uma transferência de uma conta para um cartão e parte desta tabela.
+- O pagamento de fatura (ticket 38) é uma transferência de uma conta para um cartão e parte desta tabela: o cartão fica em `conta_destino_id` (como a compra guarda o cartão em `conta_id`, ADR 0015) e a coluna `fatura_mes` diz a fatura que ele quita. Não tem categoria, e o saldo do cartão nunca entra em `contas`.
 - A categoria da transferência é uma só e opcional, da lista de transferência; não há tabela de associação.
 - Reverter é migrar as linhas para um tipo novo em `lancamentos`, o que o DSQL só permite criando outra tabela.

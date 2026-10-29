@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 12
+VERSAO_FORMATO = 13
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -267,6 +267,15 @@ def _da_versao_11_para_a_12(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_12_para_a_13(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 13 (ticket 38) dá à transferência o mês da fatura que o pagamento de fatura
+    quita. Antes dela nenhuma transferência ia para um cartão."""
+    colunas, linhas = tabelas["transferencias"]
+    if "fatura_mes" not in colunas:
+        tabelas["transferencias"] = ([*colunas, "fatura_mes"], [[*linha, None] for linha in linhas])
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -281,6 +290,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     9: _da_versao_9_para_a_10,
     10: _da_versao_10_para_a_11,
     11: _da_versao_11_para_a_12,
+    12: _da_versao_12_para_a_13,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
