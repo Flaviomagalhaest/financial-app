@@ -48,9 +48,18 @@ class DadosDoParcelamento(BaseModel):
     tags: list[str] = []
     # O id de uma pessoa do casal, que as parcelas herdam; sem ela, é do conjunto.
     pessoa: str | None = None
+    # A escolha do item do planejamento, pela categoria dele, com que as parcelas nascem
+    # (ADR 0006).
+    item_categoria_id: UUID | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
+
+    @model_validator(mode="after")
+    def _item_de_uma_das_categorias(self):
+        if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
+            raise ValueError(lancamentos.ITEM_FORA_DAS_CATEGORIAS)
+        return self
 
 
 class NovoParcelamento(DadosDoParcelamento):
@@ -86,7 +95,7 @@ class Parcelamento(DadosDoParcelamento):
 
 _COLUNAS = (
     "id, valor_total_centavos, parcelas, data, automatico, descricao, conta_id, pessoa,"
-    " criado_por, criado_em, alterado_por, alterado_em"
+    " criado_por, criado_em, alterado_por, alterado_em, item_categoria_id"
 )
 _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
 
@@ -176,8 +185,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         gravado = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
             " conta_id, criado_por, alterado_por, versao, parcelamento_id, parcela, automatico,"
-            " pessoa, fonte, mes)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s)"
+            " pessoa, fonte, mes, item_categoria_id)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s, %s)"
             " ON CONFLICT (id) DO NOTHING",
             (
                 lancamento_id,
@@ -194,6 +203,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 regra.automatico,
                 regra.pessoa,
                 mes,
+                regra.item_categoria_id,
             ),
         ).rowcount
         if not gravado:
@@ -257,7 +267,7 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
     tags = ids_das_tags(conn, novo.tags, usuario, set())
     gravado = conn.execute(
         f"INSERT INTO parcelamentos ({_COLUNAS}, geradas)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), 0)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, 0)"
         # Dois reenvios ao mesmo tempo: o segundo fica com o que o primeiro gravou.
         " ON CONFLICT (id) DO NOTHING",
         (
@@ -271,6 +281,7 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
             novo.pessoa,
             usuario,
             usuario,
+            novo.item_categoria_id,
         ),
     ).rowcount
     if not gravado:

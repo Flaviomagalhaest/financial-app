@@ -834,7 +834,7 @@
     "/api/categorias/{id}/juntar": {
       "post": {
         "summary": "Juntar Categoria",
-        "description": "Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,\ndo mesmo tipo, e exclui a origem.",
+        "description": "Move os lançamentos, as recorrências, as transferências, os itens do planejamento e as\nescolhas de item da categoria para o destino, do mesmo tipo, e exclui a origem.",
         "operationId": "juntar_categoria",
         "security": [
           {
@@ -2207,6 +2207,43 @@
   },
   "components": {
     "schemas": {
+      "AEscolher": {
+        "properties": {
+          "lancamento_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Lancamento Id"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
+          "categorias_com_item": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Categorias Com Item"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lancamento_id",
+          "item_categoria_id",
+          "categorias_com_item"
+        ],
+        "title": "AEscolher",
+        "description": "Lançamento com duas ou mais categorias com item no mês e sem escolha explícita."
+      },
       "AcaoCriar": {
         "properties": {
           "acao": {
@@ -2522,6 +2559,18 @@
             ],
             "title": "Fatura Mes"
           },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
           "acao_em": {
             "anyOf": [
               {
@@ -2610,7 +2659,7 @@
             ],
             "title": "Pessoa"
           },
-          "item_id": {
+          "item_categoria_id": {
             "anyOf": [
               {
                 "type": "string",
@@ -2620,7 +2669,7 @@
                 "type": "null"
               }
             ],
-            "title": "Item Id"
+            "title": "Item Categoria Id"
           },
           "a_cada": {
             "type": "integer",
@@ -2686,7 +2735,8 @@
               "categoria_ids",
               "tags",
               "pessoa",
-              "fatura_mes"
+              "fatura_mes",
+              "item_categoria_id"
             ],
             "title": "Campo"
           },
@@ -3508,6 +3558,18 @@
             ],
             "title": "Estorno De"
           },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
           "mes": {
             "type": "string",
             "format": "date",
@@ -3925,7 +3987,7 @@
             ],
             "title": "Vezes"
           },
-          "item_id": {
+          "item_categoria_id": {
             "anyOf": [
               {
                 "type": "string",
@@ -3935,7 +3997,7 @@
                 "type": "null"
               }
             ],
-            "title": "Item Id"
+            "title": "Item Categoria Id"
           }
         },
         "type": "object",
@@ -4246,6 +4308,18 @@
             ],
             "title": "Estorno De"
           },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
           "acao_em": {
             "anyOf": [
               {
@@ -4331,6 +4405,18 @@
               }
             ],
             "title": "Pessoa"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
           },
           "valor_total_centavos": {
             "anyOf": [
@@ -4440,6 +4526,18 @@
             ],
             "title": "Pessoa"
           },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
           "valor_total_centavos": {
             "type": "integer",
             "title": "Valor Total Centavos"
@@ -4535,6 +4633,14 @@
             },
             "type": "array",
             "title": "Itens"
+          },
+          "a_escolher": {
+            "items": {
+              "$ref": "#/components/schemas/AEscolher"
+            },
+            "type": "array",
+            "title": "A Escolher",
+            "default": []
           },
           "ainda_da_para_gastar_centavos": {
             "type": "integer",
@@ -4667,7 +4773,7 @@
             ],
             "title": "Vezes"
           },
-          "item_id": {
+          "item_categoria_id": {
             "anyOf": [
               {
                 "type": "string",
@@ -4677,7 +4783,7 @@
                 "type": "null"
               }
             ],
-            "title": "Item Id"
+            "title": "Item Categoria Id"
           },
           "ocorrencia_do_inicio": {
             "type": "integer",

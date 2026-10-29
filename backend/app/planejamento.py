@@ -10,12 +10,18 @@ from pydantic import BaseModel, Field
 
 from app import faturas
 from app.banco import conectar, em_transacao
+from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import recusar, url_do_banco
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
 
 Mes = Annotated[str, Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", examples=["2026-10"])]
+
+
+# O lançamento `l` do mês: pelo índice do mês; o de antes da migration 0034 sem mês, pela data.
+# Parâmetros: o primeiro dia do mês, ele de novo e o primeiro dia do mês seguinte.
+_DO_MES = "(l.mes = %s OR (l.mes IS NULL AND l.data >= %s AND l.data < %s))"
 
 
 def primeiro_dia(mes: str) -> date:
@@ -45,9 +51,20 @@ class ItemDoPlanejamento(BaseModel):
     ainda_da_para_gastar_centavos: int
 
 
+class AEscolher(BaseModel):
+    """Lançamento com duas ou mais categorias com item no mês e sem escolha explícita."""
+
+    lancamento_id: UUID
+    # A categoria do item em que ele conta enquanto o casal não escolhe: o item em que já estava
+    # quando a ambiguidade surgiu, ou nenhum.
+    item_categoria_id: UUID | None
+    categorias_com_item: list[UUID]
+
+
 class Planejamento(BaseModel):
     mes: str
     itens: list[ItemDoPlanejamento]
+    a_escolher: list[AEscolher] = []
     # A soma do que falta em cada item, sem compensar item estourado com a sobra de outro, menos
     # os ajustes de fatura do mês (ADR 0008): eles saíram do bolso mas não são de item nenhum.
     # Não fica abaixo de zero.
@@ -74,35 +91,46 @@ class MudancaDeItem(BaseModel):
 
 
 def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID]):
-    """(item, situacao, valor) de cada lançamento e transferência do mês que conta em um item:
-    automaticamente, quando só uma das categorias dele tem item no mês. O lançamento com mais de
-    uma (a escolha é do ticket 51) ainda não conta em nenhum. O lançamento entra pelo mês em que
+    """(item, situacao, valor) de cada lançamento e transferência do mês que conta em um item,
+    e os lançamentos "a escolher" (`item_em_que_conta`). O lançamento entra pelo mês em que
     conta, que no cartão é o da fatura (ADR 0003); a transferência, pela data."""
     ate = _proximo_mes(mes)
     movimentos: list[tuple[UUID, str, int]] = []
-    por_lancamento: dict[UUID, tuple[str, int, set[UUID]]] = {}
-    for id, situacao, valor, categoria_id in conn.execute(
+    a_escolher: list[AEscolher] = []
+    por_lancamento: dict[UUID, tuple[str, int, UUID | None, UUID | None, set[UUID]]] = {}
+    for id, situacao, valor, escolhida, atual, categoria_id in conn.execute(
         "SELECT l.id, l.situacao,"
         # O estorno diminui o item da compra que ele devolve.
         " CASE WHEN l.estorno_de IS NULL THEN l.valor_centavos ELSE -l.valor_centavos END,"
+        " l.item_categoria_id, l.item_atual_categoria_id,"
         " lc.categoria_id FROM lancamentos l"
         " JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"
-        # Pelo índice do mês; o de antes da migration 0034 sem mês, pela data.
         " WHERE l.excluido_em IS NULL AND lc.categoria_id = ANY(%s)"
-        " AND (l.mes = %s OR (l.mes IS NULL AND l.data >= %s AND l.data < %s))",
+        f" AND {_DO_MES} ORDER BY l.data, l.criado_em, l.id",
         (list(categorias_com_item), mes, mes, ate),
     ):
-        por_lancamento.setdefault(id, (situacao, valor, set()))[2].add(categoria_id)
-    for situacao, valor, categorias in por_lancamento.values():
-        if len(categorias) == 1:
-            movimentos.append((categorias_com_item[next(iter(categorias))], situacao, valor))
+        por_lancamento.setdefault(id, (situacao, valor, escolhida, atual, set()))[4].add(
+            categoria_id
+        )
+    for id, (situacao, valor, escolhida, atual, com_item) in por_lancamento.items():
+        conta_em, fica_a_escolher = onde_conta(com_item, escolhida, atual)
+        if conta_em:
+            movimentos.append((categorias_com_item[conta_em], situacao, valor))
+        if fica_a_escolher:
+            a_escolher.append(
+                AEscolher(
+                    lancamento_id=id,
+                    item_categoria_id=conta_em,
+                    categorias_com_item=sorted(com_item),
+                )
+            )
     for situacao, valor, categoria_id in conn.execute(
         "SELECT situacao, valor_centavos, categoria_id FROM transferencias"
         " WHERE data >= %s AND data < %s AND categoria_id = ANY(%s)",
         (mes, ate, list(categorias_com_item)),
     ):
         movimentos.append((categorias_com_item[categoria_id], situacao, valor))
-    return movimentos
+    return movimentos, a_escolher
 
 
 def _ler(conn, mes: str) -> Planejamento:
@@ -114,8 +142,10 @@ def _ler(conn, mes: str) -> Planejamento:
     ).fetchall()
     item_da_categoria = {categoria_id: id for id, categoria_id, _ in linhas}
     somas: dict[UUID, dict[str, int]] = {id: {"realizado": 0, "previsto": 0} for id, _, _ in linhas}
+    a_escolher: list[AEscolher] = []
     if linhas:
-        for item, situacao, valor in _movimentos_por_item(conn, dia, item_da_categoria):
+        movimentos, a_escolher = _movimentos_por_item(conn, dia, item_da_categoria)
+        for item, situacao, valor in movimentos:
             somas[item][situacao] += valor
     itens = [
         ItemDoPlanejamento(
@@ -135,6 +165,7 @@ def _ler(conn, mes: str) -> Planejamento:
     return Planejamento(
         mes=mes,
         itens=itens,
+        a_escolher=a_escolher,
         ainda_da_para_gastar_centavos=max(
             sum(max(i.ainda_da_para_gastar_centavos, 0) for i in itens) - ajustes, 0
         ),
@@ -266,6 +297,13 @@ def criar_item(
             (dia, novo.categoria_id),
         ).fetchone():
             raise HTTPException(status_code=409, detail="a categoria já tem item neste mês")
+        # O lançamento que já contava em outro item fica nele: o novo só cria a ambiguidade.
+        guardar_item_atual(
+            conn,
+            f"{_DO_MES} AND l.id IN (SELECT lancamento_id FROM lancamento_categorias"
+            " WHERE categoria_id = %s)",
+            (dia, dia, _proximo_mes(dia), novo.categoria_id),
+        )
         conn.execute(
             "INSERT INTO itens_do_planejamento (id, mes, categoria_id, valor_centavos,"
             " criado_por, alterado_por) VALUES (%s, %s, %s, %s, %s, %s)",

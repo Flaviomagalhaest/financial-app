@@ -156,7 +156,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
     assert primeira.json() | {"criado_em": None, "alterado_em": None} == nova | {
         "automatico": False,
         "ate": None,
-        "item_id": None,
+        "item_categoria_id": None,
         "ocorrencia_do_inicio": 1,
         "criado_por": "flavio",
         "alterado_por": "flavio",
@@ -513,16 +513,23 @@ def test_pular_um_mes_e_excluir_o_previsto_e_ele_nao_volta_por_mudanca_nem_pela_
 
 
 def test_recorrencia_guarda_o_item_do_planejamento_e_mudar_troca_ou_tira(casal: Casal):
-    conta, luz, item = casal.conta(), casal.categoria("Luz"), str(uuid4())
-    nova = recorrencia(conta, [luz], item_id=item, vezes=2)
+    conta, luz, casa = casal.conta(), casal.categoria("Luz"), casal.categoria("Casa")
+    nova = recorrencia(conta, [luz, casa], item_categoria_id=luz, vezes=2)
 
     criada = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
 
-    assert criada.json()["item_id"] == item
-    outro = str(uuid4())
-    assert mudar(casal, nova["id"], 1, item_id=outro).json()["item_id"] == outro
-    assert mudar(casal, nova["id"], 1, item_id=None).json()["item_id"] is None
-    assert mudar(casal, nova["id"], 1, valor_centavos=1000).json()["item_id"] is None
+    assert criada.json()["item_categoria_id"] == luz
+    assert mudar(casal, nova["id"], 1, item_categoria_id=casa).json()["item_categoria_id"] == casa
+    assert [p["item_categoria_id"] for p in gerados(casal, nova["id"])] == [casa, casa]
+    assert mudar(casal, nova["id"], 2, item_categoria_id=None).json()["item_categoria_id"] is None
+    assert [p["item_categoria_id"] for p in gerados(casal, nova["id"])] == [casa, None]
+    assert mudar(casal, nova["id"], 1, valor_centavos=1000).json()["item_categoria_id"] is None
+    # A escolha sai com a categoria dela.
+    mudar(casal, nova["id"], 1, item_categoria_id=luz)
+    sem_luz = mudar(casal, nova["id"], 1, categoria_ids=[casa])
+    assert (sem_luz.status_code, sem_luz.json()["item_categoria_id"]) == (200, None)
+    fora = mudar(casal, nova["id"], 1, item_categoria_id=luz)
+    assert fora.status_code == 422
 
 
 def test_mudar_o_calendario_daqui_para_frente_renumera_sem_mexer_no_passado(

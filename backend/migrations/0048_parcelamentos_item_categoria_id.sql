@@ -1,0 +1,1 @@
+ALTER TABLE parcelamentos ADD COLUMN IF NOT EXISTS item_categoria_id uuid

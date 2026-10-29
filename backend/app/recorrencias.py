@@ -55,9 +55,9 @@ class NovaRecorrencia(BaseModel):
     # Sem os dois, não tem fim; `ate` é a última data possível e `vezes`, o número de ocorrências.
     ate: date | None = None
     vezes: int | None = Field(default=None, ge=1)
-    # O item do planejamento em que os previstos contam, quando o casal o escolheu (ADR 0006); os
-    # previstos herdam a escolha assim que o lançamento passar a guardá-la (ticket 51).
-    item_id: UUID | None = None
+    # A escolha do item do planejamento, pela categoria dele, com que os previstos nascem
+    # (ADR 0006); vale em qualquer mês, como a do lançamento.
+    item_categoria_id: UUID | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
@@ -70,6 +70,8 @@ class NovaRecorrencia(BaseModel):
             raise ValueError("a recorrência termina numa data ou depois de N vezes, não nos dois")
         if self.ate is not None and self.ate < self.inicio:
             raise ValueError("a data de fim vem antes do início")
+        if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
+            raise ValueError(lancamentos.ITEM_FORA_DAS_CATEGORIAS)
         return self
 
 
@@ -100,7 +102,8 @@ class AlteracaoDeRecorrencia(BaseModel):
     categoria_ids: list[UUID] = Field(default=None, min_length=1)
     tags: list[str] = Field(default=None)
     pessoa: str | None = None
-    item_id: UUID | None = None
+    # Vazio tira a escolha; ela também sai com a categoria dela.
+    item_categoria_id: UUID | None = None
     # Mudar o calendário daqui para frente: a ocorrência `a_partir_da_ocorrencia` cai em `inicio`
     # (sem ele, na data que já tinha) e as seguintes, a cada N semanas ou meses.
     a_cada: int = Field(default=None, ge=1)
@@ -121,7 +124,11 @@ _GRAVADAS = (
 )
 # Recorrência de antes do ticket 45 não tem a ocorrência do início: é a 1ª.
 _COLUNAS = f"{_GRAVADAS}, COALESCE(ocorrencia_do_inicio, 1)"
-_NOMES_DAS_COLUNAS = [*_GRAVADAS.replace(" ", "").split(","), "ocorrencia_do_inicio"]
+# A coluna `item_id` (migration 0039, ticket 45) guarda a categoria do item escolhido.
+_NOMES_DAS_COLUNAS = [
+    *_GRAVADAS.replace(" ", "").replace("item_id", "item_categoria_id").split(","),
+    "ocorrencia_do_inicio",
+]
 
 
 def mais_meses(dia: date, meses: int) -> date:
@@ -202,8 +209,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         gravado = conn.execute(
             "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
             " conta_id, criado_por, alterado_por, versao, recorrencia_id, ocorrencia, automatico,"
-            " pessoa, fonte, mes)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s)"
+            " pessoa, fonte, mes, item_categoria_id)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s, %s)"
             " ON CONFLICT (id) DO NOTHING",
             (
                 lancamento_id,
@@ -221,6 +228,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 regra.pessoa,
                 # No cartão, o mês da fatura em que o previsto cai (ADR 0003).
                 lancamentos.mes_em_que_conta(conn, regra.conta_id, dia),
+                regra.item_categoria_id,
             ),
         ).rowcount
         if not gravado:
@@ -270,6 +278,7 @@ def _campos_da_regra(nova: NovaRecorrencia) -> dict:
         "pessoa": nova.pessoa,
         "categoria_ids": set(nova.categoria_ids),
         "tags": {tag.casefold() for tag in nova.tags},
+        "item_categoria_id": nova.item_categoria_id,
     }
 
 
@@ -333,7 +342,7 @@ def criar_recorrencia(
                 usuario,
                 usuario,
                 nova.pessoa,
-                nova.item_id,
+                nova.item_categoria_id,
             ),
         ).rowcount
         if not gravada:
@@ -382,7 +391,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     [regra] = _ler(conn, "id = %s", (id,))
     previstos = conn.execute(
         f"SELECT l.id, l.ocorrencia, l.data, l.tipo, l.valor_centavos, l.descricao, l.conta_id,"
-        f" l.pessoa, COALESCE(l.automatico, false), {lancamentos.VERSAO},"
+        f" l.pessoa, COALESCE(l.automatico, false), {lancamentos.VERSAO}, l.item_categoria_id,"
         " EXISTS (SELECT FROM lancamento_campos c WHERE c.lancamento_id = l.id"
         " AND c.origem IS NULL)"
         " FROM lancamentos l WHERE l.recorrencia_id = %s"
@@ -417,6 +426,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         pessoa,
         automatico,
         versao,
+        item_categoria_id,
         a_mao,
     ) in previstos:
         if _fora_do_fim(regra, n, dia):
@@ -433,6 +443,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             "data": dia,
             "categoria_ids": categorias.get(lancamento_id, set()),
             "tags": tags.get(lancamento_id, set()),
+            "item_categoria_id": item_categoria_id,
         }
         # Antes da última mudança de calendário a regra não sabe mais a data: fica a que tem.
         dia_novo = data_da_ocorrencia(regra, n) if n >= regra.ocorrencia_do_inicio else dia
@@ -453,7 +464,8 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             lancamento_id,
             versao,
             "tipo = %s, valor_centavos = %s, descricao = %s, conta_id = %s, pessoa = %s,"
-            " data = %s, automatico = %s, mes = %s, alterado_por = %s, alterado_em = %s",
+            " data = %s, automatico = %s, mes = %s, item_categoria_id = %s, alterado_por = %s,"
+            " alterado_em = %s",
             (
                 regra.tipo,
                 regra.valor_centavos,
@@ -463,6 +475,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
                 dia,
                 regra.automatico,
                 lancamentos.mes_em_que_conta(conn, regra.conta_id, dia),
+                regra.item_categoria_id,
                 usuario,
                 agora,
             ),
@@ -508,6 +521,8 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeRecorrencia, usuario: str) -> R
             raise recusar("o calendário já mudou depois dessa ocorrência")
         pedidas.setdefault("inicio", data_da_ocorrencia(atual, n))
         pedidas["ocorrencia_do_inicio"] = n
+    if atual.item_categoria_id not in pedidas.get("categoria_ids", [atual.item_categoria_id]):
+        pedidas.setdefault("item_categoria_id", None)  # a escolha sai com a categoria dela
     try:
         nova = Recorrencia(**(atual.model_dump() | pedidas))
     except ValidationError as erro:
@@ -529,7 +544,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeRecorrencia, usuario: str) -> R
             nova.descricao,
             nova.conta_id,
             nova.pessoa,
-            nova.item_id,
+            nova.item_categoria_id,
             nova.inicio,
             nova.a_cada,
             nova.unidade,

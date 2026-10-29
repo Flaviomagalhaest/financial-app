@@ -28,7 +28,7 @@ export const LISTA = "/api/lancamentos";
 /** O mesmo limite do servidor (`LIMITE_DO_LOTE`). */
 const LIMITE_DO_LOTE = 100;
 /** Os campos que o servidor versiona um a um (`CAMPOS` em `lancamentos.py`). */
-export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags", "pessoa", "fatura_mes"];
+export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags", "pessoa", "fatura_mes", "item_categoria_id"];
 
 type Proximo = Omit<ItemDaFila, "id" | "desde" | "revisao"> | null;
 
@@ -57,8 +57,9 @@ export function alteracao(lancamento: NovoLancamento, base: Base | undefined): A
   const mudou: Record<string, unknown> = {};
   for (const campo of CAMPOS) {
     const valor = lancamento[campo];
-    // Sem fatura, o servidor escolhe; mandar a fatura é trocá-la à mão.
-    if ((campo === "situacao" || campo === "fatura_mes") && !valor) continue;
+    // Sem fatura, o servidor escolhe; mandar a fatura é trocá-la à mão. Sem escolha de item, a
+    // que o servidor tem fica (ela sai com a categoria dela).
+    if ((campo === "situacao" || campo === "fatura_mes" || campo === "item_categoria_id") && !valor) continue;
     // O servidor lê `pessoa` ausente como "fica" e vazia como "do conjunto".
     if (!base || comparavel(campo, valor) !== comparavel(campo, base[campo])) mudou[campo] = campo === "pessoa" ? (valor ?? "") : valor;
   }
