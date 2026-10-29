@@ -276,7 +276,8 @@ export interface paths {
         put?: never;
         /**
          * Juntar Categoria
-         * @description Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem.
+         * @description Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,
+         *     do mesmo tipo, e exclui a origem.
          */
         post: operations["juntar_categoria"];
         delete?: never;
@@ -384,6 +385,61 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Planejamento */
+        get: operations["ler_planejamento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}/itens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Criar Item */
+        post: operations["criar_item_do_planejamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/itens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir Item
+         * @description Idempotente. Os lançamentos ficam como estão: só deixam de contar no item.
+         */
+        delete: operations["excluir_item_do_planejamento"];
+        options?: never;
+        head?: never;
+        /** Mudar Item */
+        patch: operations["mudar_item_do_planejamento"];
         trace?: never;
     };
     "/api/pessoas": {
@@ -647,6 +703,29 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** ItemDoPlanejamento */
+        ItemDoPlanejamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Planejado Centavos */
+            planejado_centavos: number;
+            /** Realizado Centavos */
+            realizado_centavos: number;
+            /** Previsto Centavos */
+            previsto_centavos: number;
+            /** Percentual */
+            percentual: number;
+            /** Ainda Da Para Gastar Centavos */
+            ainda_da_para_gastar_centavos: number;
+        };
         /** Juncao */
         Juncao: {
             /**
@@ -730,6 +809,11 @@ export interface components {
             /** Acoes */
             acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"])[];
         };
+        /** MudancaDeItem */
+        MudancaDeItem: {
+            /** Valor Centavos */
+            valor_centavos: number;
+        };
         /** MudancaDeTag */
         MudancaDeTag: {
             /** Nome */
@@ -800,6 +884,21 @@ export interface components {
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
         };
+        /** NovoItem */
+        NovoItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+        };
         /** NovoLancamento */
         NovoLancamento: {
             /**
@@ -859,6 +958,15 @@ export interface components {
             nome: string;
             /** Eu */
             eu: boolean;
+        };
+        /** Planejamento */
+        Planejamento: {
+            /** Mes */
+            mes: string;
+            /** Itens */
+            itens: components["schemas"]["ItemDoPlanejamento"][];
+            /** Ainda Da Para Gastar Centavos */
+            ainda_da_para_gastar_centavos: number;
         };
         /**
          * Resultado
@@ -1861,6 +1969,136 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Planejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    criar_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoItem"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mudar_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MudancaDeItem"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
             };
             /** @description Validation Error */
             422: {

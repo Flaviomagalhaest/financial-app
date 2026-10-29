@@ -55,6 +55,10 @@ Previsto e realizado ([ADR 0004](docs/adr/0004-previsto-e-situacao-do-lancamento
 
 `backend/app/transferencias.py` registra a transferência entre duas contas ([ADR 0014](docs/adr/0014-transferencia-em-tabela-propria.md)). A conta guarda o saldo de abertura (valor e data) e pode ser arquivada (`PUT /api/contas/{id}`); `GET /api/contas` devolve `saldo_centavos` (abertura mais os realizados depois da data) e esconde as arquivadas, salvo com `?arquivadas=true`. Só a API existe: as telas são do ticket 74.
 
+## Planejamento
+
+`backend/app/planejamento.py` guarda os itens do planejamento de cada mês: uma categoria (de despesa, receita ou transferência) e um valor, no máximo um item por categoria e mês. `POST /api/planejamento/{mes}/itens` cria (reenviar o mesmo id devolve o gravado), `PATCH` e `DELETE /api/planejamento/itens/{id}` mudam o valor e excluem, e `GET /api/planejamento/{mes}` (`AAAA-MM`) devolve o mês numa chamada só, já somado: por item o planejado, o realizado, o previsto (inclusive o atrasado), a porcentagem `(realizado + previsto) / planejado` e o "ainda dá para gastar" (planejado menos realizado e previsto, negativo se estoura); o do mês soma o que falta em cada item, sem abater item estourado. Hoje o lançamento conta no item quando só uma das categorias dele tem item no mês; com duas ou mais, a escolha é do ticket 51. Juntar categorias soma os itens do mesmo mês no destino, e excluir categoria recusa se há item. Só a API existe: as telas são dos tickets 52 e 54.
+
 ## Contrato (OpenAPI e tipos)
 
 A FastAPI gera o OpenAPI; `openapi.json` fica versionado e o app gera os tipos dele. Depois de mudar uma rota ou um modelo:

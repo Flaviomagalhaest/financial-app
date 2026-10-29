@@ -834,7 +834,7 @@
     "/api/categorias/{id}/juntar": {
       "post": {
         "summary": "Juntar Categoria",
-        "description": "Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem.",
+        "description": "Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,\ndo mesmo tipo, e exclui a origem.",
         "operationId": "juntar_categoria",
         "security": [
           {
@@ -1230,6 +1230,204 @@
         "summary": "Excluir Transferencia",
         "description": "Idempotente: excluir o que já não existe também dá 204.",
         "operationId": "excluir_transferencia",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/{mes}": {
+      "get": {
+        "summary": "Ler Planejamento",
+        "operationId": "ler_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/{mes}/itens": {
+      "post": {
+        "summary": "Criar Item",
+        "operationId": "criar_item_do_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDoPlanejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/itens/{id}": {
+      "patch": {
+        "summary": "Mudar Item",
+        "operationId": "mudar_item_do_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MudancaDeItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDoPlanejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Excluir Item",
+        "description": "Idempotente. Os lançamentos ficam como estão: só deixam de contar no item.",
+        "operationId": "excluir_item_do_planejamento",
         "security": [
           {
             "HTTPBearer": []
@@ -1953,6 +2151,51 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ItemDoPlanejamento": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "planejado_centavos": {
+            "type": "integer",
+            "title": "Planejado Centavos"
+          },
+          "realizado_centavos": {
+            "type": "integer",
+            "title": "Realizado Centavos"
+          },
+          "previsto_centavos": {
+            "type": "integer",
+            "title": "Previsto Centavos"
+          },
+          "percentual": {
+            "type": "integer",
+            "title": "Percentual"
+          },
+          "ainda_da_para_gastar_centavos": {
+            "type": "integer",
+            "title": "Ainda Da Para Gastar Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "categoria_id",
+          "planejado_centavos",
+          "realizado_centavos",
+          "previsto_centavos",
+          "percentual",
+          "ainda_da_para_gastar_centavos"
+        ],
+        "title": "ItemDoPlanejamento"
+      },
       "Juncao": {
         "properties": {
           "destino_id": {
@@ -2140,6 +2383,20 @@
         ],
         "title": "Lote"
       },
+      "MudancaDeItem": {
+        "properties": {
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valor_centavos"
+        ],
+        "title": "MudancaDeItem"
+      },
       "MudancaDeTag": {
         "properties": {
           "nome": {
@@ -2324,6 +2581,32 @@
         ],
         "title": "NovaTransferencia"
       },
+      "NovoItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "categoria_id",
+          "valor_centavos"
+        ],
+        "title": "NovoItem"
+      },
       "NovoLancamento": {
         "properties": {
           "id": {
@@ -2465,6 +2748,32 @@
           "eu"
         ],
         "title": "Pessoa"
+      },
+      "Planejamento": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "title": "Mes"
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoPlanejamento"
+            },
+            "type": "array",
+            "title": "Itens"
+          },
+          "ainda_da_para_gastar_centavos": {
+            "type": "integer",
+            "title": "Ainda Da Para Gastar Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "itens",
+          "ainda_da_para_gastar_centavos"
+        ],
+        "title": "Planejamento"
       },
       "Resultado": {
         "properties": {
