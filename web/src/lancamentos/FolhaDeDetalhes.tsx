@@ -18,6 +18,8 @@ type Props = {
   onData: (data: string) => void;
   situacao: Situacao;
   onSituacao: (situacao: Situacao) => void;
+  /** Só na compra no cartão: a fatura escolhida à mão (`null` é a da data) e as que se pode escolher. */
+  fatura?: { mes: string | null; opcoes: string[]; onMudar: (mes: string | null) => void };
   onFechar: () => void;
 };
 
@@ -115,6 +117,25 @@ export function FolhaDeDetalhes(props: Props) {
           </button>
         ))}
       </div>
+
+      {props.fatura && (
+        <>
+          <h4>Fatura</h4>
+          <div className="alternancia quatro" role="group" aria-label="Fatura">
+            {[null, ...props.fatura.opcoes].map((mes) => (
+              <button
+                type="button"
+                key={mes ?? "pela-data"}
+                className={props.fatura?.mes === mes ? "" : "secundario"}
+                aria-pressed={props.fatura?.mes === mes}
+                onClick={() => props.fatura?.onMudar(mes)}
+              >
+                {mes ? `${mes.slice(5, 7)}/${mes.slice(0, 4)}` : "Pela data"}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <h4>Repete?</h4>
       <div className="alternancia tres" role="group" aria-label="Repete?">

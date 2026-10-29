@@ -582,3 +582,7 @@ dialog.folha > input {
   text-align: left;
   font-weight: 500;
 }
+
+.alternancia.quatro {
+  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+}

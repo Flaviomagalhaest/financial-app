@@ -240,3 +240,53 @@ test("sem internet, o atalho do ícone abre o novo lançamento e a jornada intei
   await expect(padarias.first()).toContainText(`${porExtenso(dia(0))} · ${conta} · ${mercado} · #café ${s}`);
   await expect(padarias.last()).toContainText(`${porExtenso(dia(-1))} · ${conta} · ${mercado} · #café ${s}`);
 });
+
+/** `MM/AAAA` do mês `deslocamento` meses depois do de hoje em São Paulo. */
+function mes(deslocamento: number): string {
+  const [ano, m] = dia(0).split("-").map(Number);
+  const alvo = new Date(Date.UTC(ano, m - 1 + deslocamento, 1));
+  return `${String(alvo.getUTCMonth() + 1).padStart(2, "0")}/${alvo.getUTCFullYear()}`;
+}
+
+test("o cartão entra na fileira de contas e a fatura da compra se troca à mão na folha de detalhes", async ({ page }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  const visa = `Visa ${s}`;
+  // Ainda não há tela de cadastro de cartão (ticket 88): o teste cadastra pela API, com o token da página.
+  const pedido = page.waitForRequest((r) => r.url().includes("/api/") && !!r.headers().authorization);
+  await page.reload();
+  const authorization = (await pedido).headers().authorization;
+  const criado = await page.request.post("/api/cartoes", { headers: { authorization }, data: { nome: visa, dia_fechamento: 10, dia_vencimento: 20 } });
+  expect(criado.ok()).toBe(true);
+
+  await page.goto("/#/hoje");
+  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  const fichaDoCartao = page.getByRole("button", { name: visa, exact: true });
+  await expect(fichaDoCartao).toContainText("💳");
+  await digitar(page, "3", "00");
+  await page.getByRole("button", { name: mercado }).click();
+  await page.getByRole("button", { name: conta }).click();
+  const resumo = page.getByRole("button", { name: /^Detalhes/ });
+  await resumo.click();
+  const folha = page.getByRole("dialog", { name: "Detalhes" });
+  // Numa conta não há fatura.
+  await expect(folha.getByRole("group", { name: "Fatura" })).toHaveCount(0);
+  await folha.getByRole("button", { name: "Pronto" }).click();
+
+  await fichaDoCartao.click();
+  await resumo.click();
+  const fatura = folha.getByRole("group", { name: "Fatura" });
+  await expect(fatura.getByRole("button", { name: "Pela data" })).toHaveAttribute("aria-pressed", "true");
+  await folha.getByLabel("Descrição").fill(`Compra atrasada ${s}`);
+  await fatura.getByRole("button", { name: mes(2) }).click();
+  await folha.getByRole("button", { name: "Pronto" }).click();
+  await expect(resumo).toHaveText(`Detalhes: Compra atrasada ${s} · fatura de ${mes(2)}`);
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  const compra = linha(page, `Compra atrasada ${s}`);
+  await expect(compra).toContainText(`${porExtenso(dia(0))} · ${visa} · ${mercado}`);
+  await expect(compra).not.toContainText("não enviado");
+  // A edição abre com a fatura que o servidor gravou.
+  await compra.getByRole("link", { name: `Editar Compra atrasada ${s}` }).click();
+  await resumo.click();
+  await expect(fatura.getByRole("button", { name: mes(2) })).toHaveAttribute("aria-pressed", "true");
+});

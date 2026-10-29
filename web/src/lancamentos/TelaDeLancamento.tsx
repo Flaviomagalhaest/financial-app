@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { salvarLancamento, useCadastro, useLancamentos, usePessoas, useTags, type LancamentoNaTela } from "../dados";
 import { nomePorId, tituloDoLancamento } from "./apresentacao";
-import { hoje, rotuloDaData } from "./datas";
+import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes } from "./FolhaDeDetalhes";
@@ -31,7 +31,7 @@ type Props = {
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
 export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
-  const { contas, categorias, carregado } = useCadastro();
+  const { contas, cartoes, contasECartoes, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
   const opcoesDeTags = useTags();
@@ -45,6 +45,8 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const [data, setData] = useState(hoje);
   const [descricao, setDescricao] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  // A fatura escolhida à mão (o mês, `AAAA-MM-01`); sem ela, o servidor escolhe pela data (ADR 0015).
+  const [faturaMes, setFaturaMes] = useState<string | null>(null);
   const [detalhesAbertos, setDetalhesAbertos] = useState(false);
   // Sem pessoa, o lançamento é do conjunto (do casal).
   const [pessoa, setPessoa] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setDescricao(achado.descricao ?? "");
     setTags(achado.tags ?? []);
     setPessoa(achado.pessoa ?? null);
+    setFaturaMes(achado.fatura_mes ?? null);
   }, [id, existente, lancamentos, semDados]);
 
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
@@ -86,6 +89,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     descricao.trim(),
     ...tags.map((t) => `#${t}`),
     pessoa ? nomeDe(pessoa) : "",
+    faturaMes ? rotuloDaFatura(faturaMes) : "",
     data === hoje() ? "" : rotuloDaData(data),
     situacao === "previsto" ? "previsto" : "",
   ]
@@ -101,11 +105,21 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setData(hoje());
     setSituacaoEscolhida(null);
     setCentavos(u.valor_centavos);
-    if (contas.some((c) => c.id === u.conta_id)) setContaId(u.conta_id);
+    if (contasECartoes.some((c) => c.id === u.conta_id)) trocarConta(u.conta_id);
     setCategoriaIds(u.categoria_ids.filter((c) => categorias.some((cat) => cat.id === c && !cat.arquivada)));
     setDescricao(u.descricao ?? "");
     setTags(u.tags ?? []);
     setPessoa(u.pessoa ?? null);
+  }
+
+  const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
+  // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
+  const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
+
+  /** Outro cartão ou uma conta desfaz a fatura escolhida à mão, como no servidor. */
+  function trocarConta(nova: string) {
+    if (nova !== conta) setFaturaMes(null);
+    setContaId(nova);
   }
 
   function trocarTipo(novo: Tipo) {
@@ -134,6 +148,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           conta_id: conta,
           categoria_ids: categoriaIds,
           pessoa,
+          fatura_mes: noCartao ? faturaMes : null,
           ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
           tags,
         },
@@ -161,13 +176,19 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
       {mostraRepetir && (
         <button type="button" className="repetir" onClick={() => repetirUltimo(ultimo)}>
           Repetir último: {tituloDoLancamento(ultimo, categorias)},{" "}
-          {formatarCentavos(ultimo.valor_centavos)} · {ultimo.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {nomePorId(contas, ultimo.conta_id)}
+          {formatarCentavos(ultimo.valor_centavos)} · {ultimo.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {nomePorId(contasECartoes, ultimo.conta_id)}
         </button>
       )}
-      <h3>Conta</h3>
+      <h3>Conta ou cartão</h3>
       <div className="fileira rolavel">
         {contas.map((c) => (
-          <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} onClick={() => setContaId(c.id)}>
+          <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} onClick={() => trocarConta(c.id)}>
+            {c.nome}
+          </button>
+        ))}
+        {cartoes.map((c) => (
+          <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} onClick={() => trocarConta(c.id)}>
+            <span aria-hidden="true">💳 </span>
             {c.nome}
           </button>
         ))}
@@ -205,6 +226,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           onData={setData}
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
+          fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
           onFechar={() => setDetalhesAbertos(false)}
         />
       )}

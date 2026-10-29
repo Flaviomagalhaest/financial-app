@@ -36,6 +36,7 @@ import {
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
+export type Cartao = components["schemas"]["Cartao"];
 export type { Campo } from "./fila";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { comoNovo } from "./fila";
@@ -74,6 +75,7 @@ const LEITURAS = {
   "/api/categorias": () => api.GET("/api/categorias"),
   "/api/pessoas": () => api.GET("/api/pessoas"),
   "/api/tags": () => api.GET("/api/tags"),
+  "/api/cartoes": () => api.GET("/api/cartoes"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -185,15 +187,22 @@ export function useLancamentos() {
   return { lancamentos, atualizadoEm, semDados };
 }
 
-/** Contas e categorias do casal; `carregado` quando há resposta do servidor, nova ou guardada. */
+/**
+ * Contas, cartões e categorias do casal; `carregado` quando há resposta do servidor, nova ou
+ * guardada. Os cartões não arquivados (titulares e adicionais) vêm à parte, e `contasECartoes`
+ * dá o nome de qualquer `conta_id`: a compra no cartão guarda nele o cartão (ADR 0015).
+ */
 export function useCadastro() {
   const contas = useResposta("/api/contas");
+  const cartoes = useResposta("/api/cartoes");
   const categorias = useResposta("/api/categorias");
   const recarregar = useCallback(async () => {
     await Promise.all([contas.buscar(), categorias.buscar()]);
   }, [contas.buscar, categorias.buscar]);
   return {
     contas: contas.dados ?? [],
+    cartoes: cartoes.dados ?? [],
+    contasECartoes: useMemo(() => [...(contas.dados ?? []), ...(cartoes.dados ?? [])], [contas.dados, cartoes.dados]),
     categorias: categorias.dados ?? [],
     carregado: !!contas.dados && !!categorias.dados,
     atualizadoEm: contas.atualizadoEm ?? categorias.atualizadoEm,

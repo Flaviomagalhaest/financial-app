@@ -15,7 +15,7 @@ import { dataPorExtenso, quando } from "./datas";
 
 /** Lançamentos do casal, do mais recente ao mais antigo, com editar e excluir em cada linha. */
 export function ListaDeLancamentos() {
-  const { contas, categorias } = useCadastro();
+  const { contasECartoes, categorias } = useCadastro();
   const { lancamentos, atualizadoEm, semDados } = useLancamentos();
   const { euId, nomeDe } = usePessoas();
   const [erro, setErro] = useState("");
@@ -70,7 +70,7 @@ export function ListaDeLancamentos() {
                 <ValorComSinal l={l} />
               </div>
               <p className="vazio">
-                {dataPorExtenso(l.data)} · {nome(contas, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
+                {dataPorExtenso(l.data)} · {nome(contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
                 {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
                 {" · "}

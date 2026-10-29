@@ -17,6 +17,17 @@ export function dataPorExtenso(iso: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+/** `2026-11-01` vira "fatura de 11/2026". */
+export function rotuloDaFatura(mes: string): string {
+  return `fatura de ${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
+}
+
+/** O primeiro dia do mês `deslocamento` meses depois do de `iso`, como `AAAA-MM-01`. */
+export function mesDepois(iso: string, deslocamento: number): string {
+  const [ano, mes] = iso.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1 + deslocamento, 1)).toISOString().slice(0, 10);
+}
+
 /** O dia antes de `iso` (`AAAA-MM-DD`), sem passar pelo fuso do aparelho. */
 export function diaAnterior(iso: string): string {
   const [ano, mes, dia] = iso.split("-").map(Number);
