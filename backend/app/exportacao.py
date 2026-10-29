@@ -171,7 +171,8 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             conta_ou_cartao=(
                 f"{contas.get(t['conta_origem_id'], '')} → {contas.get(t['conta_destino_id'], '')}"
             ),
-            fatura="",
+            # O pagamento de fatura mostra a fatura que quita, no mesmo formato das compras.
+            fatura=t["fatura_mes"].strftime("%Y-%m") if t["fatura_mes"] else "",
             categorias=[t["categoria"]] if t["categoria"] else [],
             tags=[],
             pessoa="",

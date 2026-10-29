@@ -36,6 +36,7 @@ import {
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
+export type Cartao = components["schemas"]["Cartao"];
 export type { Campo } from "./fila";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { comoNovo } from "./fila";
@@ -53,6 +54,8 @@ export type LancamentoNaTela = NovoLancamento & {
   alterado_por?: string;
   alterado_em?: string;
   fonte?: Lancamento["fonte"];
+  /** A recorrência que gerou o previsto. */
+  recorrencia_id?: Lancamento["recorrencia_id"];
   /** O lançamento da outra pessoa que este parece repetir. */
   parece_repetido_de?: string | null;
   /** A hora da última ação no aparelho, enquanto a mudança não subiu. */
@@ -71,6 +74,8 @@ const LEITURAS = {
   "/api/contas?arquivadas=true": () => api.GET("/api/contas", { params: { query: { arquivadas: true } } }),
   "/api/categorias": () => api.GET("/api/categorias"),
   "/api/pessoas": () => api.GET("/api/pessoas"),
+  "/api/tags": () => api.GET("/api/tags"),
+  "/api/cartoes": () => api.GET("/api/cartoes"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -182,15 +187,22 @@ export function useLancamentos() {
   return { lancamentos, atualizadoEm, semDados };
 }
 
-/** Contas e categorias do casal; `carregado` quando há resposta do servidor, nova ou guardada. */
+/**
+ * Contas, cartões e categorias do casal; `carregado` quando há resposta do servidor, nova ou
+ * guardada. Os cartões não arquivados (titulares e adicionais) vêm à parte, e `contasECartoes`
+ * dá o nome de qualquer `conta_id`: a compra no cartão guarda nele o cartão (ADR 0015).
+ */
 export function useCadastro() {
   const contas = useResposta("/api/contas");
+  const cartoes = useResposta("/api/cartoes");
   const categorias = useResposta("/api/categorias");
   const recarregar = useCallback(async () => {
     await Promise.all([contas.buscar(), categorias.buscar()]);
   }, [contas.buscar, categorias.buscar]);
   return {
     contas: contas.dados ?? [],
+    cartoes: cartoes.dados ?? [],
+    contasECartoes: useMemo(() => [...(contas.dados ?? []), ...(cartoes.dados ?? [])], [contas.dados, cartoes.dados]),
     categorias: categorias.dados ?? [],
     carregado: !!contas.dados && !!categorias.dados,
     atualizadoEm: contas.atualizadoEm ?? categorias.atualizadoEm,
@@ -204,6 +216,27 @@ export function usePessoas() {
   const pessoas = dados ?? [];
   const nomeDe = (id: string | null | undefined) => pessoas.find((p) => p.id === id)?.nome ?? "a outra pessoa";
   return { pessoas, euId: pessoas.find((p) => p.eu)?.id, nomeDe };
+}
+
+/** A tag é a mesma com outra caixa ("Novo ap" e "novo ap"), como no servidor. */
+export const chaveDaTag = (nome: string) => nome.toLocaleLowerCase("pt-BR");
+
+/**
+ * Os nomes das tags para escolher no lançamento: as do servidor que não estão arquivadas e as dos
+ * lançamentos do aparelho, para a tag criada num lançamento ainda não enviado já aparecer no próximo.
+ */
+export function useTags(): string[] {
+  const { dados } = useResposta("/api/tags");
+  const { lancamentos } = useLancamentos();
+  return useMemo(() => {
+    const arquivadas = new Set((dados ?? []).filter((t) => t.arquivada).map((t) => chaveDaTag(t.nome)));
+    const porNome = new Map<string, string>();
+    for (const nome of [...(dados ?? []).filter((t) => !t.arquivada).map((t) => t.nome), ...(lancamentos ?? []).flatMap((l) => l.tags ?? [])]) {
+      const chave = chaveDaTag(nome);
+      if (!arquivadas.has(chave) && !porNome.has(chave)) porNome.set(chave, nome);
+    }
+    return [...porNome.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [dados, lancamentos]);
 }
 
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
@@ -297,6 +330,22 @@ export async function criarConta(nome: string, tipo: Conta["tipo"]): Promise<boo
 
 export async function criarCategoria(nome: string, tipo: Categoria["tipo"]): Promise<boolean> {
   return !!(await api.POST("/api/categorias", { body: { nome, tipo } })).data;
+}
+
+export type NovaTransferencia = components["schemas"]["NovaTransferencia"];
+
+/**
+ * Transferência precisa de internet (ADR 0011): não entra na fila. Devolve o motivo da recusa, ou
+ * `null` quando gravou. Reenviar o mesmo id não duplica.
+ */
+export async function criarTransferencia(transferencia: NovaTransferencia): Promise<string | null> {
+  try {
+    const { data, error } = await api.POST("/api/transferencias", { body: transferencia });
+    if (data) return null;
+    return typeof error?.detail === "string" ? error.detail : "o servidor recusou a transferência";
+  } catch {
+    return "sem resposta do servidor";
+  }
 }
 
 export async function contarNaoEnviados(): Promise<number> {

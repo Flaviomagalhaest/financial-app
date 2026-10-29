@@ -2991,9 +2991,26 @@
             "type": "string",
             "enum": [
               "aberta",
-              "fechada"
+              "fechada",
+              "paga"
             ],
             "title": "Situacao"
+          },
+          "total_centavos": {
+            "type": "integer",
+            "title": "Total Centavos"
+          },
+          "saldo_anterior_centavos": {
+            "type": "integer",
+            "title": "Saldo Anterior Centavos"
+          },
+          "pago_centavos": {
+            "type": "integer",
+            "title": "Pago Centavos"
+          },
+          "a_pagar_centavos": {
+            "type": "integer",
+            "title": "A Pagar Centavos"
           }
         },
         "type": "object",
@@ -3002,7 +3019,11 @@
           "mes",
           "fechamento",
           "vencimento",
-          "situacao"
+          "situacao",
+          "total_centavos",
+          "saldo_anterior_centavos",
+          "pago_centavos",
+          "a_pagar_centavos"
         ],
         "title": "Fatura"
       },
@@ -3685,6 +3706,18 @@
               }
             ],
             "title": "Situacao"
+          },
+          "fatura_mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatura Mes"
           }
         },
         "type": "object",
@@ -4520,6 +4553,18 @@
               "realizado"
             ],
             "title": "Situacao"
+          },
+          "fatura_mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatura Mes"
           },
           "criado_por": {
             "type": "string",

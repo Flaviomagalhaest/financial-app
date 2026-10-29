@@ -26,3 +26,8 @@ Achar a corrida de cada um (provável: o teste desliga a rede ou recarrega antes
 - [ ] Reproduzir na suíte inteira, com `--repeat-each` (`workers: 1`)
 - [ ] Corrigir a causa de cada um no teste (ou no app, se for dele) e rodar a suíte completa algumas vezes sem falha
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- O [ticket 42](42-jornada-completa-do-lancamento-rapido.md) corrigiu três corridas, todas no teste. Em `conflito.spec.ts`, "mudança no mesmo campo", "descartar a minha mudança" e "excluir o que a outra pessoa mudou depois" agora esperam a mudança da outra pessoa subir antes de o aparelho voltar à rede, porque a mudança dele chegava primeiro e o conflito ficava com ela. O último também espera a exclusão subir antes de a outra pessoa recarregar. Em `sem-internet.spec.ts`, "recusado pelo servidor" agora desfaz a rota de `/api/contas` no fim, porque a leitura em andamento estourava no teste seguinte (`route.fetch: Test ended`) e a falha ia para "sem internet, as telas abertas...".
+- Ainda falha às vezes: "criado com a resposta perdida e depois editado ou excluído sem internet". O Histórico abre sem a lista guardada. Hipótese: o `sync` do service worker reenvia a fila, que o `page.route` da página não intercepta, e a esvazia antes de a lista do servidor ser guardada.

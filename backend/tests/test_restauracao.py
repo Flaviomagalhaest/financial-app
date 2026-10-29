@@ -305,7 +305,7 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
                 continue
             if nome == "lancamentos.csv":
                 conteudo = b"\n".join(
-                    # As 2 últimas são as da versão 13 (ticket 46), as 2 antes delas, da 12
+                    # As 2 últimas são as da versão 14 (ticket 46), as 2 antes delas, da 12
                     # (ticket 37), as 3 antes, da 11 (ticket 44), as 3 antes, da 9, e as 3
                     # antes, da 7.
                     b",".join(linha.split(b",")[:-13])
@@ -378,7 +378,7 @@ def test_backup_da_versao_8_sem_pessoa_nem_fonte_restaura_do_conjunto_e_do_app(d
             if nome == "lancamentos.csv":
                 conteudo = b"\n".join(
                     # Sem as 3 da versão 9, as 3 da 11 (ticket 44), as 2 da 12 (ticket 37) e
-                    # as 2 da 13 (ticket 46).
+                    # as 2 da 14 (ticket 46).
                     b",".join(linha.split(b",")[:-10])
                     for linha in conteudo.split(b"\n")
                 )
@@ -446,7 +446,7 @@ def test_backup_da_versao_10_sem_recorrencias_restaura_com_os_lancamentos_avulso
             if nome.removesuffix(".csv") in da_versao_11 | da_versao_12:
                 continue
             if nome == "lancamentos.csv":
-                # Sem as 3 da versão 11 e as 2 da 12 (ticket 37) e da 13 (ticket 46), que vêm
+                # Sem as 3 da versão 11 e as 2 da 12 (ticket 37) e da 14 (ticket 46), que vêm
                 # depois.
                 conteudo = b"\n".join(
                     b",".join(linha.split(b",")[:-7]) for linha in conteudo.split(b"\n")
@@ -490,7 +490,7 @@ def test_backup_da_versao_11_sem_cartoes_restaura_cada_lancamento_no_mes_da_data
             if nome in ("cartoes.csv", "faturas.csv"):
                 continue
             if nome == "lancamentos.csv":
-                # Sem as 2 da versão 12 e as 2 da 13 (ticket 46), que vêm depois.
+                # Sem as 2 da versão 12 e as 2 da 14 (ticket 46), que vêm depois.
                 conteudo = b"\n".join(
                     b",".join(linha.split(b",")[:-4]) for linha in conteudo.split(b"\n")
                 )
@@ -511,7 +511,45 @@ def test_backup_da_versao_11_sem_cartoes_restaura_cada_lancamento_no_mes_da_data
         assert conn.execute("SELECT count(*) FROM cartoes").fetchone() == (0,)
 
 
-def test_backup_da_versao_12_sem_parcelamentos_restaura_com_os_lancamentos_avulsos(database_url):
+def test_backup_da_versao_12_sem_o_mes_da_fatura_na_transferencia_restaura_sem_fatura(
+    database_url,
+):
+    # O que `prod` gravava antes do ticket 38: nenhuma transferência ia para um cartão.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO transferencias (id, situacao, valor_centavos, data, conta_origem_id,"
+            " conta_destino_id, criado_por, alterado_por)"
+            " VALUES ('00000000-0000-0000-0000-000000000001', 'realizado', 3000, '2026-03-28',"
+            " '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003',"
+            " 'flavio', 'flavio')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM transferencias")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "transferencias.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-1]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 12
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT valor_centavos, fatura_mes FROM transferencias").fetchall() == [
+            (3000, None)
+        ]
+
+
+def test_backup_da_versao_13_sem_parcelamentos_restaura_com_os_lancamentos_avulsos(database_url):
     # O que `prod` gravava antes do ticket 46: sem as tabelas dos parcelamentos e sem a ligação
     # da parcela ao parcelamento.
     aplicar_migrations(database_url)
@@ -524,12 +562,12 @@ def test_backup_da_versao_12_sem_parcelamentos_restaura_com_os_lancamentos_avuls
         )
         atual = gerar_backup(conn)
         conn.execute("DELETE FROM lancamentos")
-    da_versao_13 = {"parcelamentos", "parcelamento_categorias", "parcelamento_tags"}
+    da_versao_14 = {"parcelamentos", "parcelamento_categorias", "parcelamento_tags"}
     antigo = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
         for nome in origem.namelist():
             conteudo = origem.read(nome)
-            if nome.removesuffix(".csv") in da_versao_13:
+            if nome.removesuffix(".csv") in da_versao_14:
                 continue
             if nome == "lancamentos.csv":
                 conteudo = b"\n".join(
@@ -537,8 +575,8 @@ def test_backup_da_versao_12_sem_parcelamentos_restaura_com_os_lancamentos_avuls
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
-                manifesto["versao_formato"] = 12
-                for tabela in da_versao_13:
+                manifesto["versao_formato"] = 13
+                for tabela in da_versao_14:
                     del manifesto["tabelas"][tabela]
                 del manifesto["tabelas"]["lancamentos"]["somas"]["parcela"]
                 conteudo = json.dumps(manifesto).encode()

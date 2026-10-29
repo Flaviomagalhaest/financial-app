@@ -1,7 +1,7 @@
 # Jornada completa do lançamento rápido
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 36, 40, 41
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
@@ -15,12 +15,27 @@ A tela de lançar chega ao desenho dos protótipos: lançar uma despesa leva pou
 
 ## Checklist
 
-- [ ] Tela de transferência entre duas contas, com categoria opcional da lista de transferência (API do [ticket 36](36-contas-saldo-e-transferencia.md), `/api/transferencias`)
-- [ ] Fileiras de toque para conta ou cartão e categorias; folha de detalhes com descrição, tags, pessoa, data, parcelado e recorrente (os dois últimos ficam desativados até seus tickets: o recorrente no [86](86-recorrencia-criar-pela-tela-e-sem-internet.md), sobre a API do 44, e o parcelado no [93](93-parcelamento-criar-pela-tela-e-sem-internet.md), sobre a API do 46), e resumo numa linha
-- [ ] Data entre hoje, ontem ou outra; data futura nasce prevista e passada ou de hoje nasce realizada, trocável à mão
-- [ ] "Repetir último" enquanto o lançamento está vazio
-- [ ] Atalho "Novo lançamento" funcionando no Android e botão na tela inicial no iPhone
-- [ ] Teste de navegador do fluxo completo, online e offline
-- [ ] A fileira "conta ou cartão" lê também `GET /api/cartoes` (ticket 37) e manda o cartão em `conta_id`; a resposta traz `fatura_mes` e `mes`. A troca de fatura à mão é o `fatura_mes` (história 73), na folha de detalhes
-- [ ] Verificações do projeto rodando e PR aberto para `main`
-- [ ] Da revisão do ticket 32: data com "hoje / ontem / outra" (história 18) e a linha de resumo dos detalhes embaixo do valor (história 17); hoje a data é só um campo em "Detalhes"
+- [x] Tela de transferência entre duas contas, com categoria opcional da lista de transferência (API do [ticket 36](36-contas-saldo-e-transferencia.md), `/api/transferencias`)
+- [x] Fileiras de toque para conta ou cartão e categorias; folha de detalhes com descrição, tags, pessoa, data, parcelado e recorrente (os dois últimos ficam desativados até seus tickets: o recorrente no [86](86-recorrencia-criar-pela-tela-e-sem-internet.md), sobre a API do 44, e o parcelado no [93](93-parcelamento-criar-pela-tela-e-sem-internet.md), sobre a API do 46), e resumo numa linha
+- [x] Data entre hoje, ontem ou outra; data futura nasce prevista e passada ou de hoje nasce realizada, trocável à mão
+- [x] "Repetir último" enquanto o lançamento está vazio
+- [x] Atalho "Novo lançamento" funcionando no Android e botão na tela inicial no iPhone
+- [x] Teste de navegador do fluxo completo, online e offline
+- [x] A fileira "conta ou cartão" lê também `GET /api/cartoes` (ticket 37) e manda o cartão em `conta_id`; a resposta traz `fatura_mes` e `mes`. A troca de fatura à mão é o `fatura_mes` (história 73), na folha de detalhes
+- [x] Verificações do projeto rodando e PR aberto para `main`
+- [x] Da revisão do ticket 32: data com "hoje / ontem / outra" (história 18) e a linha de resumo dos detalhes embaixo do valor (história 17); hoje a data é só um campo em "Detalhes"
+
+## Notas da implementação
+
+- **Tela de lançar** (`TelaDeLancamento.tsx`, variante A): tipo no topo, valor, a linha de resumo ("Detalhes: Jantar · #viagem · Flávio · ontem · previsto"; a data de hoje e o realizado não aparecem), "Repetir último", fileiras de conta e de categorias que rolam de lado, teclado e Salvar. A folha de detalhes (`FolhaDeDetalhes.tsx`) é um `<dialog>` modal: descrição, tags, pessoa, data, situação e "Repete?" (Parcelado e Recorrente desativados até os tickets [93](93-parcelamento-criar-pela-tela-e-sem-internet.md) e [86](86-recorrencia-criar-pela-tela-e-sem-internet.md)). Ela fecha por "Pronto", Esc ou toque fora.
+- **Data** (`EscolhaDaData.tsx`): Hoje, Ontem e o campo "Outra data", no dia de São Paulo (`diaAnterior`, `rotuloDaData` em `datas.ts`). A situação segue a regra que já existia: data futura nasce prevista, a escolha à mão vale.
+- **Tags**: escolher e criar na folha, pelo nome. A tag nova nasce no servidor junto com o lançamento, então funciona sem internet. As opções (`useTags` em `dados/`) são as do servidor não arquivadas mais as dos lançamentos do aparelho, para a criada sem internet já aparecer no próximo. O Histórico passou a mostrar as tags na linha.
+- **Repetir último**: aparece no lançamento novo enquanto não há valor nem categoria. Preenche tipo, valor, conta, categorias ativas, descrição, tags e pessoa, com a data de hoje. O "último" é o mais recente criado à mão por quem está com o aparelho (o não enviado conta e o gerado pela recorrência não), não o da outra pessoa.
+- **Transferência** (`TelaDeTransferencia.tsx`): "Transferência" é a terceira opção do seletor de tipo do lançamento novo; o protótipo não tinha tela de transferência. Valor pelo mesmo teclado (segue ao trocar de tipo), De, Para (sem a conta de origem), categoria opcional da lista de transferência, descrição e data. Grava por `criarTransferencia` (`POST /api/transferencias`, id gerado na tela); sem internet a tela avisa e não salva ([ADR 0011](../../../docs/adr/0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md)). A situação vem da data, sem troca à mão (linha no [ticket 80](80-transferencia-prevista-atrasada-e-confirmacao.md)).
+- **Cartões** (ADR 0015): a fileira "Conta ou cartão" traz as contas e depois os cartões não arquivados, com 💳 (`GET /api/cartoes`, guardado para funcionar sem internet, no `useCadastro`). O cartão vai em `conta_id`. Na compra no cartão, a folha mostra "Fatura": "Pela data" (o servidor escolhe, `fatura_mes` vazio) ou o mês da data e os dois seguintes, para a compra que o banco lança com atraso (história 73). Trocar de cartão ou ir para uma conta desfaz a escolha, como no servidor. A fatura que fechou antes da compra o servidor recusa, e o lançamento fica "não enviado: <motivo>". Histórico, Contas da semana e a tela de conflito passaram a dar o nome do cartão (`contasECartoes`).
+- **Atalho e botão**: o manifesto já tinha o atalho para `/#/novo` e a Hoje, o "+ Novo lançamento". O teste novo abre `/#/novo` sem internet com o app instalado, como o atalho do Android.
+- **Testes**: `web/e2e/jornada.spec.ts`. Os testes antigos fecham a folha com "Pronto" antes de Salvar. Ajustes em testes de outras telas que falhavam por corrida: esperar a mudança da outra pessoa subir em `conflito.spec.ts` e desfazer a rota em `sem-internet.spec.ts`.
+- **Desvios do protótipo A**: a data no resumo é `dd/mm/aaaa`, como no Histórico, e não "sex 23/out". O aviso de planejamento fica para o [ticket 52](52-aviso-de-planejamento-ao-lancar.md).
+- **Tags na folha**: este ticket fez o primeiro item do [ticket 78](78-telas-de-tags-e-manutencao.md).
+- **Reserva**: commitada na própria branch de trabalho, como nos tickets 41 e 44.
+- **Pendências**: linhas novas nos tickets [35](35-teste-nos-dois-celulares.md) (o dono confere a jornada no celular e as escolhas acima), [80](80-transferencia-prevista-atrasada-e-confirmacao.md) (troca de situação na transferência) e [90](90-teste-do-recusado-intermitente.md) (o que este ticket já corrigiu dos testes instáveis e o que falta).

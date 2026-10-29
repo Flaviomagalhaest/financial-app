@@ -36,8 +36,9 @@ test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ pa
   await page.getByRole("button", { name: viagem }).click();
   await expect(salvar).toBeEnabled();
   await page.getByRole("button", { name: viagem }).click();
-  await page.getByText("Detalhes").click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
   await page.getByLabel("Descrição").fill(`Jantar ${s}`);
+  await page.getByRole("button", { name: "Pronto" }).click();
   await salvar.click();
 
   const linha = page.getByRole("listitem").filter({ hasText: `Jantar ${s}` });
