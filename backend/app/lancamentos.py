@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.login import UsuarioLogado
+from app.pessoas import configuradas
 
 router = APIRouter(prefix="/api")
 log = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ class AlteracaoDeCategoria(BaseModel):
         return nome.strip() if nome else nome
 
 
-def _tags_limpas(nomes: list[str] | None) -> list[str] | None:
+def tags_limpas(nomes: list[str] | None) -> list[str] | None:
     if nomes is None:
         return None
     limpos = [nome.strip() for nome in nomes]
@@ -77,13 +78,13 @@ def _tags_limpas(nomes: list[str] | None) -> list[str] | None:
     return list({nome.casefold(): nome for nome in limpos}.values())
 
 
-def _sem_repetidas(ids: list[UUID] | None) -> list[UUID] | None:
+def sem_repetidas(ids: list[UUID] | None) -> list[UUID] | None:
     if ids is not None and len(set(ids)) != len(ids):
         raise ValueError("categoria repetida")
     return ids
 
 
-class NovoLancamento(BaseModel):
+class DadosDoLancamento(BaseModel):
     id: UUID
     tipo: Literal["despesa", "receita"]
     valor_centavos: int = Field(gt=0)
@@ -95,25 +96,51 @@ class NovoLancamento(BaseModel):
     situacao: Literal["previsto", "realizado"] | None = None
     # Pelo nome: a tag que ainda não existe nasce junto com o lançamento.
     tags: list[str] = []
+    # O id de uma pessoa do casal; sem ela, o lançamento é do conjunto.
+    pessoa: str | None = None
 
-    _tags = field_validator("tags")(_tags_limpas)
-    _categorias = field_validator("categoria_ids")(_sem_repetidas)
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
 
 
-class Lancamento(NovoLancamento):
+class NovoLancamento(DadosDoLancamento):
+    # A hora em que a pessoa fez a ação no aparelho; sem ela, a da chegada ao servidor.
+    acao_em: datetime | None = None
+
+
+class Lancamento(DadosDoLancamento):
     situacao: Literal["previsto", "realizado"]
-    # Previsto cuja data já passou sem confirmação; continua previsto (e contando) até confirmar.
+    # Previsto que pede confirmação e cuja data já passou sem ela; continua previsto (e contando)
+    # até confirmar. O automático não pede: a tarefa diária o realiza na data.
     atrasado: bool
+    # A regra que gerou o lançamento e o número da ocorrência nela (1, 2...); o avulso não tem.
+    recorrencia_id: UUID | None = None
+    ocorrencia: int | None = None
+    # Vira realizado sozinho na data, sem confirmação (recorrência de valor fixo).
+    automatico: bool = False
     # Sobe a cada mudança aceita; a edição e a exclusão dizem sobre qual versão foram feitas.
     versao: int
     criado_por: str
     criado_em: datetime
     alterado_por: str
     alterado_em: datetime
+    # De onde veio: "app" ou "mobills" (o importado); lançamento antigo, sem marca, é do app.
+    fonte: Literal["app", "mobills"] = "app"
+    # O lançamento da outra pessoa com mesmo valor, conta e tipo e data a até um dia, que já
+    # estava no servidor quando este chegou, e que o casal ainda não conferiu ("Parece repetido").
+    parece_repetido_de: UUID | None = None
 
 
 Campo = Literal[
-    "tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags"
+    "tipo",
+    "situacao",
+    "valor_centavos",
+    "data",
+    "descricao",
+    "conta_id",
+    "categoria_ids",
+    "tags",
+    "pessoa",
 ]
 CAMPOS: tuple[Campo, ...] = get_args(Campo)
 
@@ -132,9 +159,12 @@ class AlteracaoDeLancamento(BaseModel):
     # Sem situação, só mudar a data refaz a inferência, se ninguém mudou a situação depois.
     situacao: Literal["previsto", "realizado"] | None = None
     tags: list[str] | None = None
+    # Sem o campo, a pessoa fica; vazia, o lançamento passa a ser do conjunto.
+    pessoa: str | None = None
+    acao_em: datetime | None = None
 
-    _tags = field_validator("tags")(_tags_limpas)
-    _categorias = field_validator("categoria_ids")(_sem_repetidas)
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
 
 
 class CampoEmConflito(BaseModel):
@@ -182,11 +212,27 @@ class ConflitoDeCampos(Exception):
         self.conflito = conflito
 
 
+# O original mais antigo de outra pessoa; some quando o casal mantém os dois ou quando um dos
+# dois é excluído (a consulta só vê os não excluídos).
+_REPETIDO_DE = f"""(
+    SELECT o.id FROM lancamentos o
+    WHERE lancamentos.repetido_mantido_em IS NULL AND o.excluido_em IS NULL
+      AND lancamentos.fonte IS DISTINCT FROM 'mobills' AND o.fonte IS DISTINCT FROM 'mobills'
+      AND o.id <> lancamentos.id AND o.criado_por <> lancamentos.criado_por
+      AND o.valor_centavos = lancamentos.valor_centavos AND o.tipo = lancamentos.tipo
+      AND o.conta_id = lancamentos.conta_id
+      AND abs(o.data - lancamentos.data) <= {int(valores_iniciais()["pareceRepetidoDias"])}
+      AND (o.criado_em, o.id) < (lancamentos.criado_em, lancamentos.id)
+    ORDER BY o.criado_em, o.id LIMIT 1
+) AS repetido_de"""
+
 # Lançamento de antes do ticket 34 não tem versão: está como nasceu, na 1.
-_VERSAO = "COALESCE(versao, 1)"
+VERSAO = "COALESCE(versao, 1)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
-    f" criado_por, criado_em, alterado_por, alterado_em, {_VERSAO}"
+    f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
+    " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
+    f" {_REPETIDO_DE}"
 )
 
 
@@ -352,13 +398,17 @@ def conferir_conta(conn, id: UUID, ja_ligada: bool = False) -> None:
         raise recusar("conta arquivada")
 
 
-def _conferir_ligacoes(
+def conferir_ligacoes(
     conn,
-    lancamento: NovoLancamento,
+    lancamento,
     conta_atual: UUID | None = None,
     categorias_atuais: frozenset[UUID] = frozenset(),
 ) -> None:
-    """Conta e categoria arquivadas só valem num lançamento que já as tinha."""
+    """Conta e categoria arquivadas só valem num lançamento que já as tinha. Serve a quem tem
+    `tipo`, `conta_id`, `categoria_ids` e `pessoa`: o lançamento e a regra que gera lançamentos."""
+    pessoas = configuradas()
+    if lancamento.pessoa and pessoas and lancamento.pessoa not in pessoas:
+        raise recusar("pessoa não encontrada")
     conferir_conta(conn, lancamento.conta_id, ja_ligada=lancamento.conta_id == conta_atual)
     tipos = {}
     arquivadas = set()
@@ -378,19 +428,13 @@ def _conferir_ligacoes(
             raise recusar("categoria arquivada")
 
 
-def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+def ids_das_tags(conn, nomes: list[str], usuario: str, ja_tinha: set[UUID]) -> list[UUID]:
     """Acha cada tag pelo nome (sem distinguir maiúsculas) ou a cria. Tag arquivada só vale para
     quem já a tinha."""
     existentes = {
         nome.casefold(): (tag, arquivada)
         for tag, nome, arquivada in conn.execute(
             "SELECT id, nome, arquivada_em IS NOT NULL FROM tags"
-        )
-    }
-    ja_tinha = {
-        linha[0]
-        for linha in conn.execute(
-            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
         )
     }
     ids = []
@@ -405,6 +449,17 @@ def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
                 "INSERT INTO tags (id, nome, criado_por) VALUES (%s, %s, %s)", (tag, nome, usuario)
             )
         ids.append(tag)
+    return ids
+
+
+def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+    ja_tinha = {
+        linha[0]
+        for linha in conn.execute(
+            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
+        )
+    }
+    ids = ids_das_tags(conn, nomes, usuario, ja_tinha)
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
     for tag in ids:
         conn.execute(
@@ -421,26 +476,42 @@ def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
         )
 
 
-def _registrar_mudancas(
-    conn, id: UUID, campos: Iterable[str], versao: int, usuario: str, origem: str | None = None
+def _momento(acao_em: datetime | None) -> datetime:
+    """A hora da ação no aparelho; a do relógio do aparelho nunca vale mais que a do servidor."""
+    agora = datetime.now(UTC)
+    if acao_em is None:
+        return agora
+    if acao_em.tzinfo is None:
+        acao_em = acao_em.replace(tzinfo=UTC)
+    return min(acao_em, agora)
+
+
+def registrar_mudancas(
+    conn,
+    id: UUID,
+    campos: Iterable[str],
+    versao: int,
+    usuario: str,
+    em: datetime,
+    origem: str | None = None,
 ) -> None:
     """Guarda, por campo, a versão em que ele mudou por último e quem o mudou (ADR 0011)."""
     for campo in campos:
         conn.execute(
             "INSERT INTO lancamento_campos"
             " (lancamento_id, campo, versao, alterado_por, alterado_em, origem)"
-            " VALUES (%s, %s, %s, %s, now(), %s) ON CONFLICT (lancamento_id, campo) DO UPDATE"
+            " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (lancamento_id, campo) DO UPDATE"
             " SET versao = excluded.versao, alterado_por = excluded.alterado_por,"
             " alterado_em = excluded.alterado_em, origem = excluded.origem",
-            (id, campo, versao, usuario, origem),
+            (id, campo, versao, usuario, em, origem),
         )
 
 
-def _subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) -> int:
+def subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) -> int:
     """Grava a mudança só se ninguém mudou o lançamento desde a leitura; senão a transação
     recomeça (`em_transacao`) e a nova leitura vê a outra mudança."""
     gravadas = conn.execute(
-        f"UPDATE lancamentos SET {atribuicoes}, versao = %s WHERE id = %s AND {_VERSAO} = %s",
+        f"UPDATE lancamentos SET {atribuicoes}, versao = %s WHERE id = %s AND {VERSAO} = %s",
         (*parametros, de + 1, id, de),
     ).rowcount
     if not gravadas:
@@ -529,11 +600,13 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             (novo.id,),
         )
     )
-    _conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
+    conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
+    momento = _momento(novo.acao_em)
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
-        " conta_id, criado_por, alterado_por, versao)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1) ON CONFLICT (id) DO NOTHING",
+        " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app')"
+        " ON CONFLICT (id) DO NOTHING",
         (
             novo.id,
             novo.tipo,
@@ -544,6 +617,9 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             novo.conta_id,
             usuario,
             usuario,
+            novo.pessoa,
+            momento,
+            momento,
         ),
     ).rowcount
     if gravados:
@@ -558,7 +634,9 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
     à gravada não conta."""
     atual = _atual(conn, id, usuario)
     versoes = _versoes(conn, atual)
-    pedidas = alteracao.model_dump(exclude={"versao"}, exclude_none=True)
+    pedidas = alteracao.model_dump(exclude={"versao", "acao_em"}, exclude_none=True)
+    if "pessoa" in pedidas:
+        pedidas["pessoa"] = pedidas["pessoa"] or None
     mudancas = {}
     conflitos: list[Campo] = []
     for campo, valor in pedidas.items():
@@ -586,15 +664,16 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
     if not mudancas:
         return atual
     editado = NovoLancamento(
-        **atual.model_dump(include=set(NovoLancamento.model_fields)) | mudancas
+        **atual.model_dump(include=set(DadosDoLancamento.model_fields)) | mudancas
     )
-    _conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
-    versao = _subir_versao(
+    momento = _momento(alteracao.acao_em)
+    conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
+    versao = subir_versao(
         conn,
         id,
         atual.versao,
         "tipo = %s, situacao = %s, valor_centavos = %s, data = %s, descricao = %s,"
-        " conta_id = %s, alterado_por = %s, alterado_em = now()",
+        " conta_id = %s, pessoa = %s, alterado_por = %s, alterado_em = %s",
         (
             editado.tipo,
             editado.situacao,
@@ -602,10 +681,12 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
             editado.data,
             editado.descricao,
             editado.conta_id,
+            editado.pessoa,
             usuario,
+            momento,
         ),
     )
-    _registrar_mudancas(conn, id, mudancas, versao, usuario)
+    registrar_mudancas(conn, id, mudancas, versao, usuario, momento)
     if "categoria_ids" in mudancas:
         _gravar_categorias(conn, id, editado.categoria_ids)
     if "tags" in mudancas:
@@ -613,11 +694,13 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
     return _um(conn, id)
 
 
-def _excluir(conn, id: UUID, versao: int | None, usuario: str) -> None:
+def _excluir(
+    conn, id: UUID, versao: int | None, usuario: str, acao_em: datetime | None = None
+) -> None:
     """Marca a exclusão: sem a marca, a edição que chega depois não saberia que perdeu para
     ela. Com `versao`, excluir o que o outro lado mudou depois é conflito."""
     linha = conn.execute(
-        f"SELECT {_VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
+        f"SELECT {VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
     ).fetchone()
     if not linha or linha[1]:
         return
@@ -625,7 +708,13 @@ def _excluir(conn, id: UUID, versao: int | None, usuario: str) -> None:
         atual = _um(conn, id)
         depois = {c: v for c, v in _versoes(conn, atual).items() if v.versao > versao}
         raise _conflito("alterado depois da sua versão", atual, depois, usuario)
-    _subir_versao(conn, id, linha[0], "excluido_em = now(), excluido_por = %s", (usuario,))
+    subir_versao(
+        conn,
+        id,
+        linha[0],
+        "excluido_em = %s, excluido_por = %s",
+        (_momento(acao_em), usuario),
+    )
     # Sem lixeira: "Lançar de novo" cria outro lançamento. As ligações saem para a categoria e a
     # tag não contarem como usadas por ele.
     conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
@@ -699,7 +788,7 @@ def _todos(
             id=l[0],
             tipo=l[1],
             situacao=l[2],
-            atrasado=l[2] == "previsto" and l[4] < dia,
+            atrasado=l[2] == "previsto" and l[4] < dia and not l[16],
             valor_centavos=l[3],
             data=l[4],
             descricao=l[5],
@@ -711,6 +800,12 @@ def _todos(
             alterado_por=l[9],
             alterado_em=l[10],
             versao=l[11],
+            pessoa=l[12],
+            fonte=l[13] or "app",
+            recorrencia_id=l[14],
+            ocorrencia=l[15],
+            automatico=l[16],
+            parece_repetido_de=l[17],
         )
         for l in linhas
     ]
@@ -741,7 +836,8 @@ def editar_lancamento(
 
 
 class ContasDaSemana(BaseModel):
-    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."""
+    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
+    automático fica de fora: não pede confirmação."""
 
     lancamentos: list[Lancamento]
 
@@ -752,7 +848,7 @@ def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana
     with conectar(url_do_banco(request)) as conn:
         lancamentos = _todos(
             conn,
-            "situacao = 'previsto' AND data <= %s",
+            "situacao = 'previsto' AND NOT COALESCE(automatico, false) AND data <= %s",
             (ate,),
             ordem="data, criado_em, id",
         )
@@ -767,6 +863,7 @@ class Confirmacao(BaseModel):
     valor_centavos: int | None = Field(default=None, gt=0)
     data: date | None = None
     conta_id: UUID | None = None
+    acao_em: datetime | None = None
 
 
 def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancamento:
@@ -774,7 +871,9 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
     versoes = _versoes(conn, atual)
     ajustes = {
         campo: pedido
-        for campo, pedido in confirmacao.model_dump(exclude={"versao"}, exclude_none=True).items()
+        for campo, pedido in confirmacao.model_dump(
+            exclude={"versao", "acao_em"}, exclude_none=True
+        ).items()
         if pedido != getattr(atual, campo)
     }
     if atual.situacao == "realizado":
@@ -789,16 +888,17 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
             raise _conflito("o outro lado mudou os mesmos campos depois", atual, depois, usuario)
     if confirmacao.conta_id:
         conferir_conta(conn, confirmacao.conta_id, ja_ligada=confirmacao.conta_id == atual.conta_id)
-    versao = _subir_versao(
+    momento = _momento(confirmacao.acao_em)
+    versao = subir_versao(
         conn,
         id,
         atual.versao,
         "situacao = 'realizado', valor_centavos = COALESCE(%s, valor_centavos),"
         " data = COALESCE(%s, data), conta_id = COALESCE(%s, conta_id),"
-        " alterado_por = %s, alterado_em = now()",
-        (confirmacao.valor_centavos, confirmacao.data, confirmacao.conta_id, usuario),
+        " alterado_por = %s, alterado_em = %s",
+        (confirmacao.valor_centavos, confirmacao.data, confirmacao.conta_id, usuario, momento),
     )
-    _registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario)
+    registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
     return _um(conn, id)
 
 
@@ -824,12 +924,38 @@ def confirmar_lancamento(
     responses=_CONFLITO,
 )
 def excluir_lancamento(
-    id: UUID, usuario: UsuarioLogado, request: Request, versao: int | None = None
+    id: UUID,
+    usuario: UsuarioLogado,
+    request: Request,
+    versao: int | None = None,
+    acao_em: datetime | None = None,
 ) -> Response:
     """Idempotente: excluir o que já não existe também dá 204. Com `versao`, o que o outro lado
     mudou depois dela é 409, para perguntar antes."""
-    resposta = _na_rota(request, lambda conn: _excluir(conn, id, versao, usuario))
+    resposta = _na_rota(request, lambda conn: _excluir(conn, id, versao, usuario, acao_em))
     return resposta if isinstance(resposta, JSONResponse) else Response(status_code=204)
+
+
+@router.post(
+    "/lancamentos/{id}/manter-os-dois",
+    response_model=Lancamento,
+    operation_id="manter_os_dois",
+    responses=_EXCLUIDO,
+)
+def manter_os_dois(id: UUID, usuario: UsuarioLogado, request: Request) -> Lancamento | JSONResponse:
+    """O casal conferiu o "Parece repetido" e os dois lançamentos ficam. Não é uma mudança do
+    lançamento: não sobe a versão nem entra no conflito."""
+
+    def gravar(conn) -> Lancamento:
+        _atual(conn, id, usuario)
+        conn.execute(
+            "UPDATE lancamentos SET repetido_mantido_em = COALESCE(repetido_mantido_em, now())"
+            " WHERE id = %s",
+            (id,),
+        )
+        return _um(conn, id)
+
+    return _na_rota(request, gravar)
 
 
 LIMITE_DO_LOTE = 100
@@ -851,6 +977,7 @@ class AcaoExcluir(BaseModel):
     id: UUID
     # A versão que o aparelho tinha; sem ela, exclui de qualquer jeito.
     versao: int | None = None
+    acao_em: datetime | None = None
 
 
 Acao = AcaoCriar | AcaoEditar | AcaoExcluir
@@ -914,8 +1041,8 @@ def _aplicar_na(conn, acao: Acao, usuario: str) -> Resultado:
             return Resultado(resultado="aceita", lancamento=_criar(conn, novo, usuario)[0])
         case AcaoEditar(id=id, alteracao=alteracao):
             return Resultado(resultado="aceita", lancamento=_editar(conn, id, alteracao, usuario))
-        case AcaoExcluir(id=id, versao=versao):
-            _excluir(conn, id, versao, usuario)
+        case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
+            _excluir(conn, id, versao, usuario, acao_em)
             return Resultado(resultado="aceita")
 
 

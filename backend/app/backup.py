@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 7
+VERSAO_FORMATO = 11
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -135,6 +135,103 @@ def _da_versao_6_para_a_7(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
     return manifesto, tabelas
 
 
+def _da_versao_7_para_a_8(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 8 traz os itens do planejamento (ticket 49); backup antigo entra sem nenhum."""
+    if "itens_do_planejamento" not in tabelas:
+        tabelas["itens_do_planejamento"] = (
+            [
+                "id",
+                "mes",
+                "categoria_id",
+                "valor_centavos",
+                "criado_por",
+                "criado_em",
+                "alterado_por",
+                "alterado_em",
+            ],
+            [],
+        )
+        manifesto["tabelas"]["itens_do_planejamento"] = {
+            "linhas": 0,
+            "somas": {"valor_centavos": "0"},
+        }
+    return manifesto, tabelas
+
+
+def _da_versao_8_para_a_9(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 9 (ticket 41) dá ao lançamento a pessoa, a fonte e a conferência do "Parece
+    repetido". Os antigos entram do conjunto (sem pessoa), sem fonte (lida como "app") e sem
+    conferência."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "pessoa" not in colunas:
+        novas = ["pessoa", "fonte", "repetido_mantido_em"]
+        tabelas["lancamentos"] = (
+            colunas + novas,
+            [linha + [None] * len(novas) for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
+def _da_versao_9_para_a_10(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 10 traz o modelo padrão do planejamento (ticket 50); backup antigo entra com o
+    modelo vazio."""
+    if "modelo_do_planejamento" not in tabelas:
+        tabelas["modelo_do_planejamento"] = (
+            ["categoria_id", "valor_centavos", "alterado_por", "alterado_em"],
+            [],
+        )
+        manifesto["tabelas"]["modelo_do_planejamento"] = {
+            "linhas": 0,
+            "somas": {"valor_centavos": "0"},
+        }
+    return manifesto, tabelas
+
+
+def _da_versao_10_para_a_11(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 11 (ticket 44) traz as recorrências e liga o lançamento à regra que o gerou. Os
+    lançamentos antigos entram avulsos (sem regra e sem ocorrência) e sem o automático."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "recorrencia_id" not in colunas:
+        novas = ["recorrencia_id", "ocorrencia", "automatico"]
+        tabelas["lancamentos"] = (
+            colunas + novas,
+            [linha + [None] * len(novas) for linha in linhas],
+        )
+        manifesto["tabelas"]["lancamentos"]["somas"]["ocorrencia"] = "0"
+    novas_tabelas = {
+        "recorrencias": (
+            [
+                "id",
+                "tipo",
+                "valor_centavos",
+                "tipo_do_valor",
+                "automatico",
+                "descricao",
+                "conta_id",
+                "inicio",
+                "a_cada",
+                "unidade",
+                "ate",
+                "vezes",
+                "geradas",
+                "criado_por",
+                "criado_em",
+                "alterado_por",
+                "alterado_em",
+                "pessoa",
+            ],
+            {"valor_centavos": "0", "a_cada": "0", "vezes": "0", "geradas": "0"},
+        ),
+        "recorrencia_categorias": (["recorrencia_id", "categoria_id"], {}),
+        "recorrencia_tags": (["recorrencia_id", "tag_id"], {}),
+    }
+    for tabela, (colunas_novas, somas) in novas_tabelas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas_novas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -144,6 +241,10 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     4: _da_versao_4_para_a_5,
     5: _da_versao_5_para_a_6,
     6: _da_versao_6_para_a_7,
+    7: _da_versao_7_para_a_8,
+    8: _da_versao_8_para_a_9,
+    9: _da_versao_9_para_a_10,
+    10: _da_versao_10_para_a_11,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

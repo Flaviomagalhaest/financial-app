@@ -224,6 +224,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lancamentos/{id}/manter-os-dois": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manter Os Dois
+         * @description O casal conferiu o "Parece repetido" e os dois lançamentos ficam. Não é uma mudança do
+         *     lançamento: não sobe a versão nem entra no conflito.
+         */
+        post: operations["manter_os_dois"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lancamentos/lote": {
         parameters: {
             query?: never;
@@ -255,7 +276,8 @@ export interface paths {
         put?: never;
         /**
          * Juntar Categoria
-         * @description Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem.
+         * @description Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,
+         *     do mesmo tipo, e exclui a origem.
          */
         post: operations["juntar_categoria"];
         delete?: never;
@@ -365,6 +387,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/planejamento/modelo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Modelo */
+        get: operations["ler_modelo_padrao"];
+        /**
+         * Definir Modelo
+         * @description Troca o modelo padrão inteiro pelo conjunto enviado (categoria e valor, sem repetir).
+         */
+        put: operations["definir_modelo_padrao"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}/aplicar-modelo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aplicar Modelo
+         * @description Cria os itens do modelo padrão neste mês, que precisa estar vazio.
+         */
+        post: operations["aplicar_modelo_padrao"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Planejamento */
+        get: operations["ler_planejamento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}/itens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Criar Item */
+        post: operations["criar_item_do_planejamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}/copiar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copiar Planejamento
+         * @description Copia os itens (categoria e valor) de outro mês para este, que precisa estar vazio.
+         */
+        post: operations["copiar_planejamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/itens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir Item
+         * @description Idempotente. Os lançamentos ficam como estão: só deixam de contar no item.
+         */
+        delete: operations["excluir_item_do_planejamento"];
+        options?: never;
+        head?: never;
+        /** Mudar Item */
+        patch: operations["mudar_item_do_planejamento"];
+        trace?: never;
+    };
+    "/api/pessoas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Pessoas */
+        get: operations["listar_pessoas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/recorrencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Recorrencias */
+        get: operations["listar_recorrencias"];
+        put?: never;
+        /**
+         * Criar Recorrencia
+         * @description Grava a regra e gera os previstos até o horizonte. Reenviar o mesmo id (a fila repete)
+         *     devolve a regra gravada, com 200, e completa a geração se ela tiver parado no meio.
+         */
+        post: operations["criar_recorrencia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -406,6 +583,8 @@ export interface components {
             id: string;
             /** Versao */
             versao?: number | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * AlteracaoDeCategoria
@@ -441,6 +620,10 @@ export interface components {
             situacao?: ("previsto" | "realizado") | null;
             /** Tags */
             tags?: string[] | null;
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * CampoEmConflito
@@ -452,7 +635,7 @@ export interface components {
              * Campo
              * @enum {string}
              */
-            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags";
+            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa";
             /** Alterado Por */
             alterado_por: string;
             /**
@@ -499,6 +682,8 @@ export interface components {
             data?: string | null;
             /** Conta Id */
             conta_id?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /**
          * Conflito
@@ -537,11 +722,20 @@ export interface components {
         };
         /**
          * ContasDaSemana
-         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo.
+         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
+         *     automático fica de fora: não pede confirmação.
          */
         ContasDaSemana: {
             /** Lancamentos */
             lancamentos: components["schemas"]["Lancamento"][];
+        };
+        /** CopiaDeMes */
+        CopiaDeMes: {
+            /**
+             * De
+             * @example 2026-09
+             */
+            de: string;
         };
         /** EdicaoDeConta */
         EdicaoDeConta: {
@@ -601,6 +795,39 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** ItemDoModelo */
+        ItemDoModelo: {
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+        };
+        /** ItemDoPlanejamento */
+        ItemDoPlanejamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Planejado Centavos */
+            planejado_centavos: number;
+            /** Realizado Centavos */
+            realizado_centavos: number;
+            /** Previsto Centavos */
+            previsto_centavos: number;
+            /** Percentual */
+            percentual: number;
+            /** Ainda Da Para Gastar Centavos */
+            ainda_da_para_gastar_centavos: number;
+        };
         /** Juncao */
         Juncao: {
             /**
@@ -650,8 +877,19 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
             /** Atrasado */
             atrasado: boolean;
+            /** Recorrencia Id */
+            recorrencia_id?: string | null;
+            /** Ocorrencia */
+            ocorrencia?: number | null;
+            /**
+             * Automatico
+             * @default false
+             */
+            automatico: boolean;
             /** Versao */
             versao: number;
             /** Criado Por */
@@ -668,11 +906,29 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+            /**
+             * Fonte
+             * @default app
+             * @enum {string}
+             */
+            fonte: "app" | "mobills";
+            /** Parece Repetido De */
+            parece_repetido_de?: string | null;
         };
         /** Lote */
         Lote: {
             /** Acoes */
             acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"])[];
+        };
+        /** ModeloPadrao */
+        ModeloPadrao: {
+            /** Itens */
+            itens: components["schemas"]["ItemDoModelo"][];
+        };
+        /** MudancaDeItem */
+        MudancaDeItem: {
+            /** Valor Centavos */
+            valor_centavos: number;
         };
         /** MudancaDeTag */
         MudancaDeTag: {
@@ -704,6 +960,66 @@ export interface components {
             saldo_abertura_centavos?: number | null;
             /** Data Abertura */
             data_abertura?: string | null;
+        };
+        /** NovaRecorrencia */
+        NovaRecorrencia: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor: "fixo" | "estimado";
+            /**
+             * Automatico
+             * @default false
+             */
+            automatico: boolean;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio: string;
+            /** A Cada */
+            a_cada: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade: "semanas" | "meses";
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
         };
         /** NovaTag */
         NovaTag: {
@@ -744,6 +1060,21 @@ export interface components {
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
         };
+        /** NovoItem */
+        NovoItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+        };
         /** NovoLancamento */
         NovoLancamento: {
             /**
@@ -782,6 +1113,10 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
         };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
@@ -790,6 +1125,98 @@ export interface components {
              * @enum {string}
              */
             formato: "backup" | "planilha";
+        };
+        /** Pessoa */
+        Pessoa: {
+            /** Id */
+            id: string;
+            /** Nome */
+            nome: string;
+            /** Eu */
+            eu: boolean;
+        };
+        /** Planejamento */
+        Planejamento: {
+            /** Mes */
+            mes: string;
+            /** Itens */
+            itens: components["schemas"]["ItemDoPlanejamento"][];
+            /** Ainda Da Para Gastar Centavos */
+            ainda_da_para_gastar_centavos: number;
+        };
+        /** Recorrencia */
+        Recorrencia: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor: "fixo" | "estimado";
+            /**
+             * Automatico
+             * @default false
+             */
+            automatico: boolean;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio: string;
+            /** A Cada */
+            a_cada: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade: "semanas" | "meses";
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
         };
         /**
          * Resultado
@@ -1264,6 +1691,7 @@ export interface operations {
         parameters: {
             query?: {
                 versao?: number | null;
+                acao_em?: string | null;
             };
             header?: never;
             path: {
@@ -1404,6 +1832,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conflito"];
+                };
+            };
+            /** @description O lançamento foi excluído */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exclusao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manter_os_dois: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"];
                 };
             };
             /** @description O lançamento foi excluído */
@@ -1751,6 +2219,328 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_modelo_padrao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeloPadrao"];
+                };
+            };
+        };
+    };
+    definir_modelo_padrao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModeloPadrao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeloPadrao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    aplicar_modelo_padrao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Planejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Planejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    criar_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoItem"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copiar_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopiaDeMes"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Planejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mudar_item_do_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MudancaDeItem"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_pessoas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pessoa"][];
+                };
+            };
+        };
+    };
+    listar_recorrencias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recorrencia"][];
+                };
+            };
+        };
+    };
+    criar_recorrencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaRecorrencia"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recorrencia"];
+                };
             };
             /** @description Validation Error */
             422: {

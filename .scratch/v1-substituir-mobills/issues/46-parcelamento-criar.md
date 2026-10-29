@@ -20,4 +20,4 @@ O casal lança uma compra ou dívida em N parcelas, no cartão ou em boleto, tam
 - [ ] Sem internet vai como um pedido só, gerado pelo servidor
 - [ ] Testes de API com divisão de centavos e viradas de fatura
 - [ ] Verificações do projeto rodando e PR aberto para `main`
-- [ ] Parcela automática não pede confirmação (ticket 43): fica fora de `GET /api/contas-da-semana` e não aparece como `atrasado`, que hoje valem para todo `situacao = 'previsto'`
+- [ ] Parcela automática não pede confirmação (ticket 43): gravar `lancamentos.automatico = true` na parcela, que já a tira de `GET /api/contas-da-semana` e do `atrasado` (ticket 44), e fazer a tarefa diária (`realizar_automaticos` em `backend/app/recorrencias.py`, que hoje só acha os previstos com `recorrencia_id`) realizar também as parcelas, com a `origem` do parcelamento

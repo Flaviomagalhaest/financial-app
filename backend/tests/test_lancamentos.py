@@ -34,10 +34,16 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
         "atrasado": False,
         "versao": 1,
         "tags": [],
+        "recorrencia_id": None,
+        "ocorrencia": None,
+        "automatico": False,
         "criado_por": "flavio",
         "alterado_por": "flavio",
         "criado_em": None,
         "alterado_em": None,
+        "pessoa": None,
+        "fonte": "app",
+        "parece_repetido_de": None,
     }
 
 

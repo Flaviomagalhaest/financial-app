@@ -20,6 +20,8 @@ Fecha a etapa 1 com o teste de verdade nos aparelhos do casal (HITL, do dono). S
 - [ ] No Android, fechar o app com lançamentos não enviados, ligar a rede e conferir que eles sobem sozinhos (o `sync` do service worker, ticket 33; o teste automático só o dispara pelo CDP do Chromium)
 - [ ] Provocar um conflito de verdade entre os dois aparelhos e decidi-lo
 - [ ] No DSQL (dev ou prod), conferir que editar o mesmo lançamento nos dois grava a versão de cada campo (o `INSERT ... ON CONFLICT DO UPDATE` em `lancamento_campos`, ticket 34, só rodou no Postgres) e que a disputa entre duas edições ao mesmo tempo termina em conflito, não em erro
+- [ ] No dev, criar uma recorrência e conferir no DSQL os previstos gerados em lotes (`INSERT ... ON CONFLICT (id) DO NOTHING`, ticket 44, só rodou no Postgres) e, no dia seguinte, os logs da Lambda `TarefaDiaria` (das 00:07) com o automático do dia realizado
 - [ ] Deixar o iPhone alguns dias sem abrir e conferir que nada local se perdeu (senão, retomar o roteiro do ticket 17)
 - [ ] Resultado e decisão sobre seguir ou acionar o plano B em `## Answer`
+- [ ] Conferir no DSQL se `itens_do_planejamento` aceita um índice único em (`mes`, `categoria_id`) (ticket 49: hoje a unicidade é só da rota)
 - [ ] Verificações do projeto rodando e PR aberto para `main`

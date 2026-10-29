@@ -586,6 +586,23 @@
               ],
               "title": "Versao"
             }
+          },
+          {
+            "name": "acao_em",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Acao Em"
+            }
           }
         ],
         "responses": {
@@ -714,6 +731,62 @@
         }
       }
     },
+    "/api/lancamentos/{id}/manter-os-dois": {
+      "post": {
+        "summary": "Manter Os Dois",
+        "description": "O casal conferiu o \"Parece repetido\" e os dois lançamentos ficam. Não é uma mudança do\nlançamento: não sobe a versão nem entra no conflito.",
+        "operationId": "manter_os_dois",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lancamento"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "O lançamento foi excluído",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exclusao"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/lancamentos/lote": {
       "post": {
         "summary": "Enviar Lote",
@@ -761,7 +834,7 @@
     "/api/categorias/{id}/juntar": {
       "post": {
         "summary": "Juntar Categoria",
-        "description": "Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem.",
+        "description": "Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,\ndo mesmo tipo, e exclui a origem.",
         "operationId": "juntar_categoria",
         "security": [
           {
@@ -1190,6 +1263,473 @@
           }
         }
       }
+    },
+    "/api/planejamento/modelo": {
+      "get": {
+        "summary": "Ler Modelo",
+        "operationId": "ler_modelo_padrao",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeloPadrao"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Definir Modelo",
+        "description": "Troca o modelo padrão inteiro pelo conjunto enviado (categoria e valor, sem repetir).",
+        "operationId": "definir_modelo_padrao",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeloPadrao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeloPadrao"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/planejamento/{mes}/aplicar-modelo": {
+      "post": {
+        "summary": "Aplicar Modelo",
+        "description": "Cria os itens do modelo padrão neste mês, que precisa estar vazio.",
+        "operationId": "aplicar_modelo_padrao",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/{mes}": {
+      "get": {
+        "summary": "Ler Planejamento",
+        "operationId": "ler_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/{mes}/itens": {
+      "post": {
+        "summary": "Criar Item",
+        "operationId": "criar_item_do_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDoPlanejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/{mes}/copiar": {
+      "post": {
+        "summary": "Copiar Planejamento",
+        "description": "Copia os itens (categoria e valor) de outro mês para este, que precisa estar vazio.",
+        "operationId": "copiar_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopiaDeMes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planejamento/itens/{id}": {
+      "patch": {
+        "summary": "Mudar Item",
+        "operationId": "mudar_item_do_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MudancaDeItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDoPlanejamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Excluir Item",
+        "description": "Idempotente. Os lançamentos ficam como estão: só deixam de contar no item.",
+        "operationId": "excluir_item_do_planejamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pessoas": {
+      "get": {
+        "summary": "Listar Pessoas",
+        "operationId": "listar_pessoas",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Pessoa"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Pessoas"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/recorrencias": {
+      "get": {
+        "summary": "Listar Recorrencias",
+        "operationId": "listar_recorrencias",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Recorrencia"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Recorrencias"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Criar Recorrencia",
+        "description": "Grava a regra e gera os previstos até o horizonte. Reenviar o mesmo id (a fila repete)\ndevolve a regra gravada, com 200, e completa a geração se ela tiver parado no meio.",
+        "operationId": "criar_recorrencia",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaRecorrencia"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recorrencia"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1258,6 +1798,18 @@
               }
             ],
             "title": "Versao"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -1411,6 +1963,29 @@
               }
             ],
             "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -1432,7 +2007,8 @@
               "descricao",
               "conta_id",
               "categoria_ids",
-              "tags"
+              "tags",
+              "pessoa"
             ],
             "title": "Campo"
           },
@@ -1555,6 +2131,18 @@
               }
             ],
             "title": "Conta Id"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -1665,7 +2253,24 @@
           "lancamentos"
         ],
         "title": "ContasDaSemana",
-        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo."
+        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O\nautomático fica de fora: não pede confirmação."
+      },
+      "CopiaDeMes": {
+        "properties": {
+          "de": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "De",
+            "examples": [
+              "2026-09"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "de"
+        ],
+        "title": "CopiaDeMes"
       },
       "EdicaoDeConta": {
         "properties": {
@@ -1805,6 +2410,71 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ItemDoModelo": {
+        "properties": {
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoria_id",
+          "valor_centavos"
+        ],
+        "title": "ItemDoModelo"
+      },
+      "ItemDoPlanejamento": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "planejado_centavos": {
+            "type": "integer",
+            "title": "Planejado Centavos"
+          },
+          "realizado_centavos": {
+            "type": "integer",
+            "title": "Realizado Centavos"
+          },
+          "previsto_centavos": {
+            "type": "integer",
+            "title": "Previsto Centavos"
+          },
+          "percentual": {
+            "type": "integer",
+            "title": "Percentual"
+          },
+          "ainda_da_para_gastar_centavos": {
+            "type": "integer",
+            "title": "Ainda Da Para Gastar Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "categoria_id",
+          "planejado_centavos",
+          "realizado_centavos",
+          "previsto_centavos",
+          "percentual",
+          "ainda_da_para_gastar_centavos"
+        ],
+        "title": "ItemDoPlanejamento"
+      },
       "Juncao": {
         "properties": {
           "destino_id": {
@@ -1879,9 +2549,48 @@
             "title": "Tags",
             "default": []
           },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
           "atrasado": {
             "type": "boolean",
             "title": "Atrasado"
+          },
+          "recorrencia_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorrencia Id"
+          },
+          "ocorrencia": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocorrencia"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico",
+            "default": false
           },
           "versao": {
             "type": "integer",
@@ -1904,6 +2613,27 @@
             "type": "string",
             "format": "date-time",
             "title": "Alterado Em"
+          },
+          "fonte": {
+            "type": "string",
+            "enum": [
+              "app",
+              "mobills"
+            ],
+            "title": "Fonte",
+            "default": "app"
+          },
+          "parece_repetido_de": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parece Repetido De"
           }
         },
         "type": "object",
@@ -1959,6 +2689,36 @@
           "acoes"
         ],
         "title": "Lote"
+      },
+      "ModeloPadrao": {
+        "properties": {
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoModelo"
+            },
+            "type": "array",
+            "title": "Itens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "itens"
+        ],
+        "title": "ModeloPadrao"
+      },
+      "MudancaDeItem": {
+        "properties": {
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valor_centavos"
+        ],
+        "title": "MudancaDeItem"
       },
       "MudancaDeTag": {
         "properties": {
@@ -2060,6 +2820,134 @@
         ],
         "title": "NovaConta"
       },
+      "NovaRecorrencia": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "tipo_do_valor": {
+            "type": "string",
+            "enum": [
+              "fixo",
+              "estimado"
+            ],
+            "title": "Tipo Do Valor"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico",
+            "default": false
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "title": "Inicio"
+          },
+          "a_cada": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Cada"
+          },
+          "unidade": {
+            "type": "string",
+            "enum": [
+              "semanas",
+              "meses"
+            ],
+            "title": "Unidade"
+          },
+          "ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "vezes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vezes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "valor_centavos",
+          "tipo_do_valor",
+          "conta_id",
+          "categoria_ids",
+          "inicio",
+          "a_cada",
+          "unidade"
+        ],
+        "title": "NovaRecorrencia"
+      },
       "NovaTag": {
         "properties": {
           "nome": {
@@ -2144,6 +3032,32 @@
         ],
         "title": "NovaTransferencia"
       },
+      "NovoItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "categoria_id",
+          "valor_centavos"
+        ],
+        "title": "NovoItem"
+      },
       "NovoLancamento": {
         "properties": {
           "id": {
@@ -2210,6 +3124,29 @@
             "type": "array",
             "title": "Tags",
             "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
           }
         },
         "type": "object",
@@ -2239,6 +3176,205 @@
           "formato"
         ],
         "title": "PedidoDeExportacao"
+      },
+      "Pessoa": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "eu": {
+            "type": "boolean",
+            "title": "Eu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nome",
+          "eu"
+        ],
+        "title": "Pessoa"
+      },
+      "Planejamento": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "title": "Mes"
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoPlanejamento"
+            },
+            "type": "array",
+            "title": "Itens"
+          },
+          "ainda_da_para_gastar_centavos": {
+            "type": "integer",
+            "title": "Ainda Da Para Gastar Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "itens",
+          "ainda_da_para_gastar_centavos"
+        ],
+        "title": "Planejamento"
+      },
+      "Recorrencia": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "tipo_do_valor": {
+            "type": "string",
+            "enum": [
+              "fixo",
+              "estimado"
+            ],
+            "title": "Tipo Do Valor"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico",
+            "default": false
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "title": "Inicio"
+          },
+          "a_cada": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Cada"
+          },
+          "unidade": {
+            "type": "string",
+            "enum": [
+              "semanas",
+              "meses"
+            ],
+            "title": "Unidade"
+          },
+          "ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "vezes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vezes"
+          },
+          "criado_por": {
+            "type": "string",
+            "title": "Criado Por"
+          },
+          "criado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Criado Em"
+          },
+          "alterado_por": {
+            "type": "string",
+            "title": "Alterado Por"
+          },
+          "alterado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Alterado Em"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "valor_centavos",
+          "tipo_do_valor",
+          "conta_id",
+          "categoria_ids",
+          "inicio",
+          "a_cada",
+          "unidade",
+          "criado_por",
+          "criado_em",
+          "alterado_por",
+          "alterado_em"
+        ],
+        "title": "Recorrencia"
       },
       "Resultado": {
         "properties": {

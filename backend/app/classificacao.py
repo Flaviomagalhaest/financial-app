@@ -21,6 +21,50 @@ def _categoria(conn, id: UUID) -> Categoria | None:
     )
 
 
+def _juntar_itens_do_planejamento(conn, origem: UUID, destino: UUID) -> None:
+    """O item da origem passa para o destino; nos meses em que os dois têm item, os valores se
+    somam num item só (o do destino)."""
+    for id, mes, valor in conn.execute(
+        "SELECT id, mes, valor_centavos FROM itens_do_planejamento WHERE categoria_id = %s",
+        (origem,),
+    ).fetchall():
+        do_destino = conn.execute(
+            "SELECT id FROM itens_do_planejamento WHERE categoria_id = %s AND mes = %s",
+            (destino, mes),
+        ).fetchone()
+        if do_destino:
+            conn.execute(
+                "UPDATE itens_do_planejamento SET valor_centavos = valor_centavos + %s,"
+                " alterado_em = now() WHERE id = %s",
+                (valor, do_destino[0]),
+            )
+            conn.execute("DELETE FROM itens_do_planejamento WHERE id = %s", (id,))
+        else:
+            conn.execute(
+                "UPDATE itens_do_planejamento SET categoria_id = %s, alterado_em = now()"
+                " WHERE id = %s",
+                (destino, id),
+            )
+
+
+def _juntar_item_do_modelo(conn, origem: UUID, destino: UUID) -> None:
+    """Como nos meses: o valor da origem se soma ao do destino, ou passa para ele."""
+    da_origem = conn.execute(
+        "SELECT valor_centavos FROM modelo_do_planejamento WHERE categoria_id = %s", (origem,)
+    ).fetchone()
+    if not da_origem:
+        return
+    conn.execute("DELETE FROM modelo_do_planejamento WHERE categoria_id = %s", (origem,))
+    conn.execute(
+        "INSERT INTO modelo_do_planejamento (categoria_id, valor_centavos, alterado_por)"
+        " VALUES (%s, %s, 'sistema')"
+        " ON CONFLICT (categoria_id) DO UPDATE SET"
+        " valor_centavos = modelo_do_planejamento.valor_centavos + excluded.valor_centavos,"
+        " alterado_em = now()",
+        (destino, da_origem[0]),
+    )
+
+
 class Juncao(BaseModel):
     destino_id: UUID
 
@@ -29,7 +73,8 @@ class Juncao(BaseModel):
 def juntar_categoria(
     id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Request
 ) -> Categoria:
-    """Move os lançamentos da categoria para o destino, do mesmo tipo, e exclui a origem."""
+    """Move os lançamentos, as transferências e os itens do planejamento da categoria para o destino,
+    do mesmo tipo, e exclui a origem."""
 
     def trabalho(conn):
         origem, destino = _categoria(conn, id), _categoria(conn, juncao.destino_id)
@@ -48,6 +93,12 @@ def juntar_categoria(
             (destino.id, origem.id),
         )
         conn.execute("DELETE FROM lancamento_categorias WHERE categoria_id = %s", (origem.id,))
+        _juntar_itens_do_planejamento(conn, origem.id, destino.id)
+        _juntar_item_do_modelo(conn, origem.id, destino.id)
+        conn.execute(
+            "UPDATE transferencias SET categoria_id = %s WHERE categoria_id = %s",
+            (destino.id, origem.id),
+        )
         conn.execute("DELETE FROM categorias WHERE id = %s", (origem.id,))
         return destino
 
@@ -63,6 +114,18 @@ def excluir_categoria(id: UUID, usuario: UsuarioLogado, request: Request) -> Res
             "SELECT 1 FROM lancamento_categorias WHERE categoria_id = %s LIMIT 1", (id,)
         ).fetchone():
             raise HTTPException(status_code=409, detail="categoria com lançamentos")
+        if conn.execute(
+            "SELECT 1 FROM transferencias WHERE categoria_id = %s LIMIT 1", (id,)
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="categoria com transferências")
+        if conn.execute(
+            "SELECT 1 FROM itens_do_planejamento WHERE categoria_id = %s LIMIT 1", (id,)
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="categoria com item do planejamento")
+        if conn.execute(
+            "SELECT 1 FROM modelo_do_planejamento WHERE categoria_id = %s", (id,)
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="categoria no modelo do planejamento")
         conn.execute("DELETE FROM categorias WHERE id = %s", (id,))
 
     em_transacao(url_do_banco(request), trabalho)

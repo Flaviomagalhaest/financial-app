@@ -69,6 +69,18 @@ _Avoid_: motor de sugestão
 Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz).
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 
+**Ocorrência**:
+Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a excluída não volta.
+_Avoid_: instância, repetição
+
+**Horizonte**:
+Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária.
+_Avoid_: janela, limite
+
+**Tarefa diária**:
+Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o horizonte das recorrências e realiza os automáticos do dia. Rodar de novo no mesmo dia não muda nada.
+_Avoid_: job, cron, rotina noturna
+
 **Parcelamento**:
 Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela.
 _Avoid_: compra parcelada, financiamento
@@ -102,6 +114,10 @@ _Avoid_: orçamento, meta
 **Item do planejamento**:
 Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: R$ 1.000 em alimentação), comparada com os lançamentos realizados e previstos do mês que contam nele; cada lançamento conta em no máximo um item, mesmo tendo várias categorias.
 _Avoid_: teto, limite, meta
+
+**Modelo padrão do planejamento**:
+Conjunto de itens (categoria e valor) que o casal mantém nas configurações e aplica a um mês vazio para não começar o planejamento do zero; vale para qualquer mês e não é um mês. Não é um **Favorito**, que é um lançamento-modelo.
+_Avoid_: modelo (sozinho), template
 
 ### Consulta
 
@@ -208,6 +224,14 @@ _Avoid_: pendente, offline, na fila, não sincronizado
 **Conflito**:
 Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica.
 _Avoid_: colisão, divergência
+
+**Parece repetido**:
+Aviso, para quem não o criou, de um lançamento que chegou depois de outro da outra pessoa com o mesmo valor, a mesma conta e data a até 1 dia; o casal escolhe "Manter os dois" ou "Excluir este".
+_Avoid_: duplicado, duplicata
+
+**Fonte do lançamento**:
+De onde o lançamento veio: o "app" ou o "importado do Mobills".
+_Avoid_: autoria (é quem criou ou alterou)
 
 **Versão do lançamento**:
 Número que sobe a cada mudança aceita num lançamento; cada campo guarda a versão em que mudou por último, e uma mudança diz sobre qual versão foi feita, para o servidor saber o que o outro lado mudou depois dela.
