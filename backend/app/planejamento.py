@@ -3,7 +3,7 @@ conta neles. Não é lançamento e não mexe em saldo."""
 
 from datetime import date
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 from pydantic import BaseModel, Field
@@ -49,6 +49,19 @@ class Planejamento(BaseModel):
     itens: list[ItemDoPlanejamento]
     # A soma do que falta em cada item, sem compensar item estourado com a sobra de outro.
     ainda_da_para_gastar_centavos: int
+
+
+class ItemDoModelo(BaseModel):
+    categoria_id: UUID
+    valor_centavos: int = Field(gt=0)
+
+
+class ModeloPadrao(BaseModel):
+    itens: list[ItemDoModelo]
+
+
+class CopiaDeMes(BaseModel):
+    de: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", examples=["2026-09"])
 
 
 class MudancaDeItem(BaseModel):
@@ -115,11 +128,92 @@ def _ler(conn, mes: str) -> Planejamento:
     )
 
 
+def _gravar_itens(conn, dia: date, itens, usuario: str) -> None:
+    for categoria_id, valor in itens:
+        conn.execute(
+            "INSERT INTO itens_do_planejamento (id, mes, categoria_id, valor_centavos,"
+            " criado_por, alterado_por) VALUES (%s, %s, %s, %s, %s, %s)",
+            (uuid4(), dia, categoria_id, valor, usuario, usuario),
+        )
+
+
+def _gravar_itens_no_mes_vazio(conn, dia: date, itens, usuario: str) -> None:
+    if conn.execute("SELECT 1 FROM itens_do_planejamento WHERE mes = %s", (dia,)).fetchone():
+        raise HTTPException(status_code=409, detail="o mês já tem itens")
+    _gravar_itens(conn, dia, itens, usuario)
+
+
 def _item(conn, id: UUID) -> ItemDoPlanejamento:
     mes = conn.execute("SELECT mes FROM itens_do_planejamento WHERE id = %s", (id,)).fetchone()
     if not mes:
         raise HTTPException(status_code=404, detail="item não encontrado")
     return next(i for i in _ler(conn, mes[0].strftime("%Y-%m")).itens if i.id == id)
+
+
+def _modelo(conn) -> ModeloPadrao:
+    return ModeloPadrao(
+        itens=[
+            ItemDoModelo(categoria_id=categoria_id, valor_centavos=valor)
+            for categoria_id, valor in conn.execute(
+                "SELECT categoria_id, valor_centavos FROM modelo_do_planejamento"
+                " ORDER BY alterado_em, categoria_id"
+            )
+        ]
+    )
+
+
+# As rotas do modelo vêm antes das de `{mes}`, para "modelo" não ser lido como mês.
+@router.get("/planejamento/modelo", response_model=ModeloPadrao, operation_id="ler_modelo_padrao")
+def ler_modelo(usuario: UsuarioLogado, request: Request) -> ModeloPadrao:
+    with conectar(url_do_banco(request)) as conn:
+        return _modelo(conn)
+
+
+@router.put(
+    "/planejamento/modelo", response_model=ModeloPadrao, operation_id="definir_modelo_padrao"
+)
+def definir_modelo(modelo: ModeloPadrao, usuario: UsuarioLogado, request: Request) -> ModeloPadrao:
+    """Troca o modelo padrão inteiro pelo conjunto enviado (categoria e valor, sem repetir)."""
+    categorias = [i.categoria_id for i in modelo.itens]
+    if len(set(categorias)) != len(categorias):
+        raise recusar("categoria repetida no modelo")
+
+    def gravar(conn):
+        achadas = conn.execute(
+            "SELECT count(*) FROM categorias WHERE id = ANY(%s)", (categorias,)
+        ).fetchone()[0]
+        if achadas != len(categorias):
+            raise recusar("categoria não encontrada")
+        conn.execute("DELETE FROM modelo_do_planejamento")
+        for item in modelo.itens:
+            conn.execute(
+                "INSERT INTO modelo_do_planejamento (categoria_id, valor_centavos, alterado_por)"
+                " VALUES (%s, %s, %s)",
+                (item.categoria_id, item.valor_centavos, usuario),
+            )
+        return _modelo(conn)
+
+    return em_transacao(url_do_banco(request), gravar)
+
+
+@router.post(
+    "/planejamento/{mes}/aplicar-modelo",
+    status_code=201,
+    response_model=Planejamento,
+    operation_id="aplicar_modelo_padrao",
+)
+def aplicar_modelo(mes: Mes, usuario: UsuarioLogado, request: Request) -> Planejamento:
+    """Cria os itens do modelo padrão neste mês, que precisa estar vazio."""
+
+    def gravar(conn):
+        dia = _primeiro_dia(mes)
+        itens = [(i.categoria_id, i.valor_centavos) for i in _modelo(conn).itens]
+        if not itens:
+            raise recusar("o modelo padrão está vazio")
+        _gravar_itens_no_mes_vazio(conn, dia, itens, usuario)
+        return _ler(conn, mes)
+
+    return em_transacao(url_do_banco(request), gravar)
 
 
 @router.get("/planejamento/{mes}", response_model=Planejamento, operation_id="ler_planejamento")
@@ -164,6 +258,33 @@ def criar_item(
             (novo.id, dia, novo.categoria_id, novo.valor_centavos, usuario, usuario),
         )
         return _item(conn, novo.id)
+
+    return em_transacao(url_do_banco(request), gravar)
+
+
+@router.post(
+    "/planejamento/{mes}/copiar",
+    status_code=201,
+    response_model=Planejamento,
+    operation_id="copiar_planejamento",
+)
+def copiar_planejamento(
+    mes: Mes, copia: CopiaDeMes, usuario: UsuarioLogado, request: Request
+) -> Planejamento:
+    """Copia os itens (categoria e valor) de outro mês para este, que precisa estar vazio."""
+    if copia.de == mes:
+        raise recusar("a origem é o próprio mês")
+
+    def gravar(conn):
+        dia = _primeiro_dia(mes)
+        itens = conn.execute(
+            "SELECT categoria_id, valor_centavos FROM itens_do_planejamento WHERE mes = %s",
+            (_primeiro_dia(copia.de),),
+        ).fetchall()
+        if not itens:
+            raise recusar("o mês de origem não tem itens")
+        _gravar_itens_no_mes_vazio(conn, dia, itens, usuario)
+        return _ler(conn, mes)
 
     return em_transacao(url_do_banco(request), gravar)
 

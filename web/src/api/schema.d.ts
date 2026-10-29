@@ -387,6 +387,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/planejamento/modelo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Modelo */
+        get: operations["ler_modelo_padrao"];
+        /**
+         * Definir Modelo
+         * @description Troca o modelo padrão inteiro pelo conjunto enviado (categoria e valor, sem repetir).
+         */
+        put: operations["definir_modelo_padrao"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}/aplicar-modelo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aplicar Modelo
+         * @description Cria os itens do modelo padrão neste mês, que precisa estar vazio.
+         */
+        post: operations["aplicar_modelo_padrao"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/planejamento/{mes}": {
         parameters: {
             query?: never;
@@ -415,6 +456,26 @@ export interface paths {
         put?: never;
         /** Criar Item */
         post: operations["criar_item_do_planejamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planejamento/{mes}/copiar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copiar Planejamento
+         * @description Copia os itens (categoria e valor) de outro mês para este, que precisa estar vazio.
+         */
+        post: operations["copiar_planejamento"];
         delete?: never;
         options?: never;
         head?: never;
@@ -645,6 +706,14 @@ export interface components {
             /** Lancamentos */
             lancamentos: components["schemas"]["Lancamento"][];
         };
+        /** CopiaDeMes */
+        CopiaDeMes: {
+            /**
+             * De
+             * @example 2026-09
+             */
+            de: string;
+        };
         /** EdicaoDeConta */
         EdicaoDeConta: {
             /** Nome */
@@ -702,6 +771,16 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ItemDoModelo */
+        ItemDoModelo: {
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
         };
         /** ItemDoPlanejamento */
         ItemDoPlanejamento: {
@@ -808,6 +887,11 @@ export interface components {
         Lote: {
             /** Acoes */
             acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"])[];
+        };
+        /** ModeloPadrao */
+        ModeloPadrao: {
+            /** Itens */
+            itens: components["schemas"]["ItemDoModelo"][];
         };
         /** MudancaDeItem */
         MudancaDeItem: {
@@ -1981,6 +2065,90 @@ export interface operations {
             };
         };
     };
+    ler_modelo_padrao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeloPadrao"];
+                };
+            };
+        };
+    };
+    definir_modelo_padrao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModeloPadrao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeloPadrao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    aplicar_modelo_padrao: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Planejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ler_planejamento: {
         parameters: {
             query?: never;
@@ -2034,6 +2202,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemDoPlanejamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copiar_planejamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopiaDeMes"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Planejamento"];
                 };
             };
             /** @description Validation Error */

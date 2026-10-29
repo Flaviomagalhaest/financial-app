@@ -1,7 +1,7 @@
 # Copiar planejamento e modelo padrão
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 49
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Sonnet
@@ -15,7 +15,15 @@ O casal monta o mês copiando o anterior ou um modelo padrão em vez de começar
 
 ## Checklist
 
-- [ ] Copiar o planejamento do mês anterior para um mês vazio
-- [ ] Modelo padrão (conjunto de itens com valor) editável nas configurações e aplicável a um mês
-- [ ] Testes de API
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Copiar o planejamento do mês anterior para um mês vazio
+- [x] Modelo padrão (conjunto de itens com valor) editável nas configurações e aplicável a um mês
+- [x] Testes de API
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas da implementação
+
+- Cópia: `POST /api/planejamento/{mes}/copiar` com `{"de": "YYYY-MM"}`; o destino precisa estar vazio (409) e a origem ter item (422).
+- Modelo padrão: tabela `modelo_do_planejamento` (migration 0022, uma linha por categoria), `GET`/`PUT /api/planejamento/modelo` (o PUT troca o conjunto inteiro) e `POST /api/planejamento/{mes}/aplicar-modelo` (mês vazio). Juntar categorias soma o item do modelo e excluir categoria com item no modelo é recusado.
+- Backup na versão 10, com conversor da 9 (modelo vazio).
+- Só a API; a tela de configurações e o botão de copiar/aplicar ficam para a interface do planejamento.
+- **Pendências**: a tela de configurações do modelo e os botões de copiar/aplicar ficam como linha nova no ticket [54](54-aba-mes.md). O formato do modelo (um conjunto de itens com valor) é provisório até o casal usar. `copiar` e `aplicar-modelo` não são idempotentes: um reenvio devolve 409 (a escolha é só online, como a edição de itens). Copiar e aplicar não olham categoria arquivada, como `criar_item`.
