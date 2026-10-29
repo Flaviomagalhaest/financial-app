@@ -81,6 +81,9 @@ def test_fatura_nasce_na_primeira_compra_com_as_datas_padrao(casal: Casal):
             "fechamento": "2026-02-28",
             "vencimento": "2026-03-08",
             "situacao": "fechada",
+            "compras_centavos": 24070,
+            "ajuste_centavos": 0,
+            "total_centavos": 24070,
         }
     ]
 

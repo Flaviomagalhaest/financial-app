@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 from pydantic import BaseModel, Field
 
+from app import faturas
 from app.banco import conectar, em_transacao
 from app.lancamentos import recusar, url_do_banco
 from app.login import UsuarioLogado
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/api")
 Mes = Annotated[str, Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", examples=["2026-10"])]
 
 
-def _primeiro_dia(mes: str) -> date:
+def primeiro_dia(mes: str) -> date:
     ano, numero = map(int, mes.split("-"))
     return date(ano, numero, 1)
 
@@ -47,8 +48,12 @@ class ItemDoPlanejamento(BaseModel):
 class Planejamento(BaseModel):
     mes: str
     itens: list[ItemDoPlanejamento]
-    # A soma do que falta em cada item, sem compensar item estourado com a sobra de outro.
+    # A soma do que falta em cada item, sem compensar item estourado com a sobra de outro, menos
+    # os ajustes de fatura do mês (ADR 0008): eles saíram do bolso mas não são de item nenhum.
+    # Não fica abaixo de zero.
     ainda_da_para_gastar_centavos: int
+    # Os ajustes de fatura do mês, que contam aqui e no total, mas não em item.
+    ajustes_de_fatura_centavos: int = 0
 
 
 class ItemDoModelo(BaseModel):
@@ -77,7 +82,10 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
     movimentos: list[tuple[UUID, str, int]] = []
     por_lancamento: dict[UUID, tuple[str, int, set[UUID]]] = {}
     for id, situacao, valor, categoria_id in conn.execute(
-        "SELECT l.id, l.situacao, l.valor_centavos, lc.categoria_id FROM lancamentos l"
+        "SELECT l.id, l.situacao,"
+        # O estorno diminui o item da compra que ele devolve.
+        " CASE WHEN l.estorno_de IS NULL THEN l.valor_centavos ELSE -l.valor_centavos END,"
+        " lc.categoria_id FROM lancamentos l"
         " JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"
         # Pelo índice do mês; o de antes da migration 0034 sem mês, pela data.
         " WHERE l.excluido_em IS NULL AND lc.categoria_id = ANY(%s)"
@@ -98,7 +106,7 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
 
 
 def _ler(conn, mes: str) -> Planejamento:
-    dia = _primeiro_dia(mes)
+    dia = primeiro_dia(mes)
     linhas = conn.execute(
         "SELECT id, categoria_id, valor_centavos FROM itens_do_planejamento WHERE mes = %s"
         " ORDER BY criado_em, id",
@@ -123,10 +131,14 @@ def _ler(conn, mes: str) -> Planejamento:
         )
         for id, categoria_id, planejado in linhas
     ]
+    ajustes = faturas.ajustes_do_mes(conn, dia)
     return Planejamento(
         mes=mes,
         itens=itens,
-        ainda_da_para_gastar_centavos=sum(max(i.ainda_da_para_gastar_centavos, 0) for i in itens),
+        ainda_da_para_gastar_centavos=max(
+            sum(max(i.ainda_da_para_gastar_centavos, 0) for i in itens) - ajustes, 0
+        ),
+        ajustes_de_fatura_centavos=ajustes,
     )
 
 
@@ -208,7 +220,7 @@ def aplicar_modelo(mes: Mes, usuario: UsuarioLogado, request: Request) -> Planej
     """Cria os itens do modelo padrão neste mês, que precisa estar vazio."""
 
     def gravar(conn):
-        dia = _primeiro_dia(mes)
+        dia = primeiro_dia(mes)
         itens = [(i.categoria_id, i.valor_centavos) for i in _modelo(conn).itens]
         if not itens:
             raise recusar("o modelo padrão está vazio")
@@ -234,7 +246,7 @@ def criar_item(
     mes: Mes, novo: NovoItem, usuario: UsuarioLogado, request: Request, response: Response
 ) -> ItemDoPlanejamento:
     def gravar(conn):
-        dia = _primeiro_dia(mes)
+        dia = primeiro_dia(mes)
         existente = conn.execute(
             "SELECT mes, categoria_id, valor_centavos FROM itens_do_planejamento WHERE id = %s",
             (novo.id,),
@@ -278,10 +290,10 @@ def copiar_planejamento(
         raise recusar("a origem é o próprio mês")
 
     def gravar(conn):
-        dia = _primeiro_dia(mes)
+        dia = primeiro_dia(mes)
         itens = conn.execute(
             "SELECT categoria_id, valor_centavos FROM itens_do_planejamento WHERE mes = %s",
-            (_primeiro_dia(copia.de),),
+            (primeiro_dia(copia.de),),
         ).fetchall()
         if not itens:
             raise recusar("o mês de origem não tem itens")

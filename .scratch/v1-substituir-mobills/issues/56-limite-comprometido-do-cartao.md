@@ -19,3 +19,7 @@ O casal vê quanto do limite já está ocupado, só na aba Cartões, como decidi
 - [ ] Barra na linha do cartão (só com limite informado) e, no detalhe, as três partes, os parcelamentos em andamento e a lista dos próximos 12 meses
 - [ ] Testes de API com exemplos concretos
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): O estorno (`estorno_de`, ADR 0016) é um lançamento de despesa que diminui: a soma do comprometido usa `GASTO_NO_CARTAO` (`app/lancamentos.py`) e o ajuste da fatura (`faturas.ajuste_centavos`) entra no total da fatura fechada.

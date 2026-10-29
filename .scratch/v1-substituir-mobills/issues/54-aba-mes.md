@@ -21,3 +21,7 @@ O casal navega mês a mês, lê o fechamento do mês em texto corrido e compara 
 - [ ] Ranking por categoria, tag ou pessoa que abre os lançamentos numa folha; barras e listas, sem pizza
 - [ ] Tudo pelo mês da fatura ([ADR 0003](../../../docs/adr/0003-compra-no-cartao-conta-no-mes-da-fatura.md)); testes de API
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): As despesas do mês (compras menos estornos, mais os ajustes de fatura) e os totais por categoria e por tag (sem o ajuste) saem de `GET /api/meses/{mes}/totais` (`app/meses.py`); o fechamento do mês parte dali, e o ajuste de fatura entra nas despesas dele e não em categoria nem tag.

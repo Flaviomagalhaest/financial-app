@@ -135,3 +135,11 @@ def garantir_fatura(conn, titular: Titular, mes: date) -> None:
         " ON CONFLICT (cartao_id, mes) DO NOTHING",
         (titular.id, mes, fechamento, vencimento),
     )
+
+
+def ajustes_do_mes(conn, mes: date) -> int:
+    """A soma dos ajustes das faturas do mês, de todos os cartões (ADR 0008)."""
+    (soma,) = conn.execute(
+        "SELECT COALESCE(SUM(ajuste_centavos), 0)::bigint FROM faturas WHERE mes = %s", (mes,)
+    ).fetchone()
+    return soma
