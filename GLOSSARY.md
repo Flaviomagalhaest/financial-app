@@ -231,6 +231,14 @@ _Avoid_: importação do backup, merge
 O dia em que o casal para de lançar no Mobills e passa a lançar só no app; a última importação do histórico do Mobills acontece nele, e antes dele a importação pode ser refeita quantas vezes for preciso.
 _Avoid_: migração, corte, go-live
 
+**Planilha de revisão**:
+A planilha que o importador do Mobills escreve a cada rodada com o que ele não decide sozinho (a conta e os cartões, o de-para, os pares prováveis, as parcelas) e as abas Conferência e Faturas; o dono a edita e roda de novo, e o que ele editou vale na rodada seguinte.
+_Avoid_: relatório, planilha de importação
+
+**Par provável**:
+Uma linha de fatura e uma do geral que sobraram do cruzamento no mesmo mês e são as únicas com aquele valor; viram uma compra só quando o dono as junta na planilha de revisão, e até lá cada uma entra sozinha.
+_Avoid_: par duvidoso, casamento parcial
+
 ### Sem internet
 
 **Não enviado**:
