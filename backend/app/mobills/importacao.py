@@ -16,7 +16,8 @@ from app.mobills.leitura import (
     pastas_de_fatura,
 )
 
-ORIGEM = "importado do Mobills"
+# A fonte do lançamento importado (ticket 41): `lancamentos.fonte`, que no app fica `NULL`.
+FONTE = "mobills"
 TIPOS_DE_CONTA = ("corrente", "poupanca", "carteira")
 
 
@@ -52,7 +53,7 @@ class Lancamento:
     cartao: str | None  # o nome do cadastro; sem cartão, entra na conta
     parcela: tuple[int, int] | None
     pessoa: str | None = None  # sem pessoa é do conjunto
-    origem: str = ORIGEM
+    fonte: str = FONTE
 
 
 @dataclass

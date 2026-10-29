@@ -50,9 +50,7 @@ def test_compra_de_cartao_casada_entra_uma_vez_com_a_data_e_o_cartao_da_fatura(p
     salario = next(x for x in importacao.lancamentos if x.descricao == "Salário")
     assert (salario.tipo, salario.valor_centavos) == ("receita", 500000)
     assert len(importacao.lancamentos) == 3
-    assert all(
-        x.origem == "importado do Mobills" and x.pessoa is None for x in importacao.lancamentos
-    )
+    assert all(x.fonte == "mobills" and x.pessoa is None for x in importacao.lancamentos)
 
 
 def test_linhas_iguais_casam_na_ordem_e_a_sobra_da_fatura_entra_so_com_o_que_a_fatura_tem(pastas):
