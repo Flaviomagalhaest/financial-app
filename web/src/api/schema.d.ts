@@ -671,6 +671,28 @@ export interface paths {
         patch: operations["alterar_recorrencia"];
         trace?: never;
     };
+    "/api/parcelamentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Parcelamentos */
+        get: operations["listar_parcelamentos"];
+        put?: never;
+        /**
+         * Criar Parcelamento
+         * @description Grava o parcelamento e gera todas as parcelas. Reenviar o mesmo id (a fila repete)
+         *     devolve o gravado, com 200, e completa a geração se ela tiver parado no meio.
+         */
+        post: operations["criar_parcelamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -683,6 +705,15 @@ export interface components {
              */
             acao: "criar";
             lancamento: components["schemas"]["NovoLancamento"];
+        };
+        /** AcaoCriarParcelamento */
+        AcaoCriarParcelamento: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "criar_parcelamento";
+            parcelamento: components["schemas"]["NovoParcelamento"];
         };
         /** AcaoEditar */
         AcaoEditar: {
@@ -1178,6 +1209,12 @@ export interface components {
              * @default false
              */
             automatico: boolean;
+            /** Parcelamento Id */
+            parcelamento_id?: string | null;
+            /** Parcela */
+            parcela?: number | null;
+            /** Parcelas */
+            parcelas?: number | null;
             /** Versao */
             versao: number;
             /** Criado Por */
@@ -1206,7 +1243,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoCriarParcelamento"])[];
         };
         /** ModeloPadrao */
         ModeloPadrao: {
@@ -1436,6 +1473,110 @@ export interface components {
             /** Acao Em */
             acao_em?: string | null;
         };
+        /** NovoParcelamento */
+        NovoParcelamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @default despesa
+             * @constant
+             */
+            tipo: "despesa";
+            /** Parcelas */
+            parcelas: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos?: number | null;
+            /** Valor Da Parcela Centavos */
+            valor_da_parcela_centavos?: number | null;
+            /** Automatico */
+            automatico?: boolean | null;
+        };
+        /** Parcelamento */
+        Parcelamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @default despesa
+             * @constant
+             */
+            tipo: "despesa";
+            /** Parcelas */
+            parcelas: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos: number;
+            /** Automatico */
+            automatico: boolean;
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
+        };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
             /**
@@ -1551,7 +1692,8 @@ export interface components {
         /**
          * Resultado
          * @description `recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os
-         *     campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu.
+         *     campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O
+         *     parcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos.
          */
         Resultado: {
             /**
@@ -1562,6 +1704,7 @@ export interface components {
             /** Motivo */
             motivo?: string | null;
             lancamento?: components["schemas"]["Lancamento"] | null;
+            parcelamento?: components["schemas"]["Parcelamento"] | null;
             /** Campos */
             campos?: components["schemas"]["CampoEmConflito"][] | null;
             exclusao?: components["schemas"]["Exclusao"] | null;
@@ -3163,6 +3306,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Recorrencia"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_parcelamentos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parcelamento"][];
+                };
+            };
+        };
+    };
+    criar_parcelamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoParcelamento"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parcelamento"];
                 };
             };
             /** @description Validation Error */
