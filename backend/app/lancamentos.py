@@ -511,7 +511,7 @@ def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
         )
 
 
-def _gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
+def gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
     conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
     for categoria in categorias:
         conn.execute(
@@ -805,7 +805,7 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
         ),
     ).rowcount
     if gravados:
-        _gravar_categorias(conn, novo.id, novo.categoria_ids)
+        gravar_categorias(conn, novo.id, novo.categoria_ids)
         _gravar_tags(conn, novo.id, novo.tags, usuario)
     return _atual(conn, novo.id, usuario), bool(gravados)
 
@@ -879,7 +879,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     )
     registrar_mudancas(conn, id, mudancas, versao, usuario, momento)
     if "categoria_ids" in mudancas:
-        _gravar_categorias(conn, id, editado.categoria_ids)
+        gravar_categorias(conn, id, editado.categoria_ids)
     if "tags" in mudancas:
         _gravar_tags(conn, id, editado.tags, usuario)
     return _um(conn, id)
