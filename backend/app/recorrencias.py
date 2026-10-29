@@ -12,7 +12,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from app import lancamentos
+from app import faturas, lancamentos
 from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
@@ -182,21 +182,14 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
-    tags = [
-        tag
-        for (tag,) in conn.execute(
-            "SELECT tag_id FROM recorrencia_tags WHERE recorrencia_id = %s", (id,)
-        )
-    ]
+    tags = _tags_da_regra(conn, id)
     # O DSQL aceita até 3.000 linhas por transação: a mesma folga da restauração.
     por_lote = max(1, LINHAS_POR_LOTE // (1 + len(categorias) + len(tags)))
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     proximas: list[tuple[int, date]] = []
     for n in range(geradas + 1, geradas + 1 + por_lote):
         dia = data_da_ocorrencia(regra, n)
-        if (regra.vezes and n > regra.vezes) or (regra.ate and dia > regra.ate):
-            break
-        if dia > ultimo_dia:
+        if _fora_do_fim(regra, n, dia) or dia > ultimo_dia:
             break
         proximas.append((n, dia))
     if not proximas:
@@ -255,6 +248,15 @@ def gerar_ate_o_horizonte(url: str | None, id: UUID) -> None:
     próxima chamada (ou a tarefa diária) continua de onde parou."""
     while em_transacao(url, lambda conn: _gerar_um_lote(conn, id)):
         pass
+
+
+def _tags_da_regra(conn, id: UUID) -> list[UUID]:
+    return [
+        tag
+        for (tag,) in conn.execute(
+            "SELECT tag_id FROM recorrencia_tags WHERE recorrencia_id = %s", (id,)
+        )
+    ]
 
 
 def _campos_da_regra(nova: NovaRecorrencia) -> dict:
@@ -411,7 +413,8 @@ def _por_lote(regra: Recorrencia) -> int:
 def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     """Põe os previstos de acordo com a regra de hoje, até um lote, e devolve se pode faltar
     algum: tira os que passaram do fim e refaz, da ocorrência `desde` em diante, os que ninguém
-    alterou à mão (campo com `origem` vazia). Não toca no realizado. O que já está como a regra
+    alterou à mão (previsto com algum campo de `origem` vazia, mexido por uma pessoa, fica como
+    está por inteiro). Não toca no realizado. O que já está como a regra
     manda não conta, por isso o lote seguinte sempre anda."""
     [regra] = _ler(conn, "id = %s", (id,))
     previstos = conn.execute(
@@ -468,16 +471,13 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             "categoria_ids": categorias.get(lancamento_id, set()),
             "tags": tags.get(lancamento_id, set()),
         }
-        quer = regras | {"data": data_da_ocorrencia(regra, n)}
+        # Antes da última mudança de calendário a regra não sabe mais a data: fica a que tem.
+        dia_novo = data_da_ocorrencia(regra, n) if n >= regra.ocorrencia_do_inicio else dia
+        quer = regras | {"data": dia_novo}
         mudou = [campo for campo in quer if quer[campo] != tem[campo]]
         if mudou or automatico != regra.automatico:
             trabalho.append((lancamento_id, versao, mudou, quer["data"]))
-    tags_da_regra = [
-        tag
-        for (tag,) in conn.execute(
-            "SELECT tag_id FROM recorrencia_tags WHERE recorrencia_id = %s", (id,)
-        )
-    ]
+    tags_da_regra = _tags_da_regra(conn, id)
     agora = datetime.now(UTC)
     por_lote = _por_lote(regra)
     for item in trabalho[:por_lote]:
@@ -504,6 +504,9 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
                 agora,
             ),
         )
+        # A fatura que o app escolheu de novo conta como mudança da regra (ADR 0011).
+        if {"data", "conta_id"} & set(mudou) and faturas.ler_cartao(conn, regra.conta_id):
+            mudou.append("fatura_mes")
         registrar_mudancas(
             conn, lancamento_id, mudou, nova, usuario, agora, origem=origem(regra.descricao)
         )
@@ -520,7 +523,9 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
 
 
 def _mudar(conn, id: UUID, alteracao: AlteracaoDeRecorrencia, usuario: str) -> Recorrencia:
-    """Grava a regra nova; o reajuste dos previstos vem depois, em lotes."""
+    """Valida e grava a regra nova (a ocorrência precisa existir; `ate` e `vezes` não valem juntos;
+    mudar o calendário remarca o `inicio` na ocorrência dada); o reajuste dos previstos vem
+    depois, em lotes."""
     if not (lidas := _ler(conn, "id = %s", (id,))):
         raise HTTPException(status_code=404, detail="recorrência não encontrada")
     [atual] = lidas
@@ -543,14 +548,9 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeRecorrencia, usuario: str) -> R
     try:
         nova = Recorrencia(**(atual.model_dump() | pedidas))
     except ValidationError as erro:
-        raise recusar("; ".join(e["msg"] for e in erro.errors()))
+        raise recusar("; ".join(e["msg"] for e in erro.errors())) from erro
     conferir_ligacoes(conn, nova, atual.conta_id, frozenset(atual.categoria_ids))
-    tags_de_antes = {
-        tag
-        for (tag,) in conn.execute(
-            "SELECT tag_id FROM recorrencia_tags WHERE recorrencia_id = %s", (id,)
-        )
-    }
+    tags_de_antes = set(_tags_da_regra(conn, id))
     tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes)
     if not conn.execute(
         "UPDATE recorrencias SET tipo = %s, valor_centavos = %s, tipo_do_valor = %s,"
@@ -637,6 +637,15 @@ def excluir_recorrencia(id: UUID, usuario: UsuarioLogado, request: Request) -> R
     """Idempotente. Tira a regra e os previstos de hoje em diante; o realizado e o atrasado
     ficam, como lançamentos que a regra gerou."""
     url = url_do_banco(request)
+
+    def fechar(conn) -> None:
+        # Sem fim ontem, a tarefa diária geraria previstos novos enquanto os de hoje saem.
+        conn.execute(
+            "UPDATE recorrencias SET ate = %s, vezes = NULL WHERE id = %s",
+            (lancamentos.hoje() - timedelta(days=1), id),
+        )
+
+    em_transacao(url, fechar)
     while em_transacao(url, lambda conn: _excluir_um_lote(conn, id, usuario)):
         pass
 

@@ -609,3 +609,55 @@ def test_mudar_ou_excluir_recorrencia_que_nao_existe(casal: Casal):
 
     assert resposta.status_code == 404
     assert casal.pedir("esposa", "DELETE", f"/api/recorrencias/{uuid4()}").status_code == 204
+
+
+def test_mudar_um_campo_de_antes_da_mudanca_de_calendario_nao_remarca_as_datas_do_passado(
+    casal: Casal,
+):
+    conta, seguro = casal.conta(), casal.categoria("Seguro")
+    nova = recorrencia(conta, [seguro], inicio="2026-11-10", vezes=6)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    mudar(casal, nova["id"], 5, a_cada=2)
+
+    mudar(casal, nova["id"], 2, valor_centavos=21000)
+
+    assert [
+        (l["ocorrencia"], l["data"], l["valor_centavos"]) for l in gerados(casal, nova["id"])
+    ] == [
+        (1, "2026-11-10", 18990),
+        (2, "2026-12-10", 21000),
+        (3, "2027-01-10", 21000),
+        (4, "2027-02-10", 21000),
+        (5, "2027-03-10", 21000),
+        (6, "2027-05-10", 21000),
+    ]
+
+
+def test_mudar_o_dia_da_recorrencia_no_cartao_registra_a_fatura_como_mudanca_da_regra(
+    casal: Casal,
+):
+    cartao = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/cartoes",
+        json={"nome": "Nubank", "dia_fechamento": 25, "dia_vencimento": 5},
+    ).json()["id"]
+    nova = recorrencia(cartao, [casal.categoria("Assinaturas")], inicio="2026-11-20", vezes=1)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    [previsto] = gerados(casal, nova["id"])
+
+    # O dia 20 passa para o 26, que fecha na fatura seguinte.
+    mudar(casal, nova["id"], 1, inicio="2026-11-26")
+
+    [depois] = gerados(casal, nova["id"])
+    assert (depois["data"], depois["fatura_mes"]) == ("2026-11-26", "2026-12-01")
+    resposta = casal.pedir(
+        "esposa",
+        "PATCH",
+        f"/api/lancamentos/{previsto['id']}",
+        json={"versao": 1, "fatura_mes": "2026-11-01"},
+    )
+    assert resposta.status_code == 409
+    assert [(c["campo"], c["origem"]) for c in resposta.json()["campos"]] == [
+        ("fatura_mes", "a recorrência Luz")
+    ]
