@@ -5,6 +5,10 @@ import type { components } from "../api/schema";
 
 export type NovoLancamento = components["schemas"]["NovoLancamento"];
 export type Lancamento = components["schemas"]["Lancamento"];
+export type Conflito = components["schemas"]["Conflito"];
+export type Exclusao = components["schemas"]["Exclusao"];
+/** O lançamento numa versão do servidor: a edição sobe só o que mudou desde ela (ADR 0011). */
+export type Base = NovoLancamento & { versao: number };
 
 /** Uma mudança não enviada: no máximo uma por lançamento, a soma do que se fez nele. */
 export interface ItemDaFila {
@@ -20,6 +24,15 @@ export interface ItemDaFila {
   recusa?: string;
   /** No criar enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
   talvezNoServidor?: number;
+  /**
+   * A versão do servidor sobre a qual a mudança foi feita: a edição sobe só os campos que
+   * mudaram desde ela, e a exclusão leva a versão. No criar talvez gravado, o que foi enviado.
+   */
+  base?: Base;
+  /** O servidor recusou como conflito: a versão dele e os campos que esperam a decisão. */
+  conflito?: Conflito;
+  /** A exclusão venceu: a mudança não foi salva e espera "Lançar de novo" ou ser dispensada. */
+  exclusao?: Exclusao;
 }
 
 export interface Guardada<T> {

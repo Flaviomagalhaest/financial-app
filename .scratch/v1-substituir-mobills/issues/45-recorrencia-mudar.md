@@ -18,6 +18,6 @@ O casal acompanha um reajuste ou uma cobrança atípica sem mexer no passado.
 - [ ] Mudar "daqui para frente" em qualquer campo; mudar só um mês, preservado de mudanças posteriores; pular um mês
 - [ ] Encerrar ou excluir apaga os previstos depois da data de fim; mudar nunca reescreve um realizado
 - [ ] A recorrência guarda a escolha do item do planejamento (quando o ticket de item existir, o campo já nasce aqui)
-- [ ] Mudança de regra que colide com edição offline vira conflito marcado como vindo da regra ([ticket 34](34-conflito-de-campos.md))
+- [ ] Mudança de regra que colide com edição offline vira conflito marcado como vindo da regra ([ticket 34](34-conflito-de-campos.md)): a regra grava pelo `_registrar_mudancas(..., origem="a recorrência Luz")` e sobe a versão do lançamento, e a tela de conflito já mostra "O da regra <origem>"
 - [ ] Testes de API
 - [ ] Verificações do projeto rodando e PR aberto para `main`

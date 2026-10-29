@@ -23,6 +23,7 @@ Decidir aqui também a grafia dos nomes das colunas (hoje sem acento: `descricao
 - [ ] Lançamento de cartão traz o cartão e a fatura; lançamento de conta traz a conta e fatura vazia; transferência e pagamento de fatura têm o destino claro (decidir com o dono se precisar)
 - [ ] Lançamento com várias categorias e tags sai numa linha só, separados por ` | `
 - [ ] Lançamentos excluídos ou de outra origem não somem do CSV (todo o histórico), inclusive os "importado do Mobills"
+- [ ] O lançamento com a marca de exclusão (`excluido_em`, ticket 34) fica fora da planilha, como em todas as leituras; o item acima fala do histórico, não do que o casal excluiu
 - [ ] A consulta lê na mesma transação `REPEATABLE READ` de `exportar`
 - [ ] Remover `TABELAS_DA_PLANILHA` e o ramo que devolve lista vazia quando faltam tabelas
 - [ ] Verificações do projeto rodando e PR aberto para `main`

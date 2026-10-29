@@ -448,6 +448,16 @@
               }
             }
           },
+          "410": {
+            "description": "O lançamento foi excluído",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exclusao"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -467,8 +477,9 @@
       }
     },
     "/api/lancamentos/{id}": {
-      "put": {
+      "patch": {
         "summary": "Editar Lancamento",
+        "description": "Só os campos mudados, sobre uma versão: campos diferentes se mesclam, o mesmo campo\nmudado depois pelo outro lado é 409, e o excluído é 410 (ADR 0011).",
         "operationId": "editar_lancamento",
         "security": [
           {
@@ -492,7 +503,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NovoLancamento"
+                "$ref": "#/components/schemas/AlteracaoDeLancamento"
               }
             }
           }
@@ -504,6 +515,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Lancamento"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O outro lado mudou depois",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflito"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "O lançamento foi excluído",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exclusao"
                 }
               }
             }
@@ -522,7 +553,7 @@
       },
       "delete": {
         "summary": "Excluir Lancamento",
-        "description": "Idempotente: excluir o que já não existe também dá 204.",
+        "description": "Idempotente: excluir o que já não existe também dá 204. Com `versao`, o que o outro lado\nmudou depois dela é 409, para perguntar antes.",
         "operationId": "excluir_lancamento",
         "security": [
           {
@@ -539,11 +570,37 @@
               "format": "uuid",
               "title": "Id"
             }
+          },
+          {
+            "name": "versao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Versao"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "O outro lado mudou depois",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflito"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -584,7 +641,7 @@
     "/api/lancamentos/{id}/confirmar": {
       "post": {
         "summary": "Confirmar Lancamento",
-        "description": "Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um\ntoque) devolve o gravado; com ajuste diferente é 409, para nada se perder em silêncio.",
+        "description": "Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um\ntoque) devolve o gravado; com ajuste diferente é 409 com os campos em conflito e quem\nconfirmou, para nada se perder em silêncio.",
         "operationId": "confirmar_lancamento",
         "security": [
           {
@@ -620,6 +677,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Lancamento"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O outro lado mudou depois",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflito"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "O lançamento foi excluído",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exclusao"
                 }
               }
             }
@@ -1142,14 +1219,20 @@
             "const": "editar",
             "title": "Acao"
           },
-          "lancamento": {
-            "$ref": "#/components/schemas/NovoLancamento"
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "alteracao": {
+            "$ref": "#/components/schemas/AlteracaoDeLancamento"
           }
         },
         "type": "object",
         "required": [
           "acao",
-          "lancamento"
+          "id",
+          "alteracao"
         ],
         "title": "AcaoEditar"
       },
@@ -1164,6 +1247,17 @@
             "type": "string",
             "format": "uuid",
             "title": "Id"
+          },
+          "versao": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versao"
           }
         },
         "type": "object",
@@ -1204,6 +1298,179 @@
         "title": "AlteracaoDeCategoria",
         "description": "Só o nome e o arquivamento mudam; o tipo é fixo porque os lançamentos dependem dele."
       },
+      "AlteracaoDeLancamento": {
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Versao"
+          },
+          "tipo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "despesa",
+                  "receita"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "descricao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descricao"
+          },
+          "conta_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Ids"
+          },
+          "situacao": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "previsto",
+                  "realizado"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Situacao"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "versao"
+        ],
+        "title": "AlteracaoDeLancamento",
+        "description": "Só os campos que a pessoa mudou, feitos sobre a `versao` que o aparelho tinha; o campo\nausente fica como está no servidor, com o que o outro lado tiver mudado nele (ADR 0011)."
+      },
+      "CampoEmConflito": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "enum": [
+              "tipo",
+              "situacao",
+              "valor_centavos",
+              "data",
+              "descricao",
+              "conta_id",
+              "categoria_ids",
+              "tags"
+            ],
+            "title": "Campo"
+          },
+          "alterado_por": {
+            "type": "string",
+            "title": "Alterado Por"
+          },
+          "alterado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Alterado Em"
+          },
+          "por_voce": {
+            "type": "boolean",
+            "title": "Por Voce"
+          },
+          "origem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origem"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo",
+          "alterado_por",
+          "alterado_em",
+          "por_voce"
+        ],
+        "title": "CampoEmConflito",
+        "description": "Um campo que o outro lado mudou depois da versão do pedido; o valor dele está no\nlançamento que acompanha o conflito."
+      },
       "Categoria": {
         "properties": {
           "nome": {
@@ -1241,6 +1508,18 @@
       },
       "Confirmacao": {
         "properties": {
+          "versao": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versao"
+          },
           "valor_centavos": {
             "anyOf": [
               {
@@ -1280,7 +1559,33 @@
         },
         "type": "object",
         "title": "Confirmacao",
-        "description": "O que de fato aconteceu; campo ausente fica como estava no previsto."
+        "description": "O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o\najuste num campo que o outro lado mudou depois dela é conflito, como na edição."
+      },
+      "Conflito": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          },
+          "lancamento": {
+            "$ref": "#/components/schemas/Lancamento"
+          },
+          "campos": {
+            "items": {
+              "$ref": "#/components/schemas/CampoEmConflito"
+            },
+            "type": "array",
+            "title": "Campos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivo",
+          "lancamento",
+          "campos"
+        ],
+        "title": "Conflito",
+        "description": "Corpo do 409: o lançamento como o servidor o tem e os campos em conflito. Na exclusão, os\ncampos são os que o outro lado mudou depois."
       },
       "Conta": {
         "properties": {
@@ -1433,6 +1738,36 @@
         ],
         "title": "Eu"
       },
+      "Exclusao": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "title": "Motivo",
+            "default": "lançamento excluído"
+          },
+          "excluido_por": {
+            "type": "string",
+            "title": "Excluido Por"
+          },
+          "excluido_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Excluido Em"
+          },
+          "por_voce": {
+            "type": "boolean",
+            "title": "Por Voce"
+          }
+        },
+        "type": "object",
+        "required": [
+          "excluido_por",
+          "excluido_em",
+          "por_voce"
+        ],
+        "title": "Exclusao",
+        "description": "Corpo do 410: a exclusão vence a edição (ADR 0011)."
+      },
       "ExportacaoPronta": {
         "properties": {
           "url": {
@@ -1548,6 +1883,10 @@
             "type": "boolean",
             "title": "Atrasado"
           },
+          "versao": {
+            "type": "integer",
+            "title": "Versao"
+          },
           "criado_por": {
             "type": "string",
             "title": "Criado Por"
@@ -1577,6 +1916,7 @@
           "categoria_ids",
           "situacao",
           "atrasado",
+          "versao",
           "criado_por",
           "criado_em",
           "alterado_por",
@@ -1932,6 +2272,30 @@
                 "type": "null"
               }
             ]
+          },
+          "campos": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CampoEmConflito"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campos"
+          },
+          "exclusao": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Exclusao"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -1939,7 +2303,7 @@
           "resultado"
         ],
         "title": "Resultado",
-        "description": "`recusada` traz o motivo para mostrar; `descartada` é a edição de algo já excluído; o\n`conflito` (mesmo campo mudado pelo outro lado, ADR 0011) chega com o ticket 34."
+        "description": "`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os\ncampos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu."
       },
       "ResultadoDoLote": {
         "properties": {

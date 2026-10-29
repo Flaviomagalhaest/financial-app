@@ -8,15 +8,19 @@ export const ABAS = [
   { id: "futuro", nome: "Futuro" },
 ] as const;
 
-export type Rota = (typeof ABAS)[number]["id"] | "novo" | "contas-e-categorias" | "configuracoes";
+export type Rota = (typeof ABAS)[number]["id"] | "novo" | "conflito" | "contas-e-categorias" | "configuracoes";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
 export function lerRota(hash: string): { rota: Rota; id?: string } {
   const [tela, id] = hash.replace(/^#\/?/, "").split("/");
   const conhecida =
-    tela === "novo" || tela === "contas-e-categorias" || tela === "configuracoes" || ABAS.some((aba) => aba.id === tela);
-  // `#/novo/<id>` edita o lançamento de identidade `<id>`.
-  return conhecida ? { rota: tela as Rota, id: tela === "novo" ? id : undefined } : { rota: "hoje" };
+    tela === "novo" ||
+    (tela === "conflito" && !!id) ||
+    tela === "contas-e-categorias" ||
+    tela === "configuracoes" ||
+    ABAS.some((aba) => aba.id === tela);
+  // `#/novo/<id>` edita o lançamento de identidade `<id>`; `#/conflito/<id>` decide o conflito dele.
+  return conhecida ? { rota: tela as Rota, id: tela === "novo" || tela === "conflito" ? id : undefined } : { rota: "hoje" };
 }
 
 export function useRota(): { rota: Rota; id?: string } {

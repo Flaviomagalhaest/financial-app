@@ -32,7 +32,10 @@ def test_categoria_arquivada_sai_das_opcoes_mas_o_historico_a_mantem(casal: Casa
     )
     novo = casal.pedir("flavio", "POST", "/api/lancamentos", json=lancamento(conta, [mercado]))
     editado = casal.pedir(
-        "flavio", "PUT", f"/api/lancamentos/{antigo['id']}", json=antigo | {"descricao": "Feira"}
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{antigo['id']}",
+        json={"versao": 1, "descricao": "Feira", "categoria_ids": [mercado]},
     )
 
     assert arquivada.json()["arquivada"] is True
@@ -124,9 +127,11 @@ def test_editar_lancamento_troca_as_tags(casal: Casal):
     casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
 
     editado = casal.pedir(
-        "flavio", "PUT", f"/api/lancamentos/{novo['id']}", json=novo | {"tags": ["obra"]}
+        "flavio", "PATCH", f"/api/lancamentos/{novo['id']}", json={"versao": 1, "tags": ["obra"]}
     )
-    sem = casal.pedir("flavio", "PUT", f"/api/lancamentos/{novo['id']}", json=novo | {"tags": []})
+    sem = casal.pedir(
+        "flavio", "PATCH", f"/api/lancamentos/{novo['id']}", json={"versao": 2, "tags": []}
+    )
 
     assert editado.json()["tags"] == ["obra"]
     assert sem.json()["tags"] == []
@@ -163,13 +168,16 @@ def test_tag_arquivada_sai_das_opcoes_mas_o_historico_a_mantem(casal: Casal):
         json=lancamento(antigo["conta_id"], antigo["categoria_ids"], tags=["obra"]),
     )
     editado = casal.pedir(
-        "flavio", "PUT", f"/api/lancamentos/{antigo['id']}", json=antigo | {"descricao": "x"}
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{antigo['id']}",
+        json={"versao": 1, "tags": [*antigo["tags"], "nova"]},
     )
 
     assert arquivada.json()["arquivada"] is True
     assert novo.status_code == 422
     assert editado.status_code == 200
-    assert editado.json()["tags"] == ["obra"]
+    assert editado.json()["tags"] == ["nova", "obra"]
 
 
 def test_juntar_tags_move_os_lancamentos_sem_repetir(casal: Casal):

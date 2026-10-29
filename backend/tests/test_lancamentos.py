@@ -32,6 +32,7 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
     assert visto | {"criado_em": None, "alterado_em": None} == novo | {
         "situacao": "realizado",
         "atrasado": False,
+        "versao": 1,
         "tags": [],
         "criado_por": "flavio",
         "alterado_por": "flavio",
@@ -44,13 +45,14 @@ def test_edita_um_lancamento_e_registra_quem_alterou(casal: Casal):
     conta, alimentacao, viagem = casal.conta(), casal.categoria(), casal.categoria("Viagem")
     novo = lancamento(conta, [alimentacao])
     casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
-    editado = novo | {
+    editado = {
+        "versao": 1,
         "valor_centavos": 23000,
         "descricao": "Jantar em Ilhabela",
         "categoria_ids": [alimentacao, viagem],
     }
 
-    resposta = casal.pedir("esposa", "PUT", f"/api/lancamentos/{novo['id']}", json=editado)
+    resposta = casal.pedir("esposa", "PATCH", f"/api/lancamentos/{novo['id']}", json=editado)
 
     assert resposta.status_code == 200
     [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
@@ -64,7 +66,9 @@ def test_editar_um_lancamento_que_nao_existe_e_404(casal: Casal):
     conta, alimentacao = casal.conta(), casal.categoria()
     novo = lancamento(conta, [alimentacao])
 
-    resposta = casal.pedir("flavio", "PUT", f"/api/lancamentos/{novo['id']}", json=novo)
+    resposta = casal.pedir(
+        "flavio", "PATCH", f"/api/lancamentos/{novo['id']}", json={"versao": 1, "descricao": "x"}
+    )
 
     assert resposta.status_code == 404
 
@@ -148,24 +152,12 @@ def test_editar_para_um_lancamento_invalido_mantem_o_que_estava(casal: Casal):
     casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
 
     resposta = casal.pedir(
-        "flavio", "PUT", f"/api/lancamentos/{novo['id']}", json=novo | {"categoria_ids": []}
+        "flavio", "PATCH", f"/api/lancamentos/{novo['id']}", json={"versao": 1, "categoria_ids": []}
     )
 
     assert resposta.status_code == 422
     [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
     assert visto["categoria_ids"] == [alimentacao]
-
-
-def test_o_id_do_corpo_tem_de_ser_o_da_url(casal: Casal):
-    conta, alimentacao = casal.conta(), casal.categoria()
-    novo = lancamento(conta, [alimentacao])
-    casal.pedir("flavio", "POST", "/api/lancamentos", json=novo)
-
-    resposta = casal.pedir(
-        "flavio", "PUT", f"/api/lancamentos/{novo['id']}", json=novo | {"id": str(uuid4())}
-    )
-
-    assert resposta.status_code == 422
 
 
 @pytest.mark.parametrize(
@@ -177,7 +169,7 @@ def test_o_id_do_corpo_tem_de_ser_o_da_url(casal: Casal):
         ("POST", "/api/categorias"),
         ("GET", "/api/lancamentos"),
         ("POST", "/api/lancamentos"),
-        ("PUT", f"/api/lancamentos/{uuid4()}"),
+        ("PATCH", f"/api/lancamentos/{uuid4()}"),
         ("DELETE", f"/api/lancamentos/{uuid4()}"),
         ("POST", "/api/lancamentos/lote"),
         ("POST", f"/api/lancamentos/{uuid4()}/confirmar"),
@@ -205,25 +197,24 @@ def test_editar_a_data_para_o_passado_realiza_o_que_era_futuro_mas_a_escolha_man
     conta, alimentacao = casal.conta(), casal.categoria()
     futuro = lancamento(conta, [alimentacao], data="2999-01-01")
     casal.pedir("flavio", "POST", "/api/lancamentos", json=futuro)
-    sem_situacao = {k: v for k, v in futuro.items() if k != "situacao"}
 
     passado = casal.pedir(
         "flavio",
-        "PUT",
+        "PATCH",
         f"/api/lancamentos/{futuro['id']}",
-        json=sem_situacao | {"data": "2020-01-01"},
+        json={"versao": 1, "data": "2020-01-01"},
     )
     mesmo_dia = casal.pedir(
         "flavio",
-        "PUT",
+        "PATCH",
         f"/api/lancamentos/{futuro['id']}",
-        json=sem_situacao | {"data": "2020-01-01", "valor_centavos": 5, "situacao": "previsto"},
+        json={"versao": 2, "data": "2020-01-01", "valor_centavos": 5, "situacao": "previsto"},
     )
     sem_mexer_na_data = casal.pedir(
         "flavio",
-        "PUT",
+        "PATCH",
         f"/api/lancamentos/{futuro['id']}",
-        json=sem_situacao | {"data": "2020-01-01", "valor_centavos": 6},
+        json={"versao": 3, "data": "2020-01-01", "valor_centavos": 6},
     )
 
     assert passado.json()["situacao"] == "realizado"
@@ -280,19 +271,23 @@ def test_editar_lancamento_antigo_mantem_categoria_arquivada_mas_nao_troca_por_o
     casal: Casal,
 ):
     conta, velha, outra = casal.conta(), casal.categoria("Velha"), casal.categoria("Outra")
+    ativa = casal.categoria("Ativa")
     antigo = lancamento(conta, [velha])
     casal.pedir("flavio", "POST", "/api/lancamentos", json=antigo)
     for id in (velha, outra):
         casal.pedir("flavio", "PATCH", f"/api/categorias/{id}", json={"arquivada": True})
 
     mantida = casal.pedir(
-        "flavio", "PUT", f"/api/lancamentos/{antigo['id']}", json=antigo | {"descricao": "x"}
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{antigo['id']}",
+        json={"versao": 1, "categoria_ids": [velha, ativa]},
     )
     trocada = casal.pedir(
         "flavio",
-        "PUT",
+        "PATCH",
         f"/api/lancamentos/{antigo['id']}",
-        json=antigo | {"categoria_ids": [outra]},
+        json={"versao": 2, "categoria_ids": [outra]},
     )
 
     assert mantida.status_code == 200
@@ -375,7 +370,7 @@ def test_o_lote_grava_na_ordem_e_reenviar_nao_duplica(casal: Casal):
     novo = lancamento(conta, [alimentacao])
     acoes = lote(
         {"acao": "criar", "lancamento": novo},
-        {"acao": "editar", "lancamento": novo | {"valor_centavos": 999}},
+        {"acao": "editar", "id": novo["id"], "alteracao": {"versao": 1, "valor_centavos": 999}},
     )
 
     primeira = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json=acoes)
@@ -419,7 +414,7 @@ def test_no_lote_editar_o_que_foi_excluido_e_descartado_e_excluir_de_novo_e_acei
         "POST",
         "/api/lancamentos/lote",
         json=lote(
-            {"acao": "editar", "lancamento": novo | {"valor_centavos": 5}},
+            {"acao": "editar", "id": novo["id"], "alteracao": {"versao": 1, "valor_centavos": 5}},
             {"acao": "excluir", "id": novo["id"]},
         ),
     )

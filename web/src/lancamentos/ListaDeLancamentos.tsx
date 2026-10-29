@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { atualizadoAs, descartarNaoEnviado, excluirLancamento, useCadastro, useLancamentos, type LancamentoNaTela } from "../dados";
+import {
+  atualizadoAs,
+  descartarNaoEnviado,
+  excluirLancamento,
+  lancarDeNovoOExcluido,
+  useCadastro,
+  useLancamentos,
+  type LancamentoNaTela,
+} from "../dados";
 import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso } from "./datas";
 
@@ -12,7 +20,12 @@ export function ListaDeLancamentos() {
   async function excluir(l: LancamentoNaTela) {
     if (!window.confirm(`Excluir "${l.descricao || "este lançamento"}"?`)) return;
     setErro("");
-    await excluirLancamento(l.id).catch(() => setErro("Não foi possível excluir no aparelho."));
+    await excluirLancamento(l).catch(() => setErro("Não foi possível excluir no aparelho."));
+  }
+
+  async function lancarDeNovo(l: LancamentoNaTela) {
+    setErro("");
+    await lancarDeNovoOExcluido(l.id).catch(() => setErro("Não foi possível lançar de novo no aparelho."));
   }
 
   async function descartar(l: LancamentoNaTela) {
@@ -48,21 +61,45 @@ export function ListaDeLancamentos() {
                 {dataPorExtenso(l.data)} · {nome(contas, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
               </p>
-              {l.naoEnviado && (
-                <p className={l.recusa ? "erro" : "vazio"}>{l.recusa ? `⏳ não enviado: ${l.recusa}` : "⏳ não enviado"}</p>
+              {l.conflito ? (
+                <p className="erro">⚠ conflito: sua mudança espera decisão</p>
+              ) : l.exclusao ? (
+                <p className="erro">
+                  {l.exclusao.por_voce ? "Você excluiu este lançamento em outro aparelho" : "A outra pessoa excluiu este lançamento"}; sua alteração não foi
+                  salva.
+                </p>
+              ) : (
+                l.naoEnviado && <p className={l.recusa ? "erro" : "vazio"}>{l.recusa ? `⏳ não enviado: ${l.recusa}` : "⏳ não enviado"}</p>
               )}
               <div className="acoes">
-                <a className="botao secundario" href={`#/novo/${l.id}`} aria-label={`${l.recusa ? "Corrigir" : "Editar"} ${titulo}`}>
-                  {l.recusa ? "Corrigir" : "Editar"}
-                </a>
-                {l.recusa ? (
-                  <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(l)}>
-                    Descartar
-                  </button>
+                {l.conflito ? (
+                  <a className="botao" href={`#/conflito/${l.id}`} aria-label={`Decidir ${titulo}`}>
+                    Decidir
+                  </a>
+                ) : l.exclusao ? (
+                  <>
+                    <button type="button" aria-label={`Lançar de novo ${titulo}`} onClick={() => void lancarDeNovo(l)}>
+                      Lançar de novo
+                    </button>
+                    <button type="button" className="secundario" aria-label={`Dispensar ${titulo}`} onClick={() => void descartar(l)}>
+                      Dispensar
+                    </button>
+                  </>
                 ) : (
-                  <button type="button" className="secundario" aria-label={`Excluir ${titulo}`} onClick={() => void excluir(l)}>
-                    Excluir
-                  </button>
+                  <>
+                    <a className="botao secundario" href={`#/novo/${l.id}`} aria-label={`${l.recusa ? "Corrigir" : "Editar"} ${titulo}`}>
+                      {l.recusa ? "Corrigir" : "Editar"}
+                    </a>
+                    {l.recusa ? (
+                      <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(l)}>
+                        Descartar
+                      </button>
+                    ) : (
+                      <button type="button" className="secundario" aria-label={`Excluir ${titulo}`} onClick={() => void excluir(l)}>
+                        Excluir
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </li>

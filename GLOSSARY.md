@@ -208,3 +208,11 @@ _Avoid_: pendente, offline, na fila, não sincronizado
 **Conflito**:
 Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica.
 _Avoid_: colisão, divergência
+
+**Versão do lançamento**:
+Número que sobe a cada mudança aceita num lançamento; cada campo guarda a versão em que mudou por último, e uma mudança diz sobre qual versão foi feita, para o servidor saber o que o outro lado mudou depois dela.
+_Avoid_: revisão, timestamp
+
+**Exclusão vence a edição**:
+Regra do conflito: a edição que chega depois que o outro lado excluiu o lançamento é descartada, com o aviso de quem excluiu e o botão "Lançar de novo", que cria outro lançamento com a mudança. O lançamento excluído fica no banco só com a marca de exclusão, sem aparecer em lugar nenhum.
+_Avoid_: lixeira, restaurar, ressuscitar

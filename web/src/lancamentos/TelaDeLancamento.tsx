@@ -81,6 +81,7 @@ export function TelaDeLancamento({ id }: { id?: string }) {
           tags: existente?.tags ?? [],
         },
         !existente,
+        existente ?? undefined,
       );
       window.location.hash = "#/historico";
     } catch {
