@@ -32,7 +32,7 @@ import {
   LISTA,
   type Remessa,
 } from "./fila";
-import { fonteDoHistorico, pacoteDe, type FonteDeSugestao } from "./sugestao";
+import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
@@ -83,18 +83,22 @@ const LEITURAS = {
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
 
+/** Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. */
+function buscarEGuardar<C extends Caminho>(caminho: C) {
+  return comTrava("shared", async () => {
+    const { data } = await LEITURAS[caminho]().catch(() => ({ data: undefined }));
+    if (data) await guardarResposta(caminho, data);
+    return data;
+  });
+}
+
 /** A resposta do servidor, ou a última guardada; `aoVivo` diz se a última busca deu certo. */
 function useResposta<C extends Caminho>(caminho: C) {
   const [guardada, setGuardada] = useState<Guardada<Dados<C>> | null>(null);
   const [aoVivo, setAoVivo] = useState<boolean | null>(null);
 
   const buscar = useCallback(async () => {
-    const dados = await comTrava("shared", async () => {
-      const { data } = await LEITURAS[caminho]().catch(() => ({ data: undefined }));
-      if (data) await guardarResposta(caminho, data);
-      return data;
-    });
-    setAoVivo(!!dados);
+    setAoVivo(!!(await buscarEGuardar(caminho)));
   }, [caminho]);
 
   useEffect(() => {
@@ -123,8 +127,6 @@ function useResposta<C extends Caminho>(caminho: C) {
     /** Hora da resposta guardada, só quando o servidor não respondeu agora. */
     atualizadoEm: aoVivo === false && guardada ? guardada.em : null,
     semDados: aoVivo === false && !guardada,
-    /** Quando o servidor deu a resposta guardada (ms), nova ou não. */
-    guardadaEm: guardada?.em ?? null,
     buscar,
   };
 }
@@ -245,22 +247,25 @@ export function useTags(): string[] {
 }
 
 /**
- * A sugestão pela descrição, sem internet: o índice do servidor com os lançamentos que o aparelho
- * mudou depois dele por cima (os não enviados e os que o envio já acertou na lista), para o que se
- * acabou de lançar ou corrigir já ser a sugestão mais recente. Sem índice guardado, a lista inteira.
+ * A sugestão pela descrição, sem internet: o índice do servidor com os lançamentos do aparelho que
+ * ele ainda não tem por cima (os não enviados e os que mudaram no servidor depois de ele ser
+ * montado), para o que se acabou de lançar ou corrigir já ser a sugestão mais recente. Sem índice
+ * guardado, a lista inteira. Do enviado, o aparelho só sabe quando mudou, não o quê: mudar só o
+ * valor dele também o põe primeiro, até o índice ser buscado de novo.
  */
 export function useSugestao(): FonteDeSugestao {
-  const indice = useResposta("/api/sugestoes");
+  const { dados: indice } = useResposta("/api/sugestoes");
   const { lancamentos } = useLancamentos();
   return useMemo(() => {
-    const desde = indice.guardadaEm ?? 0;
+    const desde = indice ? Date.parse(indice.gerado_em) : 0;
     const depois = (lancamentos ?? []).flatMap((l) => {
       if (l.conflito || l.exclusao) return [];
-      const em = l.naoEnviado ? l.feitoEm : l.alterado_em && Date.parse(l.alterado_em);
-      return em && em > desde ? [pacoteDe(l, em)] : [];
+      const em = l.naoEnviado ? l.feitoEm : l.alterado_em ? Date.parse(l.alterado_em) : undefined;
+      const sugestao = em && (l.naoEnviado || em > desde) ? sugestaoDe(l, em) : null;
+      return sugestao ? [sugestao] : [];
     });
-    return fonteDoHistorico([...depois, ...(indice.dados?.pacotes ?? [])]);
-  }, [indice.dados, indice.guardadaEm, lancamentos]);
+    return fonteDoHistorico([...depois, ...(indice?.sugestoes ?? [])]);
+  }, [indice, lancamentos]);
 }
 
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
@@ -378,9 +383,12 @@ export async function contarNaoEnviados(): Promise<number> {
 
 export const apagarDadosDoAparelho = apagarTudo;
 
-/** A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta. */
+/**
+ * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão vem
+ * logo depois, para o aparelho tê-lo sem internet mesmo sem ter aberto o novo lançamento.
+ */
 export function iniciarEnvioAutomatico(): () => void {
-  const enviar = () => void enviarAgora();
+  const enviar = () => void enviarAgora().then(() => buscarEGuardar("/api/sugestoes"));
   const aoVoltar = () => document.visibilityState === "visible" && enviar();
   enviar();
   window.addEventListener("online", enviar);

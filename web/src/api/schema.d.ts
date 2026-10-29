@@ -1093,8 +1093,13 @@ export interface components {
         };
         /** IndiceDeSugestao */
         IndiceDeSugestao: {
-            /** Pacotes */
-            pacotes: components["schemas"]["Pacote"][];
+            /**
+             * Gerado Em
+             * Format: date-time
+             */
+            gerado_em: string;
+            /** Sugestoes */
+            sugestoes: components["schemas"]["Sugestao"][];
         };
         /** ItemDoModelo */
         ItemDoModelo: {
@@ -1458,43 +1463,6 @@ export interface components {
             /** Acao Em */
             acao_em?: string | null;
         };
-        /**
-         * Pacote
-         * @description O que um lançamento anterior sugere, por inteiro: escolhê-lo preenche esses campos.
-         */
-        Pacote: {
-            /** Chave */
-            chave: string;
-            /** Descricao */
-            descricao: string;
-            /**
-             * Tipo
-             * @enum {string}
-             */
-            tipo: "despesa" | "receita";
-            /**
-             * Conta Id
-             * Format: uuid
-             */
-            conta_id: string;
-            /** Categoria Ids */
-            categoria_ids: string[];
-            /** Tags */
-            tags: string[];
-            /** Pessoa */
-            pessoa: string | null;
-            /**
-             * Em
-             * Format: date-time
-             */
-            em: string;
-            /**
-             * Origem
-             * @default historico
-             * @constant
-             */
-            origem: "historico";
-        };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
             /**
@@ -1636,6 +1604,43 @@ export interface components {
             status: string;
             /** Migrations */
             migrations: number;
+        };
+        /**
+         * Sugestao
+         * @description O que um lançamento anterior sugere, por inteiro: escolher preenche esses campos.
+         */
+        Sugestao: {
+            /** Chave */
+            chave: string;
+            /** Descricao */
+            descricao: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /** Tags */
+            tags: string[];
+            /** Pessoa */
+            pessoa: string | null;
+            /**
+             * Em
+             * Format: date-time
+             */
+            em: string;
+            /**
+             * Origem
+             * @default historico
+             * @constant
+             */
+            origem: "historico";
         };
         /** Tag */
         Tag: {

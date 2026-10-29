@@ -3272,17 +3272,23 @@
       },
       "IndiceDeSugestao": {
         "properties": {
-          "pacotes": {
+          "gerado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Gerado Em"
+          },
+          "sugestoes": {
             "items": {
-              "$ref": "#/components/schemas/Pacote"
+              "$ref": "#/components/schemas/Sugestao"
             },
             "type": "array",
-            "title": "Pacotes"
+            "title": "Sugestoes"
           }
         },
         "type": "object",
         "required": [
-          "pacotes"
+          "gerado_em",
+          "sugestoes"
         ],
         "title": "IndiceDeSugestao"
       },
@@ -4184,81 +4190,6 @@
         ],
         "title": "NovoLancamento"
       },
-      "Pacote": {
-        "properties": {
-          "chave": {
-            "type": "string",
-            "title": "Chave"
-          },
-          "descricao": {
-            "type": "string",
-            "title": "Descricao"
-          },
-          "tipo": {
-            "type": "string",
-            "enum": [
-              "despesa",
-              "receita"
-            ],
-            "title": "Tipo"
-          },
-          "conta_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Conta Id"
-          },
-          "categoria_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Categoria Ids"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags"
-          },
-          "pessoa": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pessoa"
-          },
-          "em": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Em"
-          },
-          "origem": {
-            "type": "string",
-            "const": "historico",
-            "title": "Origem",
-            "default": "historico"
-          }
-        },
-        "type": "object",
-        "required": [
-          "chave",
-          "descricao",
-          "tipo",
-          "conta_id",
-          "categoria_ids",
-          "tags",
-          "pessoa",
-          "em"
-        ],
-        "title": "Pacote",
-        "description": "O que um lançamento anterior sugere, por inteiro: escolhê-lo preenche esses campos."
-      },
       "PedidoDeExportacao": {
         "properties": {
           "formato": {
@@ -4595,6 +4526,81 @@
           "migrations"
         ],
         "title": "Saude"
+      },
+      "Sugestao": {
+        "properties": {
+          "chave": {
+            "type": "string",
+            "title": "Chave"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Em"
+          },
+          "origem": {
+            "type": "string",
+            "const": "historico",
+            "title": "Origem",
+            "default": "historico"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chave",
+          "descricao",
+          "tipo",
+          "conta_id",
+          "categoria_ids",
+          "tags",
+          "pessoa",
+          "em"
+        ],
+        "title": "Sugestao",
+        "description": "O que um lançamento anterior sugere, por inteiro: escolher preenche esses campos."
       },
       "Tag": {
         "properties": {

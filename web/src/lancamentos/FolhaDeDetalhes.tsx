@@ -5,7 +5,7 @@ import { EscolhaDaData } from "./EscolhaDaData";
 type Situacao = LancamentoNaTela["situacao"];
 
 /** Uma sugestão pela descrição, já com o texto que a tela mostra. */
-export type SugestaoNaFolha = { descricao: string; pacote: string; onEscolher: () => void };
+export type SugestaoNaFolha = { descricao: string; resumo: string; onEscolher: () => void };
 
 type Props = {
   descricao: string;
@@ -79,7 +79,7 @@ export function FolhaDeDetalhes(props: Props) {
             <li key={i}>
               <button type="button" className="sugestao" onClick={s.onEscolher}>
                 <span>{s.descricao}</span>
-                <span className="pacote">{s.pacote}</span>
+                <span className="resumo-da-sugestao">{s.resumo}</span>
               </button>
             </li>
           ))}

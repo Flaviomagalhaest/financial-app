@@ -1,13 +1,13 @@
-// A sugestão pela descrição (ticket 22), que roda no aparelho, sem internet. O contrato é o de
-// uma fonte de sugestão: entra a descrição (e o contexto do lançamento) e sai uma lista de pacotes,
-// cada um com a sua origem. A v1 só tem a fonte "histórico", feita do índice que o servidor monta
-// (`app/sugestao.py`) com os lançamentos que o aparelho mudou depois por cima.
+// A sugestão pela descrição (tickets 22 e 63), que roda no aparelho, sem internet. O contrato é o
+// de uma fonte de sugestão: entra a descrição (e o contexto do lançamento) e sai uma lista de
+// sugestões, cada uma com a sua origem. A v1 só tem a fonte "histórico", feita do índice que o
+// servidor monta (`app/sugestao.py`) com os lançamentos que o aparelho mudou depois por cima.
 import type { components } from "../api/schema";
 import { config } from "../config";
 import type { NovoLancamento } from "./armazem";
 
 /** Categorias, tags, conta e pessoa de um lançamento anterior; escolher preenche esses campos. */
-export type Sugestao = components["schemas"]["Pacote"];
+export type Sugestao = components["schemas"]["Sugestao"];
 
 /** O que a tela sabe do lançamento além da descrição; a fonte do histórico não usa. */
 export type ContextoDaSugestao = Partial<Pick<NovoLancamento, "tipo" | "valor_centavos" | "conta_id" | "data">>;
@@ -28,11 +28,15 @@ export function chaveDaDescricao(descricao: string): string {
     .join(" ");
 }
 
-/** O pacote de um lançamento que o aparelho mudou depois do índice; `em` é a hora da mudança (ms). */
-export function pacoteDe(lancamento: NovoLancamento, em: number): Sugestao {
+/**
+ * A sugestão de um lançamento que o aparelho mudou depois do índice; `em` é a hora da mudança (ms).
+ * Sem descrição ou sem categoria, nenhuma, como no servidor.
+ */
+export function sugestaoDe(lancamento: NovoLancamento, em: number): Sugestao | null {
+  if (!lancamento.descricao?.trim() || lancamento.categoria_ids.length === 0) return null;
   return {
-    chave: chaveDaDescricao(lancamento.descricao ?? ""),
-    descricao: lancamento.descricao ?? "",
+    chave: chaveDaDescricao(lancamento.descricao),
+    descricao: lancamento.descricao,
     tipo: lancamento.tipo,
     conta_id: lancamento.conta_id,
     categoria_ids: [...lancamento.categoria_ids].sort(),
@@ -43,7 +47,8 @@ export function pacoteDe(lancamento: NovoLancamento, em: number): Sugestao {
   };
 }
 
-const igual = (s: Sugestao) =>
+/** A mesma sugestão vinda de dois lançamentos aparece uma vez só. */
+const identidade = (s: Sugestao) =>
   [s.tipo, s.conta_id, [...s.categoria_ids].sort().join(), s.tags.map((t) => t.toLowerCase()).sort().join("\u0000"), s.pessoa ?? ""].join("|");
 
 const letraOuNumero = /[\p{L}\p{N}]/u;
@@ -60,24 +65,24 @@ function casamento(chave: string, digitado: string): number | null {
 
 /**
  * A fonte do histórico: igual, depois "começa com", depois palavra que começa com o digitado; em
- * cada um, do pacote mais recente ao mais antigo, sem repetir pacote, a partir de 2 letras e até 3.
+ * cada um, da sugestão mais recente à mais antiga, sem repetir, a partir de 2 letras e até 3.
  */
-export function fonteDoHistorico(pacotes: Sugestao[]): FonteDeSugestao {
+export function fonteDoHistorico(sugestoes: Sugestao[]): FonteDeSugestao {
   return (descricao) => {
     const digitado = chaveDaDescricao(descricao);
     if (digitado.length < config.sugestao.letrasMinimas) return [];
-    const casados = pacotes
-      .map((pacote) => ({ pacote, nivel: casamento(pacote.chave, digitado) }))
-      .filter((c): c is { pacote: Sugestao; nivel: number } => c.nivel !== null)
-      .sort((a, b) => a.nivel - b.nivel || Date.parse(b.pacote.em) - Date.parse(a.pacote.em));
-    const vistos = new Set<string>();
-    const sugestoes: Sugestao[] = [];
-    for (const { pacote } of casados) {
-      if (sugestoes.length === config.sugestao.maximoDeSugestoes) break;
-      if (vistos.has(igual(pacote))) continue;
-      vistos.add(igual(pacote));
-      sugestoes.push(pacote);
+    const casados = sugestoes
+      .map((sugestao) => ({ sugestao, nivel: casamento(sugestao.chave, digitado) }))
+      .filter((c): c is { sugestao: Sugestao; nivel: number } => c.nivel !== null)
+      .sort((a, b) => a.nivel - b.nivel || Date.parse(b.sugestao.em) - Date.parse(a.sugestao.em));
+    const vistas = new Set<string>();
+    const escolhidas: Sugestao[] = [];
+    for (const { sugestao } of casados) {
+      if (escolhidas.length === config.sugestao.maximoDeSugestoes) break;
+      if (vistas.has(identidade(sugestao))) continue;
+      vistas.add(identidade(sugestao));
+      escolhidas.push(sugestao);
     }
-    return sugestoes;
+    return escolhidas;
   };
 }

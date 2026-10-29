@@ -587,7 +587,7 @@ dialog.folha > input {
   grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
 }
 
-/* As sugestões pela descrição, numa lista curta logo abaixo dela; tocar preenche o pacote. */
+/* As sugestões pela descrição, numa lista curta logo abaixo dela; tocar preenche os campos. */
 .sugestoes {
   display: flex;
   flex-direction: column;
@@ -609,7 +609,7 @@ dialog.folha > input {
   font-weight: 600;
 }
 
-.sugestao .pacote {
+.sugestao .resumo-da-sugestao {
   color: var(--texto-suave);
   font-size: 0.875rem;
   font-weight: 400;

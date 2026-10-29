@@ -1,10 +1,16 @@
-"""Índice de sugestão pelo histórico (ticket 22): os pacotes de categorias, tags, conta e pessoa
+"""Índice de sugestão pelo histórico (ticket 22): as categorias, tags, conta e pessoa
 dos lançamentos do casal, que o aparelho casa com a descrição sem internet."""
 
-import psycopg
+from datetime import date
 
+import psycopg
+import pytest
+
+from app import lancamentos
+from app.tarefa_diaria import fazer_tarefa_diaria
 from tests.conftest import Casal
 from tests.test_lancamentos import lancamento
+from tests.test_recorrencias import recorrencia
 
 
 def lancar(casal: Casal, quem: str = "flavio", **campos) -> dict:
@@ -16,10 +22,10 @@ def lancar(casal: Casal, quem: str = "flavio", **campos) -> dict:
 def indice(casal: Casal, quem: str = "esposa") -> list[dict]:
     resposta = casal.pedir(quem, "GET", "/api/sugestoes")
     assert resposta.status_code == 200
-    return resposta.json()["pacotes"]
+    return resposta.json()["sugestoes"]
 
 
-def test_o_indice_traz_o_pacote_do_lancamento_com_a_descricao_sem_acento_maiuscula_e_parcela(
+def test_o_indice_traz_a_sugestao_do_lancamento_com_a_descricao_sem_acento_maiuscula_e_parcela(
     casal: Casal,
 ):
     conta, mercado = casal.conta(), casal.categoria("Mercado")
@@ -48,7 +54,7 @@ def test_o_indice_traz_o_pacote_do_lancamento_com_a_descricao_sem_acento_maiuscu
     ]
 
 
-def test_por_descricao_ficam_os_pacotes_diferentes_do_mais_recente_ao_mais_antigo_ate_3(
+def test_por_descricao_ficam_as_sugestoes_diferentes_da_mais_recente_a_mais_antiga_ate_3(
     casal: Casal,
 ):
     conta = casal.conta()
@@ -69,18 +75,18 @@ def test_por_descricao_ficam_os_pacotes_diferentes_do_mais_recente_ao_mais_antig
             acao_em=f"2026-10-{dia}T12:00:00Z",
         )
 
-    pacotes = indice(casal)
+    sugestoes = indice(casal)
 
-    # O pacote de Mercado repetido conta pela vez mais recente (dia 3), e o de Casa, o mais
-    # antigo dos quatro, fica de fora: o aparelho nunca mostra mais de 3.
-    assert [(p["categoria_ids"], p["descricao"], p["em"][:10]) for p in pacotes] == [
+    # A sugestão de Mercado repetida conta pela vez mais recente (dia 3), e a de Casa, a mais
+    # antiga das quatro, fica de fora: o aparelho nunca mostra mais de 3.
+    assert [(p["categoria_ids"], p["descricao"], p["em"][:10]) for p in sugestoes] == [
         ([d], "Extrá", "2026-10-06"),
         ([c], "Extra", "2026-10-04"),
         ([a], "EXTRA", "2026-10-03"),
     ]
 
 
-def test_corrigir_as_categorias_torna_o_pacote_o_mais_recente_e_mudar_o_valor_nao(casal: Casal):
+def test_corrigir_as_categorias_torna_a_sugestao_a_mais_recente_e_mudar_o_valor_nao(casal: Casal):
     conta, transporte, lazer = (
         casal.conta(),
         casal.categoria("Transporte"),
@@ -151,3 +157,19 @@ def test_o_historico_importado_do_mobills_e_o_da_outra_pessoa_entram(
         conn.execute("UPDATE lancamentos SET fonte = 'mobills' WHERE id = %s", (importado["id"],))
 
     assert sorted(p["chave"] for p in indice(casal, "flavio")) == ["assai", "atacadao"]
+
+
+def test_a_ocorrencia_que_a_recorrencia_gera_depois_nao_passa_na_frente_da_correcao(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 10, 28))
+    conta, lazer, assinaturas = casal.conta(), casal.categoria("Lazer"), casal.categoria("Assin.")
+    regra = recorrencia(conta, [lazer], descricao="Netflix", inicio="2026-11-10")
+    assert casal.pedir("flavio", "POST", "/api/recorrencias", json=regra).status_code == 201
+    lancar(casal, conta=conta, categorias=[assinaturas], descricao="Netflix")
+
+    # A tarefa diária estende o horizonte: ocorrências novas da regra, criadas agora.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2027, 3, 1))
+    fazer_tarefa_diaria(database_url)
+
+    assert [p["categoria_ids"] for p in indice(casal)] == [[assinaturas], [lazer]]

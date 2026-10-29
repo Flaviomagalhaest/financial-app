@@ -81,6 +81,8 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
 
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
   const conta = contaId || contas[0]?.id || "";
+  /** As categorias que ainda se pode escolher, das que um lançamento anterior traz. */
+  const escolhiveis = (ids: string[]) => categorias.filter((c) => !c.arquivada && ids.includes(c.id));
   const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo && (!c.arquivada || categoriaIds.includes(c.id) || !!existente?.categoria_ids.includes(c.id)));
   const situacao: Situacao =
     situacaoEscolhida ??
@@ -109,17 +111,20 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setSituacaoEscolhida(null);
     setCentavos(u.valor_centavos);
     if (contasECartoes.some((c) => c.id === u.conta_id)) trocarConta(u.conta_id);
-    setCategoriaIds(u.categoria_ids.filter((c) => categorias.some((cat) => cat.id === c && !cat.arquivada)));
+    setCategoriaIds(escolhiveis(u.categoria_ids).map((c) => c.id));
     setDescricao(u.descricao ?? "");
     setTags(u.tags ?? []);
     setPessoa(u.pessoa ?? null);
   }
 
-  /** Preenche conta, categorias, tags e pessoa do pacote; o valor e a data ficam como estão. */
+  /**
+   * Preenche conta, categorias, tags e pessoa da sugestão, e o tipo que as categorias têm; o valor,
+   * a data e a descrição ficam como estão.
+   */
   function escolher(s: Sugestao) {
     setTipo(s.tipo);
     if (contasECartoes.some((c) => c.id === s.conta_id)) trocarConta(s.conta_id);
-    setCategoriaIds(s.categoria_ids.filter((c) => categorias.some((cat) => cat.id === c && !cat.arquivada)));
+    setCategoriaIds(escolhiveis(s.categoria_ids).map((c) => c.id));
     setTags(s.tags);
     setPessoa(s.pessoa ?? null);
     setSugerindo(false);
@@ -129,8 +134,8 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     ? sugerir(descricao, { tipo, valor_centavos: centavos, conta_id: conta, data }).map((s) => ({
         descricao: s.descricao.trim(),
         // A conta ou categoria que não se pode mais escolher fica de fora, como ao escolher.
-        pacote: [
-          categorias.filter((c) => !c.arquivada && s.categoria_ids.includes(c.id)).map((c) => c.nome).join(", "),
+        resumo: [
+          escolhiveis(s.categoria_ids).map((c) => c.nome).join(", "),
           ...s.tags.map((t) => `#${t}`),
           contasECartoes.find((c) => c.id === s.conta_id)?.nome ?? "",
           s.pessoa ? nomeDe(s.pessoa) : "Conjunto",
