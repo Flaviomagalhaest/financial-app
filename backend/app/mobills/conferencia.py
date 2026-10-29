@@ -44,26 +44,29 @@ class Fatura:
 
 
 def meses(lancamentos, ajustes, cruzamento, primeiro: str, ultimo: str) -> list[Mes]:
-    """Uma linha por mês, do primeiro ao último do export, inclusive os vazios."""
+    """Uma linha por mês, do primeiro ao último, inclusive os vazios. Os meses depois do último
+    (os previstos do Mobills) ficam de fora."""
     por_mes: dict[str, Mes] = {}
     mes = primeiro
     while primeiro and mes <= ultimo:
         por_mes[mes] = Mes(mes)
         mes = mes_seguinte(mes)
     for lancamento in lancamentos:
-        linha = por_mes.setdefault(lancamento.mes, Mes(lancamento.mes))
-        if lancamento.tipo == "receita":
-            linha.receitas += lancamento.valor_centavos
-        else:
-            linha.despesas += lancamento.valor_centavos
+        if linha := por_mes.get(lancamento.mes):
+            if lancamento.tipo == "receita":
+                linha.receitas += lancamento.valor_centavos
+            else:
+                linha.despesas += lancamento.valor_centavos
     for ajuste in ajustes:
-        por_mes.setdefault(ajuste.mes, Mes(ajuste.mes)).ajustes += ajuste.valor_centavos
+        if linha := por_mes.get(ajuste.mes):
+            linha.ajustes += ajuste.valor_centavos
+    # O que entrou da fatura sem par no geral, que o total do Mobills não tem.
     for fatura in cruzamento.fatura_sem_par:
-        if not e_ajuste(fatura.categoria):
-            por_mes[fatura.mes].sem_par.append(-fatura.valor_centavos)
+        if linha := por_mes.get(fatura.mes):
+            linha.sem_par.append(-fatura.valor_centavos)
     for provavel in cruzamento.provaveis:
-        if provavel.decisao is None:
-            por_mes[provavel.fatura.mes].provaveis_abertos.append(-provavel.fatura.valor_centavos)
+        if provavel.decisao is None and (linha := por_mes.get(provavel.fatura.mes)):
+            linha.provaveis_abertos.append(-provavel.fatura.valor_centavos)
     return [por_mes[m] for m in sorted(por_mes)]
 
 
@@ -76,9 +79,7 @@ def faturas(lancamentos, ajustes, meses_das_pastas: dict[str, list[str]]) -> lis
     for lancamento in lancamentos:
         if lancamento.cartao:
             chave = (lancamento.cartao, lancamento.mes)
-            fatura = por_fatura.setdefault(chave, Fatura(*chave))
-            sinal = 1 if lancamento.tipo == "despesa" else -1
-            fatura.compras += sinal * lancamento.valor_centavos
+            por_fatura.setdefault(chave, Fatura(*chave)).compras += _custo(lancamento)
     for ajuste in ajustes:
         if ajuste.cartao:
             chave = (ajuste.cartao, ajuste.mes)
@@ -95,10 +96,12 @@ def separar_ajustes(lancamentos) -> tuple[list, list[AjusteDeFatura]]:
     restantes, ajustes = [], []
     for lancamento in lancamentos:
         if e_ajuste(lancamento.categorias[0]):
-            sinal = 1 if lancamento.tipo == "despesa" else -1
-            ajustes.append(
-                AjusteDeFatura(lancamento.cartao, lancamento.mes, sinal * lancamento.valor_centavos)
-            )
+            ajustes.append(AjusteDeFatura(lancamento.cartao, lancamento.mes, _custo(lancamento)))
         else:
             restantes.append(lancamento)
     return restantes, ajustes
+
+
+def _custo(lancamento) -> int:
+    """Quanto o lançamento soma à fatura: a despesa soma, o crédito (receita) desconta."""
+    return lancamento.valor_centavos if lancamento.tipo == "despesa" else -lancamento.valor_centavos

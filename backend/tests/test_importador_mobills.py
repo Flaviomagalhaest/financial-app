@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.mobills import AjusteDeFatura, Cartao, Conta, importar
+from app.mobills.leitura import ArquivoInvalido
 from tests.mobills_ficticio import editar_aba, escrever_fatura, escrever_geral, ler_aba, linha
 
 
@@ -101,7 +102,7 @@ def test_par_que_so_difere_na_categoria_casa_com_a_do_geral_e_vai_para_a_planilh
     )
     assert ler_aba(revisao, "Categoria diferente") == [
         {
-            "Cartão": "Cartao A",
+            "Pasta do cartão": "Cartao A",
             "Mês": "2024-05",
             "Data da compra": "03/05/2024",
             "Descrição": "Farmácia",
@@ -138,7 +139,7 @@ def test_par_provavel_entra_separado_ate_o_dono_confirmar_na_planilha(pastas):
     assert len(primeira.lancamentos) == 5
     assert ler_aba(revisao, "Pares prováveis") == [
         {
-            "Cartão": "Cartao A",
+            "Pasta do cartão": "Cartao A",
             "Mês": "2023-07",
             "Data da compra": "08/07/2023",
             "Descrição na fatura": "SHELL BOX 123",
@@ -208,7 +209,7 @@ def test_grupo_igual_com_tags_diferentes_no_geral_casa_na_ordem_e_vai_para_a_rev
     ]
     assert ler_aba(revisao, "Grupos ambíguos") == [
         {
-            "Cartão": "Cartao A",
+            "Pasta do cartão": "Cartao A",
             "Mês": "2025-01",
             "Descrição": "iFood",
             "Valor": 50.00,
@@ -220,7 +221,7 @@ def test_grupo_igual_com_tags_diferentes_no_geral_casa_na_ordem_e_vai_para_a_rev
             "Situação no geral": "Paga",
         },
         {
-            "Cartão": "Cartao A",
+            "Pasta do cartão": "Cartao A",
             "Mês": "2025-01",
             "Descrição": "iFood",
             "Valor": 50.00,
@@ -267,7 +268,7 @@ def test_cadastro_da_conta_e_dos_cartoes_nasce_proposto_e_o_dono_liga_cada_pasta
             "Dia do vencimento": None,
         },
     ]
-    assert primeira.pendencias == [
+    assert primeira.impedimentos == [
         "Cartões: 'Cartao Novo' está ativo e sem os dias de fechamento e vencimento"
     ]
 
@@ -277,7 +278,7 @@ def test_cadastro_da_conta_e_dos_cartoes_nasce_proposto_e_o_dono_liga_cada_pasta
     editar_aba(revisao, "Cartões", "Pasta", "Cartao Novo", "Dia do vencimento", 5)
     segunda = importar(geral, faturas, revisao)
 
-    assert segunda.pendencias == []
+    assert segunda.impedimentos == []
     assert segunda.conta == Conta(nome="Conta do casal", tipo="corrente")
     assert segunda.cartoes == [
         Cartao(
@@ -375,7 +376,7 @@ def test_de_para_propoe_o_mesmo_papel_e_aplica_o_que_o_dono_editou(pastas):
     )
     assert (por_descricao["Mercado"].pessoa, por_descricao["Mercado"].tags) == ("Fulano", [])
     assert por_descricao["Reembolso"].categorias == ["Alimentação"]
-    assert [x for x in importacao.pendencias if x.startswith("De-para")] == [
+    assert [x for x in importacao.impedimentos if x.startswith("De-para")] == [
         "De-para: 1 lançamento ficou sem categoria"
     ]
     assert de_para(revisao)[("despesa", "Tag", "fulano")]["Papel"] == "pessoa"
@@ -529,3 +530,136 @@ def test_conferencia_mes_a_mes_e_faturas_com_a_coluna_do_mobills_mantida(pastas)
     assert (janeiro["Mobills"], janeiro["Diferença"]) == (1249.98, -25.50)
     fatura = ler_aba(revisao, "Faturas")[0]
     assert (fatura["Mobills"], fatura["Diferença"]) == (250.02, 25.50)
+
+
+def test_grupo_com_dois_cartoes_casa_pela_data_da_compra_e_cada_linha_diz_o_seu_cartao(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/10/2025", "Amazon", -99.90, "Compras", tags="praia"),
+            linha("31/10/2025", "Amazon", -99.90, "Compras"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202510", [("20/10/2025", "Amazon", "Compras", 99.90)])
+    escrever_fatura(faturas, "Cartao B", "202510", [("05/10/2025", "Amazon", "Compras", 99.90)])
+
+    importacao = importar(geral, faturas, revisao)
+
+    por_cartao = {x.cartao: x for x in importacao.lancamentos}
+    assert (por_cartao["Cartao B"].data.day, por_cartao["Cartao B"].tags) == (5, ["praia"])
+    assert (por_cartao["Cartao A"].data.day, por_cartao["Cartao A"].tags) == (20, [])
+    ambiguos = ler_aba(revisao, "Grupos ambíguos")
+    assert [(x["Pasta do cartão"], x["Data da compra"]) for x in ambiguos] == [
+        ("Cartao B", "05/10/2025"),
+        ("Cartao A", "20/10/2025"),
+    ]
+
+
+def test_conferencia_vai_ate_o_ultimo_mes_pago_e_explica_o_reajuste_sem_par(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/05/2026", "Mercado", -100.00, "Alimentação"),
+            linha("10/06/2026", "Luz", -90.00, "Casa", situacao="Pendente"),
+            linha("10/09/2026", "Luz", -90.00, "Casa", situacao="Pendente"),
+        ],
+    )
+    escrever_fatura(
+        faturas,
+        "Cartao A",
+        "202605",
+        [
+            ("02/05/2026", "Mercado", "Alimentação", 100.00),
+            ("30/05/2026", "Reajuste", "Reajuste de fatura", 0.03),
+        ],
+    )
+
+    importar(geral, faturas, revisao)
+
+    conferencia = ler_aba(revisao, "Conferência")
+    assert [x["Mês"] for x in conferencia] == ["2026-05"]
+    assert conferencia[0]["Ajustes de fatura"] == 0.03
+    assert conferencia[0]["Por quê"] == "1 linha de fatura sem par (-0,03)"
+
+
+def test_parcela_repetida_no_mes_e_quebra_e_a_futura_herda_o_cartao_e_a_data_da_compra(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/07/2026", "Sofá (1/3)", -400.00, "Casa"),
+            linha("31/08/2026", "Sofá (2/3)", -400.00, "Casa", situacao="Pendente"),
+            linha("30/09/2026", "Sofá (3/3)", -400.00, "Casa", situacao="Pendente"),
+            linha("31/07/2026", "Curso (2/5)", -50.00, "Educação"),
+            linha("31/07/2026", "Curso (2/5)", -50.00, "Educação"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202607", [("14/07/2026", "Sofá", "Casa", 400.00)])
+
+    importacao = importar(geral, faturas, revisao)
+
+    sofa = next(p for p in importacao.parcelamentos if p.descricao == "Sofá")
+    assert [(x.cartao, x.data, x.mes) for x in sofa.lancamentos] == [
+        ("Cartao A", date(2026, 7, 14), "2026-07"),
+        ("Cartao A", date(2026, 7, 14), "2026-08"),
+        ("Cartao A", date(2026, 7, 14), "2026-09"),
+    ]
+    assert [x["Mês"] for x in ler_aba(revisao, "Faturas")] == ["2026-07", "2026-08", "2026-09"]
+    assert [x["Motivo"] for x in ler_aba(revisao, "Parcelas quebradas")] == [
+        "falta a parcela 3 depois de 2026-07; duas parcelas 2 de 5 em 2026-07",
+        "falta a parcela 3 depois de 2026-07; duas parcelas 2 de 5 em 2026-07",
+    ]
+
+
+def test_planilha_editada_com_erro_vira_impedimento_e_nao_some(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(geral, "geral.xlsx", [linha("31/03/2026", "Mercado", -10.00, "Alimentação")])
+    escrever_fatura(faturas, "Cartao A", "202603", [])
+    escrever_fatura(faturas, "Cartao B", "202603", [])
+    importar(geral, faturas, revisao)
+    papel = "Papel (categoria, tag, pessoa ou descartar)"
+    editar_aba(
+        revisao, "Conta", "Nome", "Carteira", "Tipo (corrente, poupanca ou carteira)", "banco"
+    )
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao A", "Dia do fechamento", "dia 5")
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao A", "Dia do vencimento", 12)
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao B", "Cartão", "Cartao A")
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao B", "Arquivado (sim ou não)", "sim")
+    editar_aba(revisao, "De-para", "Nome no Mobills", "Alimentação", papel, "rótulo")
+    editar_aba(revisao, "Conferência", "Mês", "2026-03", "Mobills", "-1.234,56")
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert importacao.impedimentos == [
+        "Conta: tipo 'banco' não é corrente, poupanca, carteira",
+        "Cartões: 'Cartao A' tem o dia 'dia 5', fora de 1 a 31",
+        "Cartões: 'Cartao A' está ativo e sem os dias de fechamento e vencimento",
+        "Cartões: duas pastas ligadas ao mesmo cartão 'Cartao A'",
+        "De-para: 'Alimentação' tem papel 'rótulo', que não existe",
+    ]
+    assert ler_aba(revisao, "Conferência")[0]["Mobills"] == -1234.56
+    assert ler_aba(revisao, "Cartões")[0]["Dia do vencimento"] == 12
+
+    editar_aba(revisao, "Conferência", "Mês", "2026-03", "Mobills", "mil")
+    with pytest.raises(ArquivoInvalido, match="coluna Mobills"):
+        importar(geral, faturas, revisao)
+
+
+def test_fatura_sem_rotulo_no_nome_e_valor_que_nao_e_numero_sao_recusados(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(geral, "geral.xlsx", [linha("31/03/2026", "Mercado", -10.00, "Alimentação")])
+    fatura = escrever_fatura(faturas, "Cartao A", "202603", [])
+    fatura.rename(fatura.with_name("Cartao A_-_marco.xlsx"))
+    with pytest.raises(ArquivoInvalido, match="falta o rótulo AAAAMM"):
+        importar(geral, faturas, revisao)
+
+    fatura.with_name("Cartao A_-_marco.xlsx").unlink()
+    escrever_fatura(faturas, "Cartao A", "202603", [("02/03/2026", "Mercado", "Alimentação", 10.0)])
+    escrever_geral(geral, "geral.xlsx", [linha("31/03/2026", "Mercado", "dez", "Alimentação")])
+    with pytest.raises(ArquivoInvalido, match="geral.xlsx: valor que não é número"):
+        importar(geral, faturas, revisao)

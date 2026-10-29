@@ -58,7 +58,8 @@ def cruzar(
     decisoes_dos_provaveis: dict[tuple, str] | None = None,
 ) -> Cruzamento:
     resultado = Cruzamento()
-    sobra_da_fatura = sorted(faturas, key=lambda x: (x.pasta, x.mes, x.data))
+    # A ordem em que as linhas de um grupo casam: pela data da compra, de qualquer cartão.
+    sobra_da_fatura = sorted(faturas, key=lambda x: (x.mes, x.data, x.pasta))
     sobra_do_geral = list(geral)
     for como, chave_da_fatura, chave_do_geral in (
         (

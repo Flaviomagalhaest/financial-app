@@ -1,8 +1,8 @@
 """O reagrupamento das parcelas `(n/total)` do geral em parcelamentos (`## Answer` do ticket 18): a
-mesma descrição base, o mesmo valor (tolerância de 1 centavo), o mesmo total e números `n` em
-meses consecutivos. As parcelas que faltam e as futuras são do ticket 68."""
+mesma descrição base, o mesmo valor (tolerância de 1 centavo sobre a primeira parcela), o mesmo
+total e números `n` em meses consecutivos. As parcelas que o export não traz são do ticket 68."""
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 TOLERANCIA_EM_CENTAVOS = 1
@@ -40,8 +40,8 @@ def mes_seguinte(mes: str) -> str:
 
 
 def reagrupar(lancamentos, primeiro_mes: str, ultimo_mes: str) -> list[Parcelamento]:
-    """Uma sequência que começa depois do primeiro mês do export sem a parcela 1, ou acaba antes
-    do último sem a última parcela, está quebrada."""
+    """Uma sequência que começa depois do primeiro mês do export sem a parcela 1, que acaba antes
+    do último sem a última parcela, ou que tem a mesma parcela repetida num mês, está quebrada."""
     grupos = defaultdict(list)
     for lancamento in lancamentos:
         if lancamento.parcela:
@@ -56,7 +56,7 @@ def reagrupar(lancamentos, primeiro_mes: str, ultimo_mes: str) -> list[Parcelame
                 for c in cadeias
                 if c[-1].parcela[0] == parcela.parcela[0] - 1
                 and mes_seguinte(c[-1].mes) == parcela.mes
-                and abs(c[-1].valor_centavos - parcela.valor_centavos) <= TOLERANCIA_EM_CENTAVOS
+                and abs(c[0].valor_centavos - parcela.valor_centavos) <= TOLERANCIA_EM_CENTAVOS
             ]
             # Entre parcelamentos iguais em paralelo, fica junto o do mesmo cartão.
             continua.sort(key=lambda c: c[-1].cartao != parcela.cartao)
@@ -64,23 +64,29 @@ def reagrupar(lancamentos, primeiro_mes: str, ultimo_mes: str) -> list[Parcelame
                 continua[0].append(parcela)
             else:
                 cadeias.append([parcela])
+        vistas = Counter((x.mes, x.parcela[0]) for x in parcelas)
         for cadeia in cadeias:
+            motivos = _faltas(cadeia, total, primeiro_mes, ultimo_mes)
+            repetida = next((x for x in cadeia if vistas[(x.mes, x.parcela[0])] > 1), None)
+            if repetida is not None:
+                motivos.append(f"duas parcelas {repetida.parcela[0]} de {total} em {repetida.mes}")
             parcelamentos.append(
                 Parcelamento(
                     descricao=cadeia[0].descricao,
                     total=total,
                     lancamentos=cadeia,
-                    quebra=_quebra(cadeia, total, primeiro_mes, ultimo_mes),
+                    quebra="; ".join(motivos) or None,
                 )
             )
     parcelamentos.sort(key=lambda p: (p.descricao.casefold(), p.primeira.mes))
     return parcelamentos
 
 
-def _quebra(cadeia: list, total: int, primeiro_mes: str, ultimo_mes: str) -> str | None:
+def _faltas(cadeia: list, total: int, primeiro_mes: str, ultimo_mes: str) -> list[str]:
     primeira, ultima = cadeia[0], cadeia[-1]
+    faltas = []
     if primeira.parcela[0] > 1 and primeira.mes > primeiro_mes:
-        return f"falta a parcela {primeira.parcela[0] - 1} antes de {primeira.mes}"
+        faltas.append(f"falta a parcela {primeira.parcela[0] - 1} antes de {primeira.mes}")
     if ultima.parcela[0] < total and ultima.mes < ultimo_mes:
-        return f"falta a parcela {ultima.parcela[0] + 1} depois de {ultima.mes}"
-    return None
+        faltas.append(f"falta a parcela {ultima.parcela[0] + 1} depois de {ultima.mes}")
+    return faltas

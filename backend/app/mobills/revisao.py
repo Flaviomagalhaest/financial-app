@@ -2,7 +2,7 @@
 dono editar e rodar de novo, e as abas de conferência contra o Mobills."""
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -12,6 +12,7 @@ from openpyxl.utils import get_column_letter
 from app.mobills import de_para
 from app.mobills.conferencia import Fatura, Mes
 from app.mobills.cruzamento import Cruzamento
+from app.mobills.leitura import centavos, data, texto
 from app.mobills.parcelas import Parcelamento
 
 FORMATO_DE_REAIS = "#,##0.00"
@@ -31,6 +32,7 @@ def data_br(dia: date) -> str:
     return f"{dia:%d/%m/%Y}"
 
 
+COLUNA_DA_PASTA = "Pasta do cartão"
 COLUNA_DA_DECISAO = "Decisão (juntar ou separar)"
 COLUNA_DO_PAPEL = "Papel (categoria, tag, pessoa ou descartar)"
 COLUNA_DO_CARTAO_ESCOLHIDO = "Cartão (escolha)"
@@ -45,7 +47,8 @@ class Decisoes:
 
     provaveis: dict[tuple, str] = field(default_factory=dict)
     conta: tuple[str, str] | None = None  # nome e tipo
-    cartoes: dict[str, dict] = field(default_factory=dict)  # por pasta, os campos de `Cartao`
+    # Por pasta, os campos de `Cartao`; o dia vem como o dono digitou, para a conferência dizer.
+    cartoes: dict[str, dict] = field(default_factory=dict)
     de_para: dict[de_para.Chave, tuple[str, str]] = field(default_factory=dict)  # papel e nome
     cartao_dos_parcelamentos: dict[tuple, str] = field(default_factory=dict)
     mobills_por_mes: dict[str, int] = field(default_factory=dict)
@@ -57,51 +60,58 @@ def ler_decisoes(caminho: Path) -> Decisoes:
     if not caminho.exists():
         return decisoes
     livro = load_workbook(caminho, data_only=True)
+
+    def valor(linha: dict, coluna: str) -> int | None:
+        conteudo = linha.get(coluna)
+        if texto(conteudo) == "":
+            return None
+        return centavos(conteudo, f"{caminho.name}, coluna {coluna}")
+
     for linha in _linhas(livro, "Conta")[:1]:
-        decisoes.conta = (_texto(linha.get("Nome")), _texto(linha.get(COLUNA_DO_TIPO)).casefold())
+        decisoes.conta = (texto(linha.get("Nome")), texto(linha.get(COLUNA_DO_TIPO)).casefold())
     for linha in _linhas(livro, "Cartões"):
-        decisoes.cartoes[_texto(linha.get("Pasta"))] = {
-            "nome": _texto(linha.get("Cartão")),
-            "arquivado": _texto(linha.get(COLUNA_DO_ARQUIVADO)).casefold() == "sim",
+        decisoes.cartoes[texto(linha.get("Pasta"))] = {
+            "nome": texto(linha.get("Cartão")),
+            "arquivado": texto(linha.get(COLUNA_DO_ARQUIVADO)).casefold() == "sim",
             "fechamento": _dia_do_mes(linha.get("Dia do fechamento")),
             "vencimento": _dia_do_mes(linha.get("Dia do vencimento")),
         }
     for linha in _linhas(livro, "De-para"):
         chave = (
-            _texto(linha.get("Tipo")),
-            _texto(linha.get("No Mobills")),
-            _texto(linha.get("Nome no Mobills")),
+            texto(linha.get("Tipo")),
+            texto(linha.get("No Mobills")),
+            texto(linha.get("Nome no Mobills")),
         )
         decisoes.de_para[chave] = (
-            _texto(linha.get(COLUNA_DO_PAPEL)).casefold(),
-            _texto(linha.get("Nome no app")),
+            texto(linha.get(COLUNA_DO_PAPEL)).casefold(),
+            texto(linha.get("Nome no app")),
         )
     for linha in _linhas(livro, "Parcelamentos sem cartão"):
         chave = (
-            _texto(linha.get("Descrição")),
-            _centavos(linha.get("Valor")),
-            _texto(linha.get("Parcelas")).split(" ")[0],
-            _texto(linha.get("Primeiro mês")),
+            texto(linha.get("Descrição")),
+            valor(linha, "Valor"),
+            texto(linha.get("Parcelas")).split(" ")[0],
+            texto(linha.get("Primeiro mês")),
         )
-        decisoes.cartao_dos_parcelamentos[chave] = _texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
+        decisoes.cartao_dos_parcelamentos[chave] = texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
     for linha in _linhas(livro, "Conferência"):
-        if (valor := _centavos(linha.get("Mobills"))) is not None:
-            decisoes.mobills_por_mes[_texto(linha.get("Mês"))] = valor
+        if (do_mobills := valor(linha, "Mobills")) is not None:
+            decisoes.mobills_por_mes[texto(linha.get("Mês"))] = do_mobills
     for linha in _linhas(livro, "Faturas"):
-        if (valor := _centavos(linha.get("Mobills"))) is not None:
-            chave = (_texto(linha.get("Cartão")), _texto(linha.get("Mês")))
-            decisoes.mobills_por_fatura[chave] = valor
+        if (do_mobills := valor(linha, "Mobills")) is not None:
+            chave = (texto(linha.get("Cartão")), texto(linha.get("Mês")))
+            decisoes.mobills_por_fatura[chave] = do_mobills
     for linha in _linhas(livro, "Pares prováveis"):
-        decisao = _texto(linha.get(COLUNA_DA_DECISAO)).casefold()
+        decisao = texto(linha.get(COLUNA_DA_DECISAO)).casefold()
         if decisao in DECISOES_DO_PROVAVEL:
             chave = (
-                _texto(linha["Cartão"]),
-                _texto(linha["Mês"]),
-                _dia(linha["Data da compra"]),
-                _texto(linha["Descrição na fatura"]),
-                _centavos(linha["Valor"]),
-                _dia(linha["Data no geral"]),
-                _texto(linha["Descrição no geral"]),
+                texto(linha.get(COLUNA_DA_PASTA)),
+                texto(linha.get("Mês")),
+                data(linha.get("Data da compra")),
+                texto(linha.get("Descrição na fatura")),
+                valor(linha, "Valor"),
+                data(linha.get("Data no geral")),
+                texto(linha.get("Descrição no geral")),
             )
             decisoes.provaveis[chave] = decisao
     return decisoes
@@ -111,37 +121,20 @@ def _linhas(livro, nome: str) -> list[dict]:
     if nome not in livro.sheetnames:
         return []
     linhas = livro[nome].iter_rows(values_only=True)
-    cabecalho = [_texto(c) for c in next(linhas, ())]
+    cabecalho = [texto(c) for c in next(linhas, ())]
     return [
         dict(zip(cabecalho, valores)) for valores in linhas if any(v is not None for v in valores)
     ]
 
 
-def _texto(valor) -> str:
-    return "" if valor is None else " ".join(str(valor).split())
-
-
-def _dia(valor) -> date | None:
-    if isinstance(valor, datetime):
-        return valor.date()
-    try:
-        return datetime.strptime(_texto(valor), "%d/%m/%Y").date()
-    except ValueError:
-        return None
-
-
-def _dia_do_mes(valor) -> int | None:
-    """O dia como o dono digitou; um texto que não é número vira 0, fora de 1 a 31."""
-    if valor in (None, ""):
+def _dia_do_mes(valor) -> int | str | None:
+    """O dia em número; o que não for número volta como o dono digitou."""
+    if texto(valor) == "":
         return None
     try:
         return int(float(valor))
     except ValueError:
-        return 0
-
-
-def _centavos(valor) -> int | None:
-    return None if valor in (None, "") else round(float(valor) * 100)
+        return texto(valor)
 
 
 def aba_conta(conta) -> tuple[list[str], list[list]]:
@@ -193,7 +186,7 @@ def aba_de_para(
 
 def aba_pares_provaveis(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
     cabecalho = [
-        "Cartão",
+        COLUNA_DA_PASTA,
         "Mês",
         "Data da compra",
         "Descrição na fatura",
@@ -227,7 +220,7 @@ def aba_pares_provaveis(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
 def aba_grupos_ambiguos(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
     """Um par por linha; o lado que sobrou fica em branco."""
     cabecalho = [
-        "Cartão",
+        COLUNA_DA_PASTA,
         "Mês",
         "Descrição",
         "Valor",
@@ -240,12 +233,11 @@ def aba_grupos_ambiguos(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
     ]
     linhas = []
     for grupo in cruzamento.ambiguos:
-        fatura = next(f for f, _ in grupo if f is not None)
         geral = next(g for _, g in grupo if g is not None)
         for f, g in grupo:
             linhas.append(
                 [
-                    fatura.pasta,
+                    f.pasta if f else None,
                     geral.mes,
                     geral.descricao,
                     reais(-geral.valor_centavos),
@@ -322,7 +314,7 @@ def aba_parcelamentos_sem_cartao(
 def aba_categoria_diferente(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
     """Os pares que casaram em tudo menos na categoria: vale a do geral."""
     cabecalho = [
-        "Cartão",
+        COLUNA_DA_PASTA,
         "Mês",
         "Data da compra",
         "Descrição",

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from app.mobills import importar
-from app.mobills.leitura import ExportInvalido
+from app.mobills.leitura import ArquivoInvalido
 
 
 def main(argumentos: list[str] | None = None) -> int:
@@ -27,8 +27,8 @@ def main(argumentos: list[str] | None = None) -> int:
 
     try:
         importacao = importar(opcoes.geral, opcoes.faturas, opcoes.revisao)
-    except ExportInvalido as erro:
-        print(f"export inválido: {erro}", file=sys.stderr)
+    except ArquivoInvalido as erro:
+        print(f"arquivo inválido: {erro}", file=sys.stderr)
         return 1
 
     cruzamento = importacao.cruzamento
@@ -43,14 +43,15 @@ def main(argumentos: list[str] | None = None) -> int:
     provaveis = len(cruzamento.provaveis)
     print(
         f"{provaveis} {'par provável' if provaveis == 1 else 'pares prováveis'} ({abertos} abertos),"
-        f" {len(cruzamento.ambiguos)} grupos ambíguos,"
-        f" {sum(1 for p in importacao.parcelamentos if p.quebra)} parcelas quebradas,"
-        f" {len(importacao.ajustes)} ajustes de fatura"
+        f" grupos ambíguos: {len(cruzamento.ambiguos)},"
+        f" parcelas quebradas: {sum(1 for p in importacao.parcelamentos if p.quebra)},"
+        f" ajustes de fatura: {len(importacao.ajustes)}"
     )
     print(f"planilha de revisão em {opcoes.revisao}")
-    for pendencia in importacao.pendencias:
-        print(f"pendência: {pendencia}", file=sys.stderr)
-    return 0
+    for impedimento in importacao.impedimentos:
+        print(f"impede gravar: {impedimento}", file=sys.stderr)
+    # A planilha foi escrita; o código 2 diz que ela ainda precisa de edição.
+    return 2 if importacao.impedimentos else 0
 
 
 if __name__ == "__main__":

@@ -33,7 +33,8 @@ def escrever_geral(pasta: Path, nome: str, linhas: list[list]) -> Path:
     for valores in linhas:
         aba.append(valores)
     aba.append([])
-    aba.append(["Total (receitas - despesas)", None, round(sum(v[2] for v in linhas), 2)])
+    total = sum(v[2] for v in linhas if isinstance(v[2], int | float))
+    aba.append(["Total (receitas - despesas)", None, round(total, 2)])
     for outra in ("Despesas", "Receitas", "Transferências"):
         livro.create_sheet(outra).append(["Data", "Descrição", "Valor"])
     caminho = pasta / nome
