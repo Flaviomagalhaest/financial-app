@@ -10,13 +10,18 @@ from pydantic import BaseModel, Field
 
 from app import faturas
 from app.banco import conectar, em_transacao
-from app.item_em_que_conta import fixar, onde_conta
+from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import recusar, url_do_banco
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
 
 Mes = Annotated[str, Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", examples=["2026-10"])]
+
+
+# O lançamento `l` do mês: pelo índice do mês; o de antes da migration 0034 sem mês, pela data.
+# Parâmetros: o primeiro dia do mês, ele de novo e o primeiro dia do mês seguinte.
+_DO_MES = "(l.mes = %s OR (l.mes IS NULL AND l.data >= %s AND l.data < %s))"
 
 
 def primeiro_dia(mes: str) -> date:
@@ -92,28 +97,26 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
     ate = _proximo_mes(mes)
     movimentos: list[tuple[UUID, str, int]] = []
     a_escolher: list[AEscolher] = []
-    por_lancamento: dict[UUID, tuple[str, int, UUID | None, bool, set[UUID]]] = {}
-    for id, situacao, valor, guardada, explicita, categoria_id in conn.execute(
+    por_lancamento: dict[UUID, tuple[str, int, UUID | None, UUID | None, set[UUID]]] = {}
+    for id, situacao, valor, escolhida, atual, categoria_id in conn.execute(
         "SELECT l.id, l.situacao,"
         # O estorno diminui o item da compra que ele devolve.
         " CASE WHEN l.estorno_de IS NULL THEN l.valor_centavos ELSE -l.valor_centavos END,"
-        " l.item_categoria_id, COALESCE(l.item_explicito, false),"
+        " l.item_categoria_id, l.item_atual_categoria_id,"
         " lc.categoria_id FROM lancamentos l"
         " JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"
-        # Pelo índice do mês; o de antes da migration 0034 sem mês, pela data.
         " WHERE l.excluido_em IS NULL AND lc.categoria_id = ANY(%s)"
-        " AND (l.mes = %s OR (l.mes IS NULL AND l.data >= %s AND l.data < %s))"
-        " ORDER BY l.data, l.criado_em, l.id",
+        f" AND {_DO_MES} ORDER BY l.data, l.criado_em, l.id",
         (list(categorias_com_item), mes, mes, ate),
     ):
-        por_lancamento.setdefault(id, (situacao, valor, guardada, explicita, set()))[4].add(
+        por_lancamento.setdefault(id, (situacao, valor, escolhida, atual, set()))[4].add(
             categoria_id
         )
-    for id, (situacao, valor, guardada, explicita, com_item) in por_lancamento.items():
-        conta_em, escolher = onde_conta(com_item, guardada, explicita)
+    for id, (situacao, valor, escolhida, atual, com_item) in por_lancamento.items():
+        conta_em, fica_a_escolher = onde_conta(com_item, escolhida, atual)
         if conta_em:
             movimentos.append((categorias_com_item[conta_em], situacao, valor))
-        if escolher:
+        if fica_a_escolher:
             a_escolher.append(
                 AEscolher(
                     lancamento_id=id,
@@ -295,10 +298,9 @@ def criar_item(
         ).fetchone():
             raise HTTPException(status_code=409, detail="a categoria já tem item neste mês")
         # O lançamento que já contava em outro item fica nele: o novo só cria a ambiguidade.
-        fixar(
+        guardar_item_atual(
             conn,
-            "(l.mes = %s OR (l.mes IS NULL AND l.data >= %s AND l.data < %s))"
-            " AND l.id IN (SELECT lancamento_id FROM lancamento_categorias"
+            f"{_DO_MES} AND l.id IN (SELECT lancamento_id FROM lancamento_categorias"
             " WHERE categoria_id = %s)",
             (dia, dia, _proximo_mes(dia), novo.categoria_id),
         )

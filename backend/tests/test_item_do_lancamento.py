@@ -8,6 +8,7 @@ from app import lancamentos
 from tests.conftest import Casal
 from tests.test_cartoes import novo_cartao
 from tests.test_estorno_e_ajuste import estornar
+from tests.test_lancamentos import lancamento
 from tests.test_planejamento import item, lancar, ler
 from tests.test_recorrencias import gerados, recorrencia
 
@@ -328,3 +329,117 @@ def test_escolhas_de_item_diferentes_sobre_a_mesma_versao_sao_conflito(casal: Ca
     assert depois.status_code == 409
     assert [c["campo"] for c in depois.json()["campos"]] == ["item_categoria_id"]
     assert depois.json()["lancamento"]["item_categoria_id"] == viagem
+
+
+def test_escolhido_sem_item_no_mes_fica_no_item_em_que_conta_quando_surge_outro(casal: Casal):
+    conta = casal.conta()
+    casa, luz, extra = (casal.categoria(n) for n in ("Casa", "Luz", "Extra"))
+    item(casal, casa, 100000)  # a luz, escolhida, não tem item no mês
+    conta_de_luz = lancar(
+        casal, conta, [casa, luz, extra], 18000, "2026-10-05", item_categoria_id=luz
+    )
+    assert realizados(ler(casal)) == {casa: 18000}
+
+    item(casal, extra, 30000)
+
+    plano = ler(casal)
+    assert realizados(plano) == {casa: 18000, extra: 0}
+    assert [(e["lancamento_id"], e["item_categoria_id"]) for e in plano["a_escolher"]] == [
+        (conta_de_luz["id"], casa)
+    ]
+    item(casal, luz, 20000)  # com o item da escolha, ela vale de novo
+    assert realizados(ler(casal)) == {casa: 0, extra: 0, luz: 18000}
+    assert ler(casal)["a_escolher"] == []
+
+
+def test_lancamento_editado_para_outro_mes_fica_no_item_em_que_estava(casal: Casal):
+    conta = casal.conta()
+    mercado, festa = casal.categoria("Mercado"), casal.categoria("Festa")
+    item(casal, mercado, 100000)
+    item(casal, mercado, 100000, mes="2026-11")
+    item(casal, festa, 50000, mes="2026-11")
+    compra = lancar(casal, conta, [mercado, festa], 8000, "2026-10-08")
+
+    editar(casal, compra, data="2026-11-02")
+
+    novembro = ler(casal, "2026-11")
+    assert realizados(novembro) == {mercado: 0, festa: 0}
+    assert {i["categoria_id"]: i["previsto_centavos"] for i in novembro["itens"]} == {
+        mercado: 8000,
+        festa: 0,
+    }
+    assert [e["item_categoria_id"] for e in novembro["a_escolher"]] == [mercado]
+
+
+def test_compra_que_muda_de_fatura_pelas_datas_do_cartao_fica_no_item_em_que_estava(
+    casal: Casal,
+):
+    cartao = novo_cartao(casal)["id"]  # fecha dia 25
+    mercado, festa = casal.categoria("Mercado"), casal.categoria("Festa")
+    item(casal, mercado, 100000)
+    item(casal, mercado, 100000, mes="2026-11")
+    item(casal, festa, 50000, mes="2026-11")
+    compra = lancar(casal, cartao, [mercado, festa], 8000, "2026-10-10")
+    assert compra["mes"] == "2026-10-01"
+
+    mudado = casal.pedir(
+        "flavio",
+        "PUT",
+        f"/api/cartoes/{cartao}",
+        json={"nome": "Nubank", "dia_fechamento": 5, "dia_vencimento": 15},
+    )
+
+    assert mudado.status_code == 200, mudado.text
+    novembro = ler(casal, "2026-11")
+    assert realizados(novembro) == {mercado: 8000, festa: 0}
+    assert [e["item_categoria_id"] for e in novembro["a_escolher"]] == [mercado]
+
+
+def test_a_fila_do_aparelho_cria_e_escolhe_o_item_pelo_lote(casal: Casal):
+    conta = casal.conta()
+    restaurante, viagem = casal.categoria("Restaurante"), casal.categoria("Viagem")
+    item(casal, restaurante, 100000)
+    item(casal, viagem, 300000)
+    jantar = lancamento(conta, [restaurante, viagem], valor_centavos=25000, data="2026-10-03")
+    lanche = lancamento(conta, [restaurante, viagem], valor_centavos=3000, data="2026-10-04")
+
+    lote = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json={
+            "acoes": [
+                {"acao": "criar", "lancamento": jantar | {"item_categoria_id": viagem}},
+                {"acao": "criar", "lancamento": lanche},
+                {
+                    "acao": "editar",
+                    "id": lanche["id"],
+                    "alteracao": {"versao": 1, "item_categoria_id": restaurante},
+                },
+            ]
+        },
+    )
+
+    assert [r["resultado"] for r in lote.json()["resultados"]] == ["aceita"] * 3
+    plano = ler(casal)
+    assert realizados(plano) == {restaurante: 3000, viagem: 25000}
+    assert plano["a_escolher"] == []
+
+
+def test_estorno_de_compra_que_contava_sozinha_diminui_o_mesmo_item(casal: Casal):
+    cartao = novo_cartao(casal)["id"]  # fecha dia 25
+    mercado, festa = casal.categoria("Mercado"), casal.categoria("Festa")
+    item(casal, mercado, 100000)
+    item(casal, mercado, 100000, mes="2026-11")
+    item(casal, festa, 50000, mes="2026-11")
+    compra = lancar(casal, cartao, [mercado, festa], 8000, "2026-10-10")
+
+    estorno = estornar(casal, compra, "2026-10-28", valor_centavos=3000)  # fatura de novembro
+
+    assert estorno.status_code == 201, estorno.text
+    novembro = ler(casal, "2026-11")
+    assert {i["categoria_id"]: i["previsto_centavos"] for i in novembro["itens"]} == {
+        mercado: -3000,
+        festa: 0,
+    }
+    assert novembro["a_escolher"] == []

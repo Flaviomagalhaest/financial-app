@@ -1290,7 +1290,7 @@
       "fatura_a_mao": "boolean",
       "estorno_de": "uuid",
       "item_categoria_id": "uuid",
-      "item_explicito": "boolean"
+      "item_atual_categoria_id": "uuid"
     },
     "modelo_do_planejamento": {
       "categoria_id": "uuid",

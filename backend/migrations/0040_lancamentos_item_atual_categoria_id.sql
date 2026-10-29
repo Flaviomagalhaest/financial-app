@@ -1,0 +1,1 @@
+ALTER TABLE lancamentos ADD COLUMN IF NOT EXISTS item_atual_categoria_id uuid

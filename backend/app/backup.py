@@ -290,13 +290,13 @@ def _da_versao_13_para_a_14(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
 
 
 def _da_versao_14_para_a_15(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 15 (ticket 51) guarda no lançamento e na recorrência a categoria do item do
-    planejamento em que conta e, no lançamento, se a escolha foi do casal. Antes dela nenhum
-    lançamento tinha escolha: o que tem uma categoria só com item conta nele sozinho."""
+    """A versão 15 (ticket 51) guarda no lançamento e na recorrência a escolha do item do
+    planejamento em que conta e, no lançamento, o item em que ele contava sozinho. Antes dela
+    nenhum lançamento tinha escolha: o que tem uma categoria só com item conta nele sozinho."""
     colunas, linhas = tabelas["lancamentos"]
     if "item_categoria_id" not in colunas:
         tabelas["lancamentos"] = (
-            [*colunas, "item_categoria_id", "item_explicito"],
+            [*colunas, "item_categoria_id", "item_atual_categoria_id"],
             [[*linha, None, None] for linha in linhas],
         )
     colunas, linhas = tabelas["recorrencias"]

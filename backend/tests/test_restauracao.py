@@ -633,7 +633,7 @@ def test_backup_da_versao_14_sem_escolha_de_item_restaura_sem_escolha(database_u
 
         assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
         assert conn.execute(
-            "SELECT valor_centavos, item_categoria_id, item_explicito FROM lancamentos"
+            "SELECT valor_centavos, item_categoria_id, item_atual_categoria_id FROM lancamentos"
         ).fetchall() == [(1000, None, None)]
         assert conn.execute(
             "SELECT valor_centavos, item_categoria_id FROM recorrencias"

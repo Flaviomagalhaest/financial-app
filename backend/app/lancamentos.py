@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app import faturas
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
-from app.item_em_que_conta import fixar
+from app.item_em_que_conta import guardar_item_atual_do_lancamento
 from app.login import UsuarioLogado
 from app.pessoas import configuradas
 
@@ -279,9 +279,7 @@ _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
-    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de,"
-    # A categoria guardada sem escolha explícita é do servidor (`item_em_que_conta.fixar`).
-    " CASE WHEN item_explicito THEN item_categoria_id END"
+    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de, item_categoria_id"
 )
 
 
@@ -581,7 +579,7 @@ def mudar_fatura(conn, id: UUID, versao: int, mes: date, usuario: str, origem: s
     """A fatura que o app escolheu de novo (as datas do cartão mudaram): sobe a versão e conta
     como mudança do outro lado, com a origem, na tela de conflito (ADR 0011)."""
     agora = _momento(None)
-    fixar(conn, "l.id = %s", (id,))  # no mês novo, fica no item em que estava
+    guardar_item_atual_do_lancamento(conn, id)  # no mês novo, fica no item em que estava
     nova = subir_versao(
         conn, id, versao, "mes = %s, alterado_por = %s, alterado_em = %s", (mes, usuario, agora)
     )
@@ -716,17 +714,15 @@ def _fatura_depois(
     return mes, a_mao
 
 
-def _item_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None:
-    """A categoria do item a guardar num lançamento que vai mudar: a escolha explícita ou, sem
-    ela, o item em que ele conta antes da mudança, se a categoria dele continua no lançamento.
-    Assim a categoria nova ou o mês novo que criam ambiguidade não o tiram do item."""
-    if depois.item_categoria_id:
-        return depois.item_categoria_id
-    fixar(conn, "l.id = %s", (id,))
-    (guardada,) = conn.execute(
-        "SELECT item_categoria_id FROM lancamentos WHERE id = %s", (id,)
+def _item_atual_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None:
+    """O item em que um lançamento que vai mudar conta antes da mudança, se a categoria dele
+    continua no lançamento: a categoria nova ou o mês novo que criam ambiguidade não o tiram do
+    item (`item_em_que_conta`)."""
+    guardar_item_atual_do_lancamento(conn, id)
+    (atual,) = conn.execute(
+        "SELECT item_atual_categoria_id FROM lancamentos WHERE id = %s", (id,)
     ).fetchone()
-    return guardada if guardada in depois.categoria_ids else None
+    return atual if atual in depois.categoria_ids else None
 
 
 def _iguais(campo: Campo, pedido, gravado) -> bool:
@@ -789,10 +785,14 @@ def _conferir_estorno(
     return categorias
 
 
-def _item_escolhido(conn, id: UUID) -> UUID | None:
-    """A escolha explícita de item de um lançamento; o estorno nasce com a da compra."""
+def _item_da_compra(conn, id: UUID) -> UUID | None:
+    """A escolha com que o estorno nasce: a da compra ou o item em que ela conta sozinha, para
+    ele diminuir o mesmo item."""
+    guardar_item_atual_do_lancamento(conn, id)
     linha = conn.execute(
-        "SELECT item_categoria_id FROM lancamentos WHERE id = %s AND item_explicito", (id,)
+        "SELECT COALESCE(item_categoria_id, item_atual_categoria_id) FROM lancamentos"
+        " WHERE id = %s",
+        (id,),
     ).fetchone()
     return linha and linha[0]
 
@@ -815,12 +815,14 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
     mes, _, a_mao = _onde_conta(conn, novo)
     momento = _momento(novo.acao_em)
-    item = novo.item_categoria_id or (novo.estorno_de and _item_escolhido(conn, novo.estorno_de))
+    escolhida = novo.item_categoria_id
+    if escolhida is None and novo.estorno_de:
+        escolhida = _item_da_compra(conn, novo.estorno_de)
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
         " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte,"
-        " mes, fatura_a_mao, estorno_de, item_categoria_id, item_explicito)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s, %s, %s, %s)"
+        " mes, fatura_a_mao, estorno_de, item_categoria_id)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s, %s, %s)"
         " ON CONFLICT (id) DO NOTHING",
         (
             novo.id,
@@ -838,8 +840,7 @@ def _criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             mes,
             a_mao,
             novo.estorno_de,
-            item or None,
-            bool(item),
+            escolhida,
         ),
     ).rowcount
     if gravados:
@@ -900,14 +901,14 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
     momento = _momento(alteracao.acao_em)
     conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
     mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
-    item = _item_depois(conn, id, editado)
+    item_atual = _item_atual_depois(conn, id, editado)
     versao = subir_versao(
         conn,
         id,
         atual.versao,
         "tipo = %s, situacao = %s, valor_centavos = %s, data = %s, descricao = %s,"
         " conta_id = %s, pessoa = %s, mes = %s, fatura_a_mao = %s, item_categoria_id = %s,"
-        " item_explicito = %s, alterado_por = %s, alterado_em = %s",
+        " item_atual_categoria_id = %s, alterado_por = %s, alterado_em = %s",
         (
             editado.tipo,
             editado.situacao,
@@ -918,8 +919,8 @@ def _editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> L
             editado.pessoa,
             mes,
             a_mao,
-            item,
-            bool(editado.item_categoria_id),
+            editado.item_categoria_id,
+            item_atual,
             usuario,
             momento,
         ),
@@ -1134,7 +1135,7 @@ def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancam
         )
     mes, a_mao = _fatura_depois(conn, atual, _com_mudancas(atual, ajustes), ajustes)
     if mes != atual.mes:
-        fixar(conn, "l.id = %s", (id,))  # no mês novo, fica no item em que estava
+        guardar_item_atual_do_lancamento(conn, id)  # no mês novo, fica no item em que estava
     momento = _momento(confirmacao.acao_em)
     versao = subir_versao(
         conn,
