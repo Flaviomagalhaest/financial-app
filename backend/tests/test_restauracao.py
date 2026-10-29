@@ -193,6 +193,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "lancamento_categorias": 0,
             "lancamento_tags": 0,
             "lancamentos": 0,
+            "modelo_do_planejamento": 0,
             "tags": 0,
             "transferencias": 0,
         }
@@ -376,3 +377,29 @@ def test_backup_da_versao_8_sem_pessoa_nem_fonte_restaura_do_conjunto_e_do_app(d
         assert conn.execute(
             "SELECT valor_centavos, pessoa, fonte, repetido_mantido_em FROM lancamentos"
         ).fetchall() == [(1000, None, None, None)]
+
+
+def test_backup_da_versao_9_sem_modelo_do_planejamento_restaura_com_o_modelo_vazio(database_url):
+    # O que `prod` gravava antes do ticket 50: nenhuma tabela do modelo padrão.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        atual = gerar_backup(conn)
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            if nome == "modelo_do_planejamento.csv":
+                continue
+            conteudo = origem.read(nome)
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 9
+                del manifesto["tabelas"]["modelo_do_planejamento"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert manifesto["tabelas"]["modelo_do_planejamento"]["linhas"] == 0
+        assert conn.execute("SELECT count(*) FROM modelo_do_planejamento").fetchone() == (0,)

@@ -47,6 +47,24 @@ def _juntar_itens_do_planejamento(conn, origem: UUID, destino: UUID) -> None:
             )
 
 
+def _juntar_item_do_modelo(conn, origem: UUID, destino: UUID) -> None:
+    """Como nos meses: o valor da origem se soma ao do destino, ou passa para ele."""
+    da_origem = conn.execute(
+        "SELECT valor_centavos FROM modelo_do_planejamento WHERE categoria_id = %s", (origem,)
+    ).fetchone()
+    if not da_origem:
+        return
+    conn.execute("DELETE FROM modelo_do_planejamento WHERE categoria_id = %s", (origem,))
+    conn.execute(
+        "INSERT INTO modelo_do_planejamento (categoria_id, valor_centavos, alterado_por)"
+        " VALUES (%s, %s, 'sistema')"
+        " ON CONFLICT (categoria_id) DO UPDATE SET"
+        " valor_centavos = modelo_do_planejamento.valor_centavos + excluded.valor_centavos,"
+        " alterado_em = now()",
+        (destino, da_origem[0]),
+    )
+
+
 class Juncao(BaseModel):
     destino_id: UUID
 
@@ -76,6 +94,7 @@ def juntar_categoria(
         )
         conn.execute("DELETE FROM lancamento_categorias WHERE categoria_id = %s", (origem.id,))
         _juntar_itens_do_planejamento(conn, origem.id, destino.id)
+        _juntar_item_do_modelo(conn, origem.id, destino.id)
         conn.execute(
             "UPDATE transferencias SET categoria_id = %s WHERE categoria_id = %s",
             (destino.id, origem.id),
@@ -103,6 +122,10 @@ def excluir_categoria(id: UUID, usuario: UsuarioLogado, request: Request) -> Res
             "SELECT 1 FROM itens_do_planejamento WHERE categoria_id = %s LIMIT 1", (id,)
         ).fetchone():
             raise HTTPException(status_code=409, detail="categoria com item do planejamento")
+        if conn.execute(
+            "SELECT 1 FROM modelo_do_planejamento WHERE categoria_id = %s", (id,)
+        ).fetchone():
+            raise HTTPException(status_code=409, detail="categoria no modelo do planejamento")
         conn.execute("DELETE FROM categorias WHERE id = %s", (id,))
 
     em_transacao(url_do_banco(request), trabalho)

@@ -306,3 +306,118 @@ def test_excluir_categoria_de_transferencia_com_transferencia_e_recusado(casal: 
     )
 
     assert casal.pedir("flavio", "DELETE", f"/api/categorias/{guardar}").status_code == 409
+
+
+def test_copia_o_planejamento_do_mes_anterior_para_um_mes_vazio(casal: Casal):
+    alimentacao, lazer = casal.categoria("Alimentação"), casal.categoria("Lazer")
+    item(casal, alimentacao, 100000, mes="2026-09")
+    item(casal, lazer, 30000, mes="2026-09")
+
+    resposta = casal.pedir(
+        "flavio", "POST", "/api/planejamento/2026-10/copiar", json={"de": "2026-09"}
+    )
+
+    assert resposta.status_code == 201, resposta.text
+    copiado = ler(casal)
+    assert {i["categoria_id"]: i["planejado_centavos"] for i in copiado["itens"]} == {
+        alimentacao: 100000,
+        lazer: 30000,
+    }
+    assert resposta.json() == copiado
+    # O mês de origem não muda.
+    assert len(ler(casal, "2026-09")["itens"]) == 2
+
+
+def test_copiar_recusa_mes_de_destino_com_item_origem_vazia_e_origem_igual_ao_destino(
+    casal: Casal,
+):
+    alimentacao = casal.categoria("Alimentação")
+    item(casal, alimentacao, 100000, mes="2026-09")
+    item(casal, alimentacao, 50000, mes="2026-10")
+
+    def copiar(de):
+        return casal.pedir(
+            "flavio", "POST", "/api/planejamento/2026-10/copiar", json={"de": de}
+        ).status_code
+
+    assert copiar("2026-09") == 409  # destino já tem item
+    assert copiar("2026-10") == 422  # copiar de si mesmo
+    assert (
+        casal.pedir(
+            "flavio", "POST", "/api/planejamento/2026-11/copiar", json={"de": "2026-08"}
+        ).status_code
+        == 422
+    )  # origem sem item
+    assert ler(casal)["itens"][0]["planejado_centavos"] == 50000
+
+
+def definir_modelo(casal: Casal, itens: list[tuple[str, int]]):
+    return casal.pedir(
+        "flavio",
+        "PUT",
+        "/api/planejamento/modelo",
+        json={"itens": [{"categoria_id": c, "valor_centavos": v} for c, v in itens]},
+    )
+
+
+def test_modelo_padrao_comeca_vazio_e_e_editado_substituindo_o_conjunto(casal: Casal):
+    alimentacao, lazer = casal.categoria("Alimentação"), casal.categoria("Lazer")
+    assert casal.pedir("esposa", "GET", "/api/planejamento/modelo").json() == {"itens": []}
+
+    resposta = definir_modelo(casal, [(alimentacao, 90000), (lazer, 20000)])
+    assert resposta.status_code == 200, resposta.text
+    assert {i["categoria_id"]: i["valor_centavos"] for i in resposta.json()["itens"]} == {
+        alimentacao: 90000,
+        lazer: 20000,
+    }
+
+    definir_modelo(casal, [(lazer, 25000)])
+    lido = casal.pedir("esposa", "GET", "/api/planejamento/modelo").json()
+    assert lido["itens"] == [{"categoria_id": lazer, "valor_centavos": 25000}]
+
+
+def test_modelo_padrao_recusa_categoria_inexistente_repetida_e_valor_zero(casal: Casal):
+    alimentacao = casal.categoria("Alimentação")
+    assert definir_modelo(casal, [(str(uuid4()), 1000)]).status_code == 422
+    assert definir_modelo(casal, [(alimentacao, 1000), (alimentacao, 2000)]).status_code == 422
+    assert definir_modelo(casal, [(alimentacao, 0)]).status_code == 422
+
+
+def test_aplica_o_modelo_padrao_a_um_mes_vazio_e_recusa_mes_com_item(casal: Casal):
+    alimentacao, lazer = casal.categoria("Alimentação"), casal.categoria("Lazer")
+    assert (
+        casal.pedir("flavio", "POST", "/api/planejamento/2026-10/aplicar-modelo").status_code == 422
+    )  # modelo vazio
+
+    definir_modelo(casal, [(alimentacao, 90000), (lazer, 20000)])
+    resposta = casal.pedir("flavio", "POST", "/api/planejamento/2026-10/aplicar-modelo")
+
+    assert resposta.status_code == 201, resposta.text
+    assert {i["categoria_id"]: i["planejado_centavos"] for i in ler(casal)["itens"]} == {
+        alimentacao: 90000,
+        lazer: 20000,
+    }
+    assert (
+        casal.pedir("flavio", "POST", "/api/planejamento/2026-10/aplicar-modelo").status_code == 409
+    )
+
+
+def test_categoria_com_item_no_modelo_nao_se_exclui_e_juntar_leva_o_item_do_modelo(
+    casal: Casal,
+):
+    origem, destino, outra = (casal.categoria(n) for n in ["Mercado", "Alimentação", "Lazer"])
+    definir_modelo(casal, [(origem, 70000), (destino, 20000), (outra, 5000)])
+
+    assert casal.pedir("flavio", "DELETE", f"/api/categorias/{outra}").status_code == 409
+
+    assert (
+        casal.pedir(
+            "flavio", "POST", f"/api/categorias/{origem}/juntar", json={"destino_id": destino}
+        ).status_code
+        == 200
+    )
+    modelo = casal.pedir("flavio", "GET", "/api/planejamento/modelo").json()["itens"]
+    assert {i["categoria_id"]: i["valor_centavos"] for i in modelo} == {
+        destino: 90000,
+        outra: 5000,
+    }
