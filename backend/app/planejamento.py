@@ -71,16 +71,18 @@ class MudancaDeItem(BaseModel):
 def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID]):
     """(item, situacao, valor) de cada lançamento e transferência do mês que conta em um item:
     automaticamente, quando só uma das categorias dele tem item no mês. O lançamento com mais de
-    uma (a escolha é do ticket 51) ainda não conta em nenhum."""
+    uma (a escolha é do ticket 51) ainda não conta em nenhum. O lançamento entra pelo mês em que
+    conta, que no cartão é o da fatura (ADR 0003); a transferência, pela data."""
     ate = _proximo_mes(mes)
     movimentos: list[tuple[UUID, str, int]] = []
     por_lancamento: dict[UUID, tuple[str, int, set[UUID]]] = {}
     for id, situacao, valor, categoria_id in conn.execute(
         "SELECT l.id, l.situacao, l.valor_centavos, lc.categoria_id FROM lancamentos l"
         " JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"
-        " WHERE l.excluido_em IS NULL AND l.data >= %s AND l.data < %s"
-        " AND lc.categoria_id = ANY(%s)",
-        (mes, ate, list(categorias_com_item)),
+        # Pelo índice do mês; o de antes da migration 0034 sem mês, pela data.
+        " WHERE l.excluido_em IS NULL AND lc.categoria_id = ANY(%s)"
+        " AND (l.mes = %s OR (l.mes IS NULL AND l.data >= %s AND l.data < %s))",
+        (list(categorias_com_item), mes, mes, ate),
     ):
         por_lancamento.setdefault(id, (situacao, valor, set()))[2].add(categoria_id)
     for situacao, valor, categorias in por_lancamento.values():

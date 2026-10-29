@@ -307,3 +307,23 @@ def test_recorrencia_semanal_com_muitas_categorias_e_tags_gera_em_mais_de_uma_tr
     assert len(previstos) == 105
     assert previstos[-1]["data"] == "2028-10-26"
     assert [l["ocorrencia"] for l in previstos] == list(range(1, 106))
+
+
+def test_recorrencia_no_cartao_conta_cada_previsto_no_mes_da_fatura(casal: Casal):
+    # O Spotify no cartão que fecha no dia 25: o do dia 26 cai na fatura do mês seguinte.
+    cartao = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/cartoes",
+        json={"nome": "Nubank", "dia_fechamento": 25, "dia_vencimento": 5},
+    ).json()["id"]
+    nova = recorrencia(
+        cartao, [casal.categoria("Assinaturas")], inicio="2026-11-26", vezes=2, descricao="Spotify"
+    )
+
+    assert casal.pedir("flavio", "POST", "/api/recorrencias", json=nova).status_code == 201
+
+    assert [(l["data"], l["mes"], l["fatura_mes"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-11-26", "2026-12-01", "2026-12-01"),
+        ("2026-12-26", "2027-01-01", "2027-01-01"),
+    ]

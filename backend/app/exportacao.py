@@ -15,9 +15,12 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg import IsolationLevel
+from psycopg.rows import dict_row
 
 from app.backup import conferir_backup, gerar_backup
 from app.banco import conectar, em_transacao
+from app.lancamentos import MES_EM_QUE_CONTA, NO_CARTAO
+from app.pessoas import configuradas
 
 Formato = Literal["backup", "planilha"]
 VALIDADE_DA_URL = 300
@@ -36,7 +39,6 @@ COLUNAS_DA_PLANILHA = [
     "criado_por",
     "alterado_por",
 ]
-TABELAS_DA_PLANILHA = {"lancamentos", "contas", "cartoes", "faturas", "categorias", "tags"}
 
 
 @dataclass
@@ -90,20 +92,100 @@ def exportar(s3, bucket: str, usuario: str, formato: Formato, url: str | None = 
 
 
 def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
-    """Lançamentos com nomes no lugar dos ids, de todo o histórico (sem filtro por período).
+    """Lançamentos e transferências com nomes no lugar dos ids, de todo o histórico (sem filtro
+    por período), em ordem de data. O excluído fica de fora, como em todas as leituras.
 
-    As tabelas de cartões, faturas e tags ainda não existem (tickets 37 e 40): enquanto
-    faltarem, a planilha sai só com o cabeçalho. Ligar a consulta ao esquema real é o ticket 77.
+    A transferência sai numa linha, com "origem → destino" e o valor sem sinal: não é despesa
+    nem receita (ADR 0014). A pessoa, quem criou e quem alterou saem pelo nome de `PESSOAS`.
     """
-    existentes = {
-        nome
-        for (nome,) in conn.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+    pessoas = configuradas()
+    contas = dict(conn.execute("SELECT id, nome FROM contas").fetchall())
+    contas |= dict(conn.execute("SELECT id, nome FROM cartoes").fetchall())
+    categorias: dict = {}
+    for lancamento_id, nome in conn.execute(
+        "SELECT lc.lancamento_id, c.nome FROM lancamento_categorias lc"
+        " JOIN categorias c ON c.id = lc.categoria_id ORDER BY c.nome"
+    ):
+        categorias.setdefault(lancamento_id, []).append(nome)
+    tags: dict = {}
+    for lancamento_id, nome in conn.execute(
+        "SELECT lt.lancamento_id, t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
+        " ORDER BY t.nome"
+    ):
+        tags.setdefault(lancamento_id, []).append(nome)
+
+    def nome(pessoa: str | None) -> str:
+        return pessoas.get(pessoa, pessoa) if pessoa else ""
+
+    def linha(data, criado_em, situacao, criado_por, alterado_por, **colunas) -> tuple:
+        # "efetivado" é a palavra do Mobills, que o casal conhece da planilha (ticket 25).
+        return (
+            data,
+            criado_em,
+            {
+                "data": data.isoformat(),
+                "situacao": "efetivado" if situacao == "realizado" else "previsto",
+                "criado_por": nome(criado_por),
+                "alterado_por": nome(alterado_por),
+            }
+            | colunas,
         )
-    }
-    if not TABELAS_DA_PLANILHA <= existentes:
-        return []
-    raise NotImplementedError("consulta da planilha: ticket 77")
+
+    linhas = [
+        linha(
+            l["data"],
+            l["criado_em"],
+            l["situacao"],
+            l["criado_por"],
+            l["alterado_por"],
+            descricao=l["descricao"],
+            valor=_reais(-l["valor"] if l["tipo"] == "despesa" else l["valor"]),
+            conta_ou_cartao=contas.get(l["conta_id"], ""),
+            fatura=l["mes"].strftime("%Y-%m") if l["no_cartao"] else "",
+            categorias=categorias.get(l["id"], []),
+            tags=tags.get(l["id"], []),
+            pessoa=nome(l["pessoa"]),
+        )
+        for l in _dicionarios(
+            conn,
+            "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id,"
+            f" pessoa, criado_por, alterado_por, criado_em, {MES_EM_QUE_CONTA} AS mes,"
+            f" {NO_CARTAO} AS no_cartao FROM lancamentos WHERE excluido_em IS NULL",
+        )
+    ] + [
+        linha(
+            t["data"],
+            t["criado_em"],
+            t["situacao"],
+            t["criado_por"],
+            t["alterado_por"],
+            descricao=t["descricao"],
+            valor=_reais(t["valor_centavos"]),
+            conta_ou_cartao=(
+                f"{contas.get(t['conta_origem_id'], '')} → {contas.get(t['conta_destino_id'], '')}"
+            ),
+            fatura="",
+            categorias=[t["categoria"]] if t["categoria"] else [],
+            tags=[],
+            pessoa="",
+        )
+        for t in _dicionarios(
+            conn,
+            "SELECT t.*, c.nome AS categoria FROM transferencias t"
+            " LEFT JOIN categorias c ON c.id = t.categoria_id",
+        )
+    ]
+    return [colunas for *_, colunas in sorted(linhas, key=lambda linha: linha[:2])]
+
+
+def _dicionarios(conn: psycopg.Connection, consulta: str) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cursor:
+        return cursor.execute(consulta).fetchall()
+
+
+def _reais(centavos: int) -> str:
+    sinal = "-" if centavos < 0 else ""
+    return f"{sinal}{abs(centavos) // 100}.{abs(centavos) % 100:02d}"
 
 
 def formatar_planilha(linhas: list[dict]) -> bytes:
