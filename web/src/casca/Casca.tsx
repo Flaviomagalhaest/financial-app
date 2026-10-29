@@ -6,6 +6,8 @@ import { NovoLancamento } from "../lancamentos/NovoLancamento";
 import { TelaDeContasECategorias } from "../contas-e-categorias/TelaDeContasECategorias";
 import { TelaDeConflito } from "../lancamentos/TelaDeConflito";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
+import { TelaDeCartoes } from "../cartoes/TelaDeCartoes";
+import { TelaDaFatura } from "../cartoes/TelaDaFatura";
 import { ABAS, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
@@ -21,7 +23,7 @@ function Vazia({ nome }: { nome: string }) {
 
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
-  const { rota, id } = useRota();
+  const { rota, id, mes } = useRota();
   const aba = ABAS.find((a) => a.id === rota);
 
   return (
@@ -58,7 +60,8 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}
         {rota === "historico" && <ListaDeLancamentos />}
-        {aba && aba.id !== "hoje" && aba.id !== "historico" && <Vazia nome={aba.nome} />}
+        {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}
+        {aba && aba.id !== "hoje" && aba.id !== "historico" && aba.id !== "cartoes" && <Vazia nome={aba.nome} />}
       </main>
     </div>
   );

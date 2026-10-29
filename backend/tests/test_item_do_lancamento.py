@@ -9,6 +9,7 @@ from tests.conftest import Casal
 from tests.test_cartoes import novo_cartao
 from tests.test_estorno_e_ajuste import estornar
 from tests.test_lancamentos import lancamento
+from tests.test_parcelamentos import parcelamento, parcelas
 from tests.test_planejamento import item, lancar, ler
 from tests.test_recorrencias import gerados, recorrencia
 
@@ -443,3 +444,51 @@ def test_estorno_de_compra_que_contava_sozinha_diminui_o_mesmo_item(casal: Casal
         festa: 0,
     }
     assert novembro["a_escolher"] == []
+
+
+def test_parcelamento_guarda_a_escolha_e_as_parcelas_ja_nascem_com_ela(casal: Casal):
+    conta = casal.conta()
+    eletro, casa_nova = casal.categoria("Eletrodomésticos"), casal.categoria("Casa nova")
+    item(casal, eletro, 50000, mes="2026-11")
+    item(casal, casa_nova, 500000, mes="2026-11")
+    regra = parcelamento(
+        conta, [eletro, casa_nova], valor_total_centavos=90000, item_categoria_id=casa_nova
+    )
+
+    criado = casal.pedir("flavio", "POST", "/api/parcelamentos", json=regra)
+    fora = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/parcelamentos",
+        json=parcelamento(conta, [eletro], item_categoria_id=casa_nova),
+    )
+
+    assert criado.status_code == 201, criado.text
+    assert criado.json()["item_categoria_id"] == casa_nova
+    assert [p["item_categoria_id"] for p in parcelas(casal, regra["id"])] == [casa_nova] * 3
+    novembro = ler(casal, "2026-11")
+    assert {i["categoria_id"]: i["previsto_centavos"] for i in novembro["itens"]} == {
+        eletro: 0,
+        casa_nova: 30000,
+    }
+    assert novembro["a_escolher"] == []
+    assert fora.status_code == 422
+
+
+def test_juntar_categorias_leva_a_escolha_e_as_categorias_do_parcelamento(casal: Casal):
+    conta = casal.conta()
+    eletro, casa_nova, reforma = (
+        casal.categoria(n) for n in ("Eletrodomésticos", "Casa nova", "Reforma")
+    )
+    regra = parcelamento(conta, [eletro, reforma], item_categoria_id=reforma)
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=regra).status_code == 201
+
+    casal.pedir(
+        "flavio", "POST", f"/api/categorias/{reforma}/juntar", json={"destino_id": casa_nova}
+    )
+
+    [lido] = casal.pedir("esposa", "GET", "/api/parcelamentos").json()
+    assert (sorted(lido["categoria_ids"]), lido["item_categoria_id"]) == (
+        sorted([eletro, casa_nova]),
+        casa_nova,
+    )

@@ -14,8 +14,10 @@ from app.classificacao import router as classificacao
 from app.exportacao import Formato, exportar
 from app.lancamentos import router as lancamentos
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
+from app.lote import router as lote
 from app.meses import router as meses
 from app.migrations import total_aplicadas
+from app.parcelamentos import router as parcelamentos
 from app.pessoas import router as pessoas
 from app.planejamento import router as planejamento
 from app.recorrencias import router as recorrencias
@@ -83,6 +85,7 @@ def create_app(
         return ExportacaoPronta(url=pronta.url, arquivo=pronta.arquivo, expira_em=pronta.expira_em)
 
     app.include_router(lancamentos)
+    app.include_router(lote)
     app.include_router(classificacao)
     app.include_router(transferencias)
     app.include_router(cartoes)
@@ -90,4 +93,5 @@ def create_app(
     app.include_router(meses)
     app.include_router(pessoas)
     app.include_router(recorrencias)
+    app.include_router(parcelamentos)
     return app

@@ -644,6 +644,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/recorrencias/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir Recorrencia
+         * @description Idempotente. Tira a regra e os previstos de hoje em diante; o realizado e o atrasado
+         *     ficam, como lançamentos que a regra gerou.
+         */
+        delete: operations["excluir_recorrencia"];
+        options?: never;
+        head?: never;
+        /**
+         * Alterar Recorrencia
+         * @description Muda a regra "daqui para frente" (a partir de uma ocorrência), tira os previstos que
+         *     passaram do fim e refaz os que ninguém alterou à mão. Mudar só um mês é editar o previsto, e
+         *     pular um mês é excluí-lo: a geração não o traz de volta.
+         */
+        patch: operations["alterar_recorrencia"];
+        trace?: never;
+    };
+    "/api/parcelamentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Parcelamentos */
+        get: operations["listar_parcelamentos"];
+        put?: never;
+        /**
+         * Criar Parcelamento
+         * @description Grava o parcelamento e gera todas as parcelas. Reenviar o mesmo id (a fila repete)
+         *     devolve o gravado, com 200, e completa a geração se ela tiver parado no meio.
+         */
+        post: operations["criar_parcelamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -671,6 +720,15 @@ export interface components {
              */
             acao: "criar";
             lancamento: components["schemas"]["NovoLancamento"];
+        };
+        /** AcaoCriarParcelamento */
+        AcaoCriarParcelamento: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "criar_parcelamento";
+            parcelamento: components["schemas"]["NovoParcelamento"];
         };
         /** AcaoEditar */
         AcaoEditar: {
@@ -758,6 +816,62 @@ export interface components {
             item_categoria_id?: string | null;
             /** Acao Em */
             acao_em?: string | null;
+        };
+        /**
+         * AlteracaoDeRecorrencia
+         * @description Os campos da regra que mudam "daqui para frente", a partir da ocorrência dada: a regra
+         *     passa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,
+         *     são refeitos. O que já foi realizado e os previstos de antes ficam como estão. Campo
+         *     ausente fica como está; `pessoa` vazia passa a regra para o conjunto.
+         */
+        AlteracaoDeRecorrencia: {
+            /** A Partir Da Ocorrencia */
+            a_partir_da_ocorrencia: number;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo?: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos?: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor?: "fixo" | "estimado";
+            /** Automatico */
+            automatico?: boolean;
+            /** Descricao */
+            descricao?: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id?: string;
+            /** Categoria Ids */
+            categoria_ids?: string[];
+            /** Tags */
+            tags?: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** A Cada */
+            a_cada?: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade?: "semanas" | "meses";
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio?: string;
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
         };
         /**
          * CampoEmConflito
@@ -1114,6 +1228,12 @@ export interface components {
              * @default false
              */
             automatico: boolean;
+            /** Parcelamento Id */
+            parcelamento_id?: string | null;
+            /** Parcela */
+            parcela?: number | null;
+            /** Parcelas */
+            parcelas?: number | null;
             /** Versao */
             versao: number;
             /** Criado Por */
@@ -1142,7 +1262,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoCriarParcelamento"])[];
         };
         /** ModeloPadrao */
         ModeloPadrao: {
@@ -1374,6 +1494,114 @@ export interface components {
             /** Acao Em */
             acao_em?: string | null;
         };
+        /** NovoParcelamento */
+        NovoParcelamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @default despesa
+             * @constant
+             */
+            tipo: "despesa";
+            /** Parcelas */
+            parcelas: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos?: number | null;
+            /** Valor Da Parcela Centavos */
+            valor_da_parcela_centavos?: number | null;
+            /** Automatico */
+            automatico?: boolean | null;
+        };
+        /** Parcelamento */
+        Parcelamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @default despesa
+             * @constant
+             */
+            tipo: "despesa";
+            /** Parcelas */
+            parcelas: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos: number;
+            /** Automatico */
+            automatico: boolean;
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
+        };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
             /**
@@ -1471,6 +1699,11 @@ export interface components {
             vezes?: number | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Ocorrencia Do Inicio
+             * @default 1
+             */
+            ocorrencia_do_inicio: number;
             /** Criado Por */
             criado_por: string;
             /**
@@ -1489,7 +1722,8 @@ export interface components {
         /**
          * Resultado
          * @description `recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os
-         *     campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu.
+         *     campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O
+         *     parcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos.
          */
         Resultado: {
             /**
@@ -1500,6 +1734,7 @@ export interface components {
             /** Motivo */
             motivo?: string | null;
             lancamento?: components["schemas"]["Lancamento"] | null;
+            parcelamento?: components["schemas"]["Parcelamento"] | null;
             /** Campos */
             campos?: components["schemas"]["CampoEmConflito"][] | null;
             exclusao?: components["schemas"]["Exclusao"] | null;
@@ -3037,6 +3272,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Recorrencia"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_recorrencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alterar_recorrencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlteracaoDeRecorrencia"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recorrencia"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_parcelamentos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parcelamento"][];
+                };
+            };
+        };
+    };
+    criar_parcelamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoParcelamento"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parcelamento"];
                 };
             };
             /** @description Validation Error */

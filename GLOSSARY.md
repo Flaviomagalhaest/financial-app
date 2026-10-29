@@ -73,6 +73,14 @@ _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a excluída não volta.
 _Avoid_: instância, repetição
 
+**Daqui para frente**:
+Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número.
+_Avoid_: a partir de agora, mudar tudo
+
+**Alterado à mão**:
+Previsto de uma recorrência que uma pessoa editou (qualquer campo): uma mudança "daqui para frente" não o sobrescreve, nem o mês pulado volta. Mudar só um mês é editar o previsto; pular um mês é excluí-lo.
+_Avoid_: customizado, manual
+
 **Horizonte**:
 Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária.
 _Avoid_: janela, limite
@@ -86,11 +94,11 @@ Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lança
 _Avoid_: compra parcelada, financiamento
 
 **Parcela**:
-Lançamento que é uma das N partes de um parcelamento (ex.: 3/10).
+Lançamento que é uma das N partes de um parcelamento (ex.: 3/10). No cartão, todas têm a data da compra e a parcela n cai n − 1 faturas depois da fatura da compra; fora dele (o boleto), a parcela n vence n − 1 meses depois da primeira.
 _Avoid_: prestação
 
 **Automático**:
-Recorrência de valor fixo ou parcelamento cujos previstos viram realizados sozinhos na data, sem confirmação.
+Recorrência de valor fixo ou parcelamento cujos previstos viram realizados sozinhos na data, sem confirmação; a parcela no cartão, que tem a data da compra, vira realizada quando entra na fatura aberta (a fatura de antes fechou).
 _Avoid_: débito automático, efetivação automática
 
 **Confirmação**:

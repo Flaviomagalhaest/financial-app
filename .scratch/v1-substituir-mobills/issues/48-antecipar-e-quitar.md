@@ -19,3 +19,7 @@ O casal registra uma antecipação com desconto ou a quitação do que falta.
 - [ ] Quitar o restante de uma vez
 - [ ] Testes de API com os totais antes e depois
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 46](46-parcelamento-criar.md): no cartão, a fatura da parcela n vem de `faturas.mes_da_parcela` (n - 1 faturas depois da fatura da compra), e a redistribuição pelas datas do cartão (`cartoes._redistribuir`) e a edição da data a recalculam. A parcela antecipada, que conta na fatura em que foi paga, precisa da marca de troca à mão (`fatura_a_mao`) ou de outra, para não voltar à fatura dela. A tarefa diária realiza a parcela automática pelo `realiza_em` (`backend/app/parcelamentos.py`).

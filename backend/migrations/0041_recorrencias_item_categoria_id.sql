@@ -1,1 +1,0 @@
-ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS item_categoria_id uuid

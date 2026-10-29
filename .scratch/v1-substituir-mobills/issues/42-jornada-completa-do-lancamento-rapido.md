@@ -16,7 +16,7 @@ A tela de lançar chega ao desenho dos protótipos: lançar uma despesa leva pou
 ## Checklist
 
 - [x] Tela de transferência entre duas contas, com categoria opcional da lista de transferência (API do [ticket 36](36-contas-saldo-e-transferencia.md), `/api/transferencias`)
-- [x] Fileiras de toque para conta ou cartão e categorias; folha de detalhes com descrição, tags, pessoa, data, parcelado e recorrente (os dois últimos ficam desativados até seus tickets: o recorrente no [86](86-recorrencia-criar-pela-tela-e-sem-internet.md), sobre a API do 44, e o parcelado no [46](46-parcelamento-criar.md)), e resumo numa linha
+- [x] Fileiras de toque para conta ou cartão e categorias; folha de detalhes com descrição, tags, pessoa, data, parcelado e recorrente (os dois últimos ficam desativados até seus tickets: o recorrente no [86](86-recorrencia-criar-pela-tela-e-sem-internet.md), sobre a API do 44, e o parcelado no [98](98-parcelamento-criar-pela-tela-e-sem-internet.md), sobre a API do 46), e resumo numa linha
 - [x] Data entre hoje, ontem ou outra; data futura nasce prevista e passada ou de hoje nasce realizada, trocável à mão
 - [x] "Repetir último" enquanto o lançamento está vazio
 - [x] Atalho "Novo lançamento" funcionando no Android e botão na tela inicial no iPhone
@@ -27,7 +27,7 @@ A tela de lançar chega ao desenho dos protótipos: lançar uma despesa leva pou
 
 ## Notas da implementação
 
-- **Tela de lançar** (`TelaDeLancamento.tsx`, variante A): tipo no topo, valor, a linha de resumo ("Detalhes: Jantar · #viagem · Flávio · ontem · previsto"; a data de hoje e o realizado não aparecem), "Repetir último", fileiras de conta e de categorias que rolam de lado, teclado e Salvar. A folha de detalhes (`FolhaDeDetalhes.tsx`) é um `<dialog>` modal: descrição, tags, pessoa, data, situação e "Repete?" (Parcelado e Recorrente desativados até os tickets [46](46-parcelamento-criar.md) e [86](86-recorrencia-criar-pela-tela-e-sem-internet.md)). Ela fecha por "Pronto", Esc ou toque fora.
+- **Tela de lançar** (`TelaDeLancamento.tsx`, variante A): tipo no topo, valor, a linha de resumo ("Detalhes: Jantar · #viagem · Flávio · ontem · previsto"; a data de hoje e o realizado não aparecem), "Repetir último", fileiras de conta e de categorias que rolam de lado, teclado e Salvar. A folha de detalhes (`FolhaDeDetalhes.tsx`) é um `<dialog>` modal: descrição, tags, pessoa, data, situação e "Repete?" (Parcelado e Recorrente desativados até os tickets [98](98-parcelamento-criar-pela-tela-e-sem-internet.md) e [86](86-recorrencia-criar-pela-tela-e-sem-internet.md)). Ela fecha por "Pronto", Esc ou toque fora.
 - **Data** (`EscolhaDaData.tsx`): Hoje, Ontem e o campo "Outra data", no dia de São Paulo (`diaAnterior`, `rotuloDaData` em `datas.ts`). A situação segue a regra que já existia: data futura nasce prevista, a escolha à mão vale.
 - **Tags**: escolher e criar na folha, pelo nome. A tag nova nasce no servidor junto com o lançamento, então funciona sem internet. As opções (`useTags` em `dados/`) são as do servidor não arquivadas mais as dos lançamentos do aparelho, para a criada sem internet já aparecer no próximo. O Histórico passou a mostrar as tags na linha.
 - **Repetir último**: aparece no lançamento novo enquanto não há valor nem categoria. Preenche tipo, valor, conta, categorias ativas, descrição, tags e pessoa, com a data de hoje. O "último" é o mais recente criado à mão por quem está com o aparelho (o não enviado conta e o gerado pela recorrência não), não o da outra pessoa.

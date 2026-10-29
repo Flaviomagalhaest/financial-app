@@ -78,7 +78,8 @@ def _juntar_escolhas_de_item(conn, origem: UUID, destino: UUID) -> None:
     for tabela, coluna in (
         ("lancamentos", "item_categoria_id"),
         ("lancamentos", "item_atual_categoria_id"),
-        ("recorrencias", "item_categoria_id"),
+        ("recorrencias", "item_id"),
+        ("parcelamentos", "item_categoria_id"),
     ):
         conn.execute(f"UPDATE {tabela} SET {coluna} = %s WHERE {coluna} = %s", (destino, origem))
 
@@ -112,14 +113,16 @@ def juntar_categoria(
             (destino.id, origem.id),
         )
         conn.execute("DELETE FROM lancamento_categorias WHERE categoria_id = %s", (origem.id,))
-        # A recorrência vai junto, para a escolha de item dela continuar numa categoria dela.
-        conn.execute(
-            "INSERT INTO recorrencia_categorias (recorrencia_id, categoria_id)"
-            " SELECT recorrencia_id, %s FROM recorrencia_categorias WHERE categoria_id = %s"
-            " ON CONFLICT DO NOTHING",
-            (destino.id, origem.id),
-        )
-        conn.execute("DELETE FROM recorrencia_categorias WHERE categoria_id = %s", (origem.id,))
+        # A recorrência e o parcelamento vão junto, para a escolha de item continuar numa
+        # categoria deles.
+        for regra in ("recorrencia", "parcelamento"):
+            conn.execute(
+                f"INSERT INTO {regra}_categorias ({regra}_id, categoria_id)"
+                f" SELECT {regra}_id, %s FROM {regra}_categorias WHERE categoria_id = %s"
+                " ON CONFLICT DO NOTHING",
+                (destino.id, origem.id),
+            )
+            conn.execute(f"DELETE FROM {regra}_categorias WHERE categoria_id = %s", (origem.id,))
         _juntar_itens_do_planejamento(conn, origem.id, destino.id)
         _juntar_item_do_modelo(conn, origem.id, destino.id)
         conn.execute(
