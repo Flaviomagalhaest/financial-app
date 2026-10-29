@@ -20,3 +20,7 @@ O histórico importado já traz o futuro e as faturas certos, e o importador ger
 - [ ] `Reajuste de fatura` vira ajuste de fatura; faturas importadas nascem com o mês da fatura do rótulo, fechadas e pagas, sem datas nem pagamento de fatura
 - [ ] Saída é um backup válido; teste de que ele restaura num banco vazio
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- Do [ticket 39](39-estorno-ajuste-de-fatura-e-cancelamento.md): O ajuste de fatura já tem onde ficar: `faturas.ajuste_centavos` (migration `0038`, backup na versão 14), editável por `PATCH /api/cartoes/{id}/faturas/{mes}`; o `Reajuste de fatura` importado grava ali.

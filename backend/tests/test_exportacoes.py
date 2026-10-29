@@ -157,8 +157,9 @@ def test_planilha_traz_todo_o_historico_com_nomes_no_lugar_dos_ids(
         f"/api/lancamentos/{feira['id']}",
         json={"versao": 1, "descricao": "Feira!"},
     )
+    compra_no_cartao = lancamento(cartao, [mercado], valor_centavos=5000, data="2026-03-28")
     for quem, dados in [
-        ("esposa", lancamento(cartao, [mercado], valor_centavos=5000, data="2026-03-28")),
+        ("esposa", compra_no_cartao),
         (
             "flavio",
             lancamento(
@@ -173,6 +174,11 @@ def test_planilha_traz_todo_o_historico_com_nomes_no_lugar_dos_ids(
         ("flavio", lancamento(corrente, [mercado], data="2099-01-01", descricao="Futuro")),
     ]:
         assert casal.pedir(quem, "POST", "/api/lancamentos", json=dados).status_code == 201
+    # O estorno é um crédito: sai da planilha com o sinal contrário ao da compra.
+    estorno = lancamento(
+        cartao, [mercado], valor_centavos=5000, data="2026-04-26", estorno_de=compra_no_cartao["id"]
+    )
+    assert casal.pedir("flavio", "POST", "/api/lancamentos", json=estorno).status_code == 201
     excluido = lancamento(corrente, [mercado], data="2026-03-03", descricao="Excluído")
     casal.pedir("flavio", "POST", "/api/lancamentos", json=excluido)
     casal.pedir("flavio", "DELETE", f"/api/lancamentos/{excluido['id']}")
@@ -188,6 +194,20 @@ def test_planilha_traz_todo_o_historico_com_nomes_no_lugar_dos_ids(
             "data": "2026-03-10",
             "descricao": "Guardar",
             "categoria_id": reserva,
+        },
+    )
+    casal.pedir(
+        "esposa",
+        "POST",
+        "/api/transferencias",
+        json={
+            "id": str(uuid.uuid4()),
+            "conta_origem_id": corrente,
+            "conta_destino_id": cartao,
+            "valor_centavos": 5000,
+            "data": "2026-04-05",
+            "descricao": "Fatura Nubank",
+            "fatura_mes": "2026-04-01",
         },
     )
     s3 = S3Falso()
@@ -206,6 +226,8 @@ def test_planilha_traz_todo_o_historico_com_nomes_no_lugar_dos_ids(
         "2026-03-05;Salário;5000,00;Corrente;;Salário;;;efetivado;Flávio;Flávio",
         "2026-03-10;Guardar;1000,00;Corrente → Poupança;;Reserva;;;efetivado;Fulana;Fulana",
         "2026-03-28;Mercado;-50,00;Nubank;2026-04;Mercado;;;efetivado;Fulana;Fulana",
+        "2026-04-05;Fatura Nubank;50,00;Corrente → Nubank;2026-04;;;;efetivado;Fulana;Fulana",
+        "2026-04-26;Mercado;50,00;Nubank;2026-05;Mercado;;;efetivado;Flávio;Flávio",
         "2099-01-01;Futuro;-120,35;Corrente;;Mercado;;;previsto;Flávio;Flávio",
         "",
     ]

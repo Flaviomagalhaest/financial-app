@@ -10,7 +10,7 @@ type Ajuste = { centavos: number; data: string; contaId: string };
 
 /** Previstos a confirmar (atrasados e os dos próximos 7 dias), com "Confirmar" em um toque ou "Ajustar". */
 export function ContasDaSemana() {
-  const { contas, categorias } = useCadastro();
+  const { contas, contasECartoes, categorias } = useCadastro();
   const [lancamentos, setLancamentos] = useState<Lancamento[] | null>(null);
   const [ajustando, setAjustando] = useState<{ id: string } & Ajuste | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -94,7 +94,7 @@ export function ContasDaSemana() {
               </div>
               <p className="vazio">
                 {l.atrasado && <span className="selo-atrasado">atrasado</span>}
-                {dataPorExtenso(l.data)} · {nome(contas, l.conta_id)}
+                {dataPorExtenso(l.data)} · {nome(contasECartoes, l.conta_id)}
               </p>
               {ajuste ? (
                 <div className="ajuste" role="group" aria-label={`Ajuste de ${titulo}`}>

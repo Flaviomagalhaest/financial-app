@@ -44,6 +44,7 @@ def test_item_planejado_aparece_no_mes_com_realizado_previsto_e_percentual(casal
     assert ler(casal) == {
         "mes": "2026-10",
         "ainda_da_para_gastar_centavos": 25000,
+        "ajustes_de_fatura_centavos": 0,
         "itens": [
             {
                 "id": criado["id"],
@@ -162,6 +163,7 @@ def test_mes_sem_itens_vem_vazio_e_mes_invalido_e_recusado(casal: Casal):
         "mes": "2027-01",
         "itens": [],
         "ainda_da_para_gastar_centavos": 0,
+        "ajustes_de_fatura_centavos": 0,
     }
     assert casal.pedir("flavio", "GET", "/api/planejamento/2026-13").status_code == 422
     assert casal.pedir("flavio", "GET", "/api/planejamento/outubro").status_code == 422

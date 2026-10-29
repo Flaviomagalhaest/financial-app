@@ -54,8 +54,9 @@ test("a pessoa se troca na edição e a outra pessoa vê a troca", async ({ page
   await expect(linha(dela, descricao)).toContainText("conjunto");
 
   await linha(dela, descricao).getByRole("link", { name: `Editar ${descricao}` }).click();
-  await dela.getByText("Detalhes").click();
+  await dela.getByRole("button", { name: /^Detalhes/ }).click();
   await dela.getByRole("group", { name: "Pessoa" }).getByRole("button", { name: "Fulana" }).click();
+  await dela.getByRole("button", { name: "Pronto" }).click();
   await dela.getByRole("button", { name: "Salvar" }).click();
   await expect(linha(dela, descricao)).toContainText("Fulana");
   await page.reload();

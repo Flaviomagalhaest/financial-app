@@ -32,11 +32,12 @@ async function lancar(page: Page, conta: string, l: Previsto) {
   await digitar(page, ...l.teclas);
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: l.categoria }).click();
-  await page.getByText("Detalhes").click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
   await page.getByLabel("Descrição").fill(l.descricao);
   await page.getByLabel("Data").fill(l.data);
   // Conta que devo e ainda não paguei: data passada, mas previsto à mão.
   if (l.previsto) await page.getByRole("button", { name: "Previsto", exact: true }).click();
+  await page.getByRole("button", { name: "Pronto" }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
 }
