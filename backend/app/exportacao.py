@@ -15,9 +15,11 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg import IsolationLevel
+from psycopg.rows import dict_row
 
 from app.backup import conferir_backup, gerar_backup
 from app.banco import conectar, em_transacao
+from app.lancamentos import MES_EM_QUE_CONTA, NO_CARTAO
 from app.pessoas import configuradas
 
 Formato = Literal["backup", "planilha"]
@@ -115,72 +117,70 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
     def nome(pessoa: str | None) -> str:
         return pessoas.get(pessoa, pessoa) if pessoa else ""
 
-    situacao = {"previsto": "previsto", "realizado": "efetivado"}
-    linhas = []
-    for (
-        id,
-        tipo,
-        sit,
-        valor,
-        data,
-        descricao,
-        conta,
-        pessoa,
-        por,
-        alterou,
-        mes,
-        cartao,
-        em,
-    ) in conn.execute(
-        "SELECT id, tipo, situacao, valor_centavos, data, descricao, conta_id, pessoa,"
-        " criado_por, alterado_por, COALESCE(mes, date_trunc('month', data)::date),"
-        " EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id), criado_em"
-        " FROM lancamentos WHERE excluido_em IS NULL"
-    ):
-        linhas.append(
-            (
-                data,
-                em,
-                {
-                    "data": data.isoformat(),
-                    "descricao": descricao,
-                    "valor": _reais(-valor if tipo == "despesa" else valor),
-                    "conta_ou_cartao": contas.get(conta, ""),
-                    "fatura": mes.strftime("%Y-%m") if cartao else "",
-                    "categorias": categorias.get(id, []),
-                    "tags": tags.get(id, []),
-                    "pessoa": nome(pessoa),
-                    "situacao": situacao[sit],
-                    "criado_por": nome(por),
-                    "alterado_por": nome(alterou),
-                },
-            )
+    def linha(data, criado_em, situacao, criado_por, alterado_por, **colunas) -> tuple:
+        # "efetivado" é a palavra do Mobills, que o casal conhece da planilha (ticket 25).
+        return (
+            data,
+            criado_em,
+            {
+                "data": data.isoformat(),
+                "situacao": "efetivado" if situacao == "realizado" else "previsto",
+                "criado_por": nome(criado_por),
+                "alterado_por": nome(alterado_por),
+            }
+            | colunas,
         )
-    for sit, valor, data, descricao, origem, destino, categoria, por, alterou, em in conn.execute(
-        "SELECT t.situacao, t.valor_centavos, t.data, t.descricao, t.conta_origem_id,"
-        " t.conta_destino_id, c.nome, t.criado_por, t.alterado_por, t.criado_em"
-        " FROM transferencias t LEFT JOIN categorias c ON c.id = t.categoria_id"
-    ):
-        linhas.append(
-            (
-                data,
-                em,
-                {
-                    "data": data.isoformat(),
-                    "descricao": descricao,
-                    "valor": _reais(valor),
-                    "conta_ou_cartao": f"{contas.get(origem, '')} → {contas.get(destino, '')}",
-                    "fatura": "",
-                    "categorias": [categoria] if categoria else [],
-                    "tags": [],
-                    "pessoa": "",
-                    "situacao": situacao[sit],
-                    "criado_por": nome(por),
-                    "alterado_por": nome(alterou),
-                },
-            )
+
+    linhas = [
+        linha(
+            l["data"],
+            l["criado_em"],
+            l["situacao"],
+            l["criado_por"],
+            l["alterado_por"],
+            descricao=l["descricao"],
+            valor=_reais(-l["valor"] if l["tipo"] == "despesa" else l["valor"]),
+            conta_ou_cartao=contas.get(l["conta_id"], ""),
+            fatura=l["mes"].strftime("%Y-%m") if l["no_cartao"] else "",
+            categorias=categorias.get(l["id"], []),
+            tags=tags.get(l["id"], []),
+            pessoa=nome(l["pessoa"]),
         )
-    return [linha for _, _, linha in sorted(linhas, key=lambda linha: linha[:2])]
+        for l in _dicionarios(
+            conn,
+            "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id,"
+            f" pessoa, criado_por, alterado_por, criado_em, {MES_EM_QUE_CONTA} AS mes,"
+            f" {NO_CARTAO} AS no_cartao FROM lancamentos WHERE excluido_em IS NULL",
+        )
+    ] + [
+        linha(
+            t["data"],
+            t["criado_em"],
+            t["situacao"],
+            t["criado_por"],
+            t["alterado_por"],
+            descricao=t["descricao"],
+            valor=_reais(t["valor_centavos"]),
+            conta_ou_cartao=(
+                f"{contas.get(t['conta_origem_id'], '')} → {contas.get(t['conta_destino_id'], '')}"
+            ),
+            fatura="",
+            categorias=[t["categoria"]] if t["categoria"] else [],
+            tags=[],
+            pessoa="",
+        )
+        for t in _dicionarios(
+            conn,
+            "SELECT t.*, c.nome AS categoria FROM transferencias t"
+            " LEFT JOIN categorias c ON c.id = t.categoria_id",
+        )
+    ]
+    return [colunas for *_, colunas in sorted(linhas, key=lambda linha: linha[:2])]
+
+
+def _dicionarios(conn: psycopg.Connection, consulta: str) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cursor:
+        return cursor.execute(consulta).fetchall()
 
 
 def _reais(centavos: int) -> str:

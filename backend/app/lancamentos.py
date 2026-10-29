@@ -239,13 +239,14 @@ _REPETIDO_DE = f"""(
 
 # Lançamento de antes do ticket 34 não tem versão: está como nasceu, na 1.
 _VERSAO = "COALESCE(versao, 1)"
+# O mês em que o lançamento conta. Gravado pela migration 0026 nos de antes; a data cobre o que
+# sobrou dela e o que a API antiga gravar durante o deploy.
+MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
+NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {_VERSAO}, pessoa, fonte,"
-    f" {_REPETIDO_DE},"
-    # Gravado pela migration 0026 nos de antes; o COALESCE cobre a API antiga durante o deploy.
-    " COALESCE(mes, date_trunc('month', data)::date),"
-    " EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
+    f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}"
 )
 
 
@@ -532,6 +533,16 @@ def subir_versao(conn, id: UUID, de: int, atribuicoes: str, parametros: tuple) -
     if not gravadas:
         raise psycopg.errors.SerializationFailure("o lançamento mudou durante a gravação")
     return de + 1
+
+
+def mudar_fatura(conn, id: UUID, versao: int, mes: date, usuario: str, origem: str) -> None:
+    """A fatura que o app escolheu de novo (as datas do cartão mudaram): sobe a versão e conta
+    como mudança do outro lado, com a origem, na tela de conflito (ADR 0011)."""
+    agora = _momento(None)
+    nova = subir_versao(
+        conn, id, versao, "mes = %s, alterado_por = %s, alterado_em = %s", (mes, usuario, agora)
+    )
+    registrar_mudancas(conn, id, ["fatura_mes"], nova, usuario, agora, origem=origem)
 
 
 class _VersaoDoCampo(BaseModel):

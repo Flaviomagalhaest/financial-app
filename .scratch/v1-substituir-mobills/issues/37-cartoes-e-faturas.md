@@ -38,4 +38,4 @@ O casal cadastra cartões e cada compra cai na fatura certa pelo fechamento e co
 - O [ticket 77](77-ligar-o-csv-de-planilha-ao-esquema-real.md) entrou junto: com o ticket 41 na `main`, a última tabela da planilha era a deste ticket, e a exportação daria 500. Escolhas dele que o dono confere no [ticket 87](87-conferir-as-regras-de-fatura.md).
 - Comportamentos provisórios (dia padrão sobre datas editadas, fatura fechada que recebe compra esquecida, etc.) para o dono conferir no [ticket 87](87-conferir-as-regras-de-fatura.md).
 - Fora deste ticket, de propósito: as telas de cadastro de cartão e de datas da fatura ([ticket 86](86-telas-de-cadastro-de-cartoes.md)); a fileira "conta ou cartão" do lançamento ([42](42-jornada-completa-do-lancamento-rapido.md)); a situação "paga" da fatura ([38](38-pagamento-de-fatura.md)); a aba Cartões ([55](55-aba-cartoes.md)).
-- Os testes de navegador tiveram uma falha intermitente sem relação com este ticket: [ticket 88](88-teste-do-recusado-intermitente.md).
+- Os testes de navegador falham às vezes na suíte completa, também na `main` (testes que passam sozinhos): [ticket 88](88-teste-do-recusado-intermitente.md).
