@@ -605,7 +605,10 @@ def _atual(conn, id: UUID, usuario: str) -> Lancamento:
         raise LancamentoExcluido(
             Exclusao(excluido_por=por, excluido_em=em, por_voce=por == usuario)
         )
-    return _um(conn, id)
+    # No Postgres em READ COMMITTED (local e CI), a exclusão do outro lado pode ser confirmada
+    # entre as duas leituras; lida de novo, ela vira o 410. O DSQL lê tudo do mesmo instante.
+    lidos = _todos(conn, "id = %s", (id,))
+    return lidos[0] if lidos else _atual(conn, id, usuario)
 
 
 def _onde_conta(

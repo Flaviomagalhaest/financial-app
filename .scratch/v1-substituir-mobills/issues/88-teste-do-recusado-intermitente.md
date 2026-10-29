@@ -14,6 +14,8 @@ Origem: [ticket 37](37-cartoes-e-faturas.md): nas rodadas completas de `npx play
 - `e2e/conflito.spec.ts` › "mudança no mesmo campo vira conflito..." (na `main`, numa worktree limpa).
 - `e2e/conflito.spec.ts` › "descartar a minha mudança deixa a versão da outra pessoa", numa rodada em que o log da API não teve nenhum erro.
 
+Uma causa já foi achada e corrigida no PR do ticket 37: no CI, "a exclusão vence a edição" (`e2e/conflito.spec.ts`) deu `IndexError` em `_atual` (`backend/app/lancamentos.py`), porque no Postgres em READ COMMITTED a exclusão da outra pessoa chegava entre as duas leituras e a edição voltava "erro no servidor" em vez de "descartada". Os outros casos acima podem ter a mesma família de causa (leituras em instantes diferentes no Postgres local, que no DSQL não acontecem).
+
 ## O que fazer
 
 Achar a corrida de cada um (provável: o teste desliga a rede ou recarrega antes de a leitura ser guardada no aparelho, ou o handler da rota lê a resposta depois de a página navegar) e deixar a suíte estável, sem desligar nem marcar `skip` nenhum teste.
