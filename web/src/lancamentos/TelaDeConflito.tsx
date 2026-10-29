@@ -26,6 +26,7 @@ const ROTULOS: Record<Campo, string> = {
   categoria_ids: "Categorias",
   tags: "Tags",
   pessoa: "Pessoa",
+  fatura_mes: "Fatura",
 };
 
 function valorDoCampo(campo: Campo, l: NovoLancamento, contas: Conta[], categorias: Categoria[], nomeDe: (id: string) => string): string {
@@ -48,6 +49,8 @@ function valorDoCampo(campo: Campo, l: NovoLancamento, contas: Conta[], categori
       return l.tags.length ? l.tags.join(", ") : "(sem tags)";
     case "pessoa":
       return l.pessoa ? nomeDe(l.pessoa) : "Conjunto";
+    case "fatura_mes":
+      return l.fatura_mes ? `fatura de ${l.fatura_mes.slice(5, 7)}/${l.fatura_mes.slice(0, 4)}` : "(sem fatura)";
   }
 }
 

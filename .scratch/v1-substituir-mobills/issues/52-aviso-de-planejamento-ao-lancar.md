@@ -20,4 +20,5 @@ A cada toque na tela de lançar, o casal vê o efeito no planejamento ("Mercado:
 - [ ] Com duas ou mais categorias com item, "Conta no planejamento em:" com a última escolha para aquele conjunto, trocável com um toque
 - [ ] Sem internet, os totais vêm de `web/src/dados/` (ticket 33): a resposta guardada com a fila por cima, como `useLancamentos` faz com a lista
 - [ ] Testes de tabela e de navegador
+- [ ] Sem internet, o aviso da compra no cartão precisa da fatura: a regra está só no servidor (`backend/app/faturas.py`, ticket 37). Decidir se o aparelho repete a regra com as faturas guardadas (`GET /api/cartoes/{id}/faturas`) ou mostra o mês só depois do envio (ADR 0011 rejeitou repetir as regras no aparelho)
 - [ ] Verificações do projeto rodando e PR aberto para `main`

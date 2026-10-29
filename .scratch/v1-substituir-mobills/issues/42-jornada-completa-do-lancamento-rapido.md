@@ -21,6 +21,7 @@ A tela de lançar chega ao desenho dos protótipos: lançar uma despesa leva pou
 - [x] "Repetir último" enquanto o lançamento está vazio
 - [x] Atalho "Novo lançamento" funcionando no Android e botão na tela inicial no iPhone
 - [x] Teste de navegador do fluxo completo, online e offline
+- [ ] A fileira "conta ou cartão" lê também `GET /api/cartoes` (ticket 37) e manda o cartão em `conta_id`; a resposta traz `fatura_mes` e `mes`. A troca de fatura à mão é o `fatura_mes` (história 73), na folha de detalhes
 - [x] Verificações do projeto rodando e PR aberto para `main`
 - [x] Da revisão do ticket 32: data com "hoje / ontem / outra" (história 18) e a linha de resumo dos detalhes embaixo do valor (história 17); hoje a data é só um campo em "Detalhes"
 

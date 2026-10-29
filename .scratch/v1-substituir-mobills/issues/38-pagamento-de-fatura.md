@@ -1,7 +1,7 @@
 # Pagamento de fatura
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 37
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Sonnet
@@ -18,5 +18,6 @@ Pagar a fatura é uma transferência da conta para o cartão: o saldo da conta c
 - [ ] Pagamento de fatura como transferência sem categoria; pagar antes do vencimento ou adiantar com a fatura aberta mexe só no saldo da conta
 - [ ] Pagamento parcial: o que faltou vira saldo anterior na fatura seguinte, sem contar de novo no planejamento nem nas tags
 - [ ] Juros, IOF e multa do rotativo são lançamentos novos na fatura seguinte
+- [ ] A fatura (`Fatura` em `backend/app/cartoes.py`, ticket 37) tem `situacao` aberta ou fechada: acrescentar `paga`, e o pagamento parte de `transferencias` com o cartão como destino (`conferir_conta` hoje só aceita conta); no CSV de planilha (`ler_lancamentos`, ticket 77) o pagamento sai como as transferências, com o cartão no destino
 - [ ] Testes de API para saldo, mês da fatura e saldo anterior
 - [ ] Verificações do projeto rodando e PR aberto para `main`

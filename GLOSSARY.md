@@ -157,6 +157,18 @@ _Avoid_: data da fatura, data do lançamento
 Mês em que a fatura e cada compra dela contam no planejamento, nas categorias, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim. Cada cartão tem uma fatura por mês.
 _Avoid_: competência, mês de referência
 
+**Fatura aberta**:
+Fatura cujo fechamento ainda não chegou: a atual e as futuras. A partir do dia do fechamento ela é **fechada**, e mudar o dia padrão do cartão não mexe mais nas datas nem nas compras dela.
+_Avoid_: fatura atual, fatura em aberto (que é a não paga)
+
+**Troca de fatura**:
+Escolha à mão da fatura de uma compra no cartão, no lugar da que o app escolheu pela data da compra, para quando o banco lança a compra com atraso. A troca fica mesmo se a data da compra ou o dia padrão do cartão mudarem; trocar de cartão a desfaz.
+_Avoid_: mover a compra, transferir a compra
+
+**Cartão adicional**:
+Cartão ligado a um titular, para outra pessoa usar; não tem dias padrão, regra do mês nem limite próprios, e as compras dele caem na fatura do titular.
+_Avoid_: cartão dependente, segunda via
+
 **Saldo anterior**:
 Parte de uma fatura que não foi paga e passa para a fatura seguinte; não é compra nova e não conta de novo.
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
@@ -179,6 +191,10 @@ _Avoid_: saldo inicial, saldo importado
 **Conta arquivada**:
 Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve.
 _Avoid_: conta excluída, conta inativa
+
+**Cartão arquivado**:
+Cartão que o casal tirou das opções de novo lançamento sem perder o histórico; as compras antigas continuam nele e na fatura delas, e desarquivar o devolve.
+_Avoid_: cartão cancelado, cartão inativo
 
 **Limite**:
 Teto de compras de um cartão, informado pelo casal e editável; é opcional, e o cartão adicional divide o limite do titular.
@@ -214,6 +230,14 @@ _Avoid_: importação do backup, merge
 **Virada**:
 O dia em que o casal para de lançar no Mobills e passa a lançar só no app; a última importação do histórico do Mobills acontece nele, e antes dele a importação pode ser refeita quantas vezes for preciso.
 _Avoid_: migração, corte, go-live
+
+**Planilha de revisão**:
+A planilha que o importador do Mobills escreve a cada rodada com o que ele não decide sozinho (a conta e os cartões, o de-para, os pares prováveis, as parcelas) e as abas Conferência e Faturas; o dono a edita e roda de novo, e o que ele editou vale na rodada seguinte.
+_Avoid_: relatório, planilha de importação
+
+**Par provável**:
+Uma linha de fatura e uma do geral que sobraram do cruzamento no mesmo mês e são as únicas com aquele valor; viram uma compra só quando o dono as junta na planilha de revisão, e até lá cada uma entra sozinha.
+_Avoid_: par duvidoso, casamento parcial
 
 ### Sem internet
 
