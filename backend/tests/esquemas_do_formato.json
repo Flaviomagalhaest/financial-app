@@ -514,6 +514,104 @@
     }
   },
   "10": {
+    "categorias": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "arquivada_em": "timestamp with time zone"
+    },
+    "contas": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "saldo_abertura_centavos": "bigint",
+      "data_abertura": "date",
+      "arquivada_em": "timestamp with time zone"
+    },
+    "exportacoes": {
+      "id": "uuid",
+      "usuario": "text",
+      "formato": "text",
+      "criada_em": "timestamp with time zone"
+    },
+    "itens_do_planejamento": {
+      "id": "uuid",
+      "mes": "date",
+      "categoria_id": "uuid",
+      "valor_centavos": "bigint",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "lancamento_campos": {
+      "lancamento_id": "uuid",
+      "campo": "text",
+      "versao": "bigint",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "origem": "text"
+    },
+    "lancamento_categorias": {
+      "lancamento_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "lancamento_tags": {
+      "lancamento_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "lancamentos": {
+      "id": "uuid",
+      "tipo": "text",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "versao": "bigint",
+      "excluido_em": "timestamp with time zone",
+      "excluido_por": "text",
+      "pessoa": "text",
+      "fonte": "text",
+      "repetido_mantido_em": "timestamp with time zone"
+    },
+    "modelo_do_planejamento": {
+      "categoria_id": "uuid",
+      "valor_centavos": "bigint",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "tags": {
+      "id": "uuid",
+      "nome": "text",
+      "arquivada_em": "timestamp with time zone",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "transferencias": {
+      "id": "uuid",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_origem_id": "uuid",
+      "conta_destino_id": "uuid",
+      "categoria_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    }
+  },
+  "11": {
     "cartoes": {
       "id": "uuid",
       "nome": "text",
@@ -603,6 +701,12 @@
       "repetido_mantido_em": "timestamp with time zone",
       "mes": "date",
       "fatura_a_mao": "boolean"
+    },
+    "modelo_do_planejamento": {
+      "categoria_id": "uuid",
+      "valor_centavos": "bigint",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
     },
     "tags": {
       "id": "uuid",

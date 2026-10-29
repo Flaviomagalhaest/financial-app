@@ -239,7 +239,7 @@ _REPETIDO_DE = f"""(
 
 # Lançamento de antes do ticket 34 não tem versão: está como nasceu, na 1.
 _VERSAO = "COALESCE(versao, 1)"
-# O mês em que o lançamento conta. Gravado pela migration 0026 nos de antes; a data cobre o que
+# O mês em que o lançamento conta. Gravado pela migration 0027 nos de antes; a data cobre o que
 # sobrou dela e o que a API antiga gravar durante o deploy.
 MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"

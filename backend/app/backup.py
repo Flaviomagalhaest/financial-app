@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 10
+VERSAO_FORMATO = 11
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -173,7 +173,22 @@ def _da_versao_8_para_a_9(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabe
 
 
 def _da_versao_9_para_a_10(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 10 (ticket 37) traz os cartões e as faturas e grava no lançamento o mês em que
+    """A versão 10 traz o modelo padrão do planejamento (ticket 50); backup antigo entra com o
+    modelo vazio."""
+    if "modelo_do_planejamento" not in tabelas:
+        tabelas["modelo_do_planejamento"] = (
+            ["categoria_id", "valor_centavos", "alterado_por", "alterado_em"],
+            [],
+        )
+        manifesto["tabelas"]["modelo_do_planejamento"] = {
+            "linhas": 0,
+            "somas": {"valor_centavos": "0"},
+        }
+    return manifesto, tabelas
+
+
+def _da_versao_10_para_a_11(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 11 (ticket 37) traz os cartões e as faturas e grava no lançamento o mês em que
     ele conta. Antes dela todo lançamento era de conta, que conta no mês da data."""
     colunas, linhas = tabelas["lancamentos"]
     if "mes" not in colunas:
@@ -219,6 +234,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     7: _da_versao_7_para_a_8,
     8: _da_versao_8_para_a_9,
     9: _da_versao_9_para_a_10,
+    10: _da_versao_10_para_a_11,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

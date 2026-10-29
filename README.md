@@ -74,7 +74,7 @@ O CI falha se `openapi.json` ou `web/src/api/schema.d.ts` estiverem desatualizad
 
 ## Migrations
 
-Arquivos `backend/migrations/NNNN_nome.sql`, um DDL por arquivo, no subconjunto do Aurora DSQL (sem triggers nem PL/pgSQL). `aplicar_migrations` aplica em ordem as que faltam e as registra em `controle_de_migrations`. Preencher uma coluna nova é a exceção ao DDL: um `UPDATE` de no máximo 3.000 linhas (o limite da transação no DSQL), como a `0026`. Índice se escreve `CREATE INDEX ASYNC`, o único que o DSQL aceita; fora dele (local e CI), o `ASYNC` sai e o índice nasce na hora.
+Arquivos `backend/migrations/NNNN_nome.sql`, um DDL por arquivo, no subconjunto do Aurora DSQL (sem triggers nem PL/pgSQL). `aplicar_migrations` aplica em ordem as que faltam e as registra em `controle_de_migrations`. Preencher uma coluna nova é a exceção ao DDL: um `UPDATE` de no máximo 3.000 linhas (o limite da transação no DSQL), como a `0027`. Índice se escreve `CREATE INDEX ASYNC`, o único que o DSQL aceita; fora dele (local e CI), o `ASYNC` sai e o índice nasce na hora.
 
 ## Configuração
 
