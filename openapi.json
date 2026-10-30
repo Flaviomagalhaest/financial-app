@@ -2774,6 +2774,49 @@
           }
         ]
       }
+    },
+    "/api/busca": {
+      "post": {
+        "summary": "Buscar Lancamentos",
+        "operationId": "buscar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoDeBusca"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoDaBusca"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3667,6 +3710,50 @@
         "title": "Comparacao",
         "description": "As despesas do mês por categoria contra o mês anterior e o mesmo mês do ano passado, com o\nrealizado e o previsto. O lançamento com várias categorias conta inteiro em cada linha, e o\ntotal o conta uma vez (com os ajustes de fatura), então as linhas somam mais que o total."
       },
+      "CompraParcelada": {
+        "properties": {
+          "parcelamento_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parcelamento Id"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "parcelas": {
+            "type": "integer",
+            "title": "Parcelas"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "title": "Valor Centavos"
+          },
+          "lancamentos": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Lancamentos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parcelamento_id",
+          "descricao",
+          "data",
+          "parcelas",
+          "valor_centavos",
+          "lancamentos"
+        ],
+        "title": "CompraParcelada",
+        "description": "O parcelamento numa linha só, fora do filtro Fatura (ADR 0013)."
+      },
       "Confirmacao": {
         "properties": {
           "versao": {
@@ -4376,6 +4463,34 @@
         "title": "Fechamento",
         "description": "O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que\naconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz\nquantos lançamentos são."
       },
+      "FiltroDeFatura": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "format": "date",
+            "title": "Mes"
+          },
+          "cartao_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cartao Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mes"
+        ],
+        "title": "FiltroDeFatura",
+        "description": "O mês da fatura de um cartão (com as compras dos adicionais dele). Sem cartão, o mês em que\ncada lançamento conta, como na aba Mês: o da fatura no cartão, o da data no resto (ADR 0003)."
+      },
       "Futuro": {
         "properties": {
           "hoje": {
@@ -4987,6 +5102,43 @@
         ],
         "title": "LimiteDoCartao",
         "description": "Sem `limite_centavos` o cartão não mostra limite, mas o comprometido continua a conta."
+      },
+      "LinhaDaBusca": {
+        "properties": {
+          "lancamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Lancamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compra_parcelada": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompraParcelada"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transferencia": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Transferencia"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "LinhaDaBusca",
+        "description": "Uma linha do resultado: um lançamento, uma compra parcelada ou uma transferência."
       },
       "LinhaDaComparacao": {
         "properties": {
@@ -6214,6 +6366,165 @@
         ],
         "title": "ParcelamentoEmAndamento"
       },
+      "PedidoDeBusca": {
+        "properties": {
+          "texto": {
+            "type": "string",
+            "title": "Texto",
+            "default": ""
+          },
+          "valor_minimo_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Minimo Centavos"
+          },
+          "valor_maximo_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Maximo Centavos"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Categoria Ids",
+            "default": []
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "sem_categoria": {
+            "type": "boolean",
+            "title": "Sem Categoria",
+            "default": false
+          },
+          "sem_tag": {
+            "type": "boolean",
+            "title": "Sem Tag",
+            "default": false
+          },
+          "conta_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Conta Ids",
+            "default": []
+          },
+          "pessoas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pessoas",
+            "default": []
+          },
+          "conjunto": {
+            "type": "boolean",
+            "title": "Conjunto",
+            "default": false
+          },
+          "periodo_de": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo De"
+          },
+          "periodo_ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo Ate"
+          },
+          "fatura": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FiltroDeFatura"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "situacoes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "previsto",
+                "realizado"
+              ]
+            },
+            "type": "array",
+            "title": "Situacoes",
+            "default": []
+          },
+          "tipos": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "despesa",
+                "receita",
+                "transferencia"
+              ]
+            },
+            "type": "array",
+            "title": "Tipos",
+            "default": []
+          },
+          "ordem": {
+            "type": "string",
+            "enum": [
+              "recentes",
+              "valor"
+            ],
+            "title": "Ordem",
+            "default": "recentes"
+          },
+          "pagina": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Pagina",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PedidoDeBusca"
+      },
       "PedidoDeExportacao": {
         "properties": {
           "formato": {
@@ -6292,6 +6603,24 @@
           "ainda_da_para_gastar_centavos"
         ],
         "title": "Planejamento"
+      },
+      "PorSituacao": {
+        "properties": {
+          "realizado_centavos": {
+            "type": "integer",
+            "title": "Realizado Centavos"
+          },
+          "previsto_centavos": {
+            "type": "integer",
+            "title": "Previsto Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "realizado_centavos",
+          "previsto_centavos"
+        ],
+        "title": "PorSituacao"
       },
       "Quitacao": {
         "properties": {
@@ -6617,6 +6946,31 @@
         "title": "Resultado",
         "description": "`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os\ncampos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O\nparcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos."
       },
+      "ResultadoDaBusca": {
+        "properties": {
+          "totais": {
+            "$ref": "#/components/schemas/TotaisDaBusca"
+          },
+          "linhas": {
+            "items": {
+              "$ref": "#/components/schemas/LinhaDaBusca"
+            },
+            "type": "array",
+            "title": "Linhas"
+          },
+          "tem_mais": {
+            "type": "boolean",
+            "title": "Tem Mais"
+          }
+        },
+        "type": "object",
+        "required": [
+          "totais",
+          "linhas",
+          "tem_mais"
+        ],
+        "title": "ResultadoDaBusca"
+      },
       "ResultadoDoLote": {
         "properties": {
           "resultados": {
@@ -6822,6 +7176,32 @@
           "nome"
         ],
         "title": "Tag"
+      },
+      "TotaisDaBusca": {
+        "properties": {
+          "quantidade": {
+            "type": "integer",
+            "title": "Quantidade"
+          },
+          "despesas": {
+            "$ref": "#/components/schemas/PorSituacao"
+          },
+          "receitas": {
+            "$ref": "#/components/schemas/PorSituacao"
+          },
+          "saldo": {
+            "$ref": "#/components/schemas/PorSituacao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantidade",
+          "despesas",
+          "receitas",
+          "saldo"
+        ],
+        "title": "TotaisDaBusca",
+        "description": "O resumo do resultado inteiro, não só da página. A transferência fica fora das somas; o\nestorno diminui as despesas; a compra parcelada conta uma vez, pelas parcelas achadas."
       },
       "TotaisDoMes": {
         "properties": {

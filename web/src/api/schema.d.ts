@@ -932,6 +932,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/busca": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Buscar Lancamentos */
+        post: operations["buscar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1268,6 +1285,30 @@ export interface components {
             total: components["schemas"]["ValoresDaComparacao"];
         };
         /**
+         * CompraParcelada
+         * @description O parcelamento numa linha só, fora do filtro Fatura (ADR 0013).
+         */
+        CompraParcelada: {
+            /**
+             * Parcelamento Id
+             * Format: uuid
+             */
+            parcelamento_id: string;
+            /** Descricao */
+            descricao: string;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /** Parcelas */
+            parcelas: number;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /** Lancamentos */
+            lancamentos: components["schemas"]["Lancamento"][];
+        };
+        /**
          * Confirmacao
          * @description O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o
          *     ajuste num campo que o outro lado mudou depois dela é conflito, como na edição.
@@ -1535,6 +1576,20 @@ export interface components {
             /** Variacao Ano Passado Percentual */
             variacao_ano_passado_percentual: number | null;
         };
+        /**
+         * FiltroDeFatura
+         * @description O mês da fatura de um cartão (com as compras dos adicionais dele). Sem cartão, o mês em que
+         *     cada lançamento conta, como na aba Mês: o da fatura no cartão, o da data no resto (ADR 0003).
+         */
+        FiltroDeFatura: {
+            /**
+             * Mes
+             * Format: date
+             */
+            mes: string;
+            /** Cartao Id */
+            cartao_id?: string | null;
+        };
         /** Futuro */
         Futuro: {
             /**
@@ -1782,6 +1837,15 @@ export interface components {
             parcelamentos: components["schemas"]["ParcelamentoEmAndamento"][];
             /** Proximos Meses */
             proximos_meses: components["schemas"]["MesDoLimite"][];
+        };
+        /**
+         * LinhaDaBusca
+         * @description Uma linha do resultado: um lançamento, uma compra parcelada ou uma transferência.
+         */
+        LinhaDaBusca: {
+            lancamento?: components["schemas"]["Lancamento"] | null;
+            compra_parcelada?: components["schemas"]["CompraParcelada"] | null;
+            transferencia?: components["schemas"]["Transferencia"] | null;
         };
         /** LinhaDaComparacao */
         LinhaDaComparacao: {
@@ -2280,6 +2344,79 @@ export interface components {
              */
             fim_previsto: string;
         };
+        /** PedidoDeBusca */
+        PedidoDeBusca: {
+            /**
+             * Texto
+             * @default
+             */
+            texto: string;
+            /** Valor Minimo Centavos */
+            valor_minimo_centavos?: number | null;
+            /** Valor Maximo Centavos */
+            valor_maximo_centavos?: number | null;
+            /**
+             * Categoria Ids
+             * @default []
+             */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /**
+             * Sem Categoria
+             * @default false
+             */
+            sem_categoria: boolean;
+            /**
+             * Sem Tag
+             * @default false
+             */
+            sem_tag: boolean;
+            /**
+             * Conta Ids
+             * @default []
+             */
+            conta_ids: string[];
+            /**
+             * Pessoas
+             * @default []
+             */
+            pessoas: string[];
+            /**
+             * Conjunto
+             * @default false
+             */
+            conjunto: boolean;
+            /** Periodo De */
+            periodo_de?: string | null;
+            /** Periodo Ate */
+            periodo_ate?: string | null;
+            fatura?: components["schemas"]["FiltroDeFatura"] | null;
+            /**
+             * Situacoes
+             * @default []
+             */
+            situacoes: ("previsto" | "realizado")[];
+            /**
+             * Tipos
+             * @default []
+             */
+            tipos: ("despesa" | "receita" | "transferencia")[];
+            /**
+             * Ordem
+             * @default recentes
+             * @enum {string}
+             */
+            ordem: "recentes" | "valor";
+            /**
+             * Pagina
+             * @default 0
+             */
+            pagina: number;
+        };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
             /**
@@ -2315,6 +2452,13 @@ export interface components {
              * @default 0
              */
             ajustes_de_fatura_centavos: number;
+        };
+        /** PorSituacao */
+        PorSituacao: {
+            /** Realizado Centavos */
+            realizado_centavos: number;
+            /** Previsto Centavos */
+            previsto_centavos: number;
         };
         /**
          * Quitacao
@@ -2448,6 +2592,14 @@ export interface components {
             campos?: components["schemas"]["CampoEmConflito"][] | null;
             exclusao?: components["schemas"]["Exclusao"] | null;
         };
+        /** ResultadoDaBusca */
+        ResultadoDaBusca: {
+            totais: components["schemas"]["TotaisDaBusca"];
+            /** Linhas */
+            linhas: components["schemas"]["LinhaDaBusca"][];
+            /** Tem Mais */
+            tem_mais: boolean;
+        };
         /** ResultadoDoLote */
         ResultadoDoLote: {
             /** Resultados */
@@ -2544,6 +2696,18 @@ export interface components {
              * @default false
              */
             arquivada: boolean;
+        };
+        /**
+         * TotaisDaBusca
+         * @description O resumo do resultado inteiro, não só da página. A transferência fica fora das somas; o
+         *     estorno diminui as despesas; a compra parcelada conta uma vez, pelas parcelas achadas.
+         */
+        TotaisDaBusca: {
+            /** Quantidade */
+            quantidade: number;
+            despesas: components["schemas"]["PorSituacao"];
+            receitas: components["schemas"]["PorSituacao"];
+            saldo: components["schemas"]["PorSituacao"];
         };
         /** TotaisDoMes */
         TotaisDoMes: {
@@ -4597,6 +4761,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Futuro"];
+                };
+            };
+        };
+    };
+    buscar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PedidoDeBusca"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultadoDaBusca"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
