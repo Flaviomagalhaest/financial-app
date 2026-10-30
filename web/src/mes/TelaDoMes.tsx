@@ -1,0 +1,360 @@
+import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  aplicarModeloPadrao,
+  atualizadoAs,
+  copiarPlanejamento,
+  escolherItem,
+  useCadastro,
+  useConexao,
+  useLancamentos,
+  useMes,
+  usePessoas,
+  type LancamentoNaTela,
+  type LeituraDoMes,
+} from "../dados";
+import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
+import { dataPorExtenso, hoje } from "../lancamentos/datas";
+import { formatarCentavos } from "../lancamentos/dinheiro";
+import { mesCurto, mesVizinho, nomeDoMes, textoDoFechamento, variacao } from "./apresentacao";
+
+type Categorias = ReturnType<typeof useCadastro>["categorias"];
+
+/** Despesas do mês contra o planejado: o realizado, o previsto e o que ainda está livre. */
+function BarraDoMes({ leitura }: { leitura: LeituraDoMes }) {
+  const { realizado_centavos: realizado, previsto_centavos: previsto, planejado_centavos: planejado, livre_centavos: livre } = leitura.despesas;
+  const escala = Math.max(planejado, realizado + previsto, 1);
+  const largura = (centavos: number) => `${(Math.max(centavos, 0) * 100) / escala}%`;
+  const passou = realizado + previsto - planejado;
+  return (
+    <section aria-label="Despesas × planejamento">
+      <h3>Despesas × planejamento</h3>
+      <div className="barra-do-mes" role="img" aria-label={`realizado ${formatarCentavos(realizado)}, previsto ${formatarCentavos(previsto)}, livre ${formatarCentavos(livre)}`}>
+        <span className="realizado" style={{ width: largura(realizado) }} />
+        <span className="previsto" style={{ width: largura(previsto) }} />
+        {planejado > 0 && <span className="marca-do-planejado" style={{ left: `calc(${largura(planejado)} - 1px)` }} />}
+      </div>
+      <ul className="legenda">
+        <li>
+          <i className="realizado" /> realizado {formatarCentavos(realizado)}
+        </li>
+        <li>
+          <i className="previsto" /> previsto {formatarCentavos(previsto)}
+        </li>
+        <li>
+          <i className="livre" /> livre {formatarCentavos(livre)}
+        </li>
+      </ul>
+      <p className="vazio">
+        {planejado > 0 ? `De ${formatarCentavos(planejado)} planejados para despesas.` : "Sem planejamento de despesas neste mês."}
+        {planejado > 0 && passou > 0 && <strong className="acima"> Passou {formatarCentavos(passou)} do planejado.</strong>}
+      </p>
+      <p>
+        Receitas: {formatarCentavos(leitura.receitas.realizado_centavos)} recebidas, {formatarCentavos(leitura.receitas.previsto_centavos)} previstas.
+      </p>
+    </section>
+  );
+}
+
+function Fechamento({ leitura, categorias }: { leitura: LeituraDoMes; categorias: Categorias }) {
+  return (
+    <section aria-label="Fechamento do mês" className="fechamento">
+      <h3>Fechamento do mês</h3>
+      {textoDoFechamento(leitura, (id) => nomePorId(categorias, id)).map((paragrafo) => (
+        <p key={paragrafo}>{paragrafo}</p>
+      ))}
+    </section>
+  );
+}
+
+/** Os lançamentos com duas ou mais categorias com item: a escolha vai pela fila, com ou sem internet. */
+function AEscolher({ leitura, categorias, lancamentos, aoEscolher }: { leitura: LeituraDoMes; categorias: Categorias; lancamentos: LancamentoNaTela[]; aoEscolher: () => void }) {
+  // A escolha que ainda está na fila já tira o lançamento da lista.
+  const pendentes = leitura.planejamento.a_escolher.flatMap((a) => {
+    const l = lancamentos.find((x) => x.id === a.lancamento_id);
+    return l && !l.item_categoria_id ? [{ a, l }] : [];
+  });
+  if (!pendentes.length) return null;
+  return (
+    <section aria-label="A escolher">
+      <h3>A escolher</h3>
+      <p className="vazio">Têm duas ou mais categorias com item no planejamento. Em qual item cada um conta?</p>
+      <ul className="lista">
+        {pendentes.map(({ a, l }) => (
+          <li key={l.id} aria-label={tituloDoLancamento(l, categorias)}>
+            <div>
+              <strong>{tituloDoLancamento(l, categorias)}</strong>
+              <ValorComSinal l={l} />
+            </div>
+            <p className="vazio">
+              {dataPorExtenso(l.data)}
+              {a.item_categoria_id && ` · por ora conta em ${nomePorId(categorias, a.item_categoria_id)}`}
+            </p>
+            <div className="acoes-em-linha">
+              {a.categorias_com_item.map((c) => (
+                <button key={c} className="secundario" onClick={() => void escolherItem(l, c).then(aoEscolher)}>
+                  Conta em {nomePorId(categorias, c)}
+                </button>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Os itens do mês; no mês vazio, copiar do anterior ou aplicar o modelo padrão (só com internet). */
+function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; categorias: Categorias; aoMudar: () => void }) {
+  const online = useConexao();
+  const [recusa, setRecusa] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const { itens, ainda_da_para_gastar_centavos } = leitura.planejamento;
+  const anterior = mesVizinho(leitura.mes, -1);
+
+  async function pedir(fazer: () => Promise<string | null>) {
+    setEnviando(true);
+    setRecusa(null);
+    const motivo = await fazer();
+    setEnviando(false);
+    setRecusa(motivo);
+    if (!motivo) aoMudar();
+  }
+
+  return (
+    <section aria-label="Itens do planejamento">
+      <h3>Itens do planejamento</h3>
+      {itens.length > 0 ? (
+        <>
+          {leitura.situacao !== "passado" && <p>Ainda dá para gastar: {formatarCentavos(ainda_da_para_gastar_centavos)}</p>}
+          <div className="rolagem">
+            <table className="tabela">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Realizado</th>
+                  <th>Previsto</th>
+                  <th>Planejado</th>
+                  <th>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((i) => (
+                  <tr key={i.id}>
+                    <td>{nomePorId(categorias, i.categoria_id)}</td>
+                    <td>{formatarCentavos(i.realizado_centavos)}</td>
+                    <td className="vazio">{i.previsto_centavos ? formatarCentavos(i.previsto_centavos) : "—"}</td>
+                    <td>{formatarCentavos(i.planejado_centavos)}</td>
+                    <td className={i.percentual > 100 ? "acima" : undefined}>
+                      {i.percentual > 100 && "⚠ "}
+                      {i.percentual}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="vazio">Nenhum item planejado neste mês.</p>
+          {!online && <p className="vazio">Sem internet: copiar e aplicar o modelo esperam a conexão.</p>}
+          <div className="acoes-em-linha">
+            <button className="secundario" disabled={!online || enviando} onClick={() => void pedir(() => copiarPlanejamento(leitura.mes, anterior))}>
+              Copiar do mês anterior
+            </button>
+            <button className="secundario" disabled={!online || enviando} onClick={() => void pedir(() => aplicarModeloPadrao(leitura.mes))}>
+              Aplicar modelo padrão
+            </button>
+          </div>
+        </>
+      )}
+      {recusa && (
+        <p role="alert" className="erro">
+          Não deu: {recusa}.
+        </p>
+      )}
+      <a href="#/modelo-do-planejamento">Modelo padrão</a>
+    </section>
+  );
+}
+
+/** Cada categoria contra os dois períodos; tocar na linha mostra os valores antigos. */
+function Comparacao({ leitura, categorias }: { leitura: LeituraDoMes; categorias: Categorias }) {
+  const [aberta, setAberta] = useState<string | null>(null);
+  const { anterior, ano_passado, linhas, total } = leitura.comparacao;
+  if (!linhas.length && !total.mes_centavos && !total.anterior_centavos && !total.ano_passado_centavos) {
+    return (
+      <section aria-label="Comparação">
+        <h3>Comparação</h3>
+        <p className="vazio">Sem despesas neste mês, em {nomeDoMes(anterior)} nem em {nomeDoMes(ano_passado)}.</p>
+      </section>
+    );
+  }
+  const todas = [...linhas.map((l) => ({ chave: l.categoria_id, nome: nomePorId(categorias, l.categoria_id), valores: l, total: false })), { chave: "total", nome: "Total de despesas", valores: total, total: true }];
+  return (
+    <section aria-label="Comparação">
+      <h3>Comparação</h3>
+      <div className="rolagem">
+        <table className="tabela comparacao">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>{mesCurto(leitura.mes)}</th>
+              <th>× {mesCurto(anterior)}</th>
+              <th>× {mesCurto(ano_passado)}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {todas.map(({ chave, nome, valores, total: ehTotal }) => (
+              <Fragment key={chave}>
+                <tr className={ehTotal ? "total" : undefined}>
+                  <td>
+                    <button className="linha-que-abre" aria-expanded={aberta === chave} onClick={() => setAberta(aberta === chave ? null : chave)}>
+                      {nome}
+                    </button>
+                  </td>
+                  <td>{formatarCentavos(valores.mes_centavos)}</td>
+                  <td>{variacao(valores.mes_centavos, valores.anterior_centavos)}</td>
+                  <td>{variacao(valores.mes_centavos, valores.ano_passado_centavos)}</td>
+                </tr>
+                {aberta === chave && (
+                  <tr className="valores-antigos">
+                    <td colSpan={4}>
+                      {nomeDoMes(anterior)}: {formatarCentavos(valores.anterior_centavos)} · {nomeDoMes(ano_passado)}: {formatarCentavos(valores.ano_passado_centavos)}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="vazio">O total conta cada lançamento uma vez; as linhas somam mais quando um lançamento tem várias categorias.</p>
+    </section>
+  );
+}
+
+type Dimensao = "categoria" | "tag" | "pessoa";
+const DIMENSOES: { id: Dimensao; nome: string }[] = [
+  { id: "categoria", nome: "Categoria" },
+  { id: "tag", nome: "Tag" },
+  { id: "pessoa", nome: "Pessoa" },
+];
+
+type LinhaAberta = { nome: string; centavos: number; ids: string[] };
+
+/** Os lançamentos de uma linha do ranking, numa folha que sobe de baixo. */
+function FolhaDoRanking({ linha, categorias, lancamentos, aoFechar }: { linha: LinhaAberta; categorias: Categorias; lancamentos: LancamentoNaTela[]; aoFechar: () => void }) {
+  const folha = useRef<HTMLDialogElement>(null);
+  const { contasECartoes } = useCadastro();
+  useEffect(() => folha.current?.showModal(), []);
+  const daLinha = linha.ids.flatMap((id) => lancamentos.filter((l) => l.id === id));
+  return (
+    <dialog ref={folha} className="folha" aria-labelledby="titulo-da-linha" onClose={aoFechar}>
+      <h3 id="titulo-da-linha">{linha.nome}</h3>
+      <p className="vazio">{formatarCentavos(linha.centavos)}</p>
+      <ul className="lista">
+        {daLinha.map((l) => (
+          <li key={l.id}>
+            <div>
+              <strong>{tituloDoLancamento(l, categorias)}</strong>
+              <ValorComSinal l={l} />
+            </div>
+            <p className="vazio">
+              {dataPorExtenso(l.data)} · {nomePorId(contasECartoes, l.conta_id)}
+              {l.situacao === "previsto" && " · previsto"}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <button onClick={() => folha.current?.close()}>Fechar</button>
+    </dialog>
+  );
+}
+
+/** Para onde foi o dinheiro: barras por categoria, tag ou pessoa, sem pizza. */
+function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; categorias: Categorias; lancamentos: LancamentoNaTela[] }) {
+  const [dimensao, setDimensao] = useState<Dimensao>("categoria");
+  const [aberta, setAberta] = useState<LinhaAberta | null>(null);
+  const { nomeDe } = usePessoas();
+  const { por_categoria, por_tag, por_pessoa } = leitura.ranking;
+  const linhas = { categoria: por_categoria, tag: por_tag, pessoa: por_pessoa }[dimensao];
+  const nome = (chave: string | null) => (dimensao === "categoria" ? nomePorId(categorias, chave ?? "") : dimensao === "tag" ? `#${chave}` : chave ? nomeDe(chave) : "Conjunto");
+  const maior = Math.max(...linhas.map((l) => l.centavos), 1);
+  const total = leitura.despesas.realizado_centavos + leitura.despesas.previsto_centavos;
+  return (
+    <section aria-label="Ranking">
+      <h3>Ranking</h3>
+      <div className="alternancia tres" role="group" aria-label="Ranking por">
+        {DIMENSOES.map((d) => (
+          <button key={d.id} className={dimensao === d.id ? undefined : "secundario"} aria-pressed={dimensao === d.id} onClick={() => setDimensao(d.id)}>
+            {d.nome}
+          </button>
+        ))}
+      </div>
+      {linhas.length === 0 ? (
+        <p className="vazio">{dimensao === "tag" ? "Nenhuma despesa com tag neste mês." : "Nenhuma despesa neste mês."}</p>
+      ) : (
+        <ol className="ranking">
+          {linhas.map((l) => (
+            <li key={l.chave ?? "conjunto"}>
+              <button onClick={() => setAberta({ nome: nome(l.chave), centavos: l.centavos, ids: l.lancamento_ids })}>
+                <span className="nome">{nome(l.chave)}</span>
+                <span className="valor-da-linha">{formatarCentavos(l.centavos)}</span>
+                <span className="trilho" aria-hidden="true">
+                  <span style={{ width: `${(Math.max(l.centavos, 0) * 100) / maior}%` }} />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="vazio">
+        Toque numa linha para ver os lançamentos.
+        {dimensao !== "pessoa" && ` Um lançamento conta inteiro em cada ${dimensao} que tem, então as linhas podem somar mais que as despesas do mês (${formatarCentavos(total)}).`}
+      </p>
+      {aberta && <FolhaDoRanking linha={aberta} categorias={categorias} lancamentos={lancamentos} aoFechar={() => setAberta(null)} />}
+    </section>
+  );
+}
+
+/** A aba Mês: navega mês a mês; o mês passado mostra o fechamento, o atual e o futuro, a barra. */
+export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
+  const { dados: leitura, atualizadoEm, semDados, buscar } = useMes(mes);
+  const { categorias } = useCadastro();
+  const { lancamentos } = useLancamentos();
+  const situacao = leitura?.situacao ?? (mes < hoje().slice(0, 7) ? "passado" : mes === hoje().slice(0, 7) ? "atual" : "futuro");
+
+  return (
+    <section className="aba-mes">
+      <h2 className="oculto">Mês</h2>
+      <nav className="navegacao-do-mes" aria-label="Meses">
+        <a className="botao secundario" href={`#/mes/${mesVizinho(mes, -1)}`} aria-label="Mês anterior">
+          ‹
+        </a>
+        <div>
+          <h3 className="nome-do-mes">{nomeDoMes(mes).replace(/^./, (c) => c.toUpperCase())}</h3>
+          <p className="vazio">{situacao === "passado" ? "mês fechado" : situacao === "atual" ? "mês atual" : "mês que vem pela frente"}</p>
+        </div>
+        <a className="botao secundario" href={`#/mes/${mesVizinho(mes, 1)}`} aria-label="Próximo mês">
+          ›
+        </a>
+      </nav>
+      {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
+      {semDados && (
+        <p role="alert" className="erro">
+          Sem internet: não foi possível carregar este mês.
+        </p>
+      )}
+      {leitura && (
+        <>
+          {leitura.situacao === "passado" ? <Fechamento leitura={leitura} categorias={categorias} /> : <BarraDoMes leitura={leitura} />}
+          <AEscolher leitura={leitura} categorias={categorias} lancamentos={lancamentos ?? []} aoEscolher={() => void buscar()} />
+          <Itens leitura={leitura} categorias={categorias} aoMudar={() => void buscar()} />
+          <Comparacao leitura={leitura} categorias={categorias} />
+          <Ranking leitura={leitura} categorias={categorias} lancamentos={lancamentos ?? []} />
+        </>
+      )}
+    </section>
+  );
+}

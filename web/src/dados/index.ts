@@ -39,6 +39,8 @@ export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
+export type LeituraDoMes = components["schemas"]["LeituraDoMes"];
+export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
@@ -104,6 +106,17 @@ function useResposta<C extends Caminho>(caminho: C) {
 export function useFaturas(cartaoId: string) {
   const ler = () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id: cartaoId } } });
   return useRespostaDe<Fatura[]>(`/api/cartoes/${cartaoId}/faturas`, ler);
+}
+
+/** A aba Mês de um mês (`AAAA-MM`), numa leitura só, guardada para mostrar sem internet. */
+export function useMes(mes: string) {
+  const ler = () => api.GET("/api/meses/{mes}", { params: { path: { mes } } });
+  return useRespostaDe<LeituraDoMes>(`/api/meses/${mes}`, ler);
+}
+
+/** O modelo padrão do planejamento, que "Aplicar modelo padrão" copia para um mês vazio. */
+export function useModeloPadrao() {
+  return useRespostaDe<{ itens: ItemDoModelo[] }>("/api/planejamento/modelo", () => api.GET("/api/planejamento/modelo"));
 }
 
 function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
@@ -338,6 +351,17 @@ export async function salvarLancamento(lancamento: NovoLancamento, novo: boolean
   void enviarAgora();
 }
 
+/**
+ * Em qual item do planejamento o lançamento "a escolher" conta. É uma mudança do lançamento, então
+ * vai pela fila e vale sem internet; devolve `false` quando ela não subiu agora.
+ */
+export async function escolherItem(mostrado: LancamentoNaTela, categoriaId: string): Promise<boolean> {
+  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes } = mostrado;
+  const lancamento = { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes, item_categoria_id: categoriaId };
+  await enfileirarSalvar(lancamento, false, baseDe(mostrado));
+  return enviarAgora();
+}
+
 export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {
   await enfileirarExcluir(mostrado.id, baseDe(mostrado));
   void enviarAgora();
@@ -390,6 +414,32 @@ export async function criarTransferencia(transferencia: NovaTransferencia): Prom
   } catch {
     return "sem resposta do servidor";
   }
+}
+
+/** O motivo da recusa do servidor, ou `null` quando ele aceitou. */
+async function recusaDe(pedir: () => Promise<{ data?: unknown; error?: unknown }>, padrao: string): Promise<string | null> {
+  try {
+    const { data, error } = await pedir();
+    if (data) return null;
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return typeof detalhe === "string" ? detalhe : padrao;
+  } catch {
+    return "sem resposta do servidor";
+  }
+}
+
+/** O planejamento precisa de internet (ADR 0011). Copia os itens de `de` para `mes`, que precisa estar vazio. */
+export function copiarPlanejamento(mes: string, de: string): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/planejamento/{mes}/copiar", { params: { path: { mes } }, body: { de } }), "o servidor recusou a cópia");
+}
+
+export function aplicarModeloPadrao(mes: string): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/planejamento/{mes}/aplicar-modelo", { params: { path: { mes } } }), "o servidor recusou o modelo");
+}
+
+/** Troca o modelo padrão inteiro pelos itens enviados. */
+export function definirModeloPadrao(itens: ItemDoModelo[]): Promise<string | null> {
+  return recusaDe(() => api.PUT("/api/planejamento/modelo", { body: { itens } }), "o servidor recusou o modelo");
 }
 
 export async function contarNaoEnviados(): Promise<number> {
