@@ -1,7 +1,7 @@
 # Aba Mês: fechamento, comparações e ranking
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 51, 37
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
