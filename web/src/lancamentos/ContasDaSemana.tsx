@@ -4,7 +4,7 @@ import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresent
 import { dataPorExtenso } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
-import { comoNovo, guardarConflito, useCadastro, type Lancamento } from "../dados";
+import { comoNovo, guardarConflito, useCadastro, usePessoas, type Lancamento } from "../dados";
 
 type Ajuste = { centavos: number; data: string; contaId: string };
 
@@ -18,6 +18,7 @@ type Props = {
 /** Previstos a confirmar (atrasados e os dos próximos 7 dias), com "Confirmar" em um toque ou "Ajustar". */
 export function ContasDaSemana({ lancamentos, aoMudar }: Props) {
   const { contas, contasECartoes, categorias } = useCadastro();
+  const { nomeDe } = usePessoas();
   const [ajustando, setAjustando] = useState<{ id: string } & Ajuste | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
@@ -44,7 +45,8 @@ export function ContasDaSemana({ lancamentos, aoMudar }: Props) {
       if (response.status === 410) {
         setAjustando(null);
         await aoMudar();
-        return setErro("A outra pessoa excluiu este lançamento.");
+        const { excluido_por: por } = (error ?? {}) as { excluido_por?: string };
+        return setErro(`${nomeDe(por)} excluiu este lançamento.`);
       }
       if (error) return setErro("O servidor recusou a confirmação.");
       setAjustando(null);
