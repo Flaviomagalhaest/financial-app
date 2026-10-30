@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import psycopg
 
-VERSAO_FORMATO = 17
+VERSAO_FORMATO = 18
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -361,6 +361,35 @@ def _da_versao_16_para_a_17(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_17_para_a_18(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 18 (ticket 62) traz os favoritos, com os dispensados dos sugeridos. Backup antigo
+    entra sem nenhum, e o que já trouxer a tabela fica como está."""
+    if "favoritos" not in tabelas:
+        tabelas["favoritos"] = (
+            [
+                "id",
+                "estado",
+                "identidade",
+                "descricao",
+                "tipo",
+                "conta_id",
+                "categoria_ids",
+                "tags",
+                "pessoa",
+                "valor_centavos",
+                "ordem",
+                "criado_por",
+                "criado_em",
+            ],
+            [],
+        )
+        manifesto["tabelas"]["favoritos"] = {
+            "linhas": 0,
+            "somas": {"valor_centavos": "0", "ordem": "0"},
+        }
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -380,6 +409,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     14: _da_versao_14_para_a_15,
     15: _da_versao_15_para_a_16,
     16: _da_versao_16_para_a_17,
+    17: _da_versao_17_para_a_18,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

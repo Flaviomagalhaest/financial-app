@@ -55,6 +55,13 @@ _Avoid_: compartilhado, comum
 Lançamento-modelo que o casal marca (ou aceita dos sugeridos, os mais usados) para registrar de novo com um toque: preenche conta, categorias, tags, pessoa e o último valor, que é só o padrão e se confirma ao salvar. Aparece numa fileira acima do teclado do novo lançamento e numa grade na tela inicial.
 _Avoid_: atalho, modelo
 
+**Sugerido**:
+Lançamento que o casal repete muito (os 3 mais repetidos, a partir de 5 usos) e ainda não é **Favorito**; aparece no grupo "Sugeridos" da Hoje e das configurações, para promover com a ⭐ ou dispensar. O que se dispensa, ou se remove dos favoritos, não volta a ser sugerido. Não é uma **Sugestão**, que vem da descrição.
+_Avoid_: favorito automático
+
+**Identidade do favorito**:
+O que faz dois lançamentos serem "o mesmo": descrição normalizada, tipo, conta, categorias, tags e pessoa. Conta os usos do **Sugerido** e dá o valor padrão do **Favorito**, que é o valor do último lançamento com essa identidade.
+
 **Sugestão**:
 Categorias, tags, conta e pessoa de um lançamento anterior de descrição parecida, oferecidas enquanto se digita a descrição; escolher uma preenche esses campos e mantém o valor já digitado. Vem da **fonte de sugestão**.
 _Avoid_: autocompletar, recomendação

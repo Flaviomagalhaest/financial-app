@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Configuracoes } from "../configuracoes/Configuracoes";
+import { TelaDeFavoritos } from "../configuracoes/TelaDeFavoritos";
+import { OfertaDeFavoritar } from "../lancamentos/OfertaDeFavoritar";
 import { TelaHoje } from "../hoje/TelaHoje";
 import { ListaDeLancamentos } from "../lancamentos/ListaDeLancamentos";
 import { NovoLancamento } from "../lancamentos/NovoLancamento";
@@ -36,6 +38,7 @@ export function Casca({ email, onSair, hoje }: Props) {
           </a>
         ))}
       </nav>
+      <OfertaDeFavoritar />
       <main>
         {rota === "hoje" && (
           <section>
@@ -49,6 +52,8 @@ export function Casca({ email, onSair, hoje }: Props) {
           </section>
         )}
         {rota === "novo" && (id ? <TelaDeLancamento key={id} id={id} /> : <NovoLancamento />)}
+        {rota === "favorito" && id && <NovoLancamento key={id} favoritoId={id} />}
+        {rota === "favoritos" && <TelaDeFavoritos />}
         {rota === "conflito" && id && <TelaDeConflito key={id} id={id} />}
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}
