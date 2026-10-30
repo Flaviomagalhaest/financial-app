@@ -98,6 +98,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
   const estornosCentavos = compras.filter((l) => l.estorno_de && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
+  const ligacoes = useMemo(() => new Map(compras.map((l) => [l.id, ligacaoDoEstorno(l, indice, categorias)])), [compras, indice, categorias]);
   const tags = useMemo(() => [...new Set(compras.flatMap((l) => l.tags ?? []))].sort((a, b) => a.localeCompare(b, "pt-BR")), [compras]);
 
   const filtradas = compras.filter((l) => (categoria === TODAS || l.categoria_ids.includes(categoria)) && (tag === TODAS || !!l.tags?.includes(tag)));
@@ -189,7 +190,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
                     {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                     {l.situacao === "previsto" && " · previsto"}
                     {l.pessoa ? ` · ${nomeDe(l.pessoa)}` : ""}
-                    {ligacaoDoEstorno(l, indice, categorias) && ` · ${ligacaoDoEstorno(l, indice, categorias)}`}
+                    {ligacoes.get(l.id) && ` · ${ligacoes.get(l.id)}`}
                   </p>
                   {podeEstornar(l, cartoes, indice) && (
                     <div className="acoes">

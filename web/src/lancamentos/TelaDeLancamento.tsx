@@ -143,7 +143,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   const situacao: Situacao =
     situacaoEscolhida ??
     (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
-  const emEstorno = estornando && (!estornoDe || estornoAplicado);
+  const estornoPronto = estornando && (!estornoDe || estornoAplicado);
   const podeSalvar =
     centavos > 0 &&
     categoriaIds.length > 0 &&
@@ -312,7 +312,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           Compra “{tituloDoLancamento(compra, categorias)}” de {formatarCentavos(compra.valor_centavos)}: ainda dá para estornar até {formatarCentavos(restante)}.
         </p>
       )}
-      {emEstorno && cartaoDoEstorno && <FaturaDoEstorno cartaoId={cartaoDoEstorno} data={data} faturaMes={faturaMes} />}
+      {estornoPronto && cartaoDoEstorno && <FaturaDoEstorno cartaoId={cartaoDoEstorno} data={data} faturaMes={faturaMes} />}
       <button type="button" className="resumo" onClick={() => setDetalhesAbertos(true)}>
         Detalhes: {resumo || "+ descrição, tags, pessoa, data"}
       </button>
