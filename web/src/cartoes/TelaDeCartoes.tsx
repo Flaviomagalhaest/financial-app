@@ -1,14 +1,85 @@
-import { atualizadoAs, useCadastro, useFaturas, type Cartao } from "../dados";
+import { atualizadoAs, useCadastro, useFaturas, useLimite, type Cartao, type LimiteDoCartao } from "../dados";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { faturasDaLinha, mesPorExtenso, SITUACAO } from "./apresentacao";
+
+/** A barra do comprometido e, ao tocar, as três partes, os parcelamentos e os próximos 12 meses. */
+function LimiteDoCartaoNaLinha({ limite }: { limite: LimiteDoCartao }) {
+  if (limite.limite_centavos == null || limite.disponivel_centavos == null) return null;
+  const parte = Math.min(100, Math.max(0, (limite.comprometido_centavos / limite.limite_centavos) * 100));
+  return (
+    <details className="limite">
+      <summary>
+        <span>
+          Comprometido {formatarCentavos(limite.comprometido_centavos)} · disponível {formatarCentavos(limite.disponivel_centavos)}
+        </span>
+        <progress
+          max={limite.limite_centavos}
+          value={Math.min(limite.comprometido_centavos, limite.limite_centavos)}
+          aria-label={`Limite comprometido: ${Math.round(parte)}% de ${formatarCentavos(limite.limite_centavos)}`}
+        />
+      </summary>
+      <ul className="lista">
+        <li>
+          <div>
+            <span>Fatura aberta</span>
+            <span>{formatarCentavos(limite.fatura_aberta_centavos)}</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span>Faturas fechadas a pagar</span>
+            <span>{formatarCentavos(limite.faturas_fechadas_centavos)}</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span>Parcelas futuras</span>
+            <span>{formatarCentavos(limite.parcelas_futuras_centavos)}</span>
+          </div>
+        </li>
+      </ul>
+      {limite.parcelamentos.length > 0 && (
+        <>
+          <h4>Parcelamentos em andamento</h4>
+          <ul className="lista">
+            {limite.parcelamentos.map((p) => (
+              <li key={p.id}>
+                <div>
+                  <strong>{p.descricao || "Parcelamento"}</strong>
+                  <span>{formatarCentavos(p.restante_centavos)}</span>
+                </div>
+                <p className="vazio">
+                  Faltam {p.parcelas_restantes} de {p.parcelas} · termina em {mesPorExtenso(p.fim_previsto)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <h4>Próximos {limite.proximos_meses.length} meses</h4>
+      <ul className="lista">
+        {limite.proximos_meses.map((m) => (
+          <li key={m.mes}>
+            <div>
+              <span>{mesPorExtenso(m.mes)}</span>
+              <span>{formatarCentavos(m.libera_centavos)}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
   const { dados, atualizadoEm, semDados } = useFaturas(cartao.id);
   const linhas = faturasDaLinha(dados ?? []);
+  const limite = useLimite(cartao.id).dados;
 
   return (
     <section aria-label={cartao.nome}>
       <h3>💳 {cartao.nome}</h3>
+      {limite && <LimiteDoCartaoNaLinha limite={limite} />}
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {semDados && (
         <p role="alert" className="erro">
