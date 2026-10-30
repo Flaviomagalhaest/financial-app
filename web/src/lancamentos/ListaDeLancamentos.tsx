@@ -8,15 +8,18 @@ import {
   useCadastro,
   useLancamentos,
   usePessoas,
+  useRecorrenciasNaoEnviadas,
   type LancamentoNaTela,
 } from "../dados";
 import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, quando } from "./datas";
+import { rotuloDaRecorrencia } from "./recorrencia";
 
 /** Lançamentos do casal, do mais recente ao mais antigo, com editar e excluir em cada linha. */
 export function ListaDeLancamentos() {
   const { contasECartoes, categorias } = useCadastro();
   const { lancamentos, atualizadoEm, semDados } = useLancamentos();
+  const recorrencias = useRecorrenciasNaoEnviadas();
   const { euId, nomeDe } = usePessoas();
   const [erro, setErro] = useState("");
   const [informacoes, setInformacoes] = useState<string | null>(null);
@@ -40,9 +43,9 @@ export function ListaDeLancamentos() {
   /** Quem fez, pelo nome; o que só existe neste aparelho é de quem está com ele. */
   const quem = (id?: string) => (id ? (id === euId ? "você" : nomeDe(id)) : "você");
 
-  async function descartar(l: LancamentoNaTela) {
+  async function descartar({ id }: { id: string }) {
     setErro("");
-    await descartarNaoEnviado(l.id).catch(() => setErro("Não foi possível descartar no aparelho."));
+    await descartarNaoEnviado(id).catch(() => setErro("Não foi possível descartar no aparelho."));
   }
 
   return (
@@ -58,6 +61,37 @@ export function ListaDeLancamentos() {
         <p role="alert" className="erro">
           {erro}
         </p>
+      )}
+      {recorrencias.length > 0 && (
+        <section aria-labelledby="recorrencias-nao-enviadas">
+          <h3 id="recorrencias-nao-enviadas">Recorrências não enviadas</h3>
+          <p className="vazio">Os previstos aparecem quando a recorrência subir.</p>
+          <ul className="lista">
+            {recorrencias.map((r) => {
+              const titulo = tituloDoLancamento(r, categorias);
+              return (
+                <li key={r.id}>
+                  <div>
+                    <strong>{titulo}</strong>
+                    <ValorComSinal l={r} />
+                  </div>
+                  <p className="vazio">
+                    desde {dataPorExtenso(r.inicio)} · {nome(contasECartoes, r.conta_id)} · {r.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
+                    {r.tipo_do_valor === "estimado" ? " · estimado" : ""}
+                  </p>
+                  <p className={r.recusa ? "erro" : "vazio"}>
+                    ⏳ {titulo}, {rotuloDaRecorrencia(r)}, não enviado{r.recusa ? `: ${r.recusa}` : ""}
+                  </p>
+                  <div className="acoes">
+                    <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(r)}>
+                      Descartar
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
       {!semDados && lancamentos?.length === 0 && <p className="vazio">Nenhum lançamento ainda.</p>}
       <ul className="lista">

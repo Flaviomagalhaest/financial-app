@@ -17,12 +17,14 @@ import {
   type Guardada,
   type ItemDaFila,
   type Lancamento,
+  type NovaRecorrencia,
   type NovoLancamento,
 } from "./armazem";
 import {
   decidirConflito,
   descartar,
   enfileirarExcluir,
+  enfileirarRecorrencia,
   enfileirarSalvar,
   enviarFila,
   ETIQUETA_DO_ENVIO,
@@ -46,7 +48,7 @@ export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
-export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
+export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovaRecorrencia, NovoLancamento };
 export { comoNovo } from "./fila";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
@@ -206,6 +208,8 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
   const porId = new Map<string, LancamentoNaTela>(servidor.map((l) => [l.id, { ...l, naoEnviado: false }]));
   const novos: LancamentoNaTela[] = [];
   for (const item of fila) {
+    // Os previstos da recorrência são do servidor: até ela subir, o aparelho só mostra a regra.
+    if (item.acao === "criar_recorrencia") continue;
     const anterior = porId.get(item.id);
     if (item.conflito) {
       const servidor = anterior ?? { ...item.conflito.lancamento, naoEnviado: false };
@@ -234,6 +238,15 @@ export function useLancamentos() {
   const fila = useFila();
   const lancamentos = useMemo(() => (dados ? naTela(dados, fila) : semDados ? naTela([], fila) : null), [dados, fila, semDados]);
   return { lancamentos, atualizadoEm, semDados };
+}
+
+/** A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. */
+export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string };
+
+/** As recorrências criadas no aparelho que ainda não subiram, da mais antiga à mais nova. */
+export function useRecorrenciasNaoEnviadas(): RecorrenciaNaoEnviada[] {
+  const fila = useFila();
+  return useMemo(() => fila.flatMap((item) => (item.recorrencia ? [{ ...item.recorrencia, recusa: item.recusa }] : [])), [fila]);
 }
 
 /**
@@ -350,9 +363,13 @@ export function useConexao(): boolean {
   return online && !semResposta;
 }
 
+/** Uma recorrência subiu: os previstos que o servidor gerou só vêm na leitura dos lançamentos. */
+let previstosNovos = false;
+
 const remeter: Remessa = async (acoes) => {
   try {
     const { data, response } = await api.POST("/api/lancamentos/lote", { body: { acoes } });
+    if (data?.resultados.some((r) => r.recorrencia)) previstosNovos = true;
     return data ? data.resultados : response.status;
   } catch {
     return 0;
@@ -370,6 +387,10 @@ function pedirEnvioEmSegundoPlano() {
 export async function enviarAgora(): Promise<boolean> {
   const enviou = await enviarFila(remeter);
   if (!enviou) pedirEnvioEmSegundoPlano();
+  if (previstosNovos) {
+    previstosNovos = false;
+    await buscarEGuardar(LISTA, LEITURAS[LISTA]);
+  }
   return enviou;
 }
 
@@ -393,6 +414,12 @@ export async function escolherItem(mostrado: LancamentoNaTela, categoriaId: stri
   const lancamento = { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes, item_categoria_id: categoriaId };
   await enfileirarSalvar(lancamento, false, baseDe(mostrado));
   return enviarAgora();
+}
+
+/** A recorrência nova vai pela fila e vale sem internet, como um pedido só (ADR 0011). */
+export async function salvarRecorrencia(recorrencia: NovaRecorrencia): Promise<void> {
+  await enfileirarRecorrencia(recorrencia);
+  void enviarAgora();
 }
 
 export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {

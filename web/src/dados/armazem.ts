@@ -5,17 +5,23 @@ import type { components } from "../api/schema";
 
 export type NovoLancamento = components["schemas"]["NovoLancamento"];
 export type Lancamento = components["schemas"]["Lancamento"];
+export type NovaRecorrencia = components["schemas"]["NovaRecorrencia"];
 export type Conflito = components["schemas"]["Conflito"];
 export type Exclusao = components["schemas"]["Exclusao"];
 /** O lançamento numa versão do servidor: a edição sobe só o que mudou desde ela (ADR 0011). */
 export type Base = NovoLancamento & { versao: number };
 
-/** Uma mudança não enviada: no máximo uma por lançamento, a soma do que se fez nele. */
+/**
+ * Uma mudança não enviada: no máximo uma por lançamento, a soma do que se fez nele. A recorrência
+ * vai como um pedido só, que o servidor transforma em previstos ao receber.
+ */
 export interface ItemDaFila {
-  /** O id do lançamento. */
+  /** O id do lançamento, ou o da recorrência. */
   id: string;
-  acao: "criar" | "editar" | "excluir";
+  acao: "criar" | "editar" | "excluir" | "criar_recorrencia";
   lancamento?: NovoLancamento;
+  /** A regra da recorrência criada no aparelho; não se edita, só se descarta. */
+  recorrencia?: NovaRecorrencia;
   /** Quando a primeira mudança ainda não enviada foi feita (ms), para o aviso de 24 h. */
   desde: number;
   /** A hora da última ação no aparelho (ms): é a hora que o servidor grava, não a da chegada. */

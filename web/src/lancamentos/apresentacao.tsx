@@ -6,11 +6,11 @@ type ComNome = { id: string; nome: string };
 export const nomePorId = (lista: ComNome[], id: string) => lista.find((i) => i.id === id)?.nome ?? "?";
 
 /** A descrição, ou as categorias quando não há descrição. */
-export function tituloDoLancamento(l: NovoLancamento, categorias: ComNome[]): string {
+export function tituloDoLancamento(l: Pick<NovoLancamento, "descricao" | "categoria_ids">, categorias: ComNome[]): string {
   return l.descricao || l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ");
 }
 
-export function ValorComSinal({ l }: { l: NovoLancamento }) {
+export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_centavos"> }) {
   return (
     <span className={l.tipo === "despesa" ? "despesa" : "receita"}>
       {l.tipo === "despesa" ? "−" : "+"} {formatarCentavos(l.valor_centavos)}

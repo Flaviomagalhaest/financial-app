@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { salvarLancamento, useCadastro, useLancamentos, usePessoas, useSugestao, useTags, type LancamentoNaTela, type Sugestao } from "../dados";
+import { salvarLancamento, salvarRecorrencia, useCadastro, useLancamentos, usePessoas, useSugestao, useTags, type LancamentoNaTela, type Sugestao } from "../dados";
 import { nomePorId, tituloDoLancamento } from "./apresentacao";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
+import { problemaDa, regraDa, rotuloDaRecorrencia, type Repeticao } from "./recorrencia";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
@@ -55,6 +56,8 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
+  // "Repete? Recorrente": salvar cria a regra, e os previstos o servidor gera ao receber.
+  const [repeticao, setRepeticao] = useState<Repeticao | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -87,16 +90,17 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const situacao: Situacao =
     situacaoEscolhida ??
     (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
-  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null);
+  const problemaDaRepeticao = repeticao && problemaDa(repeticao, data);
+  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null) && !problemaDaRepeticao;
 
   // O que a folha de detalhes preencheu, numa linha; a data de hoje e o realizado são o normal e não aparecem.
   const resumo = [
     descricao.trim(),
     ...tags.map((t) => `#${t}`),
     pessoa ? nomeDe(pessoa) : "",
-    faturaMes ? rotuloDaFatura(faturaMes) : "",
-    data === hoje() ? "" : rotuloDaData(data),
-    situacao === "previsto" ? "previsto" : "",
+    repeticao ? "" : faturaMes ? rotuloDaFatura(faturaMes) : "",
+    data === hoje() ? "" : repeticao ? `desde ${rotuloDaData(data)}` : rotuloDaData(data),
+    repeticao ? rotuloDaRecorrencia(regraDa(repeticao, data)) : situacao === "previsto" ? "previsto" : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -172,26 +176,39 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setEnviando(true);
     try {
       // Vai para a fila, que sobe na hora se houver internet; sem ela, fica como não enviado.
-      await salvarLancamento(
-        {
-          id: existente?.id ?? novoId,
+      if (repeticao)
+        await salvarRecorrencia({
+          id: novoId,
           tipo,
           valor_centavos: centavos,
-          data,
           descricao,
           conta_id: conta,
           categoria_ids: categoriaIds,
-          pessoa,
-          fatura_mes: noCartao ? faturaMes : null,
-          ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
           tags,
-        },
-        !existente,
-        existente ?? undefined,
-      );
+          pessoa,
+          ...regraDa(repeticao, data),
+        });
+      else
+        await salvarLancamento(
+          {
+            id: existente?.id ?? novoId,
+            tipo,
+            valor_centavos: centavos,
+            data,
+            descricao,
+            conta_id: conta,
+            categoria_ids: categoriaIds,
+            pessoa,
+            fatura_mes: noCartao ? faturaMes : null,
+            ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
+            tags,
+          },
+          !existente,
+          existente ?? undefined,
+        );
       window.location.hash = "#/historico";
     } catch {
-      setErro("Não foi possível guardar o lançamento no aparelho.");
+      setErro(repeticao ? "Não foi possível guardar a recorrência no aparelho." : "Não foi possível guardar o lançamento no aparelho.");
     } finally {
       setEnviando(false);
     }
@@ -265,6 +282,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
+          repeticao={id ? undefined : { valor: repeticao, problema: problemaDaRepeticao, onMudar: setRepeticao }}
           onFechar={() => setDetalhesAbertos(false)}
         />
       )}

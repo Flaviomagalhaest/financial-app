@@ -1,5 +1,6 @@
-// A fila dos lançamentos não enviados: o que se faz no aparelho entra aqui e sobe em lote, na
-// ordem (ADR 0011). Sem React nem cliente da API, porque o service worker também envia.
+// A fila dos lançamentos e das recorrências não enviados: o que se faz no aparelho entra aqui e
+// sobe em lote, na ordem (ADR 0011). Sem React nem cliente da API, porque o service worker também
+// envia.
 import type { components } from "../api/schema";
 import {
   comTrava,
@@ -11,6 +12,7 @@ import {
   type Guardada,
   type ItemDaFila,
   type Lancamento,
+  type NovaRecorrencia,
   type NovoLancamento,
 } from "./armazem";
 
@@ -82,6 +84,11 @@ export function enfileirarSalvar(lancamento: NovoLancamento, novo: boolean, base
       : // Sobre um conflito, a tela já mostrava a versão do servidor.
         { acao: "editar", lancamento, base: atual?.conflito?.lancamento ?? atual?.base ?? base },
   );
+}
+
+/** A recorrência sobe como um pedido só; os previstos o servidor gera ao receber. */
+export function enfileirarRecorrencia(recorrencia: NovaRecorrencia): Promise<void> {
+  return mudar(recorrencia.id, () => ({ acao: "criar_recorrencia", recorrencia }));
 }
 
 /** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
@@ -179,6 +186,7 @@ export const esperaAPessoa = (item: ItemDaFila) => !!(item.recusa || item.confli
 function acoesDo(item: ItemDaFila): Acao[] {
   // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
   const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
+  if (item.acao === "criar_recorrencia") return [{ acao: "criar_recorrencia", recorrencia: item.recorrencia! }];
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
   const lancamento = { ...item.lancamento!, acao_em };
   const editar: Acao = { acao: "editar", id: item.id, alteracao: { ...alteracao(lancamento, item.base), acao_em } };
@@ -255,7 +263,8 @@ async function remeterLote(remeter: Remessa, itens: ItemDaFila[]): Promise<Resul
   const resposta = await remeter(acoes);
   if (typeof resposta !== "number") return resposta.length === acoes.length ? porItem(itens, resposta) : null;
   if (resposta !== 422) return null;
-  if (itens.length === 1) return [{ resultado: "recusada", motivo: "o servidor não aceitou este lançamento" }];
+  if (itens.length === 1)
+    return [{ resultado: "recusada", motivo: itens[0].acao === "criar_recorrencia" ? "o servidor não aceitou esta recorrência" : "o servidor não aceitou este lançamento" }];
   const resultados: Resultado[] = [];
   for (const item of itens) {
     const um = await remeterLote(remeter, [item]);
