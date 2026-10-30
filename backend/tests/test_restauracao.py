@@ -190,6 +190,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "contas": 0,
             "exportacoes": 0,
             "faturas": 0,
+            "favoritos": 0,
             "itens_do_planejamento": 0,
             "lancamento_campos": 0,
             "lancamento_categorias": 0,
@@ -728,3 +729,61 @@ def test_backup_da_versao_16_sem_escolha_de_item_restaura_sem_escolha(database_u
         assert conn.execute(
             "SELECT valor_total_centavos, item_categoria_id FROM parcelamentos"
         ).fetchall() == [(5000, None)]
+
+
+def test_backup_da_versao_17_sem_favoritos_restaura_sem_favoritos(database_url):
+    # O que `prod` gravava antes do ticket 62: nenhuma tabela de favoritos.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, conta_id,"
+            " criado_por, alterado_por, versao) VALUES ('00000000-0000-0000-0000-000000000001',"
+            " 'despesa', 'realizado', 1000, '2026-03-28', '00000000-0000-0000-0000-000000000002',"
+            " 'flavio', 'flavio', 1)"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "favoritos.csv":
+                continue
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 17
+                del manifesto["tabelas"]["favoritos"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT valor_centavos FROM lancamentos").fetchall() == [(1000,)]
+        assert conn.execute("SELECT count(*) FROM favoritos").fetchone() == (0,)
+
+
+def test_os_favoritos_e_os_dispensados_voltam_do_backup_com_a_ordem(database_url):
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        for id, estado, ordem in [("1", "favorito", 2), ("2", "dispensado", None)]:
+            conn.execute(
+                "INSERT INTO favoritos (id, estado, identidade, descricao, tipo, conta_id,"
+                " categoria_ids, tags, pessoa, valor_centavos, ordem, criado_por) VALUES"
+                " (%s, %s, %s, 'Café', 'despesa', '00000000-0000-0000-0000-000000000002',"
+                " '[]', '[\"Rotina\"]', 'flavio', 1200, %s, 'flavio')",
+                (f"00000000-0000-0000-0000-00000000000{id}", estado, f"id{id}", ordem),
+            )
+        backup = gerar_backup(conn)
+        conn.execute("DELETE FROM favoritos")
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        restaurar_backup(conn, backup)
+
+        assert conn.execute(
+            "SELECT estado, ordem, tags, valor_centavos FROM favoritos ORDER BY id"
+        ).fetchall() == [
+            ("favorito", 2, '["Rotina"]', 1200),
+            ("dispensado", None, '["Rotina"]', 1200),
+        ]
