@@ -67,7 +67,7 @@ class Importacao:
     parcelamentos: list[parcelas.Parcelamento] = field(default_factory=list)
     ajustes: list[AjusteDeFatura] = field(default_factory=list)
     # Os meses das faturas exportadas de cada cartão, pelo nome do cadastro.
-    faturas: dict[str, list[str]] = field(default_factory=dict)
+    meses_das_faturas: dict[str, list[str]] = field(default_factory=dict)
     # Os pendentes avulsos do mês do export e de antes, que não entram (`## Answer` do ticket 18).
     descartados: list[Lancamento] = field(default_factory=list)
     # O que impede gravar: a planilha precisa de mais uma edição do dono.
@@ -87,7 +87,7 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     nomes = {c.pasta: c.nome for c in cartoes}
     cruzamento = cruzar(linhas_do_geral, linhas_de_fatura, decisoes.provaveis)
     importacao = Importacao(conta, cartoes, cruzamento=cruzamento, impedimentos=impedimentos)
-    importacao.faturas = {nomes[pasta]: meses for pasta, meses in pastas.items()}
+    importacao.meses_das_faturas = {nomes[pasta]: meses for pasta, meses in pastas.items()}
     importacao.lancamentos, importacao.ajustes = conferencia.separar_ajustes(
         _lancamentos(cruzamento, nomes)
     )
@@ -110,8 +110,8 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     _parcelas_futuras_no_cartao(importacao, pastas)
     _gerar_parcelas_que_faltam(importacao, ultimo_mes)
 
-    # O mês do export (a virada) é o último mês com lançamento já pago no Mobills: a Conferência
-    # vai até ele, e os pendentes avulsos até ele são descartados.
+    # O mês do export é o último mês com lançamento já pago no Mobills (na importação final, o da
+    # virada): a Conferência vai até ele, e os pendentes avulsos até ele são descartados.
     ultimo_realizado = max(
         (x.mes for x in linhas_do_geral if _situacao(x.situacao) == "realizado"),
         default=ultimo_mes,
@@ -240,18 +240,11 @@ def _regras(
     return regras
 
 
-def pessoa_do_casal(nome: str, configuradas: dict[str, str]) -> str | None:
-    """O id da pessoa que o de-para deu, pelo id ou pelo nome da configuração `PESSOAS`."""
-    if nome in configuradas:
-        return nome
-    return next((id for id, n in configuradas.items() if n.casefold() == nome.casefold()), None)
-
-
 def _conferir_pessoas(lancamentos: list[Lancamento], impedimentos: list[str]) -> None:
     """A pessoa que o de-para dá precisa ser uma das duas da configuração `PESSOAS`."""
     configuradas = pessoas.configuradas()
     for nome in sorted({x.pessoa for x in lancamentos if x.pessoa}):
-        if pessoa_do_casal(nome, configuradas) is None:
+        if pessoas.id_da_pessoa(nome, configuradas) is None:
             impedimentos.append(
                 f"De-para: a pessoa {nome!r} não é do casal (a configuração PESSOAS tem"
                 f" {', '.join(configuradas.values()) or 'ninguém'})"
@@ -334,15 +327,16 @@ def _parcelas_futuras_no_cartao(importacao: Importacao, pastas: dict[str, list[s
 
 def _gerar_parcelas_que_faltam(importacao: Importacao, ultimo_mes: str) -> None:
     """Gera como previstas as parcelas depois da última que o export trouxe, quando a sequência
-    chega ao último mês dele (a que acaba antes está quebrada e vai para a revisão). Como no app:
+    chega ao último mês dele (a que acaba antes está quebrada e vai para a revisão). O valor é o
+    da última que veio: o centavo que o app põe na 1ª parcela não aparece se o export só trouxe
+    a 1ª. Como no app:
     no cartão, todas têm a data da compra e a parcela n cai n - 1 faturas depois; no boleto, a
-    parcela n vence n - 1 meses depois da 1ª. A receita parcelada não é parcelamento no app."""
+    parcela n vence n - 1 meses depois da 1ª."""
     for parcelamento in importacao.parcelamentos:
         ultima = parcelamento.ultima
-        if ultima.tipo != "despesa" or ultima.mes < ultimo_mes:
+        if not parcelamento.do_app or ultima.mes < ultimo_mes:
             continue
-        primeira = parcelamento.primeira.data
-        data_da_1a = mais_meses(primeira, 1 - parcelamento.primeira.parcela[0])
+        data_da_1a = parcelamento.data_da_1a()
         geradas = []
         mes = ultima.mes
         for n in range(ultima.parcela[0] + 1, parcelamento.total + 1):
@@ -364,7 +358,7 @@ def _gerar_parcelas_que_faltam(importacao: Importacao, ultimo_mes: str) -> None:
 def _descartar_pendentes_avulsos(importacao: Importacao, mes_do_export: str) -> None:
     """O pendente que não é parcela é a ocorrência de uma recorrência do Mobills, sem a regra: o
     do mês do export e de antes sai (o mês corrente do Mobills pode estar desatualizado), e o de
-    depois entra como previsto avulso, que o dono apaga quando cadastrar a recorrência no app. O
+    depois entra como previsto avulso, que o casal apaga quando cadastrar a recorrência no app. O
     que casou com uma linha de fatura fica: a fatura exportada prova que a compra existiu."""
     ficam = []
     for lancamento in importacao.lancamentos:

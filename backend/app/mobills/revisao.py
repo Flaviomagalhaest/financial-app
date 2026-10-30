@@ -51,7 +51,8 @@ class Decisoes:
     cartoes: dict[str, dict] = field(default_factory=dict)
     de_para: dict[de_para.Chave, tuple[str, str]] = field(default_factory=dict)  # papel e nome
     cartao_dos_parcelamentos: dict[tuple, str] = field(default_factory=dict)
-    cartao_dos_ajustes: dict[tuple[str, int], str] = field(default_factory=dict)  # mês e valor
+    # Pelo mês e pelo valor: dois ajustes iguais no mesmo mês ficam com a mesma escolha.
+    cartao_dos_ajustes: dict[tuple[str, int], str] = field(default_factory=dict)
     mobills_por_mes: dict[str, int] = field(default_factory=dict)
     mobills_por_fatura: dict[tuple[str, str], int] = field(default_factory=dict)
 
@@ -375,7 +376,7 @@ def aba_conferencia(meses: list[Mes], mobills: dict[str, int]) -> tuple[list[str
             (mes.provaveis_abertos, ("par provável aberto", "pares prováveis abertos")),
             (
                 mes.descartados,
-                ("avulso pendente descartado", "avulsos pendentes descartados"),
+                ("pendente avulso descartado", "pendentes avulsos descartados"),
             ),
         ):
             if efeitos:

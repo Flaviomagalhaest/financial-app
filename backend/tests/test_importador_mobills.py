@@ -508,7 +508,7 @@ def test_conferencia_mes_a_mes_e_faturas_com_a_coluna_do_mobills_mantida(pastas)
         "Resultado": 2724.48,
         "Mobills": None,
         "Diferença": None,
-        "Por quê": "2 linhas de fatura sem par (-25,50); 1 avulso pendente descartado (1.500,00)",
+        "Por quê": "2 linhas de fatura sem par (-25,50); 1 pendente avulso descartado (1.500,00)",
     }
     assert conferencia[1]["Resultado"] == 0
     assert conferencia[2]["Despesas"] == 20.00
@@ -748,8 +748,8 @@ def test_pendente_avulso_do_mes_do_export_ou_antes_e_descartado_e_o_de_depois_fi
     ]
     conferencia = {x["Mês"]: x for x in ler_aba(revisao, "Conferência")}
     assert conferencia["2026-04"]["Despesas"] == 0
-    assert conferencia["2026-04"]["Por quê"] == "1 avulso pendente descartado (90,00)"
-    assert conferencia["2026-05"]["Por quê"] == "2 avulsos pendentes descartados (-205,00)"
+    assert conferencia["2026-04"]["Por quê"] == "1 pendente avulso descartado (90,00)"
+    assert conferencia["2026-05"]["Por quê"] == "2 pendentes avulsos descartados (-205,00)"
 
 
 def test_reajuste_so_do_geral_espera_o_dono_escolher_o_cartao_da_fatura(pastas):

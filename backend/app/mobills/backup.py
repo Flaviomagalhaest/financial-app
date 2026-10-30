@@ -13,8 +13,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from app import pessoas
 from app.backup import NUMERICOS, esquema, montar_backup
 from app.faturas import Titular, datas_padrao
-from app.mobills.importacao import FONTE, Importacao, Lancamento, pessoa_do_casal
-from app.recorrencias import mais_meses
+from app.mobills.importacao import FONTE, Importacao, Lancamento
 
 # O `criado_por` de tudo o que veio do Mobills: um só, para o "Parece repetido" (que compara
 # autores diferentes) não comparar o histórico com ele mesmo.
@@ -35,14 +34,16 @@ def gerar_backup_da_importacao(importacao: Importacao, agora: datetime | None = 
     configuradas = pessoas.configuradas()
 
     conta_id = uuid5(_ESPACO, "conta")
-    linhas.add("contas", id=conta_id, nome=importacao.conta.nome, tipo=importacao.conta.tipo)
+    linhas.incluir("contas", id=conta_id, nome=importacao.conta.nome, tipo=importacao.conta.tipo)
     cartoes: dict[str, Titular] = {}
     for cartao in importacao.cartoes:
-        id = uuid5(_ESPACO, f"cartao {cartao.pasta}")
-        cartoes[cartao.nome] = Titular(id, cartao.nome, cartao.fechamento, cartao.vencimento, False)
-        linhas.add(
+        cartao_id = uuid5(_ESPACO, f"cartao {cartao.pasta}")
+        cartoes[cartao.nome] = Titular(
+            cartao_id, cartao.nome, cartao.fechamento, cartao.vencimento, False
+        )
+        linhas.incluir(
             "cartoes",
-            id=id,
+            id=cartao_id,
             nome=cartao.nome,
             dia_fechamento=cartao.fechamento,
             dia_vencimento=cartao.vencimento,
@@ -54,7 +55,7 @@ def gerar_backup_da_importacao(importacao: Importacao, agora: datetime | None = 
         return cartoes[lancamento.cartao].id if lancamento.cartao else conta_id
 
     def pessoa_de(lancamento: Lancamento) -> str | None:
-        return lancamento.pessoa and pessoa_do_casal(lancamento.pessoa, configuradas)
+        return lancamento.pessoa and pessoas.id_da_pessoa(lancamento.pessoa, configuradas)
 
     categorias: dict[tuple[str, str], UUID] = {}
     tags: dict[str, UUID] = {}
@@ -64,35 +65,34 @@ def gerar_backup_da_importacao(importacao: Importacao, agora: datetime | None = 
             chave = (lancamento.tipo, nome)
             if chave not in categorias:
                 categorias[chave] = uuid5(_ESPACO, f"categoria {lancamento.tipo} {nome}")
-                linhas.add("categorias", id=categorias[chave], nome=nome, tipo=lancamento.tipo)
+                linhas.incluir("categorias", id=categorias[chave], nome=nome, tipo=lancamento.tipo)
         return [categorias[(lancamento.tipo, nome)] for nome in lancamento.categorias]
 
     def ids_das_tags(lancamento: Lancamento) -> list[UUID]:
         for nome in lancamento.tags:
             if nome.casefold() not in tags:
                 tags[nome.casefold()] = uuid5(_ESPACO, f"tag {nome.casefold()}")
-                linhas.add("tags", id=tags[nome.casefold()], nome=nome)
+                linhas.incluir("tags", id=tags[nome.casefold()], nome=nome)
         return list(dict.fromkeys(tags[nome.casefold()] for nome in lancamento.tags))
 
     # Cada parcela com o id do app, `uuid5(parcelamento, número)`, para a geração não duplicar.
-    das_parcelas: dict[int, tuple[UUID, int, bool]] = {}
+    # Por lançamento (`_chave`): o parcelamento, o número da parcela e se ela é automática.
+    parcela_de: dict[int, tuple[UUID, int, bool]] = {}
     for posicao, parcelamento in enumerate(importacao.parcelamentos):
-        # A receita parcelada e o `(1/1)` entram avulsos: o parcelamento do app é de despesa e
-        # tem 2 parcelas ou mais.
-        if parcelamento.primeira.tipo != "despesa" or parcelamento.total < 2:
+        if not parcelamento.do_app:
             continue
-        id = uuid5(_ESPACO, f"parcelamento {posicao}")
+        parcelamento_id = uuid5(_ESPACO, f"parcelamento {posicao}")
         primeira = parcelamento.primeira
         no_cartao = next((x for x in parcelamento.lancamentos if x.cartao), None)
-        anteriores = primeira.parcela[0] - 1  # as de antes do histórico, que não entram
-        linhas.add(
+        linhas.incluir(
             "parcelamentos",
-            id=id,
+            id=parcelamento_id,
+            # As de antes do histórico contam no total com o valor da primeira que veio.
             valor_total_centavos=sum(x.valor_centavos for x in parcelamento.lancamentos)
-            + anteriores * primeira.valor_centavos,
+            + parcelamento.anteriores * primeira.valor_centavos,
             parcelas=parcelamento.total,
             # No cartão, a data da compra; no boleto, a da 1ª parcela.
-            data=no_cartao.data if no_cartao else mais_meses(primeira.data, -anteriores),
+            data=no_cartao.data if no_cartao else parcelamento.data_da_1a(),
             automatico=no_cartao is not None,
             descricao=parcelamento.descricao,
             conta_id=conta_de(no_cartao or primeira),
@@ -102,25 +102,31 @@ def gerar_backup_da_importacao(importacao: Importacao, agora: datetime | None = 
             alterado_em=agora,
         )
         for categoria in ids_das_categorias(primeira):
-            linhas.add("parcelamento_categorias", parcelamento_id=id, categoria_id=categoria)
+            linhas.incluir(
+                "parcelamento_categorias", parcelamento_id=parcelamento_id, categoria_id=categoria
+            )
         for tag in ids_das_tags(primeira):
-            linhas.add("parcelamento_tags", parcelamento_id=id, tag_id=tag)
+            linhas.incluir("parcelamento_tags", parcelamento_id=parcelamento_id, tag_id=tag)
         for parcela in parcelamento.lancamentos:
-            das_parcelas[_chave(parcela)] = (id, parcela.parcela[0], no_cartao is not None)
+            parcela_de[_chave(parcela)] = (
+                parcelamento_id,
+                parcela.parcela[0],
+                no_cartao is not None,
+            )
 
     meses_por_cartao: dict[str, set[str]] = {
-        nome: set(meses) for nome, meses in importacao.faturas.items()
+        nome: set(meses) for nome, meses in importacao.meses_das_faturas.items()
     }
     for posicao, lancamento in enumerate(importacao.lancamentos):
-        parcelamento_id, parcela, automatico = das_parcelas.get(_chave(lancamento), (None,) * 3)
-        id = (
+        parcelamento_id, parcela, automatico = parcela_de.get(_chave(lancamento), (None,) * 3)
+        lancamento_id = (
             uuid5(parcelamento_id, str(parcela))
             if parcelamento_id
             else uuid5(_ESPACO, f"lancamento {posicao}")
         )
-        linhas.add(
+        linhas.incluir(
             "lancamentos",
-            id=id,
+            id=lancamento_id,
             tipo=lancamento.tipo,
             situacao=lancamento.situacao,
             valor_centavos=lancamento.valor_centavos,
@@ -138,9 +144,11 @@ def gerar_backup_da_importacao(importacao: Importacao, agora: datetime | None = 
             parcela=parcela,
         )
         for categoria in ids_das_categorias(lancamento):
-            linhas.add("lancamento_categorias", lancamento_id=id, categoria_id=categoria)
+            linhas.incluir(
+                "lancamento_categorias", lancamento_id=lancamento_id, categoria_id=categoria
+            )
         for tag in ids_das_tags(lancamento):
-            linhas.add("lancamento_tags", lancamento_id=id, tag_id=tag)
+            linhas.incluir("lancamento_tags", lancamento_id=lancamento_id, tag_id=tag)
         if lancamento.cartao:
             meses_por_cartao[lancamento.cartao].add(lancamento.mes)
 
@@ -151,14 +159,14 @@ def gerar_backup_da_importacao(importacao: Importacao, agora: datetime | None = 
         meses_por_cartao[ajuste.cartao].add(ajuste.mes)
     for nome, meses in meses_por_cartao.items():
         titular = cartoes[nome]
-        ultima_exportada = max(importacao.faturas[nome], default="")
+        ultima_exportada = max(importacao.meses_das_faturas[nome], default="")
         for mes in meses:
             # A fatura exportada nasce fechada e paga, sem datas (o app a lê assim); a que só
             # as parcelas futuras pedem nasce como no app, dos dias padrão do cartão.
             fechamento, vencimento = (
                 (None, None) if mes <= ultima_exportada else datas_padrao(titular, _dia_1(mes))
             )
-            linhas.add(
+            linhas.incluir(
                 "faturas",
                 cartao_id=titular.id,
                 mes=_dia_1(mes),
@@ -166,7 +174,7 @@ def gerar_backup_da_importacao(importacao: Importacao, agora: datetime | None = 
                 vencimento=vencimento,
                 ajuste_centavos=ajustes.get((nome, mes)),
             )
-    return linhas.zip()
+    return linhas.montar()
 
 
 def _chave(lancamento: Lancamento) -> int:
@@ -186,7 +194,7 @@ class _Linhas:
         self.esquema = esquema()
         self.tabelas: dict[str, list[dict]] = {tabela: [] for tabela in self.esquema}
 
-    def add(self, tabela: str, **valores) -> None:
+    def incluir(self, tabela: str, **valores) -> None:
         colunas = self.esquema[tabela]
         # Os padrões das colunas que o banco preencheria.
         for coluna, padrao in (("criado_por", CRIADO_POR), ("criado_em", self.agora)):
@@ -196,7 +204,7 @@ class _Linhas:
             raise ValueError(f"{tabela} não tem as colunas {sorted(fora)}")
         self.tabelas[tabela].append(valores)
 
-    def zip(self) -> bytes:
+    def montar(self) -> bytes:
         tabelas = {}
         somas = {}
         for tabela in sorted(self.tabelas):

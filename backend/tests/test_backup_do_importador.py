@@ -34,6 +34,8 @@ def exports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
             linha("31/08/2026", "TV (2/4)", -300.00, "Casa", situacao="Pendente"),
             linha("31/08/2026", "Reajuste", -0.05, "Reajuste de fatura"),
             linha("30/09/2026", "TV (3/4)", -300.00, "Casa", situacao="Pendente"),
+            # Começou antes do histórico: a 4/7 está no primeiro mês do export.
+            linha("10/07/2026", "Faculdade (4/7)", -800.00, "Educação"),
             linha("10/08/2026", "Faculdade (5/7)", -800.00, "Educação"),
             linha("10/09/2026", "Faculdade (6/7)", -800.00, "Educação", situacao="Pendente"),
             linha("10/08/2026", "Luz", -90.00, "Casa", situacao="Pendente"),
@@ -41,6 +43,9 @@ def exports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
             linha("05/08/2026", "Bônus (1/2)", 1000.00, "Salário"),
             linha("05/09/2026", "Bônus (2/2)", 1000.00, "Salário", situacao="Pendente"),
             linha("12/08/2026", "Taxa (1/1)", -10.00, "Casa"),
+            # Sequência quebrada (falta a 2/3): vai para a revisão e entra avulsa, sem inventar.
+            linha("10/07/2026", "Curso (1/3)", -100.00, "Educação"),
+            linha("10/09/2026", "Curso (3/3)", -100.00, "Educação", situacao="Pendente"),
             linha("10/09/2026", "Luz", -95.00, "Casa", situacao="Pendente"),
         ],
     )
@@ -88,8 +93,9 @@ def test_backup_do_importador_restaura_num_banco_vazio_e_exporta_de_novo_o_mesmo
     assert contagens["contas"] == 1
     assert contagens["cartoes"] == 2
     assert contagens["parcelamentos"] == 2
-    # Salário 2x, Mercado, TV 1 a 4, Faculdade 5 a 7, Luz de setembro, Bônus 2x, Taxa e o Café.
-    assert contagens["lancamentos"] == 15
+    # Salário 2x, Mercado, TV 1 a 4, Faculdade 4 a 7, Luz de setembro, Bônus 2x, Taxa, Curso 2x
+    # e o Café.
+    assert contagens["lancamentos"] == 18
 
 
 def test_historico_restaurado_tem_as_faturas_pagas_os_parcelamentos_e_os_previstos(
@@ -167,9 +173,10 @@ def test_historico_restaurado_tem_as_faturas_pagas_os_parcelamentos_e_os_previst
         (4, "previsto", "2026-10-01"),
     ]
     assert {x["parcelamento_id"] for x in por_descricao["TV"]} == {tv["id"]}
-    avulsos = por_descricao["Bônus"] + por_descricao["Taxa"]
-    assert [(x["parcelamento_id"], x["parcela"]) for x in avulsos] == [(None, None)] * 3
+    avulsos = por_descricao["Bônus"] + por_descricao["Taxa"] + por_descricao["Curso"]
+    assert [(x["parcelamento_id"], x["parcela"]) for x in avulsos] == [(None, None)] * 5
     assert sorted((x["parcela"], x["data"]) for x in por_descricao["Faculdade"]) == [
+        (4, "2026-07-10"),
         (5, "2026-08-10"),
         (6, "2026-09-10"),
         (7, "2026-10-10"),
