@@ -1,6 +1,6 @@
 """O lote da fila do aparelho: as ações feitas sem internet, na ordem, cada uma na sua transação
-e com um resultado por ação (ADR 0011). O parcelamento vai como um pedido só, e o servidor gera
-as parcelas ao receber."""
+e com um resultado por ação (ADR 0011). O parcelamento e a recorrência vão como um pedido só, e o
+servidor gera as parcelas e os previstos ao receber."""
 
 import logging
 from datetime import datetime
@@ -11,7 +11,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app import parcelamentos
+from app import parcelamentos, recorrencias
 from app.banco import em_transacao
 from app.lancamentos import (
     AlteracaoDeLancamento,
@@ -29,6 +29,7 @@ from app.lancamentos import (
 )
 from app.login import UsuarioLogado
 from app.parcelamentos import NovoParcelamento, Parcelamento
+from app.recorrencias import NovaRecorrencia, Recorrencia
 
 router = APIRouter(prefix="/api")
 log = logging.getLogger(__name__)
@@ -60,7 +61,12 @@ class AcaoCriarParcelamento(BaseModel):
     parcelamento: NovoParcelamento
 
 
-Acao = AcaoCriar | AcaoEditar | AcaoExcluir | AcaoCriarParcelamento
+class AcaoCriarRecorrencia(BaseModel):
+    acao: Literal["criar_recorrencia"]
+    recorrencia: NovaRecorrencia
+
+
+Acao = AcaoCriar | AcaoEditar | AcaoExcluir | AcaoCriarParcelamento | AcaoCriarRecorrencia
 
 
 class Lote(BaseModel):
@@ -72,12 +78,14 @@ class Lote(BaseModel):
 class Resultado(BaseModel):
     """`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os
     campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O
-    parcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos."""
+    parcelamento e a recorrência aceitos voltam gravados, e as parcelas e os previstos vêm na
+    leitura dos lançamentos."""
 
     resultado: Literal["aceita", "conflito", "recusada", "descartada"]
     motivo: str | None = None
     lancamento: Lancamento | None = None
     parcelamento: Parcelamento | None = None
+    recorrencia: Recorrencia | None = None
     campos: list[CampoEmConflito] | None = None
     exclusao: Exclusao | None = None
 
@@ -118,7 +126,8 @@ def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
 
 
 def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
-    """A ação aceita; a do lançamento numa transação, a do parcelamento em várias."""
+    """A ação aceita; a do lançamento numa transação, a do parcelamento e a da recorrência em
+    várias."""
     match acao:
         case AcaoCriar(lancamento=novo):
             criado = em_transacao(url, lambda conn: criar(conn, novo, usuario)[0])
@@ -133,6 +142,10 @@ def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
             # Grava numa transação e gera as parcelas em outras (o limite de linhas do DSQL).
             criado, _ = parcelamentos.criar(url, novo, usuario)
             return Resultado(resultado="aceita", parcelamento=criado)
+        case AcaoCriarRecorrencia(recorrencia=nova):
+            # Grava numa transação e gera os previstos em outras, como o parcelamento.
+            criada, _ = recorrencias.criar(url, nova, usuario)
+            return Resultado(resultado="aceita", recorrencia=criada)
 
 
 @router.post("/lancamentos/lote", response_model=ResultadoDoLote, operation_id="enviar_lote")

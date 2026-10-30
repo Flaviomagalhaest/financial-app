@@ -302,6 +302,60 @@ def estender_todas(url: str | None) -> int:
     return len(ids)
 
 
+def _gravar(conn, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, bool]:
+    """Grava a regra; o mesmo id já gravado devolve a gravada, sem comparar os dados: o aparelho
+    não edita a recorrência não enviada, e quem muda a regra é o PATCH (ticket 86)."""
+    if ja := _ler(conn, "id = %s", (nova.id,)):
+        return ja[0], False
+    conferir_ligacoes(conn, nova)
+    tags = ids_das_tags(conn, nova.tags, usuario, set())
+    gravada = conn.execute(
+        f"INSERT INTO recorrencias ({_GRAVADAS}, geradas)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, %s,"
+        " 0)"
+        # Dois reenvios ao mesmo tempo: o segundo fica com a regra que o primeiro gravou.
+        " ON CONFLICT (id) DO NOTHING",
+        (
+            nova.id,
+            nova.tipo,
+            nova.valor_centavos,
+            nova.tipo_do_valor,
+            nova.automatico,
+            nova.descricao,
+            nova.conta_id,
+            nova.inicio,
+            nova.a_cada,
+            nova.unidade,
+            nova.ate,
+            nova.vezes,
+            usuario,
+            usuario,
+            nova.pessoa,
+            nova.item_categoria_id,
+        ),
+    ).rowcount
+    if not gravada:
+        return _ler(conn, "id = %s", (nova.id,))[0], False
+    for categoria in nova.categoria_ids:
+        conn.execute(
+            "INSERT INTO recorrencia_categorias (recorrencia_id, categoria_id) VALUES (%s, %s)",
+            (nova.id, categoria),
+        )
+    for tag in tags:
+        conn.execute(
+            "INSERT INTO recorrencia_tags (recorrencia_id, tag_id) VALUES (%s, %s)",
+            (nova.id, tag),
+        )
+    return _ler(conn, "id = %s", (nova.id,))[0], True
+
+
+def criar(url: str | None, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, bool]:
+    """Grava a regra e gera os previstos até o horizonte; serve à rota e ao lote da fila."""
+    criada, gravada = em_transacao(url, lambda conn: _gravar(conn, nova, usuario))
+    gerar_ate_o_horizonte(url, nova.id)
+    return criada, gravada
+
+
 @router.post(
     "/recorrencias",
     status_code=201,
@@ -313,56 +367,8 @@ def criar_recorrencia(
 ) -> Recorrencia:
     """Grava a regra e gera os previstos até o horizonte. Reenviar o mesmo id (a fila repete)
     devolve a regra gravada, com 200, e completa a geração se ela tiver parado no meio."""
-
-    def gravar(conn) -> Recorrencia:
-        if ja := _ler(conn, "id = %s", (nova.id,)):
-            response.status_code = 200
-            return ja[0]
-        conferir_ligacoes(conn, nova)
-        tags = ids_das_tags(conn, nova.tags, usuario, set())
-        gravada = conn.execute(
-            f"INSERT INTO recorrencias ({_GRAVADAS}, geradas)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, %s,"
-            " 0)"
-            # Dois reenvios ao mesmo tempo: o segundo fica com a regra que o primeiro gravou.
-            " ON CONFLICT (id) DO NOTHING",
-            (
-                nova.id,
-                nova.tipo,
-                nova.valor_centavos,
-                nova.tipo_do_valor,
-                nova.automatico,
-                nova.descricao,
-                nova.conta_id,
-                nova.inicio,
-                nova.a_cada,
-                nova.unidade,
-                nova.ate,
-                nova.vezes,
-                usuario,
-                usuario,
-                nova.pessoa,
-                nova.item_categoria_id,
-            ),
-        ).rowcount
-        if not gravada:
-            response.status_code = 200
-            return _ler(conn, "id = %s", (nova.id,))[0]
-        for categoria in nova.categoria_ids:
-            conn.execute(
-                "INSERT INTO recorrencia_categorias (recorrencia_id, categoria_id) VALUES (%s, %s)",
-                (nova.id, categoria),
-            )
-        for tag in tags:
-            conn.execute(
-                "INSERT INTO recorrencia_tags (recorrencia_id, tag_id) VALUES (%s, %s)",
-                (nova.id, tag),
-            )
-        return _ler(conn, "id = %s", (nova.id,))[0]
-
-    url = url_do_banco(request)
-    criada = em_transacao(url, gravar)
-    gerar_ate_o_horizonte(url, nova.id)
+    criada, gravada = criar(url_do_banco(request), nova, usuario)
+    response.status_code = 201 if gravada else 200
     return criada
 
 

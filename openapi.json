@@ -2643,6 +2643,24 @@
         ],
         "title": "AcaoCriarParcelamento"
       },
+      "AcaoCriarRecorrencia": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "criar_recorrencia",
+            "title": "Acao"
+          },
+          "recorrencia": {
+            "$ref": "#/components/schemas/NovaRecorrencia"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "recorrencia"
+        ],
+        "title": "AcaoCriarRecorrencia"
+      },
       "AcaoEditar": {
         "properties": {
           "acao": {
@@ -4684,6 +4702,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/AcaoCriarParcelamento"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoCriarRecorrencia"
                 }
               ],
               "discriminator": {
@@ -4691,6 +4712,7 @@
                 "mapping": {
                   "criar": "#/components/schemas/AcaoCriar",
                   "criar_parcelamento": "#/components/schemas/AcaoCriarParcelamento",
+                  "criar_recorrencia": "#/components/schemas/AcaoCriarRecorrencia",
                   "editar": "#/components/schemas/AcaoEditar",
                   "excluir": "#/components/schemas/AcaoExcluir"
                 }
@@ -6047,6 +6069,16 @@
               }
             ]
           },
+          "recorrencia": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Recorrencia"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "campos": {
             "anyOf": [
               {
@@ -6077,7 +6109,7 @@
           "resultado"
         ],
         "title": "Resultado",
-        "description": "`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os\ncampos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O\nparcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos."
+        "description": "`recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os\ncampos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O\nparcelamento e a recorrência aceitos voltam gravados, e as parcelas e os previstos vêm na\nleitura dos lançamentos."
       },
       "ResultadoDoLote": {
         "properties": {

@@ -169,6 +169,71 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
     assert {(tuple(l["tags"]), l["pessoa"]) for l in previstos} == {(("casa nova",), "esposa")}
 
 
+def test_sem_internet_a_recorrencia_sobe_no_lote_como_um_pedido_so(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], vezes=3)
+    sem_conta = recorrencia(str(uuid4()), [luz], descricao="Água")
+    lote = {
+        "acoes": [
+            {"acao": "criar_recorrencia", "recorrencia": nova},
+            {"acao": "criar_recorrencia", "recorrencia": sem_conta},
+        ]
+    }
+
+    primeiro = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json=lote)
+    # A fila repete o lote que ficou sem resposta.
+    segundo = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json=lote)
+
+    assert primeiro.status_code == 200
+    [aceita, recusada] = primeiro.json()["resultados"]
+    assert aceita["resultado"] == "aceita"
+    assert aceita["recorrencia"] | {"criado_em": None, "alterado_em": None} == nova | {
+        "automatico": False,
+        "ate": None,
+        "tags": [],
+        "pessoa": None,
+        "item_categoria_id": None,
+        "ocorrencia_do_inicio": 1,
+        "criado_por": "esposa",
+        "alterado_por": "esposa",
+        "criado_em": None,
+        "alterado_em": None,
+    }
+    assert (recusada["resultado"], recusada["motivo"]) == ("recusada", "conta não encontrada")
+    assert [r["resultado"] for r in segundo.json()["resultados"]] == ["aceita", "recusada"]
+    assert segundo.json()["resultados"][0]["recorrencia"] == aceita["recorrencia"]
+    assert [l["data"] for l in gerados(casal, nova["id"])] == [
+        "2026-11-10",
+        "2026-12-10",
+        "2027-01-10",
+    ]
+    assert len(casal.pedir("esposa", "GET", "/api/lancamentos").json()) == 3
+
+
+def test_reenviar_a_recorrencia_com_outros_dados_devolve_a_gravada_sem_mudar_nada(casal: Casal):
+    # O aparelho não edita a recorrência não enviada (só a descarta), então o mesmo id com outros
+    # dados não vem do app: o reenvio é idempotente e quem muda a regra é o PATCH (ticket 86).
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], vezes=2)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    outra = nova | {"valor_centavos": 99, "vezes": 5}
+
+    resposta = casal.pedir(
+        "esposa",
+        "POST",
+        "/api/lancamentos/lote",
+        json={"acoes": [{"acao": "criar_recorrencia", "recorrencia": outra}]},
+    )
+
+    [resultado] = resposta.json()["resultados"]
+    assert resultado["resultado"] == "aceita"
+    assert (resultado["recorrencia"]["valor_centavos"], resultado["recorrencia"]["vezes"]) == (
+        18990,
+        2,
+    )
+    assert [l["valor_centavos"] for l in gerados(casal, nova["id"])] == [18990, 18990]
+
+
 @pytest.mark.parametrize(
     ("mudar", "motivo"),
     [
