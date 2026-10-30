@@ -524,3 +524,32 @@ def test_antecipar_parcelamento_que_nao_existe_e_404(casal: Casal):
         "flavio", "POST", f"/api/parcelamentos/{uuid4()}/antecipacoes", json={"parcelas": 1}
     )
     assert resposta.status_code == 404
+
+
+def test_quitar_no_cartao_junta_o_restante_na_fatura_do_pagamento_e_a_tarefa_diaria_nao_mexe(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    nubank, eletro = cartao(casal), casal.categoria("Eletrodomésticos")
+    novo = parcelamento(
+        nubank, [eletro], data="2026-10-26", parcelas=4, valor_total_centavos=400000
+    )
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+
+    resposta = casal.pedir("flavio", "POST", f"/api/parcelamentos/{novo['id']}/quitacao", json={})
+
+    assert resposta.status_code == 200
+    assert [(l["parcela"], l["valor_centavos"]) for l in resposta.json()] == [
+        (2, 100000),
+        (3, 100000),
+        (4, 100000),
+    ]
+    faturas = casal.pedir("flavio", "GET", f"/api/cartoes/{nubank}/faturas").json()
+    assert [(f["mes"], f["compras_centavos"]) for f in faturas if f["compras_centavos"]] == [
+        ("2026-11-01", 400000)
+    ]
+    # Meses depois a tarefa diária não tem o que realizar nem desfaz o pagamento.
+    no_dia(monkeypatch, "2027-03-01")
+    fazer_tarefa_diaria(database_url)
+    assert [(l["situacao"], l["valor_centavos"]) for l in parcelas(casal, novo["id"])] == [
+        ("realizado", 100000)
+    ] * 4

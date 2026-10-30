@@ -356,14 +356,15 @@ def _antecipar(
     pagamento, com o valor pago dividido entre elas. No cartão, a parcela conta na fatura em
     que foi paga (a que fecha depois do dia), marcada como troca à mão para as datas do
     cartão e a data da compra não a levarem de volta à fatura dela."""
-    if not conn.execute("SELECT 1 FROM parcelamentos WHERE id = %s", (id,)).fetchone():
+    gravado = conn.execute(
+        "SELECT geradas, parcelas FROM parcelamentos WHERE id = %s", (id,)
+    ).fetchone()
+    if not gravado:
         raise HTTPException(status_code=404, detail="parcelamento não encontrado")
+    (geradas, total) = gravado
     dia = data or lancamentos.hoje()
     if dia > lancamentos.hoje():
         raise lancamentos.recusar("a antecipação é de um pagamento que já aconteceu")
-    (geradas, total) = conn.execute(
-        "SELECT geradas, parcelas FROM parcelamentos WHERE id = %s", (id,)
-    ).fetchone()
     if geradas < total:
         raise lancamentos.recusar("as parcelas ainda estão sendo geradas")
     previstas = conn.execute(
@@ -408,7 +409,7 @@ def _antecipar(
 def _responder(url: str | None, antecipadas: list[UUID]) -> list[lancamentos.Lancamento]:
     with conectar(url) as conn:
         return sorted(
-            lancamentos._todos(conn, "id = ANY(%s)", (antecipadas,)), key=lambda l: l.parcela
+            lancamentos.ler_por_ids(conn, antecipadas), key=lambda parcela: parcela.parcela
         )
 
 
