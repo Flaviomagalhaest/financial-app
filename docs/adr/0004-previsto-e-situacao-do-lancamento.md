@@ -15,4 +15,4 @@ Um compromisso futuro (a parcela que vem, o salário do mês que vem, o IPVA) é
 
 - Só o realizado mexe no saldo da conta; o previsto entra na projeção e no "quanto ainda posso gastar".
 - Recorrência sem fim gera previstos sem limite de tempo: o horizonte guardado ou calculado é decisão de implementação.
-- Mudar uma recorrência nunca reescreve um realizado dela, e um previsto alterado à mão não é sobrescrito por uma mudança "daqui para frente". Já corrigir o valor, o número de parcelas ou a data de um parcelamento gera as parcelas de novo, inclusive as realizadas, com aviso.
+- Mudar uma recorrência nunca reescreve um realizado dela, e um previsto alterado à mão não é sobrescrito por uma mudança "daqui para frente". Já corrigir o valor, o número de parcelas ou a data de um parcelamento gera as parcelas de novo, inclusive as realizadas, com aviso; só a parcela que uma pessoa editou à mão (valor, data, conta ou fatura) fica como está, realizada ou não.

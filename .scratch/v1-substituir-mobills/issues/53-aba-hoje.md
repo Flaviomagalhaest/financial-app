@@ -1,7 +1,7 @@
 # Aba Hoje
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 43, 51, 33
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Sonnet
@@ -15,12 +15,12 @@ Ao abrir o app o casal vê o essencial, e os favoritos entram aqui no ticket de 
 
 ## Checklist
 
-- [ ] Uma leitura para a tela Hoje: "ainda dá para gastar" em destaque, lista "a escolher", atrasados, fatura que vence e itens acima de 80%
-- [ ] Avisos de não enviados e de conflitos; contas da semana
-- [ ] Última resposta em cache com "atualizado às" sem internet
-- [ ] Testes de API e de navegador; fonte da interface: branch `prototipo/dashboards`
-- [ ] Verificações do projeto rodando e PR aberto para `main`
-- [ ] O bloco `ContasDaSemana` (ticket 43, `web/src/lancamentos/ContasDaSemana.tsx`) já está na Hoje com a leitura própria `GET /api/contas-da-semana`: juntá-lo à leitura única da tela, e mostrar os atrasados pelo campo `atrasado` do lançamento
+- [x] Uma leitura para a tela Hoje: "ainda dá para gastar" em destaque, lista "a escolher", atrasados, fatura que vence e itens acima de 80%
+- [x] Avisos de não enviados e de conflitos; contas da semana
+- [x] Última resposta em cache com "atualizado às" sem internet
+- [x] Testes de API e de navegador; fonte da interface: branch `prototipo/dashboards`
+- [x] Verificações do projeto rodando e PR aberto para `main`
+- [x] O bloco `ContasDaSemana` (ticket 43, `web/src/lancamentos/ContasDaSemana.tsx`) já está na Hoje com a leitura própria `GET /api/contas-da-semana`: juntá-lo à leitura única da tela, e mostrar os atrasados pelo campo `atrasado` do lançamento
 
 ## Notas
 
