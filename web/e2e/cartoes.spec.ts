@@ -77,3 +77,37 @@ test("a aba Cartões mostra a fatura anterior, a atual e a próxima, e o detalhe
   await page.getByRole("link", { name: "Voltar aos cartões" }).click();
   await expect(secao).toBeVisible();
 });
+
+test("a linha do cartão com limite mostra a barra e o detalhe do comprometido; sem limite não mostra nada", async ({ page }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const [comLimite, semLimite, mercado] = [`Com limite ${s}`, `Sem limite ${s}`, `Mercado ${s}`];
+  await page.goto("/#/cartoes");
+  await entrar(page);
+  const headers = { authorization: await tokenDaPagina(page) };
+  const criar = async (caminho: string, data: object) => {
+    const resposta = await page.request.post(caminho, { headers, data });
+    expect(resposta.ok(), await resposta.text()).toBe(true);
+    return resposta.json();
+  };
+  const cartao = await criar("/api/cartoes", { nome: comLimite, dia_fechamento: 10, dia_vencimento: 20, limite_centavos: 100000 });
+  await criar("/api/cartoes", { nome: semLimite, dia_fechamento: 10, dia_vencimento: 20 });
+  const categoria = await criar("/api/categorias", { nome: mercado, tipo: "despesa" });
+  await criar("/api/lancamentos", {
+    id: randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 25000,
+    data: dia(0),
+    descricao: `Padaria ${s}`,
+    conta_id: cartao.id,
+    categoria_ids: [categoria.id],
+  });
+
+  await page.reload();
+  const secao = page.getByRole("region", { name: comLimite });
+  await expect(secao.getByText("Comprometido R$ 250,00 · disponível R$ 750,00")).toBeVisible();
+  await expect(secao.getByRole("progressbar")).toBeVisible();
+  await secao.getByText("Comprometido").click();
+  await expect(secao.getByText("Fatura aberta")).toBeVisible();
+  await expect(secao.getByRole("heading", { name: "Próximos 12 meses" })).toBeVisible();
+  await expect(page.getByRole("region", { name: semLimite }).getByText("Comprometido")).toHaveCount(0);
+});

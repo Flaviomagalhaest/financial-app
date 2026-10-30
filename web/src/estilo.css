@@ -803,4 +803,13 @@ button.linha-que-abre {
 }
 .modelo-do-planejamento > label select {
   margin-bottom: 0;
+
+.limite summary {
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+}
+.limite progress {
+  width: 100%;
+  accent-color: var(--destaque);
 }

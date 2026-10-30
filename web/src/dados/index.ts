@@ -41,6 +41,7 @@ export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
 export type LeituraDoMes = components["schemas"]["LeituraDoMes"];
 export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
+export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
@@ -117,6 +118,12 @@ export function useMes(mes: string) {
 /** O modelo padrão do planejamento, que "Aplicar modelo padrão" copia para um mês vazio. */
 export function useModeloPadrao() {
   return useRespostaDe<{ itens: ItemDoModelo[] }>("/api/planejamento/modelo", () => api.GET("/api/planejamento/modelo"));
+}
+
+/** O limite comprometido e disponível do cartão titular (o adicional divide o dele). */
+export function useLimite(cartaoId: string) {
+  const ler = () => api.GET("/api/cartoes/{id}/limite", { params: { path: { id: cartaoId } } });
+  return useRespostaDe<LimiteDoCartao>(`/api/cartoes/${cartaoId}/limite`, ler);
 }
 
 function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
@@ -300,6 +307,12 @@ export function useSugestao(): FonteDeSugestao {
 export function useContasComArquivadas() {
   const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
   return { contas: dados ?? [], atualizadoEm, recarregar: buscar };
+}
+
+/** Todas as tags, arquivadas inclusive, com o id, para a tela que as configura. */
+export function useTagsComArquivadas() {
+  const { dados, atualizadoEm, buscar } = useResposta("/api/tags");
+  return { tags: dados ?? [], atualizadoEm, recarregar: buscar };
 }
 
 /** Se o navegador diz que há rede; para desativar o que precisa de internet. */

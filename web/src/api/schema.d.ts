@@ -472,6 +472,26 @@ export interface paths {
         patch: operations["editar_fatura"];
         trace?: never;
     };
+    "/api/cartoes/{id}/limite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ler Limite
+         * @description O limite do titular, com as compras do adicional dentro do comprometido.
+         */
+        get: operations["ler_limite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/planejamento/modelo": {
         parameters: {
             query?: never;
@@ -710,6 +730,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/parcelamentos/{id}/antecipacoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Antecipar Parcelas
+         * @description Paga adiantado as últimas K parcelas por pagar, no dia de hoje ou em outro, pelo valor
+         *     informado (o desconto). Devolve as parcelas antecipadas.
+         */
+        post: operations["antecipar_parcelas"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/parcelamentos/{id}/quitacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quitar Parcelamento
+         * @description Paga de uma vez todas as parcelas que faltam. Devolve as parcelas quitadas.
+         */
+        post: operations["quitar_parcelamento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sugestoes": {
         parameters: {
             query?: never;
@@ -906,6 +967,18 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+        };
+        /**
+         * Antecipacao
+         * @description O pagamento adiantado das últimas parcelas que ainda não foram pagas.
+         */
+        Antecipacao: {
+            /** Parcelas */
+            parcelas: number;
+            /** Data */
+            data?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos?: number | null;
         };
         /**
          * CampoEmConflito
@@ -1389,6 +1462,28 @@ export interface components {
             ranking: components["schemas"]["Ranking"];
             fechamento: components["schemas"]["Fechamento"] | null;
         };
+        /**
+         * LimiteDoCartao
+         * @description Sem `limite_centavos` o cartão não mostra limite, mas o comprometido continua a conta.
+         */
+        LimiteDoCartao: {
+            /** Limite Centavos */
+            limite_centavos: number | null;
+            /** Fatura Aberta Centavos */
+            fatura_aberta_centavos: number;
+            /** Faturas Fechadas Centavos */
+            faturas_fechadas_centavos: number;
+            /** Parcelas Futuras Centavos */
+            parcelas_futuras_centavos: number;
+            /** Comprometido Centavos */
+            comprometido_centavos: number;
+            /** Disponivel Centavos */
+            disponivel_centavos: number | null;
+            /** Parcelamentos */
+            parcelamentos: components["schemas"]["ParcelamentoEmAndamento"][];
+            /** Proximos Meses */
+            proximos_meses: components["schemas"]["MesDoLimite"][];
+        };
         /** LinhaDaComparacao */
         LinhaDaComparacao: {
             /** Mes Centavos */
@@ -1416,6 +1511,23 @@ export interface components {
         Lote: {
             /** Acoes */
             acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoCriarParcelamento"])[];
+        };
+        /**
+         * MesDoLimite
+         * @description Quanto do comprometido se libera quando as faturas que vencem no mês forem pagas.
+         */
+        MesDoLimite: {
+            /**
+             * Mes
+             * Format: date
+             */
+            mes: string;
+            /** Fatura Centavos */
+            fatura_centavos: number;
+            /** Parcelas Centavos */
+            parcelas_centavos: number;
+            /** Libera Centavos */
+            libera_centavos: number;
         };
         /** ModeloPadrao */
         ModeloPadrao: {
@@ -1755,6 +1867,27 @@ export interface components {
              */
             alterado_em: string;
         };
+        /** ParcelamentoEmAndamento */
+        ParcelamentoEmAndamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Descricao */
+            descricao: string;
+            /** Parcelas */
+            parcelas: number;
+            /** Parcelas Restantes */
+            parcelas_restantes: number;
+            /** Restante Centavos */
+            restante_centavos: number;
+            /**
+             * Fim Previsto
+             * Format: date
+             */
+            fim_previsto: string;
+        };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
             /**
@@ -1790,6 +1923,16 @@ export interface components {
              * @default 0
              */
             ajustes_de_fatura_centavos: number;
+        };
+        /**
+         * Quitacao
+         * @description O pagamento de uma vez de tudo o que falta.
+         */
+        Quitacao: {
+            /** Data */
+            data?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos?: number | null;
         };
         /**
          * Ranking
@@ -3152,6 +3295,37 @@ export interface operations {
             };
         };
     };
+    ler_limite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimiteDoCartao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ler_modelo_padrao: {
         parameters: {
             query?: never;
@@ -3640,6 +3814,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Parcelamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    antecipar_parcelas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Antecipacao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quitar_parcelamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Quitacao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lancamento"][];
                 };
             };
             /** @description Validation Error */
