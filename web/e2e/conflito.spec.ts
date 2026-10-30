@@ -127,7 +127,7 @@ test("a exclusão vence a edição, com aviso e 'Lançar de novo'", async ({ pag
   const minha = linha(page, descricao);
   await expect(minha).toContainText("Fulana excluiu este lançamento; sua alteração não foi salva.");
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toContainText("1 excluído pela outra pessoa");
+  await expect(page.getByTestId("nao-enviados")).toContainText("1 excluído por Fulana");
   await aba(page, "Histórico");
   await minha.getByRole("button", { name: `Lançar de novo ${descricao}` }).click();
 

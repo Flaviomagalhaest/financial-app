@@ -3,7 +3,7 @@ import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresent
 import { dataPorExtenso } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
-import { confirmarPrevisto, useCadastro, type Ajustes, type LancamentoNaTela } from "../dados";
+import { confirmarPrevisto, useCadastro, usePessoas, type Ajustes, type LancamentoNaTela } from "../dados";
 
 type Props = {
   /** As contas da semana da leitura da Hoje, com a fila por cima; `null` enquanto não há resposta, nem guardada. */
@@ -16,6 +16,7 @@ type Props = {
  */
 export function ContasDaSemana({ lancamentos }: Props) {
   const { contas, contasECartoes, categorias } = useCadastro();
+  const { nomeDe } = usePessoas();
   const [ajustando, setAjustando] = useState<{ id: string } & Required<Ajustes> | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
@@ -29,7 +30,11 @@ export function ContasDaSemana({ lancamentos }: Props) {
       setAjustando((aberto) => (aberto?.id === l.id ? null : aberto));
       // Já confirmado com outros valores: a decisão é campo a campo, na tela de conflito.
       if (naFila?.conflito) window.location.hash = `#/conflito/${l.id}`;
-      else if (naFila?.exclusao) setErro("A outra pessoa excluiu este lançamento.");
+      else if (naFila?.exclusao) {
+        const { por_voce, excluido_por } = naFila.exclusao;
+        const quem = por_voce ? "Você" : nomeDe(excluido_por);
+        setErro(`${quem[0].toUpperCase()}${quem.slice(1)} excluiu este lançamento.`);
+      }
     } catch {
       setErro("Não foi possível guardar a confirmação no aparelho.");
     } finally {
