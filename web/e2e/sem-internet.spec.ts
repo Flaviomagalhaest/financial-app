@@ -291,3 +291,36 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   await expect(editado).toContainText("− R$ 0,19");
   await expect(excluido).toHaveCount(0);
 });
+
+test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com ⏳ e, ao enviar, fica igual ao do servidor", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await lancar(page, { teclas: ["1", "00"], conta, categoria: mercado, descricao: `Enviado ${s}` });
+  const saldo = () => page.getByRole("listitem").filter({ hasText: conta });
+  const verSaldo = async () => {
+    await aba(page, "Hoje");
+    await page.getByRole("link", { name: "Contas e categorias" }).click();
+  };
+  await verSaldo();
+  await expect(saldo()).toContainText("R$ 1,00");
+  await expect(saldo()).not.toContainText("⏳");
+
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["4", "5", "00"], conta, categoria: mercado, descricao: `Padaria ${s}` });
+  await verSaldo();
+  await expect(saldo()).toContainText("R$ 46,00");
+  await expect(saldo()).toContainText("⏳");
+
+  await aba(page, "Histórico");
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await page.getByRole("button", { name: `Excluir Enviado ${s}` }).click();
+  await verSaldo();
+  await expect(saldo()).toContainText("R$ 45,00");
+  await expect(saldo()).not.toContainText("R$ 46,00");
+
+  await context.setOffline(false);
+  await expect(saldo()).not.toContainText("⏳");
+  await expect(saldo()).toContainText("R$ 45,00");
+  await page.reload();
+  await expect(saldo()).toContainText("R$ 45,00");
+  await expect(saldo()).not.toContainText("⏳");
+});

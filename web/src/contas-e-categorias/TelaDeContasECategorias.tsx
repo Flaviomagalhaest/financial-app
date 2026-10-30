@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
-import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta } from "../dados";
+import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta, type ContaNaTela } from "../dados";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 
 const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: "Carteira" } as const;
@@ -228,7 +228,7 @@ function LinhaDeConta({
   conta,
   aoSalvar,
 }: {
-  conta: Conta;
+  conta: ContaNaTela;
   aoSalvar: (conta: Conta, mudanca: Partial<Conta>) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
@@ -280,7 +280,10 @@ function LinhaDeConta({
           {conta.nome}
           {conta.arquivada && " (arquivada)"}
         </span>
-        <span>{formatarCentavos(conta.saldo_centavos)}</span>
+        <span>
+          {formatarCentavos(conta.saldo_centavos)}
+          {conta.saldoNaoEnviado && " ⏳"}
+        </span>
       </div>
       <div className="acoes">
         <button

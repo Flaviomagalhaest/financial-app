@@ -32,6 +32,7 @@ import {
   LISTA,
   type Remessa,
 } from "./fila";
+import { saldoNoAparelho } from "./saldo";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
@@ -73,6 +74,8 @@ export type LancamentoNaTela = NovoLancamento & {
   /** A outra pessoa excluiu: a tela mostra a mudança que não foi salva, para "Lançar de novo". */
   exclusao?: Exclusao;
 };
+
+const SEM_CONTAS: Conta[] = [];
 
 const LEITURAS = {
   "/api/lancamentos": () => api.GET("/api/lancamentos"),
@@ -216,6 +219,23 @@ export function useLancamentos() {
   return { lancamentos, atualizadoEm, semDados };
 }
 
+/** A conta com o saldo que o aparelho mostra: o do servidor mais os não enviados (ticket 81). */
+export type ContaNaTela = Conta & { saldoNaoEnviado: boolean };
+
+/** As contas com o saldo do aparelho; toda tela que mostra saldo passa por aqui. */
+function useComSaldoDoAparelho(contas: Conta[]): ContaNaTela[] {
+  const { dados } = useResposta(LISTA);
+  const fila = useFila();
+  return useMemo(() => {
+    const doServidor = new Map((dados ?? []).map((l) => [l.id, l]));
+    const naTelaPorId = new Map(naTela(dados ?? [], fila).map((l) => [l.id, l]));
+    return contas.map((conta) => {
+      const { centavos, naoEnviado } = saldoNoAparelho(conta, doServidor, naTelaPorId, fila);
+      return { ...conta, saldo_centavos: centavos, saldoNaoEnviado: naoEnviado };
+    });
+  }, [contas, dados, fila]);
+}
+
 /**
  * Contas, cartões e categorias do casal; `carregado` quando há resposta do servidor, nova ou
  * guardada. Os cartões não arquivados (titulares e adicionais) vêm à parte, e `contasECartoes`
@@ -228,10 +248,11 @@ export function useCadastro() {
   const recarregar = useCallback(async () => {
     await Promise.all([contas.buscar(), categorias.buscar()]);
   }, [contas.buscar, categorias.buscar]);
+  const contasNaTela = useComSaldoDoAparelho(contas.dados ?? SEM_CONTAS);
   return {
-    contas: contas.dados ?? [],
+    contas: contasNaTela,
     cartoes: cartoes.dados ?? [],
-    contasECartoes: useMemo(() => [...(contas.dados ?? []), ...(cartoes.dados ?? [])], [contas.dados, cartoes.dados]),
+    contasECartoes: useMemo(() => [...contasNaTela, ...(cartoes.dados ?? [])], [contasNaTela, cartoes.dados]),
     categorias: categorias.dados ?? [],
     carregado: !!contas.dados && !!categorias.dados,
     atualizadoEm: contas.atualizadoEm ?? categorias.atualizadoEm,
@@ -293,7 +314,8 @@ export function useSugestao(): FonteDeSugestao {
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
 export function useContasComArquivadas() {
   const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
-  return { contas: dados ?? [], atualizadoEm, recarregar: buscar };
+  const contas = useComSaldoDoAparelho(dados ?? SEM_CONTAS);
+  return { contas, atualizadoEm, recarregar: buscar };
 }
 
 /** Todas as tags, arquivadas inclusive, com o id, para a tela que as configura. */
