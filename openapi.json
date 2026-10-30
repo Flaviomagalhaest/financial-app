@@ -1527,6 +1527,52 @@
         }
       }
     },
+    "/api/cartoes/{id}/limite": {
+      "get": {
+        "summary": "Ler Limite",
+        "description": "O limite do titular, com as compras do adicional dentro do comprometido.",
+        "operationId": "ler_limite",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimiteDoCartao"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/planejamento/modelo": {
       "get": {
         "summary": "Ler Modelo",
@@ -2307,6 +2353,126 @@
         }
       }
     },
+    "/api/parcelamentos/{id}/antecipacoes": {
+      "post": {
+        "summary": "Antecipar Parcelas",
+        "description": "Paga adiantado as últimas K parcelas por pagar, no dia de hoje ou em outro, pelo valor\ninformado (o desconto). Devolve as parcelas antecipadas.",
+        "operationId": "antecipar_parcelas",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Antecipacao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Lancamento"
+                  },
+                  "title": "Response Antecipar Parcelas"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/parcelamentos/{id}/quitacao": {
+      "post": {
+        "summary": "Quitar Parcelamento",
+        "description": "Paga de uma vez todas as parcelas que faltam. Devolve as parcelas quitadas.",
+        "operationId": "quitar_parcelamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Quitacao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Lancamento"
+                  },
+                  "title": "Response Quitar Parcelamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sugestoes": {
       "get": {
         "summary": "Indice De Sugestao",
@@ -2936,6 +3102,45 @@
         ],
         "title": "AlteracaoDeRecorrencia",
         "description": "Os campos da regra que mudam \"daqui para frente\", a partir da ocorrência dada: a regra\npassa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,\nsão refeitos. O que já foi realizado e os previstos de antes ficam como estão. Campo\nausente fica como está; `pessoa` vazia passa a regra para o conjunto."
+      },
+      "Antecipacao": {
+        "properties": {
+          "parcelas": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Parcelas"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "valor_total_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Total Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parcelas"
+        ],
+        "title": "Antecipacao",
+        "description": "O pagamento adiantado das últimas parcelas que ainda não foram pagas."
       },
       "AvisoDeRealizadas": {
         "properties": {
@@ -3969,6 +4174,75 @@
         ],
         "title": "Lancamento"
       },
+      "LimiteDoCartao": {
+        "properties": {
+          "limite_centavos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limite Centavos"
+          },
+          "fatura_aberta_centavos": {
+            "type": "integer",
+            "title": "Fatura Aberta Centavos"
+          },
+          "faturas_fechadas_centavos": {
+            "type": "integer",
+            "title": "Faturas Fechadas Centavos"
+          },
+          "parcelas_futuras_centavos": {
+            "type": "integer",
+            "title": "Parcelas Futuras Centavos"
+          },
+          "comprometido_centavos": {
+            "type": "integer",
+            "title": "Comprometido Centavos"
+          },
+          "disponivel_centavos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disponivel Centavos"
+          },
+          "parcelamentos": {
+            "items": {
+              "$ref": "#/components/schemas/ParcelamentoEmAndamento"
+            },
+            "type": "array",
+            "title": "Parcelamentos"
+          },
+          "proximos_meses": {
+            "items": {
+              "$ref": "#/components/schemas/MesDoLimite"
+            },
+            "type": "array",
+            "title": "Proximos Meses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limite_centavos",
+          "fatura_aberta_centavos",
+          "faturas_fechadas_centavos",
+          "parcelas_futuras_centavos",
+          "comprometido_centavos",
+          "disponivel_centavos",
+          "parcelamentos",
+          "proximos_meses"
+        ],
+        "title": "LimiteDoCartao",
+        "description": "Sem `limite_centavos` o cartão não mostra limite, mas o comprometido continua a conta."
+      },
       "Lote": {
         "properties": {
           "acoes": {
@@ -4008,6 +4282,36 @@
           "acoes"
         ],
         "title": "Lote"
+      },
+      "MesDoLimite": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "format": "date",
+            "title": "Mes"
+          },
+          "fatura_centavos": {
+            "type": "integer",
+            "title": "Fatura Centavos"
+          },
+          "parcelas_centavos": {
+            "type": "integer",
+            "title": "Parcelas Centavos"
+          },
+          "libera_centavos": {
+            "type": "integer",
+            "title": "Libera Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "fatura_centavos",
+          "parcelas_centavos",
+          "libera_centavos"
+        ],
+        "title": "MesDoLimite",
+        "description": "Quanto do comprometido se libera quando as faturas que vencem no mês forem pagas."
       },
       "ModeloPadrao": {
         "properties": {
@@ -4907,6 +5211,46 @@
         ],
         "title": "Parcelamento"
       },
+      "ParcelamentoEmAndamento": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "parcelas": {
+            "type": "integer",
+            "title": "Parcelas"
+          },
+          "parcelas_restantes": {
+            "type": "integer",
+            "title": "Parcelas Restantes"
+          },
+          "restante_centavos": {
+            "type": "integer",
+            "title": "Restante Centavos"
+          },
+          "fim_previsto": {
+            "type": "string",
+            "format": "date",
+            "title": "Fim Previsto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "descricao",
+          "parcelas",
+          "parcelas_restantes",
+          "restante_centavos",
+          "fim_previsto"
+        ],
+        "title": "ParcelamentoEmAndamento"
+      },
       "PedidoDeExportacao": {
         "properties": {
           "formato": {
@@ -4985,6 +5329,37 @@
           "ainda_da_para_gastar_centavos"
         ],
         "title": "Planejamento"
+      },
+      "Quitacao": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "valor_total_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Total Centavos"
+          }
+        },
+        "type": "object",
+        "title": "Quitacao",
+        "description": "O pagamento de uma vez de tudo o que falta."
       },
       "Recorrencia": {
         "properties": {

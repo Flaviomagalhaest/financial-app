@@ -104,6 +104,10 @@ O "alterado à mão" da parcela: valor, data, conta ou fatura que uma pessoa mud
 Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo.
 _Avoid_: regerar, recalcular o parcelamento
 
+**Antecipação**:
+Pagamento adiantado das últimas parcelas de um parcelamento que ainda não foram pagas, no dia de hoje ou em outro, por um valor editável (o desconto é a diferença para o valor das parcelas). As parcelas viram realizadas na data do pagamento, e no cartão contam na fatura em que foi paga, por troca à mão. **Quitação** é a antecipação de todas as parcelas que faltam.
+_Avoid_: adiantamento, amortização
+
 **Automático**:
 Recorrência de valor fixo ou parcelamento cujos previstos viram realizados sozinhos na data, sem confirmação; a parcela no cartão, que tem a data da compra, vira realizada quando entra na fatura aberta (a fatura de antes fechou).
 _Avoid_: débito automático, efetivação automática

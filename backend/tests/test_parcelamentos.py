@@ -372,6 +372,189 @@ def test_cartao_sem_dia_de_fechamento_recusa_o_parcelamento_sem_gravar_nada(
     assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
 
 
+def total(casal: Casal, id: str, situacao: str | None = None) -> int:
+    return sum(
+        l["valor_centavos"]
+        for l in parcelas(casal, id)
+        if situacao is None or l["situacao"] == situacao
+    )
+
+
+def test_antecipar_parcelas_do_fim_com_desconto_no_boleto(casal: Casal):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], parcelas=4, valor_total_centavos=400000)
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    assert total(casal, novo["id"]) == 400000
+
+    # As duas últimas (R$ 2.000,00) saem por R$ 1.800,00, pagas hoje.
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/parcelamentos/{novo['id']}/antecipacoes",
+        json={"parcelas": 2, "valor_total_centavos": 180001},
+    )
+
+    assert resposta.status_code == 200
+    assert [(l["parcela"], l["valor_centavos"]) for l in resposta.json()] == [
+        (3, 90001),
+        (4, 90000),
+    ]
+    assert [
+        (l["parcela"], l["valor_centavos"], l["situacao"], l["data"], l["mes"])
+        for l in parcelas(casal, novo["id"])
+    ] == [
+        (1, 100000, "previsto", "2026-11-10", "2026-11-01"),
+        (2, 100000, "previsto", "2026-12-10", "2026-12-01"),
+        (3, 90001, "realizado", "2026-10-28", "2026-10-01"),
+        (4, 90000, "realizado", "2026-10-28", "2026-10-01"),
+    ]
+    # Antes 400.000; depois 200.000 por vir e 180.001 pagos (o desconto de 19.999 abate).
+    assert total(casal, novo["id"]) == 200000 + 180001
+    assert total(casal, novo["id"], "previsto") == 200000
+    assert total(casal, novo["id"], "realizado") == 180001
+    [saldo] = [c["saldo_centavos"] for c in casal.pedir("flavio", "GET", "/api/contas").json()]
+    assert saldo == -180001
+
+
+def test_antecipar_na_outra_data_e_no_cartao_conta_na_fatura_em_que_foi_paga(casal: Casal):
+    nubank, eletro = cartao(casal), casal.categoria("Eletrodomésticos")
+    novo = parcelamento(
+        nubank, [eletro], data="2026-10-26", parcelas=4, valor_total_centavos=400000
+    )
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+
+    # Pagas em 26/10, depois do fechamento de 25/10: contam na fatura de novembro, com a 1ª.
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/parcelamentos/{novo['id']}/antecipacoes",
+        json={"parcelas": 2, "data": "2026-10-26", "valor_total_centavos": 150000},
+    )
+
+    assert resposta.status_code == 200
+    assert [
+        (l["parcela"], l["valor_centavos"], l["situacao"], l["fatura_mes"])
+        for l in parcelas(casal, novo["id"])
+    ] == [
+        (1, 100000, "realizado", "2026-11-01"),
+        (2, 100000, "previsto", "2026-12-01"),
+        (3, 75000, "realizado", "2026-11-01"),
+        (4, 75000, "realizado", "2026-11-01"),
+    ]
+    faturas = casal.pedir("flavio", "GET", f"/api/cartoes/{nubank}/faturas").json()
+    assert [(f["mes"], f["compras_centavos"]) for f in faturas] == [
+        ("2026-11-01", 250000),
+        ("2026-12-01", 100000),
+        ("2027-01-01", 0),
+        ("2027-02-01", 0),
+    ]
+    # A troca de fatura fica à mão: redistribuir pelas datas do cartão não a desfaz.
+    casal.pedir(
+        "flavio",
+        "PUT",
+        f"/api/cartoes/{nubank}",
+        json={"nome": "Nubank", "dia_fechamento": 20, "dia_vencimento": 5},
+    )
+    assert [l["fatura_mes"] for l in parcelas(casal, novo["id"])][2:] == [
+        "2026-11-01",
+        "2026-11-01",
+    ]
+
+
+def test_quitar_o_restante_de_uma_vez(casal: Casal):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], parcelas=4, valor_total_centavos=400000)
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    primeira = parcelas(casal, novo["id"])[0]
+    casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/lancamentos/{primeira['id']}/confirmar",
+        json={"versao": primeira["versao"]},
+    )
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/parcelamentos/{novo['id']}/quitacao",
+        json={"valor_total_centavos": 270000},
+    )
+
+    assert resposta.status_code == 200
+    assert [(l["parcela"], l["valor_centavos"]) for l in resposta.json()] == [
+        (2, 90000),
+        (3, 90000),
+        (4, 90000),
+    ]
+    assert total(casal, novo["id"], "previsto") == 0
+    assert total(casal, novo["id"], "realizado") == 100000 + 270000
+    # Sem valor informado, quita pelo que faltava.
+    outro = parcelamento(conta, [emprestimo], parcelas=3, valor_total_centavos=300000)
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=outro)
+    sem_valor = casal.pedir("flavio", "POST", f"/api/parcelamentos/{outro['id']}/quitacao", json={})
+    assert sem_valor.status_code == 200
+    assert total(casal, outro["id"], "realizado") == 300000
+
+
+@pytest.mark.parametrize(
+    "corpo",
+    [
+        {"parcelas": 4},  # só há 3 previstas
+        {"parcelas": 0},
+        {"parcelas": 1, "valor_total_centavos": 0},
+        {"parcelas": 1, "data": "2026-10-29"},  # data futura
+    ],
+)
+def test_antecipacao_invalida_e_recusada_sem_mexer_nas_parcelas(casal: Casal, corpo):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo])
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    antes = parcelas(casal, novo["id"])
+
+    resposta = casal.pedir(
+        "flavio", "POST", f"/api/parcelamentos/{novo['id']}/antecipacoes", json=corpo
+    )
+
+    assert resposta.status_code == 422
+    assert parcelas(casal, novo["id"]) == antes
+
+
+def test_antecipar_parcelamento_que_nao_existe_e_404(casal: Casal):
+    resposta = casal.pedir(
+        "flavio", "POST", f"/api/parcelamentos/{uuid4()}/antecipacoes", json={"parcelas": 1}
+    )
+    assert resposta.status_code == 404
+
+
+def test_quitar_no_cartao_junta_o_restante_na_fatura_do_pagamento_e_a_tarefa_diaria_nao_mexe(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    nubank, eletro = cartao(casal), casal.categoria("Eletrodomésticos")
+    novo = parcelamento(
+        nubank, [eletro], data="2026-10-26", parcelas=4, valor_total_centavos=400000
+    )
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+
+    resposta = casal.pedir("flavio", "POST", f"/api/parcelamentos/{novo['id']}/quitacao", json={})
+
+    assert resposta.status_code == 200
+    assert [(l["parcela"], l["valor_centavos"]) for l in resposta.json()] == [
+        (2, 100000),
+        (3, 100000),
+        (4, 100000),
+    ]
+    faturas = casal.pedir("flavio", "GET", f"/api/cartoes/{nubank}/faturas").json()
+    assert [(f["mes"], f["compras_centavos"]) for f in faturas if f["compras_centavos"]] == [
+        ("2026-11-01", 400000)
+    ]
+    # Meses depois a tarefa diária não tem o que realizar nem desfaz o pagamento.
+    no_dia(monkeypatch, "2027-03-01")
+    fazer_tarefa_diaria(database_url)
+    assert [(l["situacao"], l["valor_centavos"]) for l in parcelas(casal, novo["id"])] == [
+        ("realizado", 100000)
+    ] * 4
+
+
 def mudar(casal: Casal, id: str, quem: str = "flavio", **campos):
     return casal.pedir(quem, "PATCH", f"/api/parcelamentos/{id}", json=campos)
 
@@ -840,3 +1023,24 @@ def test_gerar_as_parcelas_de_um_parcelamento_excluido_no_meio_nao_falha(
     from app import parcelamentos
 
     parcelamentos.gerar_as_parcelas(database_url, uuid4())
+
+
+def test_a_parcela_antecipada_conta_como_editada_a_mao_e_a_correcao_a_preserva(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", parcelas=4)
+    antecipada = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/parcelamentos/{novo['id']}/antecipacoes",
+        json={"parcelas": 1, "valor_total_centavos": 20000},
+    )
+    assert antecipada.status_code == 200
+    assert antecipada.json()[0]["alterada_a_mao"] is True
+
+    assert mudar(casal, novo["id"], valor_total_centavos=200000).status_code == 200
+    assert [(p, v, s) for p, v, _, s in valores(casal, novo["id"])] == [
+        (1, 50000, "previsto"),
+        (2, 50000, "previsto"),
+        (3, 50000, "previsto"),
+        (4, 20000, "realizado"),
+    ]
+    assert mudar(casal, novo["id"], parcelas=3).status_code == 422
