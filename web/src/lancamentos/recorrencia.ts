@@ -2,7 +2,7 @@ import type { NovaRecorrencia } from "../dados";
 import { dataPorExtenso } from "./datas";
 
 /** O "Repete? Recorrente" da folha de detalhes, como a tela o edita. */
-export type Repeticao = {
+export type RecorrenciaNaFolha = {
   aCada: number;
   unidade: NovaRecorrencia["unidade"];
   fim: "nunca" | "data" | "vezes";
@@ -15,10 +15,10 @@ export type Repeticao = {
 };
 
 /** Todo mês, sem fim, valor estimado: a luz, o salário. */
-export const REPETICAO_PADRAO: Repeticao = { aCada: 1, unidade: "meses", fim: "nunca", ate: "", vezes: 2, tipoDoValor: "estimado", automatico: false };
+export const RECORRENCIA_PADRAO: RecorrenciaNaFolha = { aCada: 1, unidade: "meses", fim: "nunca", ate: "", vezes: 2, tipoDoValor: "estimado", automatico: false };
 
-/** Os campos da regra que a repetição dá, a partir da data da primeira ocorrência. */
-export function regraDa(r: Repeticao, inicio: string) {
+/** Os campos da regra que a folha dá, a partir da data da primeira ocorrência. */
+export function regraDa(r: RecorrenciaNaFolha, inicio: string) {
   return {
     inicio,
     a_cada: r.aCada,
@@ -31,7 +31,7 @@ export function regraDa(r: Repeticao, inicio: string) {
 }
 
 /** O que impede salvar a regra, na voz da tela; `null` quando está tudo certo. */
-export function problemaDa(r: Repeticao, inicio: string): string | null {
+export function problemaDa(r: RecorrenciaNaFolha, inicio: string): string | null {
   if (!Number.isInteger(r.aCada) || r.aCada < 1) return "Diga a cada quantas semanas ou meses.";
   if (r.fim === "vezes" && (!Number.isInteger(r.vezes) || r.vezes < 1)) return "Diga quantas vezes.";
   if (r.fim === "data" && !r.ate) return "Escolha a última data.";
@@ -39,21 +39,16 @@ export function problemaDa(r: Repeticao, inicio: string): string | null {
   return null;
 }
 
+/** "toda semana", "a cada 3 meses", "todo ano": anual é a cada 12 meses. */
+function calendario(n: number, unidade: NovaRecorrencia["unidade"]): string {
+  if (unidade === "semanas") return n === 1 ? "toda semana" : `a cada ${n} semanas`;
+  if (n === 12) return "todo ano";
+  if (n % 12 === 0) return `a cada ${n / 12} anos`;
+  return n === 1 ? "todo mês" : `a cada ${n} meses`;
+}
+
 /** "todo mês", "a cada 2 semanas, 3 vezes", "todo ano, até 10/12/2027, automático". */
 export function rotuloDaRecorrencia(regra: Pick<NovaRecorrencia, "a_cada" | "unidade" | "ate" | "vezes" | "automatico">): string {
-  const { a_cada: n, unidade } = regra;
-  const calendario =
-    unidade === "semanas"
-      ? n === 1
-        ? "toda semana"
-        : `a cada ${n} semanas`
-      : n % 12 === 0
-        ? n === 12
-          ? "todo ano"
-          : `a cada ${n / 12} anos`
-        : n === 1
-          ? "todo mês"
-          : `a cada ${n} meses`;
   const fim = regra.ate ? `até ${dataPorExtenso(regra.ate)}` : regra.vezes ? (regra.vezes === 1 ? "1 vez" : `${regra.vezes} vezes`) : "";
-  return [calendario, fim, regra.automatico ? "automático" : ""].filter(Boolean).join(", ");
+  return [calendario(regra.a_cada, regra.unidade), fim, regra.automatico ? "automático" : ""].filter(Boolean).join(", ");
 }

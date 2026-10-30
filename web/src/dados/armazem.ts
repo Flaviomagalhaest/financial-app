@@ -30,7 +30,7 @@ export interface ItemDaFila {
   revisao: number;
   /** Motivo da recusa do servidor; recusado não sobe até ser corrigido ou descartado. */
   recusa?: string;
-  /** No criar enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
+  /** No criar (ou na recorrência) enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
   talvezNoServidor?: number;
   /**
    * A versão do servidor sobre a qual a mudança foi feita: a edição sobe só os campos que

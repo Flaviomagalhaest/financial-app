@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { chaveDaTag, type LancamentoNaTela, type Pessoa } from "../dados";
 import { EscolhaDaData } from "./EscolhaDaData";
-import { REPETICAO_PADRAO, type Repeticao } from "./recorrencia";
+import { RECORRENCIA_PADRAO, type RecorrenciaNaFolha } from "./recorrencia";
 
 type Situacao = LancamentoNaTela["situacao"];
 
@@ -30,7 +30,7 @@ type Props = {
    * Só no lançamento novo: "Repete?". Sem repetição (`null`) é uma vez só; com ela, salvar cria a
    * recorrência que começa na data, e situação e fatura ficam por conta da regra.
    */
-  repeticao?: { valor: Repeticao | null; problema: string | null; onMudar: (repeticao: Repeticao | null) => void };
+  recorrencia?: { valor: RecorrenciaNaFolha | null; problema: string | null; onMudar: (recorrencia: RecorrenciaNaFolha | null) => void };
   onFechar: () => void;
 };
 
@@ -49,8 +49,8 @@ export function FolhaDeDetalhes(props: Props) {
   }, []);
 
   const marcada = (tag: string) => props.tags.some((t) => mesmaTag(t, tag));
-  const repeticao = props.repeticao?.valor ?? null;
-  const mudarRepeticao = (mudanca: Partial<Repeticao>) => repeticao && props.repeticao?.onMudar({ ...repeticao, ...mudanca });
+  const recorrencia = props.recorrencia?.valor ?? null;
+  const mudarRecorrencia = (mudanca: Partial<RecorrenciaNaFolha>) => recorrencia && props.recorrencia?.onMudar({ ...recorrencia, ...mudanca });
   // As marcadas vêm primeiro: a fileira rola de lado, e a tag recém-criada fica à vista.
   const opcoes = [...props.tags, ...props.opcoesDeTags.filter((o) => !marcada(o))];
 
@@ -136,9 +136,9 @@ export function FolhaDeDetalhes(props: Props) {
         ))}
       </div>
 
-      <h4>{repeticao ? "Primeira vez" : "Data"}</h4>
+      <h4>{recorrencia ? "Primeira vez" : "Data"}</h4>
       <EscolhaDaData data={props.data} onMudar={props.onData} />
-      {!repeticao && (
+      {!recorrencia && (
         <div className="alternancia" role="group" aria-label="Situação">
           {(["realizado", "previsto"] as const).map((s) => (
             <button type="button" key={s} className={props.situacao === s ? "" : "secundario"} aria-pressed={props.situacao === s} onClick={() => props.onSituacao(s)}>
@@ -148,7 +148,7 @@ export function FolhaDeDetalhes(props: Props) {
         </div>
       )}
 
-      {props.fatura && !repeticao && (
+      {props.fatura && !recorrencia && (
         <>
           <h4>Fatura</h4>
           <div className="alternancia quatro" role="group" aria-label="Fatura">
@@ -167,32 +167,32 @@ export function FolhaDeDetalhes(props: Props) {
         </>
       )}
 
-      {props.repeticao && (
+      {props.recorrencia && (
         <>
           <h4>Repete?</h4>
           <div className="alternancia tres" role="group" aria-label="Repete?">
-            <button type="button" className={repeticao ? "secundario" : ""} aria-pressed={!repeticao} onClick={() => props.repeticao?.onMudar(null)}>
+            <button type="button" className={recorrencia ? "secundario" : ""} aria-pressed={!recorrencia} onClick={() => props.recorrencia?.onMudar(null)}>
               Uma vez
             </button>
             <button type="button" className="secundario" aria-pressed="false" disabled>
               Parcelado
             </button>
-            <button type="button" className={repeticao ? "" : "secundario"} aria-pressed={!!repeticao} onClick={() => props.repeticao?.onMudar(repeticao ?? REPETICAO_PADRAO)}>
+            <button type="button" className={recorrencia ? "" : "secundario"} aria-pressed={!!recorrencia} onClick={() => props.recorrencia?.onMudar(recorrencia ?? RECORRENCIA_PADRAO)}>
               Recorrente
             </button>
           </div>
-          {!repeticao && <p className="vazio">Parcelado ainda não está disponível.</p>}
+          {!recorrencia && <p className="vazio">Parcelado ainda não está disponível.</p>}
         </>
       )}
-      {repeticao && (
+      {recorrencia && (
         <>
           <div className="linha">
             <label htmlFor="a-cada">A cada</label>
-            <input id="a-cada" type="number" inputMode="numeric" min={1} value={repeticao.aCada || ""} onChange={(e) => mudarRepeticao({ aCada: numero(e.target.value) })} />
+            <input id="a-cada" type="number" inputMode="numeric" min={1} value={recorrencia.aCada || ""} onChange={(e) => mudarRecorrencia({ aCada: numero(e.target.value) })} />
           </div>
           <div className="alternancia" role="group" aria-label="Unidade">
             {(["semanas", "meses"] as const).map((u) => (
-              <button type="button" key={u} className={repeticao.unidade === u ? "" : "secundario"} aria-pressed={repeticao.unidade === u} onClick={() => mudarRepeticao({ unidade: u })}>
+              <button type="button" key={u} className={recorrencia.unidade === u ? "" : "secundario"} aria-pressed={recorrencia.unidade === u} onClick={() => mudarRecorrencia({ unidade: u })}>
                 {u === "semanas" ? "Semanas" : "Meses"}
               </button>
             ))}
@@ -208,20 +208,20 @@ export function FolhaDeDetalhes(props: Props) {
                 ["vezes", "Depois de"],
               ] as const
             ).map(([fim, nome]) => (
-              <button type="button" key={fim} className={repeticao.fim === fim ? "" : "secundario"} aria-pressed={repeticao.fim === fim} onClick={() => mudarRepeticao({ fim })}>
+              <button type="button" key={fim} className={recorrencia.fim === fim ? "" : "secundario"} aria-pressed={recorrencia.fim === fim} onClick={() => mudarRecorrencia({ fim })}>
                 {nome}
               </button>
             ))}
           </div>
-          {repeticao.fim === "data" && (
+          {recorrencia.fim === "data" && (
             <div className="linha">
               <label htmlFor="ate">Última data</label>
-              <input id="ate" type="date" min={props.data} value={repeticao.ate} onChange={(e) => mudarRepeticao({ ate: e.target.value })} />
+              <input id="ate" type="date" min={props.data} value={recorrencia.ate} onChange={(e) => mudarRecorrencia({ ate: e.target.value })} />
             </div>
           )}
-          {repeticao.fim === "vezes" && (
+          {recorrencia.fim === "vezes" && (
             <div className="linha">
-              <input id="vezes" type="number" inputMode="numeric" min={1} value={repeticao.vezes || ""} onChange={(e) => mudarRepeticao({ vezes: numero(e.target.value) })} />
+              <input id="vezes" type="number" inputMode="numeric" min={1} value={recorrencia.vezes || ""} onChange={(e) => mudarRecorrencia({ vezes: numero(e.target.value) })} />
               <label htmlFor="vezes">vezes</label>
             </div>
           )}
@@ -229,20 +229,20 @@ export function FolhaDeDetalhes(props: Props) {
           <h4>Valor</h4>
           <div className="alternancia" role="group" aria-label="Valor">
             {(["fixo", "estimado"] as const).map((t) => (
-              <button type="button" key={t} className={repeticao.tipoDoValor === t ? "" : "secundario"} aria-pressed={repeticao.tipoDoValor === t} onClick={() => mudarRepeticao({ tipoDoValor: t })}>
+              <button type="button" key={t} className={recorrencia.tipoDoValor === t ? "" : "secundario"} aria-pressed={recorrencia.tipoDoValor === t} onClick={() => mudarRecorrencia({ tipoDoValor: t })}>
                 {t === "fixo" ? "Fixo" : "Estimado"}
               </button>
             ))}
           </div>
-          {repeticao.tipoDoValor === "fixo" ? (
+          {recorrencia.tipoDoValor === "fixo" ? (
             <label className="caixa" htmlFor="automatico">
-              <input id="automatico" type="checkbox" checked={repeticao.automatico} onChange={(e) => mudarRepeticao({ automatico: e.target.checked })} />
+              <input id="automatico" type="checkbox" checked={recorrencia.automatico} onChange={(e) => mudarRecorrencia({ automatico: e.target.checked })} />
               Automático: vira realizado sozinho na data, sem confirmar
             </label>
           ) : (
             <p className="vazio">O estimado (a luz, o salário) sempre pede confirmação.</p>
           )}
-          {props.repeticao?.problema && <p className="erro">{props.repeticao.problema}</p>}
+          {props.recorrencia?.problema && <p className="erro">{props.recorrencia.problema}</p>}
         </>
       )}
 

@@ -71,6 +71,8 @@ test("sem internet, a recorrência fica na fila como um pedido só e sobe uma ve
   await expect(naoEnviadas.getByRole("listitem")).toHaveCount(1);
   await expect(naoEnviadas).toContainText(`Luz ${s}, todo mês, não enviado`);
   await expect(naoEnviadas).toContainText("R$ 189,90");
+  // Sem rede, o pedido nem saiu do aparelho: ainda dá para descartar.
+  await expect(naoEnviadas.getByRole("button", { name: `Descartar Luz ${s}` })).toBeVisible();
   // Os previstos são do servidor: sem internet, ainda não existem no aparelho.
   await expect(page.getByRole("listitem").filter({ hasText: `Luz ${s}` })).toHaveCount(1);
   await aba(page, "Hoje");
@@ -87,6 +89,11 @@ test("sem internet, a recorrência fica na fila como um pedido só e sobe uma ve
   await context.setOffline(false);
   await expect.poll(() => perdidas).toBe(1);
   await expect(page.getByTestId("nao-enviados")).toContainText("1 recorrência não enviada");
+  // Talvez já gravada: descartar no aparelho não tiraria os previstos do servidor.
+  await aba(page, "Histórico");
+  await expect(naoEnviadas).toContainText("talvez já esteja no servidor");
+  await expect(naoEnviadas.getByRole("button", { name: `Descartar Luz ${s}` })).toHaveCount(0);
+  await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
 

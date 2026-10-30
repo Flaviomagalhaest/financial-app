@@ -240,13 +240,22 @@ export function useLancamentos() {
   return { lancamentos, atualizadoEm, semDados };
 }
 
-/** A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. */
-export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string };
+/**
+ * A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. `podeDescartar`
+ * só quando ela com certeza não está no servidor: nunca saiu do aparelho ou foi recusada.
+ */
+export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string; podeDescartar: boolean };
 
 /** As recorrências criadas no aparelho que ainda não subiram, da mais antiga à mais nova. */
 export function useRecorrenciasNaoEnviadas(): RecorrenciaNaoEnviada[] {
   const fila = useFila();
-  return useMemo(() => fila.flatMap((item) => (item.recorrencia ? [{ ...item.recorrencia, recusa: item.recusa }] : [])), [fila]);
+  return useMemo(
+    () =>
+      fila.flatMap((item) =>
+        item.recorrencia ? [{ ...item.recorrencia, recusa: item.recusa, podeDescartar: !!item.recusa || item.talvezNoServidor === undefined }] : [],
+      ),
+    [fila],
+  );
 }
 
 /**

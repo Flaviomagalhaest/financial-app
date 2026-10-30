@@ -5,7 +5,7 @@ import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
-import { problemaDa, regraDa, rotuloDaRecorrencia, type Repeticao } from "./recorrencia";
+import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
@@ -57,7 +57,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
   // "Repete? Recorrente": salvar cria a regra, e os previstos o servidor gera ao receber.
-  const [repeticao, setRepeticao] = useState<Repeticao | null>(null);
+  const [recorrencia, setRecorrencia] = useState<RecorrenciaNaFolha | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -90,17 +90,17 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const situacao: Situacao =
     situacaoEscolhida ??
     (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
-  const problemaDaRepeticao = repeticao && problemaDa(repeticao, data);
-  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null) && !problemaDaRepeticao;
+  const problemaDaRecorrencia = recorrencia && problemaDa(recorrencia, data);
+  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null) && !problemaDaRecorrencia;
 
   // O que a folha de detalhes preencheu, numa linha; a data de hoje e o realizado são o normal e não aparecem.
   const resumo = [
     descricao.trim(),
     ...tags.map((t) => `#${t}`),
     pessoa ? nomeDe(pessoa) : "",
-    repeticao ? "" : faturaMes ? rotuloDaFatura(faturaMes) : "",
-    data === hoje() ? "" : repeticao ? `desde ${rotuloDaData(data)}` : rotuloDaData(data),
-    repeticao ? rotuloDaRecorrencia(regraDa(repeticao, data)) : situacao === "previsto" ? "previsto" : "",
+    recorrencia ? "" : faturaMes ? rotuloDaFatura(faturaMes) : "",
+    data === hoje() ? "" : recorrencia ? `desde ${rotuloDaData(data)}` : rotuloDaData(data),
+    recorrencia ? rotuloDaRecorrencia(regraDa(recorrencia, data)) : situacao === "previsto" ? "previsto" : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -176,7 +176,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setEnviando(true);
     try {
       // Vai para a fila, que sobe na hora se houver internet; sem ela, fica como não enviado.
-      if (repeticao)
+      if (recorrencia)
         await salvarRecorrencia({
           id: novoId,
           tipo,
@@ -186,7 +186,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           categoria_ids: categoriaIds,
           tags,
           pessoa,
-          ...regraDa(repeticao, data),
+          ...regraDa(recorrencia, data),
         });
       else
         await salvarLancamento(
@@ -208,7 +208,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
         );
       window.location.hash = "#/historico";
     } catch {
-      setErro(repeticao ? "Não foi possível guardar a recorrência no aparelho." : "Não foi possível guardar o lançamento no aparelho.");
+      setErro(recorrencia ? "Não foi possível guardar a recorrência no aparelho." : "Não foi possível guardar o lançamento no aparelho.");
     } finally {
       setEnviando(false);
     }
@@ -282,7 +282,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
-          repeticao={id ? undefined : { valor: repeticao, problema: problemaDaRepeticao, onMudar: setRepeticao }}
+          recorrencia={id ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, onMudar: setRecorrencia }}
           onFechar={() => setDetalhesAbertos(false)}
         />
       )}

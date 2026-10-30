@@ -244,6 +244,10 @@ async function marcarSemResposta(enviados: ItemDaFila[]) {
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       if (enviado.acao === "criar" && atual?.acao === "criar" && atual.talvezNoServidor === undefined)
         await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, base: { ...enviado.lancamento!, versao: 1 } }));
+      // A recorrência talvez gravada não se descarta mais no aparelho: os previstos viriam mesmo assim.
+      // Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
+      if (atual?.acao === "criar_recorrencia" && atual.talvezNoServidor === undefined && navigator.onLine)
+        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao }));
     }
   });
 }

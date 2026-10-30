@@ -82,11 +82,15 @@ export function ListaDeLancamentos() {
                   <p className={r.recusa ? "erro" : "vazio"}>
                     ⏳ {titulo}, {rotuloDaRecorrencia(r)}, não enviado{r.recusa ? `: ${r.recusa}` : ""}
                   </p>
-                  <div className="acoes">
-                    <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(r)}>
-                      Descartar
-                    </button>
-                  </div>
+                  {r.podeDescartar ? (
+                    <div className="acoes">
+                      <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(r)}>
+                        Descartar
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="vazio">O envio ficou sem resposta: ela talvez já esteja no servidor e sobe quando a rede voltar.</p>
+                  )}
                 </li>
               );
             })}
