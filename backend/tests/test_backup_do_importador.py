@@ -126,6 +126,12 @@ def test_historico_restaurado_tem_as_faturas_pagas_os_parcelamentos_e_os_previst
         ("2026-09-01", "aberta", "2026-09-25", 30000, 0, 0, 30000),
         ("2026-10-01", "aberta", "2026-10-25", 30000, 0, 0, 30000),
     ]
+    # O histórico pago não ocupa o limite nem sai da projeção do mês atual (ticket 58): só as
+    # parcelas que faltam da TV, nas faturas abertas.
+    limite = ler(f"/api/cartoes/{cartoes['Cartao A']['id']}/limite")
+    assert (limite["faturas_fechadas_centavos"], limite["parcelas_futuras_centavos"]) == (0, 60000)
+    projecao = {m["mes"]: m["faturas_centavos"] for m in ler("/api/futuro")["proximos_meses"]}
+    assert (projecao["2026-09-01"], projecao["2026-10-01"]) == (30000, 30000)
     [cafe] = ler(f"/api/cartoes/{cartoes['Cartao B']['id']}/faturas")
     assert (cafe["mes"], cafe["situacao"], cafe["compras_centavos"]) == ("2026-06-01", "paga", 900)
 
