@@ -277,6 +277,14 @@ _Avoid_: migração, corte, go-live
 A planilha que o importador do Mobills escreve a cada rodada com o que ele não decide sozinho (a conta e os cartões, o de-para, os pares prováveis, as parcelas) e as abas Conferência e Faturas; o dono a edita e roda de novo, e o que ele editou vale na rodada seguinte.
 _Avoid_: relatório, planilha de importação
 
+**Fatura importada**:
+Fatura que veio do export de faturas do Mobills: nasce com o mês da fatura do rótulo do arquivo, sem fechamento nem vencimento, e conta como fechada e paga sem pagamento de fatura. Dar as datas a ela (na virada, à que ainda está aberta) a faz seguir as regras das outras faturas.
+_Avoid_: fatura antiga, fatura do histórico
+
+**Pendente avulso**:
+Pendente do Mobills que não é parcela: a ocorrência de uma recorrência de lá, sem a regra. Os do mês do export (o último mês com lançamento pago no geral) e de antes ficam fora da importação; os de depois entram como previstos avulsos, que o casal apaga quando cadastrar a recorrência no app. O pendente que casou com uma linha de fatura não é avulso: a fatura prova que a compra existiu.
+_Avoid_: recorrência importada
+
 **Par provável**:
 Uma linha de fatura e uma do geral que sobraram do cruzamento no mesmo mês e são as únicas com aquele valor; viram uma compra só quando o dono as junta na planilha de revisão, e até lá cada uma entra sozinha.
 _Avoid_: par duvidoso, casamento parcial

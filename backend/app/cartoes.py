@@ -59,8 +59,8 @@ class Fatura(BaseModel):
     mes: date
     fechamento: date | None
     vencimento: date | None
-    # Fechada a partir do dia do fechamento; a importada, sem datas, nasce fechada. Paga quando
-    # fechada e quitada pelos pagamentos realizados.
+    # Fechada a partir do dia do fechamento. Paga quando fechada e quitada pelos pagamentos
+    # realizados; a importada do Mobills, sem datas, nasce paga sem pagamento de fatura.
     situacao: Literal["aberta", "fechada", "paga"]
     # As compras da fatura (despesas menos estornos e receitas, previstas e realizadas).
     compras_centavos: int
@@ -243,9 +243,17 @@ def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[
         compras_da_fatura, pago = compras.get(mes_da_fatura, 0), pagos.get(mes_da_fatura, 0)
         total = compras_da_fatura + ajuste
         devido = saldo_anterior + total
-        a_pagar = max(devido - pago, 0)
+        # A importada já foi paga no Mobills, e o pagamento não veio no histórico.
+        importada = faturas.importada(fechamento, vencimento)
+        a_pagar = 0 if importada else max(devido - pago, 0)
         aberta = faturas.aberta(fechamento, dia)
-        situacao = "aberta" if aberta else "paga" if devido > 0 and a_pagar == 0 else "fechada"
+        situacao = (
+            "aberta"
+            if aberta
+            else "paga"
+            if importada or (devido > 0 and a_pagar == 0)
+            else "fechada"
+        )
         if not mes or mes == mes_da_fatura:
             resultado.append(
                 Fatura(

@@ -126,6 +126,13 @@ def aberta(fechamento: date | None, hoje: date) -> bool:
     return fechamento is not None and fechamento > hoje
 
 
+def importada(fechamento: date | None, vencimento: date | None) -> bool:
+    """A fatura importada do Mobills não tem datas: nasce fechada e paga, sem pagamento de
+    fatura (`## Answer` do ticket 18). A fatura escolhida à mão num cartão sem os dias padrão
+    também nasce sem datas, e conta como paga até alguém dar as datas a ela."""
+    return fechamento is None and vencimento is None
+
+
 def gravar_datas(conn, titular: Titular, mes: date, fechamento, vencimento) -> None:
     conn.execute(
         "UPDATE faturas SET fechamento = %s, vencimento = %s WHERE cartao_id = %s AND mes = %s",

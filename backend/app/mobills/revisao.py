@@ -51,6 +51,7 @@ class Decisoes:
     cartoes: dict[str, dict] = field(default_factory=dict)
     de_para: dict[de_para.Chave, tuple[str, str]] = field(default_factory=dict)  # papel e nome
     cartao_dos_parcelamentos: dict[tuple, str] = field(default_factory=dict)
+    cartao_dos_ajustes: dict[tuple[str, int], str] = field(default_factory=dict)  # mês e valor
     mobills_por_mes: dict[str, int] = field(default_factory=dict)
     mobills_por_fatura: dict[tuple[str, str], int] = field(default_factory=dict)
 
@@ -94,6 +95,9 @@ def ler_decisoes(caminho: Path) -> Decisoes:
             texto(linha.get("Primeiro mês")),
         )
         decisoes.cartao_dos_parcelamentos[chave] = texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
+    for linha in _linhas(livro, "Ajustes sem cartão"):
+        chave = (texto(linha.get("Mês")), valor(linha, "Valor"))
+        decisoes.cartao_dos_ajustes[chave] = texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
     for linha in _linhas(livro, "Conferência"):
         if (do_mobills := valor(linha, "Mobills")) is not None:
             decisoes.mobills_por_mes[texto(linha.get("Mês"))] = do_mobills
@@ -311,6 +315,14 @@ def aba_parcelamentos_sem_cartao(
     return cabecalho, linhas
 
 
+def aba_ajustes_sem_cartao(escolhas: list[tuple]) -> tuple[list[str], list[list]]:
+    """Os `Reajuste de fatura` que só o geral trouxe: o dono escolhe a fatura de que cartão o
+    ajuste acerta. Cada escolha é o ajuste como o geral o trouxe e o cartão escolhido."""
+    cabecalho = ["Mês", "Valor", COLUNA_DO_CARTAO_ESCOLHIDO]
+    linhas = [[a.mes, reais(a.valor_centavos), cartao or None] for a, cartao in escolhas]
+    return cabecalho, linhas
+
+
 def aba_categoria_diferente(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
     """Os pares que casaram em tudo menos na categoria: vale a do geral."""
     cabecalho = [
@@ -361,6 +373,10 @@ def aba_conferencia(meses: list[Mes], mobills: dict[str, int]) -> tuple[list[str
         for efeitos, o_que in (
             (mes.sem_par, ("linha de fatura sem par", "linhas de fatura sem par")),
             (mes.provaveis_abertos, ("par provável aberto", "pares prováveis abertos")),
+            (
+                mes.descartados,
+                ("avulso pendente descartado", "avulsos pendentes descartados"),
+            ),
         ):
             if efeitos:
                 nome = o_que[0] if len(efeitos) == 1 else o_que[1]

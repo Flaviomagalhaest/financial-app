@@ -1,12 +1,9 @@
 import json
-from pathlib import Path
 
 import psycopg
 
-from app.backup import CONVERSORES, FORA_DO_BACKUP, VERSAO_FORMATO
+from app.backup import CONVERSORES, ESQUEMAS, FORA_DO_BACKUP, VERSAO_FORMATO
 from app.migrations import aplicar_migrations
-
-ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
 
 
 def test_migrations_que_mudam_as_tabelas_sobem_a_versao_do_formato(database_url: str):

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 
+from app import pessoas
 from app.mobills import conferencia, de_para, parcelas
 from app.mobills import revisao as planilha
 from app.mobills.conferencia import AjusteDeFatura
@@ -15,6 +16,7 @@ from app.mobills.leitura import (
     ler_geral,
     pastas_de_fatura,
 )
+from app.recorrencias import mais_meses
 
 # A fonte do lançamento importado (ticket 41): `lancamentos.fonte`, que no app fica `NULL`.
 FONTE = "mobills"
@@ -64,6 +66,10 @@ class Importacao:
     cruzamento: Cruzamento = field(default_factory=Cruzamento)
     parcelamentos: list[parcelas.Parcelamento] = field(default_factory=list)
     ajustes: list[AjusteDeFatura] = field(default_factory=list)
+    # Os meses das faturas exportadas de cada cartão, pelo nome do cadastro.
+    faturas: dict[str, list[str]] = field(default_factory=dict)
+    # Os pendentes avulsos do mês do export e de antes, que não entram (`## Answer` do ticket 18).
+    descartados: list[Lancamento] = field(default_factory=list)
     # O que impede gravar: a planilha precisa de mais uma edição do dono.
     impedimentos: list[str] = field(default_factory=list)
 
@@ -81,12 +87,14 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     nomes = {c.pasta: c.nome for c in cartoes}
     cruzamento = cruzar(linhas_do_geral, linhas_de_fatura, decisoes.provaveis)
     importacao = Importacao(conta, cartoes, cruzamento=cruzamento, impedimentos=impedimentos)
+    importacao.faturas = {nomes[pasta]: meses for pasta, meses in pastas.items()}
     importacao.lancamentos, importacao.ajustes = conferencia.separar_ajustes(
         _lancamentos(cruzamento, nomes)
     )
     contagem = de_para.contar(importacao.lancamentos)
     regras = _regras(decisoes, contagem, impedimentos)
     importacao.lancamentos = [de_para.aplicar(x, regras) for x in importacao.lancamentos]
+    _conferir_pessoas(importacao.lancamentos, impedimentos)
     sem_categoria = sum(1 for x in importacao.lancamentos if not x.categorias)
     if sem_categoria:
         plural = "lançamento ficou" if sem_categoria == 1 else "lançamentos ficaram"
@@ -100,15 +108,21 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     )
     escolhidos = _cartao_dos_parcelamentos(importacao, decisoes)
     _parcelas_futuras_no_cartao(importacao, pastas)
+    _gerar_parcelas_que_faltam(importacao, ultimo_mes)
 
-    # A Conferência vai até a virada: o último mês com lançamento já pago no Mobills.
+    # O mês do export (a virada) é o último mês com lançamento já pago no Mobills: a Conferência
+    # vai até ele, e os pendentes avulsos até ele são descartados.
     ultimo_realizado = max(
         (x.mes for x in linhas_do_geral if _situacao(x.situacao) == "realizado"),
         default=ultimo_mes,
     )
+    _descartar_pendentes_avulsos(importacao, ultimo_realizado)
+    ajustes_sem_cartao = _cartao_dos_ajustes(importacao, decisoes)
+
     linhas_dos_meses = conferencia.meses(
         importacao.lancamentos,
         importacao.ajustes,
+        importacao.descartados,
         cruzamento,
         min(meses_do_geral + [x.mes for x in linhas_de_fatura], default=""),
         ultimo_realizado,
@@ -131,6 +145,7 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
             "Parcelamentos sem cartão": planilha.aba_parcelamentos_sem_cartao(
                 importacao.parcelamentos, escolhidos
             ),
+            "Ajustes sem cartão": planilha.aba_ajustes_sem_cartao(ajustes_sem_cartao),
             "Conferência": planilha.aba_conferencia(linhas_dos_meses, decisoes.mobills_por_mes),
             "Faturas": planilha.aba_faturas(linhas_das_faturas, decisoes.mobills_por_fatura),
         },
@@ -225,6 +240,24 @@ def _regras(
     return regras
 
 
+def pessoa_do_casal(nome: str, configuradas: dict[str, str]) -> str | None:
+    """O id da pessoa que o de-para deu, pelo id ou pelo nome da configuração `PESSOAS`."""
+    if nome in configuradas:
+        return nome
+    return next((id for id, n in configuradas.items() if n.casefold() == nome.casefold()), None)
+
+
+def _conferir_pessoas(lancamentos: list[Lancamento], impedimentos: list[str]) -> None:
+    """A pessoa que o de-para dá precisa ser uma das duas da configuração `PESSOAS`."""
+    configuradas = pessoas.configuradas()
+    for nome in sorted({x.pessoa for x in lancamentos if x.pessoa}):
+        if pessoa_do_casal(nome, configuradas) is None:
+            impedimentos.append(
+                f"De-para: a pessoa {nome!r} não é do casal (a configuração PESSOAS tem"
+                f" {', '.join(configuradas.values()) or 'ninguém'})"
+            )
+
+
 def _cartao_dos_parcelamentos(importacao: Importacao, decisoes: planilha.Decisoes) -> dict:
     """Põe no cartão que o dono escolheu as parcelas do parcelamento que nenhuma fatura trouxe.
     Devolve a escolha de cada parcelamento sem cartão, para a planilha."""
@@ -252,6 +285,33 @@ def _cartao_dos_parcelamentos(importacao: Importacao, decisoes: planilha.Decisoe
     return escolhidos
 
 
+def _cartao_dos_ajustes(importacao: Importacao, decisoes: planilha.Decisoes) -> list[tuple]:
+    """Põe na fatura do cartão que o dono escolheu o ajuste que só o geral trouxe (a fatura é
+    de um cartão, e o geral não diz qual). Sem a escolha, o ajuste impede gravar. Devolve cada
+    um com a escolha, para a planilha."""
+    nomes = {c.nome for c in importacao.cartoes}
+    escolhas = []
+    ajustes = []
+    for ajuste in importacao.ajustes:
+        if ajuste.cartao is not None:
+            ajustes.append(ajuste)
+            continue
+        cartao = decisoes.cartao_dos_ajustes.get((ajuste.mes, ajuste.valor_centavos), "")
+        escolhas.append((ajuste, cartao))
+        qual = f"o de {planilha.reais_br(ajuste.valor_centavos)} em {ajuste.mes}"
+        if cartao in nomes:
+            ajuste = replace(ajuste, cartao=cartao)
+        elif cartao:
+            importacao.impedimentos.append(
+                f"Ajustes sem cartão: {qual} tem o cartão {cartao!r}, que não está na aba Cartões"
+            )
+        else:
+            importacao.impedimentos.append(f"Ajustes sem cartão: {qual} está sem o cartão")
+        ajustes.append(ajuste)
+    importacao.ajustes = ajustes
+    return escolhas
+
+
 def _parcelas_futuras_no_cartao(importacao: Importacao, pastas: dict[str, list[str]]) -> None:
     """A parcela do geral que ainda não tem fatura (depois da última fatura do cartão) herda o
     cartão e a data da compra das parcelas já casadas do mesmo parcelamento."""
@@ -270,6 +330,54 @@ def _parcelas_futuras_no_cartao(importacao: Importacao, pastas: dict[str, list[s
             novas.append(parcela)
         parcelamento.lancamentos = novas
     importacao.lancamentos = [trocados.get(id(x), x) for x in importacao.lancamentos]
+
+
+def _gerar_parcelas_que_faltam(importacao: Importacao, ultimo_mes: str) -> None:
+    """Gera como previstas as parcelas depois da última que o export trouxe, quando a sequência
+    chega ao último mês dele (a que acaba antes está quebrada e vai para a revisão). Como no app:
+    no cartão, todas têm a data da compra e a parcela n cai n - 1 faturas depois; no boleto, a
+    parcela n vence n - 1 meses depois da 1ª. A receita parcelada não é parcelamento no app."""
+    for parcelamento in importacao.parcelamentos:
+        ultima = parcelamento.ultima
+        if ultima.tipo != "despesa" or ultima.mes < ultimo_mes:
+            continue
+        primeira = parcelamento.primeira.data
+        data_da_1a = mais_meses(primeira, 1 - parcelamento.primeira.parcela[0])
+        geradas = []
+        mes = ultima.mes
+        for n in range(ultima.parcela[0] + 1, parcelamento.total + 1):
+            mes = parcelas.mes_seguinte(mes)
+            data = ultima.data if ultima.cartao else mais_meses(data_da_1a, n - 1)
+            geradas.append(
+                replace(
+                    ultima,
+                    situacao="previsto",
+                    parcela=(n, parcelamento.total),
+                    data=data,
+                    mes=mes if ultima.cartao else f"{data:%Y-%m}",
+                )
+            )
+        parcelamento.lancamentos = parcelamento.lancamentos + geradas
+        importacao.lancamentos.extend(geradas)
+
+
+def _descartar_pendentes_avulsos(importacao: Importacao, mes_do_export: str) -> None:
+    """O pendente que não é parcela é a ocorrência de uma recorrência do Mobills, sem a regra: o
+    do mês do export e de antes sai (o mês corrente do Mobills pode estar desatualizado), e o de
+    depois entra como previsto avulso, que o dono apaga quando cadastrar a recorrência no app. O
+    que casou com uma linha de fatura fica: a fatura exportada prova que a compra existiu."""
+    ficam = []
+    for lancamento in importacao.lancamentos:
+        if (
+            lancamento.situacao == "previsto"
+            and lancamento.parcela is None
+            and lancamento.cartao is None
+            and lancamento.mes <= mes_do_export
+        ):
+            importacao.descartados.append(lancamento)
+        else:
+            ficam.append(lancamento)
+    importacao.lancamentos = ficam
 
 
 def _tipo(valor_no_geral: int) -> str:

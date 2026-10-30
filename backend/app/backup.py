@@ -12,10 +12,14 @@ import json
 import zipfile
 from collections.abc import Callable
 from decimal import Decimal
+from pathlib import Path
 
 import psycopg
 
 VERSAO_FORMATO = 17
+# O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
+# compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
+ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
 # O DSQL aceita até 3.000 linhas e 10 MiB por transação: a restauração grava em lotes, e o
 # texto do CSV conta para a folga dos bytes.
 LINHAS_POR_LOTE = 1000
@@ -386,6 +390,11 @@ FORA_DO_BACKUP = {"controle_de_migrations"}
 NUMERICOS = {"smallint", "integer", "bigint", "numeric"}
 
 
+def esquema(versao: int = VERSAO_FORMATO) -> dict[str, dict[str, str]]:
+    """As tabelas da versão, cada uma com o tipo de cada coluna, na ordem das colunas."""
+    return json.loads(ESQUEMAS.read_text())[str(versao)]
+
+
 class BackupDivergente(Exception):
     """O zip não bate com o banco: o backup não vale."""
 
@@ -402,8 +411,8 @@ def gerar_backup(conn: psycopg.Connection) -> bytes:
     """Lê todas as tabelas e devolve o zip. Rode numa transação REPEATABLE READ, para as
     tabelas, as contagens e as somas saírem do mesmo instante do banco (veja `backup_diario`).
     """
-    arquivos: dict[str, bytes] = {}
-    tabelas: dict[str, dict] = {}
+    tabelas: Tabelas = {}
+    somas: dict[str, dict[str, str]] = {}
     for tabela in _tabelas(conn):
         tipos = _colunas(conn, tabela)
         colunas = list(tipos)
@@ -413,13 +422,29 @@ def gerar_backup(conn: psycopg.Connection) -> bytes:
             f"SELECT {como_texto} FROM {_identificador(tabela)}"
             f" ORDER BY {', '.join(_identificador(c) for c in ordem)}"
         ).fetchall()
+        tabelas[tabela] = (colunas, linhas)
+        somas[tabela] = _somas(conn, tabela, tipos)
+    return montar_backup(tabelas, somas)
+
+
+def montar_backup(tabelas: Tabelas, somas: dict[str, dict[str, str]]) -> bytes:
+    """O zip da versão atual: um CSV por tabela, na ordem dada, com as linhas já em ordem e no
+    texto do Postgres, e o manifesto com as contagens e as somas. Serve ao gerador e a quem
+    monta um backup sem banco (o importador do Mobills)."""
+    arquivos: dict[str, bytes] = {}
+    for tabela, (colunas, linhas) in tabelas.items():
         texto = io.StringIO(newline="")
         escritor = csv.writer(texto, quoting=csv.QUOTE_NOTNULL, lineterminator="\n")
         escritor.writerow(colunas)
         escritor.writerows(linhas)
         arquivos[f"{tabela}.csv"] = texto.getvalue().encode("utf-8")
-        tabelas[tabela] = {"linhas": len(linhas), "somas": _somas(conn, tabela, tipos)}
-    manifesto = {"versao_formato": VERSAO_FORMATO, "tabelas": tabelas}
+    manifesto = {
+        "versao_formato": VERSAO_FORMATO,
+        "tabelas": {
+            tabela: {"linhas": len(linhas), "somas": somas[tabela]}
+            for tabela, (_, linhas) in tabelas.items()
+        },
+    }
     arquivos["manifesto.json"] = json.dumps(manifesto, ensure_ascii=False, indent=2).encode()
 
     # Sem a hora da geração: o mesmo banco dá o mesmo zip, byte a byte.

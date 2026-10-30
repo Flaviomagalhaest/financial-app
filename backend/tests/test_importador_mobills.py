@@ -77,7 +77,10 @@ def test_linhas_iguais_casam_na_ordem_e_a_sobra_da_fatura_entra_so_com_o_que_a_f
 
     importacao = importar(geral, faturas, revisao)
 
-    padarias = sorted(importacao.lancamentos, key=lambda x: x.data)
+    # As 2/2 que o export não trouxe são geradas como previstas; aqui interessam as importadas.
+    padarias = sorted(
+        (x for x in importacao.lancamentos if x.situacao == "realizado"), key=lambda x: x.data
+    )
     assert [x.data.day for x in padarias] == [2, 11, 20]
     assert [x.tags for x in padarias] == [["praia"], ["praia"], []]
     assert [x.parcela for x in padarias] == [(1, 2), (1, 2), None]
@@ -308,7 +311,8 @@ def de_para(revisao: Path) -> dict[tuple, dict]:
     }
 
 
-def test_de_para_propoe_o_mesmo_papel_e_aplica_o_que_o_dono_editou(pastas):
+def test_de_para_propoe_o_mesmo_papel_e_aplica_o_que_o_dono_editou(pastas, monkeypatch):
+    monkeypatch.setenv("PESSOAS", '{"flavio": "Flávio", "fulano": "Fulano"}')
     geral, faturas, revisao = pastas
     escrever_geral(
         geral,
@@ -381,6 +385,13 @@ def test_de_para_propoe_o_mesmo_papel_e_aplica_o_que_o_dono_editou(pastas):
     ]
     assert de_para(revisao)[("despesa", "Tag", "fulano")]["Papel"] == "pessoa"
 
+    # A pessoa precisa ser uma das duas da configuração PESSOAS.
+    editar_aba(revisao, "De-para", "Nome no Mobills", "fulano", "Nome no app", "Beltrano")
+    assert (
+        "De-para: a pessoa 'Beltrano' não é do casal (a configuração PESSOAS tem Flávio,"
+        " Fulano)" in importar(geral, faturas, revisao).impedimentos
+    )
+
 
 def test_parcelas_viram_parcelamentos_e_a_sequencia_quebrada_vai_para_a_revisao(pastas):
     geral, faturas, revisao = pastas
@@ -412,7 +423,7 @@ def test_parcelas_viram_parcelamentos_e_a_sequencia_quebrada_vai_para_a_revisao(
     assert [
         (p.descricao, [x.parcela for x in p.lancamentos]) for p in importacao.parcelamentos
     ] == [
-        ("Celular", [(1, 10), (2, 10)]),
+        ("Celular", [(n, 10) for n in range(1, 11)]),
         ("Curso", [(1, 3)]),
         ("Curso", [(3, 3)]),
         ("Geladeira", [(4, 6), (5, 6), (6, 6)]),
@@ -439,7 +450,7 @@ def test_parcelas_viram_parcelamentos_e_a_sequencia_quebrada_vai_para_a_revisao(
     ]
     sem_cartao = ler_aba(revisao, "Parcelamentos sem cartão")
     assert [(x["Descrição"], x["Parcelas"]) for x in sem_cartao] == [
-        ("Celular", "1 a 2 de 10"),
+        ("Celular", "1 a 10 de 10"),
         ("Curso", "3 de 3"),
     ]
 
@@ -492,12 +503,12 @@ def test_conferencia_mes_a_mes_e_faturas_com_a_coluna_do_mobills_mantida(pastas)
     assert janeiro == {
         "Mês": "2024-01",
         "Receitas": 3010.00,
-        "Despesas": 1785.50,
+        "Despesas": 285.50,
         "Ajustes de fatura": 0.02,
-        "Resultado": 1224.48,
+        "Resultado": 2724.48,
         "Mobills": None,
         "Diferença": None,
-        "Por quê": "2 linhas de fatura sem par (-25,50)",
+        "Por quê": "2 linhas de fatura sem par (-25,50); 1 avulso pendente descartado (1.500,00)",
     }
     assert conferencia[1]["Resultado"] == 0
     assert conferencia[2]["Despesas"] == 20.00
@@ -522,12 +533,12 @@ def test_conferencia_mes_a_mes_e_faturas_com_a_coluna_do_mobills_mantida(pastas)
         },
     ]
 
-    editar_aba(revisao, "Conferência", "Mês", "2024-01", "Mobills", 1249.98)
+    editar_aba(revisao, "Conferência", "Mês", "2024-01", "Mobills", 2749.98)
     editar_aba(revisao, "Faturas", "Mês", "2024-01", "Mobills", 250.02)
     importar(geral, faturas, revisao)
 
     janeiro = ler_aba(revisao, "Conferência")[0]
-    assert (janeiro["Mobills"], janeiro["Diferença"]) == (1249.98, -25.50)
+    assert (janeiro["Mobills"], janeiro["Diferença"]) == (2749.98, -25.50)
     fatura = ler_aba(revisao, "Faturas")[0]
     assert (fatura["Mobills"], fatura["Diferença"]) == (250.02, 25.50)
 
@@ -663,3 +674,116 @@ def test_fatura_sem_rotulo_no_nome_e_valor_que_nao_e_numero_sao_recusados(pastas
     escrever_geral(geral, "geral.xlsx", [linha("31/03/2026", "Mercado", "dez", "Alimentação")])
     with pytest.raises(ArquivoInvalido, match="geral.xlsx: valor que não é número"):
         importar(geral, faturas, revisao)
+
+
+def test_parcelas_que_faltam_depois_do_export_sao_geradas_como_previstas(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/07/2026", "TV (1/4)", -300.00, "Casa", tags="novo ap"),
+            linha("31/08/2026", "TV (2/4)", -300.00, "Casa", situacao="Pendente", tags="novo ap"),
+            # Boleto: a parcela n vence n - 1 meses depois da 1ª, que veio antes do histórico.
+            linha("10/07/2026", "Faculdade (5/7)", -800.00, "Educação"),
+            linha("10/08/2026", "Faculdade (6/7)", -800.00, "Educação", situacao="Pendente"),
+            # A sequência acaba antes do último mês: quebrada, nada é gerado.
+            linha("31/07/2026", "Curso (1/3)", -100.00, "Educação"),
+            # Completa: nada falta.
+            linha("31/07/2026", "Fone (2/2)", -50.00, "Eletrônicos"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202607", [("14/07/2026", "TV", "Casa", 300.00)])
+
+    importacao = importar(geral, faturas, revisao)
+
+    tv = next(p for p in importacao.parcelamentos if p.descricao == "TV")
+    assert [
+        (x.parcela, x.situacao, x.cartao, x.data, x.mes, x.valor_centavos, x.tags)
+        for x in tv.lancamentos
+    ] == [
+        ((1, 4), "realizado", "Cartao A", date(2026, 7, 14), "2026-07", 30000, ["novo ap"]),
+        ((2, 4), "previsto", "Cartao A", date(2026, 7, 14), "2026-08", 30000, ["novo ap"]),
+        ((3, 4), "previsto", "Cartao A", date(2026, 7, 14), "2026-09", 30000, ["novo ap"]),
+        ((4, 4), "previsto", "Cartao A", date(2026, 7, 14), "2026-10", 30000, ["novo ap"]),
+    ]
+    faculdade = next(p for p in importacao.parcelamentos if p.descricao == "Faculdade")
+    assert [(x.parcela, x.situacao, x.data, x.mes) for x in faculdade.lancamentos] == [
+        ((5, 7), "realizado", date(2026, 7, 10), "2026-07"),
+        ((6, 7), "previsto", date(2026, 8, 10), "2026-08"),
+        ((7, 7), "previsto", date(2026, 9, 10), "2026-09"),
+    ]
+    assert [x.parcela for x in importacao.lancamentos if x.descricao == "Curso"] == [(1, 3)]
+    assert [x.parcela for x in importacao.lancamentos if x.descricao == "Fone"] == [(2, 2)]
+    geradas = [x for x in importacao.lancamentos if x.parcela in {(3, 4), (4, 4), (7, 7)}]
+    assert len(geradas) == 3
+    assert all(x.fonte == "mobills" and x.categorias for x in geradas)
+
+
+def test_pendente_avulso_do_mes_do_export_ou_antes_e_descartado_e_o_de_depois_fica_previsto(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("05/04/2026", "Salário", 5000.00, "Salário"),
+            linha("10/04/2026", "Luz", -90.00, "Casa", situacao="Pendente"),
+            linha("05/05/2026", "Salário", 5000.00, "Salário"),
+            linha("10/05/2026", "Luz", -95.00, "Casa", situacao="Pendente"),
+            linha("20/05/2026", "Freela", 300.00, "Trabalho", situacao="Pendente"),
+            linha("10/06/2026", "Luz", -100.00, "Casa", situacao="Pendente"),
+            # A parcela pendente não é avulso: fica, mesmo no mês do export.
+            linha("31/05/2026", "Sofá (2/2)", -400.00, "Casa", situacao="Pendente"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202605", [])
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert sorted((x.descricao, x.mes, x.situacao) for x in importacao.lancamentos) == [
+        ("Luz", "2026-06", "previsto"),
+        ("Salário", "2026-04", "realizado"),
+        ("Salário", "2026-05", "realizado"),
+        ("Sofá", "2026-05", "previsto"),
+    ]
+    conferencia = {x["Mês"]: x for x in ler_aba(revisao, "Conferência")}
+    assert conferencia["2026-04"]["Despesas"] == 0
+    assert conferencia["2026-04"]["Por quê"] == "1 avulso pendente descartado (90,00)"
+    assert conferencia["2026-05"]["Por quê"] == "2 avulsos pendentes descartados (-205,00)"
+
+
+def test_reajuste_so_do_geral_espera_o_dono_escolher_o_cartao_da_fatura(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/05/2026", "Mercado", -100.00, "Alimentação"),
+            linha("31/05/2026", "Reajuste", -0.03, "Reajuste de fatura"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202605", [])
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert importacao.ajustes == [AjusteDeFatura(cartao=None, mes="2026-05", valor_centavos=3)]
+    assert ler_aba(revisao, "Ajustes sem cartão") == [
+        {"Mês": "2026-05", "Valor": 0.03, "Cartão (escolha)": None}
+    ]
+    assert "Ajustes sem cartão: o de 0,03 em 2026-05 está sem o cartão" in importacao.impedimentos
+
+    editar_aba(revisao, "Ajustes sem cartão", "Mês", "2026-05", "Cartão (escolha)", "Cartao A")
+    importacao = importar(geral, faturas, revisao)
+
+    assert importacao.ajustes == [
+        AjusteDeFatura(cartao="Cartao A", mes="2026-05", valor_centavos=3)
+    ]
+    assert not [x for x in importacao.impedimentos if x.startswith("Ajustes")]
+    assert ler_aba(revisao, "Ajustes sem cartão")[0]["Cartão (escolha)"] == "Cartao A"
+    assert ler_aba(revisao, "Faturas")[0]["Ajuste de fatura"] == 0.03
+
+    editar_aba(revisao, "Ajustes sem cartão", "Mês", "2026-05", "Cartão (escolha)", "Outro")
+    assert (
+        "Ajustes sem cartão: o de 0,03 em 2026-05 tem o cartão 'Outro', que não está na aba"
+        " Cartões" in importar(geral, faturas, revisao).impedimentos
+    )
