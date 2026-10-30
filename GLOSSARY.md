@@ -97,6 +97,13 @@ _Avoid_: compra parcelada, financiamento
 Lançamento que é uma das N partes de um parcelamento (ex.: 3/10). No cartão, todas têm a data da compra e a parcela n cai n − 1 faturas depois da fatura da compra; fora dele (o boleto), a parcela n vence n − 1 meses depois da primeira.
 _Avoid_: prestação
 
+**Parcela alterada à mão**:
+O "alterado à mão" da parcela: valor, data, conta ou fatura que uma pessoa mudou, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento a preserva nessas quatro coisas; a descrição, as categorias, as tags, a pessoa e o item valem para todas as parcelas.
+
+**Correção do parcelamento**:
+Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo.
+_Avoid_: regerar, recalcular o parcelamento
+
 **Antecipação**:
 Pagamento adiantado das últimas parcelas de um parcelamento que ainda não foram pagas, no dia de hoje ou em outro, por um valor editável (o desconto é a diferença para o valor das parcelas). As parcelas viram realizadas na data do pagamento, e no cartão contam na fatura em que foi paga, por troca à mão. **Quitação** é a antecipação de todas as parcelas que faltam.
 _Avoid_: adiantamento, amortização
