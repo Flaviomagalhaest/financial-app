@@ -154,6 +154,8 @@ class AvisoDeRealizadas(BaseModel):
 
 
 class RealizadasMudam(Exception):
+    """A correção pede confirmação: muda parcelas realizadas."""
+
     def __init__(self, aviso: AvisoDeRealizadas):
         self.aviso = aviso
 
@@ -221,7 +223,9 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas parcelas, quantas cabem numa transação, e devolve se pode faltar
     alguma. O id de cada parcela vem do parcelamento e do número dela: gerar de novo não
     duplica."""
-    [regra] = _ler(conn, "id = %s", (id,))
+    if not (lidos := _ler(conn, "id = %s", (id,))):
+        return False  # excluído no meio da geração
+    [regra] = lidos
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
     tags = [
@@ -411,7 +415,7 @@ def _por_lote(regra: Parcelamento) -> int:
 
 
 @dataclass
-class _Trabalho:
+class _Correcao:
     """O que falta fazer numa parcela para ela ficar como o parcelamento manda: sair, voltar
     (uma que a correção tirou antes) ou mudar. `valor`, `dia` e `mes` são os de depois."""
 
@@ -448,11 +452,18 @@ class _Trabalho:
         )
 
 
-def _trabalho(conn, regra: Parcelamento, geradas: int) -> list[_Trabalho]:
+# O que vale para todas as parcelas quando o pedido o traz, as editadas à mão também.
+CLASSIFICACAO = frozenset({"descricao", "categoria_ids", "tags", "pessoa", "item_categoria_id"})
+
+
+def _correcoes(
+    conn, regra: Parcelamento, geradas: int, classificacao: frozenset[str]
+) -> list[_Correcao]:
     """As parcelas que não estão como o parcelamento manda, na ordem do número. A que uma pessoa
-    editou à mão (valor, data, conta ou fatura) fica como está nessas coisas; a classificação vale
-    para todas. A parcela que saiu antes, quando o parcelamento encolheu, volta se ele crescer
-    de novo (as de depois de `geradas`)."""
+    editou à mão (valor, data, conta ou fatura) fica como está nessas coisas. A classificação só
+    se refaz no que o pedido trouxe (`classificacao`), para a descrição que uma pessoa corrigiu
+    numa parcela só não voltar a cada correção de valor. A parcela que saiu antes, quando o
+    parcelamento encolheu, volta se ele crescer de novo (as de depois de `geradas`), com tudo."""
     parcelas = conn.execute(
         f"SELECT id, parcela, data, valor_centavos, descricao, pessoa, situacao,"
         f" excluido_em IS NOT NULL, {lancamentos.VERSAO}, item_categoria_id, mes,"
@@ -483,7 +494,7 @@ def _trabalho(conn, regra: Parcelamento, geradas: int) -> list[_Trabalho]:
         "categoria_ids": set(regra.categoria_ids),
         "tags": {tag.casefold() for tag in regra.tags},
     }
-    trabalho = []
+    feitas = []
     for (
         lancamento_id,
         n,
@@ -514,7 +525,8 @@ def _trabalho(conn, regra: Parcelamento, geradas: int) -> list[_Trabalho]:
             "categoria_ids": categorias.get(lancamento_id, set()),
             "tags": tags.get(lancamento_id, set()),
         }
-        mudou = [campo for campo in quer if quer[campo] != tem[campo]]
+        campos = CLASSIFICACAO if acao == "reviver" else classificacao
+        mudou = [campo for campo in quer if campo in campos and quer[campo] != tem[campo]]
         valor, dia, mes = valor_antes, dia_antes, mes_antes
         if acao != "excluir" and not a_mao:
             valor = valor_da_parcela(regra.valor_total_centavos, regra.parcelas, n)
@@ -529,8 +541,8 @@ def _trabalho(conn, regra: Parcelamento, geradas: int) -> list[_Trabalho]:
             if no_cartao and mes != mes_antes:
                 mudou.append("fatura_mes")
         if acao != "atualizar" or mudou:
-            trabalho.append(
-                _Trabalho(
+            feitas.append(
+                _Correcao(
                     lancamento_id,
                     versao,
                     n,
@@ -544,12 +556,13 @@ def _trabalho(conn, regra: Parcelamento, geradas: int) -> list[_Trabalho]:
                     dia_antes,
                 )
             )
-    return trabalho
+    return feitas
 
 
-def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> None:
+def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> frozenset[str]:
     """Valida e grava o parcelamento corrigido (recusa antes de gravar, e avisa se uma realizada
-    mudaria sem `confirmar_realizadas`); as parcelas são refeitas depois, em lotes."""
+    mudaria sem `confirmar_realizadas`); as parcelas são refeitas depois, em lotes. Devolve a
+    classificação que o pedido trouxe."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         raise HTTPException(status_code=404, detail="parcelamento não encontrado")
     [atual] = lidos
@@ -584,9 +597,10 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
             f"a parcela {a_mao} foi editada à mão: exclua-a antes de tirá-la do parcelamento"
         )
     geradas_depois = min(geradas, nova.parcelas)
+    classificacao = frozenset(CLASSIFICACAO & pedidas.keys())
     realizadas = [
         t.aviso
-        for t in _trabalho(conn, nova, geradas_depois)
+        for t in _correcoes(conn, nova, geradas_depois, classificacao)
         if t.realizada and t.acao != "reviver" and t.muda_o_cronograma
     ]
     if realizadas and not alteracao.confirmar_realizadas:
@@ -630,59 +644,54 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
                 "INSERT INTO parcelamento_tags (parcelamento_id, tag_id) VALUES (%s, %s)",
                 (id, tag),
             )
+    return classificacao
 
 
-def _reajustar_um_lote(conn, id: UUID, usuario: str) -> bool:
+def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: frozenset[str]) -> bool:
     """Põe as parcelas de acordo com o parcelamento de hoje, até um lote, e devolve se pode faltar
     alguma. A que já está como ele manda não conta, por isso o lote seguinte sempre anda."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False
     [regra] = lidos
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
-    trabalho = _trabalho(conn, regra, geradas)
+    trabalho = _correcoes(conn, regra, geradas, classificacao)
     tags = _tags_do_parcelamento(conn, id)
     agora = datetime.now(UTC)
     por_lote = _por_lote(regra)
-    for item in trabalho[:por_lote]:
-        if item.acao == "excluir":
-            excluir(conn, item.id, None, usuario)
+    for correcao in trabalho[:por_lote]:
+        if correcao.acao == "excluir":
+            excluir(conn, correcao.id, None, usuario)
             continue
         atribuicoes = (
-            "descricao = %s, pessoa = %s, item_categoria_id = %s, valor_centavos = %s,"
-            " data = %s, mes = %s, alterado_por = %s, alterado_em = %s"
+            "valor_centavos = %s, data = %s, mes = %s, alterado_por = %s, alterado_em = %s"
         )
-        parametros: tuple = (
-            regra.descricao,
-            regra.pessoa,
-            regra.item_categoria_id,
-            item.valor,
-            item.dia,
-            item.mes,
-            usuario,
-            agora,
-        )
-        if item.acao == "reviver":
+        parametros: tuple = (correcao.valor, correcao.dia, correcao.mes, usuario, agora)
+        for campo in ("descricao", "pessoa", "item_categoria_id"):
+            if campo in correcao.mudou:
+                atribuicoes += f", {campo} = %s"
+                parametros += (getattr(regra, campo),)
+        if correcao.acao == "reviver":
             atribuicoes += ", excluido_em = NULL, excluido_por = NULL"
-        if {"categoria_ids", "fatura_mes"} & set(item.mudou) or item.acao == "reviver":
+        if {"categoria_ids", "fatura_mes"} & set(correcao.mudou) or correcao.acao == "reviver":
             # No mês novo ou com a categoria nova, a parcela fica no item em que estava.
-            lancamentos.guardar_item_atual_do_lancamento(conn, item.id)
-            (atual,) = conn.execute(
-                "SELECT item_atual_categoria_id FROM lancamentos WHERE id = %s", (item.id,)
+            lancamentos.guardar_item_atual_do_lancamento(conn, correcao.id)
+            (item_atual,) = conn.execute(
+                "SELECT item_atual_categoria_id FROM lancamentos WHERE id = %s", (correcao.id,)
             ).fetchone()
             atribuicoes += ", item_atual_categoria_id = %s"
-            parametros += (atual if atual in regra.categoria_ids else None,)
-        nova = subir_versao(conn, item.id, item.versao, atribuicoes, parametros)
+            parametros += (item_atual if item_atual in regra.categoria_ids else None,)
+        nova = subir_versao(conn, correcao.id, correcao.versao, atribuicoes, parametros)
         registrar_mudancas(
-            conn, item.id, item.mudou, nova, usuario, agora, origem=origem(regra.descricao)
+            conn, correcao.id, correcao.mudou, nova, usuario, agora, origem=origem(regra.descricao)
         )
-        if "categoria_ids" in item.mudou:
-            gravar_categorias(conn, item.id, regra.categoria_ids)
-        if "tags" in item.mudou:
-            conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (item.id,))
+        if "categoria_ids" in correcao.mudou:
+            gravar_categorias(conn, correcao.id, regra.categoria_ids)
+        if "tags" in correcao.mudou:
+            conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (correcao.id,))
             for tag in tags:
                 conn.execute(
                     "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
-                    (item.id, tag),
+                    (correcao.id, tag),
                 )
     return len(trabalho) > por_lote
 
@@ -707,10 +716,10 @@ def alterar_parcelamento(
 
     url = url_do_banco(request)
     try:
-        em_transacao(url, lambda conn: _mudar(conn, id, alteracao, usuario))
+        classificacao = em_transacao(url, lambda conn: _mudar(conn, id, alteracao, usuario))
     except RealizadasMudam as e:
         return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
-    while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, usuario)):
+    while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, usuario, classificacao)):
         pass
     gerar_as_parcelas(url, id)
     # A parcela automática que a data nova já alcançou se realiza agora, como na criação.

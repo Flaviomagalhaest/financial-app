@@ -69,8 +69,9 @@ def realizar_automaticos(url: str | None, parcelamento_id: UUID | None = None) -
             id
             for id, conta_id, parcela, mes, data in conn.execute(
                 "SELECT l.id, l.conta_id, l.parcela, l.mes, l.data FROM lancamentos l"
-                f" WHERE {_DEVIDO}" + (" AND l.parcelamento_id = %s" if parcelamento_id else ""),
-                (lancamentos.hoje(), *([parcelamento_id] if parcelamento_id else [])),
+                f" WHERE {_DEVIDO}"
+                + ("" if parcelamento_id is None else " AND l.parcelamento_id = %s"),
+                (lancamentos.hoje(), *([] if parcelamento_id is None else [parcelamento_id])),
             ).fetchall()
             if _chegou(conn, conta_id, parcela, mes, data)
         ]

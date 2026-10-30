@@ -805,3 +805,38 @@ def test_excluir_um_parcelamento_longo_exclui_em_mais_de_uma_transacao(casal: Ca
     assert casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}").status_code == 204
 
     assert parcelas(casal, novo["id"]) == []
+
+
+def test_a_correcao_so_refaz_a_classificacao_que_o_pedido_trouxe(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", parcelas=3)
+    [_, segunda, _] = parcelas(casal, novo["id"])
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{segunda['id']}",
+        json={"versao": 1, "descricao": "Geladeira, entrada", "tags": ["extra"]},
+    )
+
+    # Corrigir só o valor não desfaz o que uma pessoa mudou numa parcela só.
+    assert mudar(casal, novo["id"], valor_total_centavos=60000).status_code == 200
+    assert [(l["descricao"], l["tags"]) for l in parcelas(casal, novo["id"])] == [
+        ("Geladeria", []),
+        ("Geladeira, entrada", ["extra"]),
+        ("Geladeria", []),
+    ]
+
+    # Corrigir a descrição vale para todas (história 101).
+    assert mudar(casal, novo["id"], descricao="Geladeira").status_code == 200
+    assert [(l["descricao"], l["tags"]) for l in parcelas(casal, novo["id"])] == [
+        ("Geladeira", []),
+        ("Geladeira", ["extra"]),
+        ("Geladeira", []),
+    ]
+
+
+def test_gerar_as_parcelas_de_um_parcelamento_excluido_no_meio_nao_falha(
+    casal: Casal, database_url: str
+):
+    from app import parcelamentos
+
+    parcelamentos.gerar_as_parcelas(database_url, uuid4())

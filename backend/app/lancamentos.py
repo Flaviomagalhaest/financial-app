@@ -282,8 +282,9 @@ VALOR_COM_SINAL = (
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 # Quantas parcelas tem o parcelamento da parcela (o 10 de 3/10); o avulso não tem.
 PARCELAS = "(SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
-# Uma pessoa mudou (campo sem `origem`) o que a correção do parcelamento refaz. A confirmação sem
-# ajuste só registra a situação, e as regras gravam com `origem`: nenhuma conta como edição.
+# Uma pessoa mudou (campo sem `origem`) o valor, a data, a conta ou a fatura da parcela, que a
+# correção do parcelamento não toca. A confirmação sem ajuste só registra a situação, e as regras
+# gravam com `origem`: nenhuma conta como edição.
 ALTERADA_A_MAO = (
     "(parcelamento_id IS NOT NULL AND EXISTS (SELECT FROM lancamento_campos c"
     " WHERE c.lancamento_id = lancamentos.id AND c.origem IS NULL"
