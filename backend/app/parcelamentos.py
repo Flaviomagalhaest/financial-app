@@ -4,12 +4,12 @@ para o valor inteiro nunca contar de uma vez num mês só. No cartão, todas as 
 da compra e a parcela n cai n - 1 faturas depois da fatura da compra; fora dele (o boleto), a
 parcela n vence n - 1 meses depois da primeira."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID, uuid5
 
 import psycopg
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app import faturas, lancamentos
@@ -328,3 +328,129 @@ def criar_parcelamento(
 def listar_parcelamentos(usuario: UsuarioLogado, request: Request) -> list[Parcelamento]:
     with conectar(url_do_banco(request)) as conn:
         return _ler(conn)
+
+
+class Antecipacao(BaseModel):
+    """O pagamento adiantado das últimas parcelas que ainda não foram pagas."""
+
+    # Quantas parcelas, tiradas do fim.
+    parcelas: int = Field(ge=1)
+    # O dia do pagamento; sem ele, hoje. Não pode ser futuro.
+    data: date | None = None
+    # O que foi pago pelas parcelas juntas (o desconto é a diferença); sem o campo, o valor
+    # delas. Os centavos que sobram da divisão vão na primeira das antecipadas.
+    valor_total_centavos: int | None = Field(default=None, gt=0)
+
+
+class Quitacao(BaseModel):
+    """O pagamento de uma vez de tudo o que falta."""
+
+    data: date | None = None
+    valor_total_centavos: int | None = Field(default=None, gt=0)
+
+
+def _antecipar(
+    conn, id: UUID, quantas: int | None, data: date | None, valor: int | None, usuario: str
+) -> list[UUID]:
+    """Realiza as últimas `quantas` parcelas previstas (todas, se `quantas` é `None`) no dia do
+    pagamento, com o valor pago dividido entre elas. No cartão, a parcela conta na fatura em
+    que foi paga (a que fecha depois do dia), marcada como troca à mão para as datas do
+    cartão e a data da compra não a levarem de volta à fatura dela."""
+    if not conn.execute("SELECT 1 FROM parcelamentos WHERE id = %s", (id,)).fetchone():
+        raise HTTPException(status_code=404, detail="parcelamento não encontrado")
+    dia = data or lancamentos.hoje()
+    if dia > lancamentos.hoje():
+        raise lancamentos.recusar("a antecipação é de um pagamento que já aconteceu")
+    (geradas, total) = conn.execute(
+        "SELECT geradas, parcelas FROM parcelamentos WHERE id = %s", (id,)
+    ).fetchone()
+    if geradas < total:
+        raise lancamentos.recusar("as parcelas ainda estão sendo geradas")
+    previstas = conn.execute(
+        f"SELECT id, {lancamentos.VERSAO}, valor_centavos, conta_id, parcela FROM lancamentos"
+        " WHERE parcelamento_id = %s AND situacao = 'previsto' AND excluido_em IS NULL"
+        " ORDER BY parcela DESC",
+        (id,),
+    ).fetchall()
+    quantas = len(previstas) if quantas is None else quantas
+    if not previstas or quantas > len(previstas):
+        raise lancamentos.recusar("não há tantas parcelas por pagar")
+    escolhidas = previstas[:quantas][::-1]
+    devido = sum(linha[2] for linha in escolhidas)
+    pago = devido if valor is None else valor
+    if pago < quantas:
+        raise lancamentos.recusar("o valor não chega a um centavo por parcela")
+    momento = datetime.now(UTC)
+    for posicao, (lancamento_id, versao, _, conta_id, _) in enumerate(escolhidas, start=1):
+        fatura = lancamentos.mes_em_que_conta(conn, conta_id, dia)
+        no_cartao = faturas.ler_cartao(conn, conta_id) is not None
+        lancamentos.guardar_item_atual_do_lancamento(conn, lancamento_id)
+        nova = lancamentos.subir_versao(
+            conn,
+            lancamento_id,
+            versao,
+            "situacao = 'realizado', valor_centavos = %s, data = %s, mes = %s,"
+            " fatura_a_mao = %s, alterado_por = %s, alterado_em = %s",
+            (
+                valor_da_parcela(pago, quantas, posicao),
+                dia,
+                fatura,
+                no_cartao,
+                usuario,
+                momento,
+            ),
+        )
+        campos = ["situacao", "valor_centavos", "data"] + (["fatura_mes"] if no_cartao else [])
+        lancamentos.registrar_mudancas(conn, lancamento_id, campos, nova, usuario, momento)
+    return [linha[0] for linha in escolhidas]
+
+
+def _responder(url: str | None, antecipadas: list[UUID]) -> list[lancamentos.Lancamento]:
+    with conectar(url) as conn:
+        return sorted(
+            lancamentos._todos(conn, "id = ANY(%s)", (antecipadas,)), key=lambda l: l.parcela
+        )
+
+
+@router.post(
+    "/parcelamentos/{id}/antecipacoes",
+    response_model=list[lancamentos.Lancamento],
+    operation_id="antecipar_parcelas",
+)
+def antecipar_parcelas(
+    id: UUID, antecipacao: Antecipacao, usuario: UsuarioLogado, request: Request
+) -> list[lancamentos.Lancamento]:
+    """Paga adiantado as últimas K parcelas por pagar, no dia de hoje ou em outro, pelo valor
+    informado (o desconto). Devolve as parcelas antecipadas."""
+    url = url_do_banco(request)
+    antecipadas = em_transacao(
+        url,
+        lambda conn: _antecipar(
+            conn,
+            id,
+            antecipacao.parcelas,
+            antecipacao.data,
+            antecipacao.valor_total_centavos,
+            usuario,
+        ),
+    )
+    return _responder(url, antecipadas)
+
+
+@router.post(
+    "/parcelamentos/{id}/quitacao",
+    response_model=list[lancamentos.Lancamento],
+    operation_id="quitar_parcelamento",
+)
+def quitar_parcelamento(
+    id: UUID, quitacao: Quitacao, usuario: UsuarioLogado, request: Request
+) -> list[lancamentos.Lancamento]:
+    """Paga de uma vez todas as parcelas que faltam. Devolve as parcelas quitadas."""
+    url = url_do_banco(request)
+    quitadas = em_transacao(
+        url,
+        lambda conn: _antecipar(
+            conn, id, None, quitacao.data, quitacao.valor_total_centavos, usuario
+        ),
+    )
+    return _responder(url, quitadas)
