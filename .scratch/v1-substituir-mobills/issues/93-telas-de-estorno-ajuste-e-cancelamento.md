@@ -1,7 +1,7 @@
 # Telas de estorno, ajuste de fatura e compra cancelada
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 55, 88
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design`
 Modelo recomendado: Sonnet
