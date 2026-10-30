@@ -59,7 +59,7 @@ export function AvisoDePlanejamento(props: Props) {
         <>
           <p data-testid="efeito-no-item">
             <strong>{props.nomeDaCategoria(aviso.item.categoria_id)}</strong>: {aviso.item.antes.percentual}%
-            {aviso.item.depois.percentual !== aviso.item.antes.percentual && (
+            {aviso.item.depois.ainda_da_para_gastar_centavos !== aviso.item.antes.ainda_da_para_gastar_centavos && (
               <>
                 {" → "}
                 <strong>{aviso.item.depois.percentual}%</strong>
@@ -84,6 +84,7 @@ export function AvisoDePlanejamento(props: Props) {
               </button>
             ))}
           </div>
+          {aviso.aEscolher && <p className="detalhe-do-aviso">Sem escolha, ele fica em "a escolher" até alguém escolher o item.</p>}
         </>
       )}
       {props.atualizadoEm && (aviso || props.noCartao) && <p className="vazio">Planejamento {atualizadoAs(props.atualizadoEm)}</p>}

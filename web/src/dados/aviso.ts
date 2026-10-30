@@ -16,8 +16,8 @@ export function ondeConta(comItem: Set<string>, escolhida: string | null | undef
 }
 
 /** (realizado + previsto) sobre o planejado, com o meio arredondado para o par, como o `round` do servidor. */
-export function percentual(usado: number, planejado: number): number {
-  const exato = (usado * 100) / planejado;
+export function percentual(realizadoEPrevisto: number, planejado: number): number {
+  const exato = (realizadoEPrevisto * 100) / planejado;
   const piso = Math.floor(exato);
   const resto = exato - piso;
   const arredondado = resto > 0.5 || (resto === 0.5 && piso % 2 !== 0) ? piso + 1 : piso;
@@ -67,17 +67,19 @@ export type CartaoDaCompra = { titular: DiasDoTitular; faturas: FechamentoGravad
 
 /**
  * O mês em que o lançamento conta (`AAAA-MM-01`): o da data, na conta; no cartão, a fatura escolhida
- * à mão, a que o servidor deu se a data e o cartão não mudaram, ou a da data (`mesDaCompra`).
+ * à mão, a que o servidor deu se a data e o cartão não mudaram, ou a da data (`mesDaCompra`), que na
+ * parcela n vem n - 1 faturas depois (`mes_da_parcela` no servidor).
  */
 export function mesEmQueConta(
   l: { conta_id: string; data: string; fatura_mes?: string | null },
-  anterior: { conta_id: string; data: string; mes?: string | null } | undefined,
+  anterior: { conta_id: string; data: string; mes?: string | null; parcela?: number | null } | undefined,
   cartao: CartaoDaCompra | undefined,
 ): string | null {
   if (!cartao) return mesDepois(l.data, 0);
   if (l.fatura_mes) return l.fatura_mes;
   if (anterior?.mes && anterior.conta_id === l.conta_id && anterior.data === l.data) return anterior.mes;
-  return mesDaCompra(cartao.titular, cartao.faturas, l.data);
+  const daCompra = mesDaCompra(cartao.titular, cartao.faturas, l.data);
+  return daCompra && mesDepois(daCompra, (anterior?.parcela ?? 1) - 1);
 }
 
 export type Planejamento = components["schemas"]["Planejamento"];
@@ -110,13 +112,14 @@ export type Aviso = {
 
 const doMes = (p: Planejamento, l: Contagem) => !!l.mes && l.mes.slice(0, 7) === p.mes;
 
-function comItemNoMes(p: Planejamento, l: Contagem): string[] {
+/** As categorias, das dadas, que têm item no mês, na mesma ordem. */
+export function categoriasComItem(p: Planejamento, categorias: string[]): string[] {
   const comItem = new Set(p.itens.map((i) => i.categoria_id));
-  return l.categoria_ids.filter((c) => comItem.has(c));
+  return categorias.filter((c) => comItem.has(c));
 }
 
 /** O item em que o lançamento ficou quando surgiu a ambiguidade, que só o servidor sabe. */
-const itemAtual = (p: Planejamento, id: string) => p.a_escolher.find((a) => a.lancamento_id === id)?.item_categoria_id;
+export const itemAtual = (p: Planejamento, id: string) => p.a_escolher.find((a) => a.lancamento_id === id)?.item_categoria_id;
 
 /** O planejamento sem a versão `antes` do lançamento e com a `depois`, somado como no servidor. */
 function trocar(p: Planejamento, antes?: Contagem | null, depois?: Contagem | null): Planejamento {
@@ -127,7 +130,7 @@ function trocar(p: Planejamento, antes?: Contagem | null, depois?: Contagem | nu
   let aEscolher: AEscolher[] = p.a_escolher.filter((a) => a.lancamento_id !== id);
   for (const [l, sinal] of [[antes, -1], [depois, 1]] as const) {
     if (!l || !doMes(p, l)) continue;
-    const comItem = comItemNoMes(p, l);
+    const comItem = categoriasComItem(p, l.categoria_ids);
     const [conta, fica] = ondeConta(new Set(comItem), l.item_categoria_id, atual);
     // O estorno diminui o item da compra que ele devolve.
     if (conta) somas.get(conta)![l.situacao] += sinal * (l.estorno_de ? -l.valor_centavos : l.valor_centavos);
@@ -157,9 +160,9 @@ export function comAFila(p: Planejamento, mudancas: Mudanca[]): Planejamento {
  */
 export function avisoDePlanejamento(p: Planejamento, antes: Contagem | null, depois: Contagem): Aviso | null {
   if (!doMes(p, depois)) return null;
-  const categoriasComItem = comItemNoMes(p, depois);
-  const [conta, aEscolher] = ondeConta(new Set(categoriasComItem), depois.item_categoria_id, itemAtual(p, depois.id));
-  const aviso: Aviso = { mes: depois.mes!, categoriasComItem, aEscolher, item: null };
+  const comItem = categoriasComItem(p, depois.categoria_ids);
+  const [conta, aEscolher] = ondeConta(new Set(comItem), depois.item_categoria_id, itemAtual(p, depois.id));
+  const aviso: Aviso = { mes: depois.mes!, categoriasComItem: comItem, aEscolher, item: null };
   if (!conta) return aviso;
   const estado = (q: Planejamento): EstadoDoItem => {
     const { percentual, ainda_da_para_gastar_centavos } = q.itens.find((i) => i.categoria_id === conta)!;
@@ -169,12 +172,24 @@ export function avisoDePlanejamento(p: Planejamento, antes: Contagem | null, dep
   return { ...aviso, item: { categoria_id: conta, planejado_centavos, antes: estado(p), depois: estado(trocar(p, antes, depois)) } };
 }
 
-/** A escolha mais recente (`em`) de um lançamento que tem todas as categorias do conjunto, entre elas. */
-export function ultimaEscolha(conjunto: string[], lancamentos: { categoria_ids: string[]; item_categoria_id?: string | null; em: number }[]): string | null {
+/**
+ * A escolha mais recente (`em`) de um lançamento do mesmo conjunto: o que tem, das categorias com
+ * item no mês (`comItemNoMes`), exatamente as do conjunto. O aparelho não sabe quando a escolha mudou,
+ * só quando o lançamento mudou.
+ */
+export function ultimaEscolha(
+  conjunto: string[],
+  lancamentos: { categoria_ids: string[]; item_categoria_id?: string | null; em: number }[],
+  comItemNoMes: string[],
+): string | null {
+  const doConjunto = (categorias: string[]) => {
+    const comItem = categorias.filter((c) => comItemNoMes.includes(c));
+    return comItem.length === conjunto.length && conjunto.every((c) => comItem.includes(c));
+  };
   let ultima: { escolha: string; em: number } | null = null;
   for (const l of lancamentos) {
     const escolha = l.item_categoria_id;
-    if (!escolha || !conjunto.includes(escolha) || !conjunto.every((c) => l.categoria_ids.includes(c))) continue;
+    if (!escolha || !conjunto.includes(escolha) || !doConjunto(l.categoria_ids)) continue;
     if (!ultima || l.em > ultima.em) ultima = { escolha, em: l.em };
   }
   return ultima?.escolha ?? null;

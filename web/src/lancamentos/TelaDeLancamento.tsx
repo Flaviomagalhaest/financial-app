@@ -56,7 +56,8 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
-  // O item tocado em "Conta no planejamento em:"; sem toque, o aviso propõe um.
+  // O item tocado em "Conta no planejamento em:"; sem toque, vale a escolha que o lançamento já tem
+  // ou, no novo, a última para aquelas categorias.
   const [itemTocado, setItemTocado] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);

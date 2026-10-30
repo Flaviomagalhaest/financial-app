@@ -34,6 +34,7 @@ import {
 } from "./fila";
 import {
   avisoDePlanejamento,
+  categoriasComItem,
   comAFila,
   fechamentoDaFatura,
   mesEmQueConta,
@@ -116,8 +117,7 @@ function useResposta<C extends Caminho>(caminho: C) {
 
 /** As faturas de um cartão, da mais antiga à mais nova; as do adicional são as do titular. */
 export function useFaturas(cartaoId: string) {
-  const ler = () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id: cartaoId } } });
-  return useRespostaDe<Fatura[]>(`/api/cartoes/${cartaoId}/faturas`, ler);
+  return useRespostaDe<Fatura[]>(caminhoDasFaturas(cartaoId), faturasDe(cartaoId));
 }
 
 /** O limite comprometido e disponível do cartão titular (o adicional divide o dele). */
@@ -305,27 +305,26 @@ export function useSugestao(): FonteDeSugestao {
 
 const planejamentoDe = (mes: string) => () => api.GET("/api/planejamento/{mes}", { params: { path: { mes } } });
 const faturasDe = (id: string) => () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id } } });
+const caminhoDasFaturas = (cartaoId: string) => `/api/cartoes/${cartaoId}/faturas`;
+/** Os cartões que têm faturas: o adicional usa as do titular. */
+const titulares = (cartoes: Cartao[]) => cartoes.filter((c) => !c.titular_id).map((c) => c.id);
 
 /**
  * As faturas guardadas dos cartões titulares, buscadas de novo ao abrir: para o aparelho saber em
  * que fatura cai a compra no cartão sem internet (o fechamento que alguém acertou à mão).
  */
 function useFaturasDosTitulares(cartoes: Cartao[]): Map<string, Fatura[]> {
-  const chave = cartoes
-    .filter((c) => !c.titular_id)
-    .map((c) => c.id)
-    .sort()
-    .join();
+  const chave = titulares(cartoes).sort().join();
   const [porCartao, setPorCartao] = useState(new Map<string, Fatura[]>());
   useEffect(() => {
     let ativo = true;
     const ids = chave ? chave.split(",") : [];
     const lerGuardadas = () =>
-      void Promise.all(ids.map((id) => lerResposta<Fatura[]>(`/api/cartoes/${id}/faturas`))).then(
+      void Promise.all(ids.map((id) => lerResposta<Fatura[]>(caminhoDasFaturas(id)))).then(
         (guardadas) => ativo && setPorCartao(new Map(ids.map((id, i) => [id, guardadas[i]?.dados ?? []]))),
       );
     lerGuardadas();
-    for (const id of ids) void buscarEGuardar(`/api/cartoes/${id}/faturas`, faturasDe(id));
+    for (const id of ids) void buscarEGuardar(caminhoDasFaturas(id), faturasDe(id));
     const parar = ouvirMudancas(lerGuardadas);
     return () => {
       ativo = false;
@@ -344,7 +343,7 @@ function cartaoDaCompra(cartoes: Cartao[], faturas: Map<string, Fatura[]>, conta
 }
 
 /** Um lançamento como conta no planejamento do aparelho, com a hora da última mudança (`em`). */
-type NoAparelho = Contagem & { conta_id: string; data: string; em: number };
+type NoAparelho = Contagem & { conta_id: string; data: string; parcela?: number | null; em: number };
 
 /**
  * As mudanças da fila que o servidor ainda não tem, sobre a versão que ele tem (`servidor`), e a
@@ -365,8 +364,9 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
     const l = item.lancamento;
     const depois: NoAparelho = {
       ...l,
-      // O estorno não muda de compra: vale o que o servidor tem.
+      // O estorno não muda de compra, nem a parcela de número: vale o que o servidor tem.
       estorno_de: l.estorno_de ?? antes?.estorno_de,
+      parcela: antes?.parcela,
       situacao: situacaoNoAparelho(l, antes),
       mes: mesEmQueConta(l, antes, cartaoDe(l.conta_id)),
       em: item.feitoEm ?? item.desde,
@@ -385,9 +385,9 @@ export type LancamentoEmEdicao = Pick<NovoLancamento, "id" | "valor_centavos" | 
 /**
  * O aviso de planejamento da tela de lançar, com e sem internet (ticket 52): o planejamento do mês
  * em que o lançamento conta (o do servidor ou o guardado) com a fila por cima, e o efeito do
- * lançamento nele. Com duas ou mais categorias com item, `escolha` é a categoria em que ele conta:
- * a tocada na tela, a que ele já tem, a do item em que ele está, a última escolha para o conjunto
- * ou a primeira marcada.
+ * lançamento nele. Com duas ou mais categorias com item, `escolha` é a escolha do item que vai ser
+ * salva: a tocada na tela, a que o lançamento já tem ou, no lançamento novo, a última escolha para
+ * aquele conjunto. Sem nenhuma, ele fica "a escolher" (no item em que já estava, se estava).
  */
 export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTocada: string | null) {
   const { dados: servidor } = useResposta(LISTA);
@@ -401,20 +401,13 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
   const cartao = cartaoDe(lancamento.conta_id);
   const mes = mesEmQueConta(lancamento, antes ?? undefined, cartao);
   // Sem mês (cartão sem dia de fechamento), lê o deste mês, que o aviso não usa.
-  const guardado = useRespostaDe<Planejamento>(`/api/planejamento/${(mes ?? hoje()).slice(0, 7)}`, planejamentoDe((mes ?? hoje()).slice(0, 7)));
+  const mesLido = (mes ?? hoje()).slice(0, 7);
+  const guardado = useRespostaDe<Planejamento>(`/api/planejamento/${mesLido}`, planejamentoDe(mesLido));
   const planejamento = useMemo(() => (guardado.dados ? comAFila(guardado.dados, mudancas) : null), [guardado.dados, mudancas]);
 
-  const comItem = planejamento ? lancamento.categoria_ids.filter((c) => planejamento.itens.some((i) => i.categoria_id === c)) : [];
-  const escolha =
-    comItem.length < 2
-      ? null
-      : ([
-          escolhaTocada,
-          antes?.item_categoria_id,
-          planejamento?.a_escolher.find((a) => a.lancamento_id === lancamento.id)?.item_categoria_id,
-          ultimaEscolha(comItem, [...porId.values()]),
-          comItem[0],
-        ].find((c) => c && comItem.includes(c)) ?? null);
+  const comItem = planejamento ? categoriasComItem(planejamento, lancamento.categoria_ids) : [];
+  const ultima = () => (antes || !planejamento ? null : ultimaEscolha(comItem, [...porId.values()], planejamento.itens.map((i) => i.categoria_id)));
+  const escolha = comItem.length < 2 ? null : ([escolhaTocada, antes?.item_categoria_id, ultima()].find((c) => c && comItem.includes(c)) ?? null);
 
   const aviso: Aviso | null =
     planejamento && mes
@@ -560,20 +553,24 @@ export async function contarNaoEnviados(): Promise<number> {
 export const apagarDadosDoAparelho = apagarTudo;
 
 /**
- * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão e o
- * planejamento vêm logo depois, para o aparelho tê-los sem internet mesmo sem ter aberto o novo
- * lançamento.
+ * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão, o
+ * planejamento e as faturas vêm logo depois, para o aparelho tê-los sem internet mesmo sem ter
+ * aberto o novo lançamento.
  */
 export function iniciarEnvioAutomatico(): () => void {
   const enviar = () =>
     void enviarAgora().then(() =>
       Promise.all([
         buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]),
-        // O planejamento deste mês e do próximo (a compra no cartão), para o aviso sem internet.
-        ...[0, 1].map((n) => {
+        // Para o aviso de planejamento sem internet: o planejamento do mês anterior ao próximo (a
+        // compra no cartão conta no mês da fatura) e as faturas dos cartões.
+        ...[-1, 0, 1].map((n) => {
           const mes = mesDepois(hoje(), n).slice(0, 7);
           return buscarEGuardar(`/api/planejamento/${mes}`, planejamentoDe(mes));
         }),
+        buscarEGuardar("/api/cartoes", LEITURAS["/api/cartoes"]).then((cartoes) =>
+          Promise.all(titulares(cartoes ?? []).map((id) => buscarEGuardar(caminhoDasFaturas(id), faturasDe(id)))),
+        ),
       ]),
     );
   const aoVoltar = () => document.visibilityState === "visible" && enviar();

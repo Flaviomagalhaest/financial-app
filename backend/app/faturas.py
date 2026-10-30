@@ -97,7 +97,9 @@ def _gravados(conn, titular: Titular, meses: list[date]) -> dict[date, date]:
     )
 
 
-def _com_padrao(titular: Titular, gravados: dict[date, date], meses: list[date]):
+def _com_padrao(
+    titular: Titular, gravados: dict[date, date], meses: list[date]
+) -> dict[date, date | None]:
     return {mes: gravados.get(mes) or datas_padrao(titular, mes)[0] for mes in meses}
 
 

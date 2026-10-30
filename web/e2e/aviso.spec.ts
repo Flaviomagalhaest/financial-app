@@ -151,15 +151,19 @@ test.describe("última escolha para o conjunto", () => {
   ];
 
   test("a mais recente entre os lançamentos que têm as categorias do conjunto", () => {
-    expect(ultimaEscolha(["mercado", "casa"], passado)).toBe("casa");
+    expect(ultimaEscolha(["mercado", "casa"], passado, ["mercado", "casa"])).toBe("casa");
+  });
+
+  test("o lançamento com outra categoria com item é de outro conjunto", () => {
+    expect(ultimaEscolha(["mercado", "casa"], passado, ["mercado", "casa", "lazer"])).toBe("mercado");
   });
 
   test("a escolha fora do conjunto não vale", () => {
-    expect(ultimaEscolha(["mercado", "casa"], [{ categoria_ids: ["mercado", "casa", "lazer"], item_categoria_id: "lazer", em: 1 }])).toBeNull();
+    expect(ultimaEscolha(["mercado", "casa"], [{ categoria_ids: ["mercado", "casa", "lazer"], item_categoria_id: "lazer", em: 1 }], ["mercado", "casa"])).toBeNull();
   });
 
   test("sem escolha guardada para o conjunto, nenhuma", () => {
-    expect(ultimaEscolha(["casa", "viagem"], passado)).toBeNull();
+    expect(ultimaEscolha(["casa", "viagem"], passado, ["casa", "viagem"])).toBeNull();
   });
 });
 
@@ -171,6 +175,8 @@ test.describe("mês em que o lançamento conta", () => {
     { caso: "no cartão, a fatura escolhida à mão", l: { conta_id: "nubank", data: "2026-10-28", fatura_mes: "2026-12-01" }, cartao: nubank, mes: "2026-12-01" },
     { caso: "na edição sem mudar data nem cartão, o mês que o servidor deu", l: { conta_id: "nubank", data: "2026-10-28" }, anterior: { conta_id: "nubank", data: "2026-10-28", mes: "2026-10-01" }, cartao: nubank, mes: "2026-10-01" },
     { caso: "na edição que muda a data, a fatura da data nova", l: { conta_id: "nubank", data: "2026-10-20" }, anterior: { conta_id: "nubank", data: "2026-10-28", mes: "2026-11-01" }, cartao: nubank, mes: "2026-10-01" },
+    { caso: "a parcela 3/10 que muda de data cai duas faturas depois da fatura da compra", l: { conta_id: "nubank", data: "2026-10-05" }, anterior: { conta_id: "nubank", data: "2026-10-06", mes: "2026-12-01", parcela: 3 }, cartao: nubank, mes: "2026-12-01" },
+    { caso: "a parcela 3/10 que muda de cartão cai duas faturas depois da fatura da compra", l: { conta_id: "visa", data: "2026-10-28" }, anterior: { conta_id: "nubank", data: "2026-10-28", mes: "2027-01-01", parcela: 3 }, cartao: nubank, mes: "2027-01-01" },
     { caso: "cartão sem dia de fechamento e sem fatura escolhida: não se sabe", l: { conta_id: "antigo", data: "2026-10-20" }, cartao: { titular: { dia_fechamento: null }, faturas: [] }, mes: null },
   ];
   for (const c of casos) {

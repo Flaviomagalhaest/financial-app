@@ -17,7 +17,7 @@ test.describe("onde conta", () => {
 test.describe("percentual", () => {
   for (const c of percentualTabela.casos) {
     test(c.caso, () => {
-      expect(percentual(c.usado, c.planejado)).toBe(c.percentual);
+      expect(percentual(c.realizado_e_previsto, c.planejado)).toBe(c.percentual);
     });
   }
 });

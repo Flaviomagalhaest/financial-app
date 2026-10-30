@@ -144,3 +144,39 @@ test("sem internet, o aviso usa o planejamento guardado e já conta o não envia
   await expect(aviso(page)).toContainText(`${mercado.nome}: 92% → 97% do planejado`);
   await context.setOffline(false);
 });
+
+test("sem escolha para o conjunto, nada fica marcado e o lançamento fica a escolher, também ao editar só o valor", async ({ page }) => {
+  const { s, headers, conta, categoria } = await prepararCasal(page);
+  const mercado = await categoria("Mercado", 100000);
+  const casa = await categoria("Casa", 50000);
+
+  await novoLancamento(page);
+  await digitar(page, "5", "0", "0", "0");
+  await page.getByRole("button", { name: conta, exact: true }).click();
+  await page.getByRole("button", { name: mercado.nome, exact: true }).click();
+  await page.getByRole("button", { name: casa.nome, exact: true }).click();
+  const ondeConta = aviso(page).getByRole("group", { name: "Conta no planejamento em:" });
+  await expect(ondeConta.getByRole("button", { name: mercado.nome })).toHaveAttribute("aria-pressed", "false");
+  await expect(ondeConta.getByRole("button", { name: casa.nome })).toHaveAttribute("aria-pressed", "false");
+  await expect(aviso(page)).toContainText('Sem escolha, ele fica em "a escolher" até alguém escolher o item.');
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(`Feira ${s}`);
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  const feira = page.getByRole("listitem").filter({ hasText: `Feira ${s}` });
+  await expect(feira).not.toContainText("não enviado");
+
+  await feira.getByRole("link", { name: `Editar Feira ${s}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 50,00");
+  await digitar(page, "0");
+  await expect(aviso(page)).toContainText('Sem escolha, ele fica em "a escolher"');
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(feira).toContainText("R$ 500,00");
+  await expect(feira).not.toContainText("não enviado");
+
+  const plano = await (await page.request.get(`/api/planejamento/${hoje().slice(0, 7)}`, { headers })).json();
+  const lista: { id: string; descricao: string; item_categoria_id: string | null }[] = await (await page.request.get("/api/lancamentos", { headers })).json();
+  const salvo = lista.find((l) => l.descricao === `Feira ${s}`)!;
+  expect(salvo.item_categoria_id).toBeNull();
+  expect(plano.a_escolher.map((a: { lancamento_id: string }) => a.lancamento_id)).toContain(salvo.id);
+});

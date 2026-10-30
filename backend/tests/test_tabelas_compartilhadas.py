@@ -30,7 +30,7 @@ def test_onde_conta(caso: dict):
 
 @pytest.mark.parametrize("caso", casos("percentual"), ids=lambda c: c["caso"])
 def test_percentual(caso: dict):
-    assert percentual(caso["usado"], caso["planejado"]) == caso["percentual"]
+    assert percentual(caso["realizado_e_previsto"], caso["planejado"]) == caso["percentual"]
 
 
 @pytest.mark.parametrize("caso", casos("mes-da-compra"), ids=lambda c: c["caso"])
