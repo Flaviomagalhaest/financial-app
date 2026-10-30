@@ -315,6 +315,12 @@ _SALDO = """
 """
 
 
+def saldo_das_contas(conn) -> int:
+    """A soma do saldo de todas as contas, arquivadas inclusive; o cartão não é conta."""
+    linhas = conn.execute(_SALDO).fetchall()
+    return sum(_conta(linha).saldo_centavos for linha in linhas)
+
+
 def _conta(linha) -> Conta:
     id, nome, tipo, abertura, data_abertura, arquivada, saldo = linha
     return Conta(

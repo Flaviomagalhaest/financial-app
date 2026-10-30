@@ -8,6 +8,7 @@ import { TelaDeConflito } from "../lancamentos/TelaDeConflito";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
 import { TelaDeCartoes } from "../cartoes/TelaDeCartoes";
 import { TelaDaFatura } from "../cartoes/TelaDaFatura";
+import { TelaDoFuturo } from "../futuro/TelaDoFuturo";
 import { ABAS, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
@@ -61,7 +62,8 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "configuracoes" && <Configuracoes />}
         {rota === "historico" && <ListaDeLancamentos />}
         {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}
-        {aba && aba.id !== "hoje" && aba.id !== "historico" && aba.id !== "cartoes" && <Vazia nome={aba.nome} />}
+        {rota === "futuro" && <TelaDoFuturo />}
+        {aba && aba.id !== "hoje" && aba.id !== "historico" && aba.id !== "cartoes" && aba.id !== "futuro" && <Vazia nome={aba.nome} />}
       </main>
     </div>
   );
