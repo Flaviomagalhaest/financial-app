@@ -730,6 +730,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/parcelamentos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir Parcelamento
+         * @description Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
+         *     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
+         *     recebe o aviso de excluído).
+         */
+        delete: operations["excluir_parcelamento"];
+        options?: never;
+        head?: never;
+        /**
+         * Alterar Parcelamento
+         * @description Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa editou à mão fica como
+         *     está. Se uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o
+         *     pedido vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.
+         */
+        patch: operations["alterar_parcelamento"];
+        trace?: never;
+    };
     "/api/parcelamentos/{id}/antecipacoes": {
         parameters: {
             query?: never;
@@ -913,6 +941,41 @@ export interface components {
             acao_em?: string | null;
         };
         /**
+         * AlteracaoDeParcelamento
+         * @description O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,
+         *     tags, pessoa e item valem para todas as parcelas, inclusive as realizadas. Valor, número de
+         *     parcelas e data refazem as parcelas, salvo as que uma pessoa editou à mão; se uma realizada
+         *     mudar ou sair, o pedido só vale com `confirmar_realizadas`.
+         */
+        AlteracaoDeParcelamento: {
+            /** Descricao */
+            descricao?: string;
+            /** Categoria Ids */
+            categoria_ids?: string[];
+            /** Tags */
+            tags?: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos?: number | null;
+            /** Valor Da Parcela Centavos */
+            valor_da_parcela_centavos?: number | null;
+            /** Parcelas */
+            parcelas?: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data?: string;
+            /**
+             * Confirmar Realizadas
+             * @default false
+             */
+            confirmar_realizadas: boolean;
+        };
+        /**
          * AlteracaoDeRecorrencia
          * @description Os campos da regra que mudam "daqui para frente", a partir da ocorrência dada: a regra
          *     passa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,
@@ -979,6 +1042,17 @@ export interface components {
             data?: string | null;
             /** Valor Total Centavos */
             valor_total_centavos?: number | null;
+        };
+        /**
+         * AvisoDeRealizadas
+         * @description A correção mudaria parcelas já realizadas; nada foi gravado. Repetir o pedido com
+         *     `confirmar_realizadas` as muda.
+         */
+        AvisoDeRealizadas: {
+            /** Motivo */
+            motivo: string;
+            /** Parcelas */
+            parcelas: components["schemas"]["ParcelaQueMuda"][];
         };
         /**
          * CampoEmConflito
@@ -1418,6 +1492,11 @@ export interface components {
             parcela?: number | null;
             /** Parcelas */
             parcelas?: number | null;
+            /**
+             * Alterada A Mao
+             * @default false
+             */
+            alterada_a_mao: boolean;
             /** Versao */
             versao: number;
             /** Criado Por */
@@ -1806,6 +1885,32 @@ export interface components {
             valor_da_parcela_centavos?: number | null;
             /** Automatico */
             automatico?: boolean | null;
+        };
+        /**
+         * ParcelaQueMuda
+         * @description Uma parcela realizada que a correção muda ou tira.
+         */
+        ParcelaQueMuda: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parcela */
+            parcela: number;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /** Valor Novo Centavos */
+            valor_novo_centavos: number | null;
+            /** Data Nova */
+            data_nova: string | null;
+            /** Sai */
+            sai: boolean;
         };
         /** Parcelamento */
         Parcelamento: {
@@ -3814,6 +3919,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Parcelamento"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_parcelamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alterar_parcelamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlteracaoDeParcelamento"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parcelamento"];
+                };
+            };
+            /** @description A correção muda parcelas realizadas */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvisoDeRealizadas"];
                 };
             };
             /** @description Validation Error */

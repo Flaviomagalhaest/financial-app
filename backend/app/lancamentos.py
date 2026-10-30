@@ -150,6 +150,9 @@ class Lancamento(DadosDoLancamento):
     parcelamento_id: UUID | None = None
     parcela: int | None = None
     parcelas: int | None = None
+    # Parcela cujo valor, data, conta ou fatura uma pessoa mudou: a correção do parcelamento a
+    # preserva (ticket 47). Só a parcela tem a marca.
+    alterada_a_mao: bool = False
     # Sobe a cada mudança aceita; a edição e a exclusão dizem sobre qual versão foram feitas.
     versao: int
     criado_por: str
@@ -279,12 +282,20 @@ VALOR_COM_SINAL = (
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 # Quantas parcelas tem o parcelamento da parcela (o 10 de 3/10); o avulso não tem.
 PARCELAS = "(SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
+# Uma pessoa mudou (campo sem `origem`) o valor, a data, a conta ou a fatura da parcela, que a
+# correção do parcelamento não toca. A confirmação sem ajuste só registra a situação, e as regras
+# gravam com `origem`: nenhuma conta como edição.
+ALTERADA_A_MAO = (
+    "(parcelamento_id IS NOT NULL AND EXISTS (SELECT FROM lancamento_campos c"
+    " WHERE c.lancamento_id = lancamentos.id AND c.origem IS NULL"
+    " AND c.campo IN ('valor_centavos', 'data', 'conta_id', 'fatura_mes')))"
+)
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
     f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de, parcelamento_id, parcela,"
-    f" {PARCELAS}, item_categoria_id"
+    f" {PARCELAS}, item_categoria_id, {ALTERADA_A_MAO}"
 )
 
 
@@ -1058,6 +1069,7 @@ def _todos(
             parcela=l[22],
             parcelas=l[23],
             item_categoria_id=l[24],
+            alterada_a_mao=l[25],
         )
         for l in linhas
     ]
