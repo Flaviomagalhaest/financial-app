@@ -160,6 +160,10 @@ _Avoid_: item principal, categoria principal
 A lista dos lançamentos do mês com duas ou mais categorias com item e sem escolha do item que valha. O lançamento que já contava sozinho num item quando a ambiguidade surgiu (item criado no meio do mês, categorias editadas, outro mês) continua nele até o casal escolher.
 _Avoid_: pendentes, sem item
 
+**Aviso de planejamento**:
+O que a tela de lançar mostra a cada toque: o item em que o lançamento conta, com a porcentagem do planejado antes e depois dele e quanto ainda dá para gastar ou quanto passa; "conta só no total do mês" quando nenhuma categoria tem item; no cartão, a fatura em que a compra cai. Roda no aparelho, também sem internet, e já conta os lançamentos não enviados.
+_Avoid_: alerta de orçamento, previsão do item
+
 **Modelo padrão do planejamento**:
 Conjunto de itens (categoria e valor) que o casal mantém nas configurações e aplica a um mês vazio para não começar o planejamento do zero; vale para qualquer mês e não é um mês. Não é um **Favorito**, que é um lançamento-modelo.
 _Avoid_: modelo (sozinho), template

@@ -86,26 +86,41 @@ def ler_cartao(conn, id: UUID) -> CartaoComTitular | None:
     return CartaoComTitular(id=id, arquivado=arquivado, titular=Titular(*titular))
 
 
-def fechamentos(conn, titular: Titular, meses: list[date]) -> dict[date, date | None]:
-    """O fechamento de cada mês: o da fatura que já existe ou, sem ela (ou sem data, como a
-    importada), o padrão."""
-    gravados = dict(
+def _gravados(conn, titular: Titular, meses: list[date]) -> dict[date, date]:
+    """O fechamento das faturas que já existem nesses meses e têm data."""
+    return dict(
         conn.execute(
             "SELECT mes, fechamento FROM faturas WHERE cartao_id = %s AND mes = ANY(%s)"
             " AND fechamento IS NOT NULL",
             (titular.id, meses),
         ).fetchall()
     )
+
+
+def _com_padrao(
+    titular: Titular, gravados: dict[date, date], meses: list[date]
+) -> dict[date, date | None]:
     return {mes: gravados.get(mes) or datas_padrao(titular, mes)[0] for mes in meses}
 
 
-def mes_da_compra(conn, titular: Titular, data: date) -> date:
-    """A primeira fatura que fecha depois da data da compra: compra feita no próprio dia do
-    fechamento já vai para a seguinte. Começa pela fatura do mês anterior, porque um
+def fechamentos(conn, titular: Titular, meses: list[date]) -> dict[date, date | None]:
+    """O fechamento de cada mês: o da fatura que já existe ou, sem ela (ou sem data, como a
+    importada), o padrão."""
+    return _com_padrao(titular, _gravados(conn, titular, meses), meses)
+
+
+def _candidatos(titular: Titular, data: date) -> list[date]:
+    """Os meses em que a compra pode cair. Começa pela fatura do mês anterior, porque um
     fechamento editado pode ter escorregado para o mês da compra."""
     primeiro = somar_meses(mes_de(data), -1 - _meses_ate_o_fechamento(titular))
-    meses = [somar_meses(primeiro, n) for n in range(4)]
-    for mes, fechamento in fechamentos(conn, titular, meses).items():
+    return [somar_meses(primeiro, n) for n in range(4)]
+
+
+def escolher_fatura(titular: Titular, gravados: dict[date, date], data: date) -> date:
+    """A primeira fatura que fecha depois da data da compra, dados os fechamentos gravados:
+    compra feita no próprio dia do fechamento já vai para a seguinte. O app repete a escolha no
+    aviso de planejamento (`tabelas-de-teste/mes-da-compra.json`)."""
+    for mes, fechamento in _com_padrao(titular, gravados, _candidatos(titular, data)).items():
         if fechamento is None:
             raise HTTPException(
                 status_code=422, detail="cartão sem dia de fechamento: escolha a fatura"
@@ -113,6 +128,12 @@ def mes_da_compra(conn, titular: Titular, data: date) -> date:
         if fechamento > data:
             return mes
     raise HTTPException(status_code=422, detail="nenhuma fatura fecha depois da compra")
+
+
+def mes_da_compra(conn, titular: Titular, data: date) -> date:
+    """A fatura em que cai a compra feita em `data` (`escolher_fatura`)."""
+    gravados = _gravados(conn, titular, _candidatos(titular, data))
+    return escolher_fatura(titular, gravados, data)
 
 
 def mes_da_parcela(conn, titular: Titular, data: date, parcela: int | None) -> date:
