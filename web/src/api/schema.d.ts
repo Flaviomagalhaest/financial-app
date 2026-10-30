@@ -833,6 +833,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/favoritos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Favoritos */
+        get: operations["listar_favoritos"];
+        put?: never;
+        /**
+         * Criar Favorito
+         * @description Reenviar o mesmo id, ou favoritar o que já é favorito, devolve o que já está gravado, com
+         *     200. Favoritar o que foi removido ou dispensado o traz de volta.
+         */
+        post: operations["criar_favorito"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/favoritos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remover Favorito
+         * @description Idempotente. O removido vira dispensado: com 5 usos ou mais, não volta como sugerido.
+         */
+        delete: operations["remover_favorito"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/favoritos/ordem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reordenar Favoritos
+         * @description A lista inteira, na ordem nova: o que faltar ou sobrar recusa (alguém mudou a lista).
+         */
+        put: operations["reordenar_favoritos"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/favoritos/sugeridos/dispensar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispensar Sugerido
+         * @description Idempotente: dispensar de novo o mesmo sugerido também dá 204.
+         */
+        post: operations["dispensar_sugerido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/futuro": {
         parameters: {
             query?: never;
@@ -868,6 +950,20 @@ export interface components {
             item_categoria_id: string | null;
             /** Categorias Com Item */
             categorias_com_item: string[];
+        };
+        /** AcaoConfirmar */
+        AcaoConfirmar: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "confirmar";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            confirmacao: components["schemas"]["Confirmacao"];
         };
         /** AcaoCriar */
         AcaoCriar: {
@@ -1254,6 +1350,11 @@ export interface components {
             /** Livre Centavos */
             livre_centavos: number;
         };
+        /** Dispensa */
+        Dispensa: {
+            /** Chave */
+            chave: string;
+        };
         /** EdicaoDeCartao */
         EdicaoDeCartao: {
             /** Nome */
@@ -1360,6 +1461,51 @@ export interface components {
             pago_centavos: number;
             /** A Pagar Centavos */
             a_pagar_centavos: number;
+        };
+        /** Favorito */
+        Favorito: {
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ordem */
+            ordem: number;
+            /** Valor Padrao Centavos */
+            valor_padrao_centavos: number;
+        };
+        /** Favoritos */
+        Favoritos: {
+            /** Favoritos */
+            favoritos: components["schemas"]["Favorito"][];
+            /** Sugeridos */
+            sugeridos: components["schemas"]["Sugerido"][];
         };
         /**
          * Fechamento
@@ -1663,7 +1809,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoCriarParcelamento"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"])[];
         };
         /** MesDaProjecao */
         MesDaProjecao: {
@@ -1750,6 +1896,11 @@ export interface components {
             saldo_abertura_centavos?: number | null;
             /** Data Abertura */
             data_abertura?: string | null;
+        };
+        /** NovaOrdem */
+        NovaOrdem: {
+            /** Ids */
+            ids: string[];
         };
         /** NovaRecorrencia */
         NovaRecorrencia: {
@@ -1875,6 +2026,40 @@ export interface components {
             mes_anterior_ao_fechamento: boolean;
             /** Titular Id */
             titular_id?: string | null;
+        };
+        /** NovoFavorito */
+        NovoFavorito: {
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** NovoItem */
         NovoItem: {
@@ -2274,6 +2459,39 @@ export interface components {
             status: string;
             /** Migrations */
             migrations: number;
+        };
+        /** Sugerido */
+        Sugerido: {
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "despesa" | "receita";
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /** Chave */
+            chave: string;
+            /** Usos */
+            usos: number;
         };
         /**
          * Sugestao
@@ -4213,6 +4431,152 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IndiceDeSugestao"];
+                };
+            };
+        };
+    };
+    listar_favoritos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Favoritos"];
+                };
+            };
+        };
+    };
+    criar_favorito: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoFavorito"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Favorito"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remover_favorito: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reordenar_favoritos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaOrdem"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Favoritos"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispensar_sugerido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Dispensa"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
