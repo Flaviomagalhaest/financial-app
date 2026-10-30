@@ -55,6 +55,13 @@ _Avoid_: compartilhado, comum
 Lançamento-modelo que o casal marca (ou aceita dos sugeridos, os mais usados) para registrar de novo com um toque: preenche conta, categorias, tags, pessoa e o último valor, que é só o padrão e se confirma ao salvar. Aparece numa fileira acima do teclado do novo lançamento e numa grade na tela inicial.
 _Avoid_: atalho, modelo
 
+**Sugerido**:
+Lançamento que o casal repete muito (os 3 mais repetidos, a partir de 5 usos) e ainda não é **Favorito**; aparece no grupo "Sugeridos" da Hoje e das configurações, para promover com a ⭐ ou dispensar. O que se dispensa, ou se remove dos favoritos, não volta a ser sugerido. Não é uma **Sugestão**, que vem da descrição.
+_Avoid_: favorito automático
+
+**Identidade do favorito**:
+O que faz dois lançamentos serem "o mesmo": descrição normalizada, tipo, conta, categorias, tags e pessoa. Conta os usos do **Sugerido** e dá o valor padrão do **Favorito**, que é o valor do último lançamento com essa identidade.
+
 **Sugestão**:
 Categorias, tags, conta e pessoa de um lançamento anterior de descrição parecida, oferecidas enquanto se digita a descrição; escolher uma preenche esses campos e mantém o valor já digitado. Vem da **fonte de sugestão**.
 _Avoid_: autocompletar, recomendação
@@ -153,6 +160,10 @@ _Avoid_: item principal, categoria principal
 A lista dos lançamentos do mês com duas ou mais categorias com item e sem escolha do item que valha. O lançamento que já contava sozinho num item quando a ambiguidade surgiu (item criado no meio do mês, categorias editadas, outro mês) continua nele até o casal escolher.
 _Avoid_: pendentes, sem item
 
+**Aviso de planejamento**:
+O que a tela de lançar mostra a cada toque: o item em que o lançamento conta, com a porcentagem do planejado antes e depois dele e quanto ainda dá para gastar ou quanto passa; "conta só no total do mês" quando nenhuma categoria tem item; no cartão, a fatura em que a compra cai. Roda no aparelho, também sem internet, e já conta os lançamentos não enviados.
+_Avoid_: alerta de orçamento, previsão do item
+
 **Modelo padrão do planejamento**:
 Conjunto de itens (categoria e valor) que o casal mantém nas configurações e aplica a um mês vazio para não começar o planejamento do zero; vale para qualquer mês e não é um mês. Não é um **Favorito**, que é um lançamento-modelo.
 _Avoid_: modelo (sozinho), template
@@ -172,7 +183,7 @@ Resumo de um mês que já passou: receitas, despesas, sobra, o que foi guardado,
 _Avoid_: balanço, extrato do mês
 
 **Projeção de saldo**:
-Estimativa da soma das contas no fim de cada mês que vem, em duas linhas: o saldo de hoje mais os previstos, e a mesma linha descontando o que ainda falta de cada item do planejamento.
+Estimativa da soma das contas no fim de cada mês que vem, em duas linhas: o saldo de hoje mais os previstos, com cada fatura descontada no mês dela, e a mesma linha descontando o que ainda falta de cada item do planejamento. No passado, mostra o saldo realizado no fim de cada mês, desde a abertura das contas.
 _Avoid_: previsão de saldo, fluxo de caixa
 
 ### Contas e cartões
@@ -276,6 +287,14 @@ _Avoid_: migração, corte, go-live
 **Planilha de revisão**:
 A planilha que o importador do Mobills escreve a cada rodada com o que ele não decide sozinho (a conta e os cartões, o de-para, os pares prováveis, as parcelas) e as abas Conferência e Faturas; o dono a edita e roda de novo, e o que ele editou vale na rodada seguinte.
 _Avoid_: relatório, planilha de importação
+
+**Fatura importada**:
+Fatura que veio do export de faturas do Mobills: nasce com o mês da fatura do rótulo do arquivo, sem fechamento nem vencimento, e conta como fechada e paga sem pagamento de fatura. Dar as datas a ela (na virada, à que ainda está aberta) a faz seguir as regras das outras faturas.
+_Avoid_: fatura antiga, fatura do histórico
+
+**Pendente avulso**:
+Pendente do Mobills que não é parcela: a ocorrência de uma recorrência de lá, sem a regra. Os do mês do export (o último mês com lançamento pago no geral) e de antes ficam fora da importação; os de depois entram como previstos avulsos, que o casal apaga quando cadastrar a recorrência no app. O pendente que casou com uma linha de fatura não é avulso: a fatura prova que a compra existiu.
+_Avoid_: recorrência importada
 
 **Par provável**:
 Uma linha de fatura e uma do geral que sobraram do cruzamento no mesmo mês e são as únicas com aquele valor; viram uma compra só quando o dono as junta na planilha de revisão, e até lá cada uma entra sozinha.

@@ -158,11 +158,11 @@ test("excluir o que a outra pessoa mudou depois pergunta antes", async ({ page, 
   await page.getByRole("button", { name: "Excluir mesmo assim" }).click();
 
   await expect(minha).toHaveCount(0);
-  // A exclusão sobe antes de a outra pessoa recarregar.
-  await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
-  await dela.reload();
-  await expect(linha(dela, descricao)).toHaveCount(0);
+  // A exclusão sobe sozinha: a outra pessoa recarrega até ela chegar.
+  await expect(async () => {
+    await dela.reload();
+    await expect(linha(dela, descricao)).toHaveCount(0, { timeout: 2000 });
+  }).toPass();
   await contextoDela.close();
 });
 
@@ -209,6 +209,7 @@ test("confirmar com ajuste o que a outra pessoa já confirmou leva à tela de co
   await expect(minha).toContainText("− R$ 10,07");
   await expect(minha).not.toContainText("previsto");
   await expect(minha).not.toContainText("conflito");
+  await expect(minha).not.toContainText("não enviado");
   await dela.goto("/#/historico");
   await expect(linha(dela, descricao)).toContainText("− R$ 10,07");
   await contextoDela.close();

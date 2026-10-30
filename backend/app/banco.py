@@ -27,9 +27,13 @@ def conectar(
     """
     if url is None and os.environ.get("DSQL_ENDPOINT"):
         return _conectar_ao_dsql(os.environ["DSQL_ENDPOINT"], autocommit, admin, papel)
-    return psycopg.connect(
+    conn = psycopg.connect(
         url or os.environ["DATABASE_URL"], connect_timeout=3, autocommit=autocommit
     )
+    # O DSQL lê tudo do mesmo instante; no Postgres, o READ COMMITTED deixa a exclusão da outra
+    # pessoa entrar entre duas leituras da mesma transação (ticket 90).
+    conn.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
+    return conn
 
 
 def _conectar_ao_dsql(
