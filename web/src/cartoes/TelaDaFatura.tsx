@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useCadastro, useFaturas, useLancamentos, usePessoas } from "../dados";
+import { enderecoDaBusca, useCadastro, useFaturas, useLancamentos, usePessoas } from "../dados";
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
@@ -78,8 +78,8 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
         </select>
       </label>
       {filtrando && <p className="vazio">Filtrado: {formatarCentavos(somaFiltrada)}</p>}
-      {/* A busca de lançamentos ainda não existe: por ora o atalho leva ao histórico. */}
-      <a href="#/historico">Ver os lançamentos</a>
+      {/* A busca pelo filtro Fatura, com a categoria e a tag escolhidas aqui. */}
+      <a href={enderecoDaBusca({ fatura: { mes, cartao_id: cartaoId }, categoria_ids: categoria === TODAS ? undefined : [categoria], tags: tag === TODAS ? undefined : [tag] })}>Ver os lançamentos</a>
       {lancamentos && filtradas.length === 0 && <p className="vazio">Nenhuma compra nesta fatura.</p>}
       {dias.map((dia) => (
         <div key={dia} role="group" aria-label={dataPorExtenso(dia)}>
