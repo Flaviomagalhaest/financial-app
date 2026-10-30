@@ -12,6 +12,7 @@ from app.banco import conectar
 from app.cartoes import router as cartoes
 from app.classificacao import router as classificacao
 from app.exportacao import Formato, exportar
+from app.favoritos import router as favoritos
 from app.hoje import router as hoje
 from app.lancamentos import router as lancamentos
 from app.limite import router as limite
@@ -22,6 +23,7 @@ from app.migrations import total_aplicadas
 from app.parcelamentos import router as parcelamentos
 from app.pessoas import router as pessoas
 from app.planejamento import router as planejamento
+from app.projecao import router as projecao
 from app.recorrencias import router as recorrencias
 from app.sugestao import router as sugestao
 from app.transferencias import router as transferencias
@@ -100,4 +102,6 @@ def create_app(
     app.include_router(recorrencias)
     app.include_router(parcelamentos)
     app.include_router(sugestao)
+    app.include_router(favoritos)
+    app.include_router(projecao)
     return app
