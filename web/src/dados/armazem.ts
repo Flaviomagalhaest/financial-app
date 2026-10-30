@@ -18,7 +18,8 @@ export type Base = NovoLancamento & { versao: number };
 export interface ItemDaFila {
   /** O id do lançamento, ou o da recorrência. */
   id: string;
-  acao: "criar" | "editar" | "excluir" | "criar_recorrencia";
+  acao: "criar" | "editar" | "excluir" | "confirmar" | "criar_recorrencia";
+  /** No confirmar, o previsto já realizado, com os ajustes. */
   lancamento?: NovoLancamento;
   /** A regra da recorrência criada no aparelho; não se edita, só se descarta. */
   recorrencia?: NovaRecorrencia;

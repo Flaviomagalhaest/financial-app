@@ -869,6 +869,20 @@ export interface components {
             /** Categorias Com Item */
             categorias_com_item: string[];
         };
+        /** AcaoConfirmar */
+        AcaoConfirmar: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "confirmar";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            confirmacao: components["schemas"]["Confirmacao"];
+        };
         /** AcaoCriar */
         AcaoCriar: {
             /**
@@ -1672,7 +1686,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"])[];
         };
         /** MesDaProjecao */
         MesDaProjecao: {

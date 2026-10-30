@@ -16,12 +16,14 @@ from app.banco import em_transacao
 from app.lancamentos import (
     AlteracaoDeLancamento,
     CampoEmConflito,
+    Confirmacao,
     ConflitoDeCampos,
     Exclusao,
     Lancamento,
     LancamentoExcluido,
     LancamentoNaoEncontrado,
     NovoLancamento,
+    confirmar,
     criar,
     editar,
     excluir,
@@ -56,6 +58,13 @@ class AcaoExcluir(BaseModel):
     acao_em: datetime | None = None
 
 
+class AcaoConfirmar(BaseModel):
+    acao: Literal["confirmar"]
+    id: UUID
+    # A versão que o aparelho tinha e só os ajustes que a pessoa fez.
+    confirmacao: Confirmacao
+
+
 class AcaoCriarParcelamento(BaseModel):
     acao: Literal["criar_parcelamento"]
     parcelamento: NovoParcelamento
@@ -66,7 +75,14 @@ class AcaoCriarRecorrencia(BaseModel):
     recorrencia: NovaRecorrencia
 
 
-Acao = AcaoCriar | AcaoEditar | AcaoExcluir | AcaoCriarParcelamento | AcaoCriarRecorrencia
+Acao = (
+    AcaoCriar
+    | AcaoEditar
+    | AcaoExcluir
+    | AcaoConfirmar
+    | AcaoCriarParcelamento
+    | AcaoCriarRecorrencia
+)
 
 
 class Lote(BaseModel):
@@ -135,6 +151,9 @@ def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
         case AcaoEditar(id=id, alteracao=alteracao):
             editado = em_transacao(url, lambda conn: editar(conn, id, alteracao, usuario))
             return Resultado(resultado="aceita", lancamento=editado)
+        case AcaoConfirmar(id=id, confirmacao=confirmacao):
+            confirmado = em_transacao(url, lambda conn: confirmar(conn, id, confirmacao, usuario))
+            return Resultado(resultado="aceita", lancamento=confirmado)
         case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
             em_transacao(url, lambda conn: excluir(conn, id, versao, usuario, acao_em))
             return Resultado(resultado="aceita")

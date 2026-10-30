@@ -24,7 +24,7 @@ O casal marca "Repete? recorrente" na folha de detalhes do novo lançamento e a 
 ## Answer
 
 - **Reenvio do mesmo id com outros dados fica como está**: `POST /api/recorrencias` e a ação `criar_recorrencia` devolvem a regra gravada, sem comparar e sem conflito. O aparelho nunca manda isso: a recorrência não enviada não se edita, só se descarta, e cada novo lançamento tem um id novo. A regra não tem versão em que basear um conflito (o da ADR 0011 é por campo do lançamento), e quem muda a regra é o `PATCH` (ticket 96). Se a outra pessoa mudar a regra entre o envio sem resposta e o reenvio, o reenvio devolve a regra já mudada. É fácil de reverter, então não virou ADR.
-- **A tela**: "Repete? Recorrente" só no lançamento novo. A data vira "Primeira vez" (o `inicio`), e a situação e a fatura saem da folha, porque quem decide é a regra. O padrão é todo mês, sem fim e estimado, e "automático" só aparece no fixo. Salvar põe a regra na fila como um item só, e os previstos chegam na leitura dos lançamentos depois que ela sobe (o app relê a lista quando o envio aceita uma recorrência).
+- **A tela**: "Repete? Recorrente" só no lançamento novo. A data vira "Primeira vez" (o `inicio`), e a situação e a fatura saem da folha, porque quem decide é a regra. O padrão é todo mês, sem fim e estimado, e "automático" só aparece no fixo. Salvar põe a regra na fila como um item só, e os previstos chegam na leitura dos lançamentos depois que ela sobe (o app relê a lista e a Hoje quando o envio aceita uma recorrência).
 - **Descartar**: só a recorrência que com certeza não está no servidor (nunca saiu do aparelho ou foi recusada). A que ficou sem resposta mostra que talvez já esteja lá e sobe quando a rede voltar.
 
 ## Pendências
