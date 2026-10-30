@@ -472,6 +472,26 @@ export interface paths {
         patch: operations["editar_fatura"];
         trace?: never;
     };
+    "/api/cartoes/{id}/limite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ler Limite
+         * @description O limite do titular, com as compras do adicional dentro do comprometido.
+         */
+        get: operations["ler_limite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/planejamento/modelo": {
         parameters: {
             query?: never;
@@ -1382,10 +1402,49 @@ export interface components {
             /** Parece Repetido De */
             parece_repetido_de?: string | null;
         };
+        /**
+         * LimiteDoCartao
+         * @description Sem `limite_centavos` o cartão não mostra limite, mas o comprometido continua a conta.
+         */
+        LimiteDoCartao: {
+            /** Limite Centavos */
+            limite_centavos: number | null;
+            /** Fatura Aberta Centavos */
+            fatura_aberta_centavos: number;
+            /** Faturas Fechadas Centavos */
+            faturas_fechadas_centavos: number;
+            /** Parcelas Futuras Centavos */
+            parcelas_futuras_centavos: number;
+            /** Comprometido Centavos */
+            comprometido_centavos: number;
+            /** Disponivel Centavos */
+            disponivel_centavos: number | null;
+            /** Parcelamentos */
+            parcelamentos: components["schemas"]["ParcelamentoEmAndamento"][];
+            /** Proximos Meses */
+            proximos_meses: components["schemas"]["MesDoLimite"][];
+        };
         /** Lote */
         Lote: {
             /** Acoes */
             acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoCriarParcelamento"])[];
+        };
+        /**
+         * MesDoLimite
+         * @description Quanto do comprometido se libera quando as faturas que vencem no mês forem pagas.
+         */
+        MesDoLimite: {
+            /**
+             * Mes
+             * Format: date
+             */
+            mes: string;
+            /** Fatura Centavos */
+            fatura_centavos: number;
+            /** Parcelas Centavos */
+            parcelas_centavos: number;
+            /** Libera Centavos */
+            libera_centavos: number;
         };
         /** ModeloPadrao */
         ModeloPadrao: {
@@ -1724,6 +1783,27 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+        };
+        /** ParcelamentoEmAndamento */
+        ParcelamentoEmAndamento: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Descricao */
+            descricao: string;
+            /** Parcelas */
+            parcelas: number;
+            /** Parcelas Restantes */
+            parcelas_restantes: number;
+            /** Restante Centavos */
+            restante_centavos: number;
+            /**
+             * Fim Previsto
+             * Format: date
+             */
+            fim_previsto: string;
         };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
@@ -3089,6 +3169,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Fatura"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_limite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimiteDoCartao"];
                 };
             };
             /** @description Validation Error */

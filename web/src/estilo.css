@@ -647,3 +647,13 @@ dialog.folha > input {
 .bloco-da-hoje progress {
   width: 100%;
 }
+
+.limite summary {
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+}
+.limite progress {
+  width: 100%;
+  accent-color: var(--destaque);
+}

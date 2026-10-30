@@ -211,7 +211,7 @@ def listar_cartoes(
         return [Cartao(**dict(zip(_NOMES, linha))) for linha in linhas]
 
 
-def _faturas(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
+def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
     """As faturas do titular, com os números. O saldo anterior de cada uma vem da anterior
     fechada, por isso a conta corre desde a mais antiga, mesmo quando se pede um mês só."""
     dia = lancamentos.hoje()
@@ -279,7 +279,7 @@ def faturas_que_vencem_ate(conn, ate: date) -> list[Fatura]:
     que_vencem = [
         f
         for titular in titulares
-        for f in _faturas(conn, titular)
+        for f in faturas_do_titular(conn, titular)
         if f.situacao == "fechada"
         and f.a_pagar_centavos > 0
         and f.vencimento
@@ -288,7 +288,7 @@ def faturas_que_vencem_ate(conn, ate: date) -> list[Fatura]:
     return sorted(que_vencem, key=lambda f: (f.vencimento, f.cartao_id, f.mes))
 
 
-def _cartao(conn, id: UUID) -> faturas.CartaoComTitular:
+def cartao_ou_404(conn, id: UUID) -> faturas.CartaoComTitular:
     cartao = faturas.ler_cartao(conn, id)
     if not cartao:
         raise HTTPException(status_code=404, detail="cartão não encontrado")
@@ -300,7 +300,7 @@ def listar_faturas(id: UUID, usuario: UsuarioLogado, request: Request) -> list[F
     """As faturas que já nasceram, da mais antiga à mais nova. As do adicional são as do
     titular."""
     with conectar(url_do_banco(request)) as conn:
-        return _faturas(conn, _cartao(conn, id).titular.id)
+        return faturas_do_titular(conn, cartao_ou_404(conn, id).titular.id)
 
 
 def _abertas(conn, titular: faturas.Titular) -> list[date]:
@@ -355,7 +355,7 @@ def editar_fatura(
     mes = faturas.mes_de(mes)
 
     def gravar(conn) -> Fatura:
-        titular = _cartao(conn, id).titular
+        titular = cartao_ou_404(conn, id).titular
         abertas = _abertas(conn, titular)
         faturas.garantir_fatura(conn, titular, mes)
         if alteracao.ajuste_centavos is not None:
@@ -383,6 +383,6 @@ def editar_fatura(
                 raise recusar("fechamento fora do intervalo entre a fatura anterior e a seguinte")
             faturas.gravar_datas(conn, titular, mes, fechamento, vencimento)
             _redistribuir(conn, titular, sorted({*abertas, mes}), usuario)
-        return _faturas(conn, titular.id, mes)[0]
+        return faturas_do_titular(conn, titular.id, mes)[0]
 
     return em_transacao(url_do_banco(request), gravar)
