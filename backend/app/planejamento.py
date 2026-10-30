@@ -179,6 +179,25 @@ def ler_mes(conn, mes: str) -> Planejamento:
     )
 
 
+def a_lancar_nas_despesas(conn, mes: date) -> int:
+    """O que ainda falta lançar dos itens de despesa do mês (o planejado menos o realizado e o
+    previsto), sem compensar o item estourado com a sobra de outro, menos os ajustes de fatura,
+    como o "ainda dá para gastar". O item de transferência fica de fora: guardar na reserva move
+    dinheiro entre contas e não muda a soma delas."""
+    plano = ler_mes(conn, mes.strftime("%Y-%m"))
+    de_despesa = {
+        id
+        for (id,) in conn.execute(
+            "SELECT id FROM categorias WHERE tipo = 'despesa' AND id = ANY(%s)",
+            ([i.categoria_id for i in plano.itens],),
+        )
+    }
+    falta = sum(
+        max(i.ainda_da_para_gastar_centavos, 0) for i in plano.itens if i.categoria_id in de_despesa
+    )
+    return max(falta - plano.ajustes_de_fatura_centavos, 0)
+
+
 def _gravar_itens(conn, dia: date, itens, usuario: str) -> None:
     for categoria_id, valor in itens:
         conn.execute(

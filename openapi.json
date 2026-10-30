@@ -2566,6 +2566,29 @@
           }
         ]
       }
+    },
+    "/api/futuro": {
+      "get": {
+        "summary": "Ler Futuro",
+        "operationId": "ler_futuro",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Futuro"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -4028,6 +4051,41 @@
         "title": "Fechamento",
         "description": "O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que\naconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz\nquantos lançamentos são."
       },
+      "Futuro": {
+        "properties": {
+          "hoje": {
+            "type": "string",
+            "format": "date",
+            "title": "Hoje"
+          },
+          "saldo_hoje_centavos": {
+            "type": "integer",
+            "title": "Saldo Hoje Centavos"
+          },
+          "passado": {
+            "items": {
+              "$ref": "#/components/schemas/MesDoPassado"
+            },
+            "type": "array",
+            "title": "Passado"
+          },
+          "proximos_meses": {
+            "items": {
+              "$ref": "#/components/schemas/MesDaProjecao"
+            },
+            "type": "array",
+            "title": "Proximos Meses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hoje",
+          "saldo_hoje_centavos",
+          "passado",
+          "proximos_meses"
+        ],
+        "title": "Futuro"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -4708,6 +4766,45 @@
         ],
         "title": "Lote"
       },
+      "MesDaProjecao": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "format": "date",
+            "title": "Mes"
+          },
+          "previstos_centavos": {
+            "type": "integer",
+            "title": "Previstos Centavos"
+          },
+          "faturas_centavos": {
+            "type": "integer",
+            "title": "Faturas Centavos"
+          },
+          "so_previstos_centavos": {
+            "type": "integer",
+            "title": "So Previstos Centavos"
+          },
+          "planejamento_centavos": {
+            "type": "integer",
+            "title": "Planejamento Centavos"
+          },
+          "com_planejamento_centavos": {
+            "type": "integer",
+            "title": "Com Planejamento Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "previstos_centavos",
+          "faturas_centavos",
+          "so_previstos_centavos",
+          "planejamento_centavos",
+          "com_planejamento_centavos"
+        ],
+        "title": "MesDaProjecao"
+      },
       "MesDoLimite": {
         "properties": {
           "mes": {
@@ -4737,6 +4834,32 @@
         ],
         "title": "MesDoLimite",
         "description": "Quanto do comprometido se libera quando as faturas que vencem no mês forem pagas."
+      },
+      "MesDoPassado": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "format": "date",
+            "title": "Mes"
+          },
+          "saldo_centavos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saldo Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "saldo_centavos"
+        ],
+        "title": "MesDoPassado"
       },
       "ModeloPadrao": {
         "properties": {
