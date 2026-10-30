@@ -1,6 +1,7 @@
 // Renovar e revogar direto no Cognito, uma chamada só, sem a biblioteca do SRP: não herdam as
 // novas tentativas da biblioteca, que seguram o app por segundos sem internet, e o service worker
 // renova sem levá-la junto (envio da fila em segundo plano). O SRP do login fica em cognito.ts.
+import { fetchComTempoLimite } from "../dados/rede";
 import { configuracaoDoCognito, type ConfiguracaoDoCognito } from "./configuracao";
 import { guardarSessao, lerSessao } from "./guarda";
 
@@ -61,7 +62,7 @@ export function traduzir(codigo: string | undefined): ErroDeLogin {
 async function chamar(cfg: ConfiguracaoDoCognito, operacao: string, corpo: object) {
   let resposta: Response;
   try {
-    resposta = await fetch(cfg.endpoint, {
+    resposta = await fetchComTempoLimite(cfg.endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-amz-json-1.1",
