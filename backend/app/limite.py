@@ -64,15 +64,15 @@ def _indice_do_mes(hoje: date, vencimento: date) -> int:
 def ler_limite(id: UUID, usuario: UsuarioLogado, request: Request) -> LimiteDoCartao:
     """O limite do titular, com as compras do adicional dentro do comprometido."""
     with conectar(url_do_banco(request)) as conn:
-        titular = cartoes._cartao(conn, id).titular
+        titular = cartoes.cartao_ou_404(conn, id).titular
         hoje = lancamentos.hoje()
-        todas = cartoes._faturas(conn, titular.id)
+        todas = cartoes.faturas_do_titular(conn, titular.id)
         abertas = [f.mes for f in todas if f.situacao == "aberta"]
         fechadas = [f for f in todas if f.situacao != "aberta"]
         limite = conn.execute(
             "SELECT limite_centavos FROM cartoes WHERE id = %s", (titular.id,)
         ).fetchone()[0]
-        no_cartao = (
+        do_titular = (
             " FROM lancamentos JOIN cartoes c ON c.id = lancamentos.conta_id"
             " WHERE COALESCE(c.titular_id, c.id) = %s AND lancamentos.excluido_em IS NULL"
             f" AND {lancamentos.MES_EM_QUE_CONTA} = ANY(%s)"
@@ -80,7 +80,7 @@ def ler_limite(id: UUID, usuario: UsuarioLogado, request: Request) -> LimiteDoCa
         realizado, futuras = {}, {}
         for mes, situacao, soma in conn.execute(
             f"SELECT {lancamentos.MES_EM_QUE_CONTA}, situacao,"
-            f" SUM({lancamentos.VALOR_COM_SINAL})::bigint {no_cartao}"
+            f" SUM({lancamentos.VALOR_COM_SINAL})::bigint {do_titular}"
             " AND (situacao = 'realizado' OR parcelamento_id IS NOT NULL) GROUP BY 1, 2",
             (titular.id, abertas),
         ):
@@ -90,14 +90,14 @@ def ler_limite(id: UUID, usuario: UsuarioLogado, request: Request) -> LimiteDoCa
                 futuras[mes] = soma
         andamento = [
             ParcelamentoEmAndamento(
-                id=id,
+                id=parcelamento_id,
                 descricao=descricao,
                 parcelas=parcelas,
                 parcelas_restantes=restantes,
                 restante_centavos=restante,
                 fim_previsto=fim,
             )
-            for id, descricao, parcelas, restantes, restante, fim in conn.execute(
+            for parcelamento_id, descricao, parcelas, restantes, restante, fim in conn.execute(
                 "SELECT p.id, p.descricao, p.parcelas, COUNT(*), SUM(l.valor_centavos)::bigint,"
                 " MAX(COALESCE(l.mes, date_trunc('month', l.data)::date))"
                 " FROM lancamentos l JOIN parcelamentos p ON p.id = l.parcelamento_id"
@@ -116,18 +116,18 @@ def ler_limite(id: UUID, usuario: UsuarioLogado, request: Request) -> LimiteDoCa
         fatura_do_mes = dict.fromkeys(range(MESES_DA_LISTA), 0)
         parcelas_do_mes = dict.fromkeys(range(MESES_DA_LISTA), 0)
 
-        def cair(lista: dict[int, int], vencimento: date, valor: int) -> None:
+        def somar_no_mes(lista: dict[int, int], vencimento: date, valor: int) -> None:
             if (n := _indice_do_mes(hoje, vencimento)) < MESES_DA_LISTA:
                 lista[n] += valor
 
         # O que sobra de uma fatura fechada passa para a seguinte: a última leva tudo.
         fechadas_centavos = fechadas[-1].a_pagar_centavos if fechadas else 0
         if fechadas:
-            cair(fatura_do_mes, vencimentos[fechadas[-1].mes], fechadas_centavos)
+            somar_no_mes(fatura_do_mes, vencimentos[fechadas[-1].mes], fechadas_centavos)
         for mes in abertas:
             aberta = realizado.get(mes, 0) + ajuste[mes]
-            cair(fatura_do_mes, vencimentos[mes], aberta)
-            cair(parcelas_do_mes, vencimentos[mes], futuras.get(mes, 0))
+            somar_no_mes(fatura_do_mes, vencimentos[mes], aberta)
+            somar_no_mes(parcelas_do_mes, vencimentos[mes], futuras.get(mes, 0))
         aberta_centavos = sum(realizado.get(m, 0) + ajuste[m] for m in abertas)
         parcelas_centavos = sum(futuras.values())
         comprometido = aberta_centavos + fechadas_centavos + parcelas_centavos

@@ -56,7 +56,7 @@ function LimiteDoCartaoNaLinha({ limite }: { limite: LimiteDoCartao }) {
           </ul>
         </>
       )}
-      <h4>Próximos 12 meses</h4>
+      <h4>Próximos {limite.proximos_meses.length} meses</h4>
       <ul className="lista">
         {limite.proximos_meses.map((m) => (
           <li key={m.mes}>
