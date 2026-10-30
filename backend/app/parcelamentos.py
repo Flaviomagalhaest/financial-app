@@ -4,13 +4,15 @@ para o valor inteiro nunca contar de uma vez num mês só. No cartão, todas as 
 da compra e a parcela n cai n - 1 faturas depois da fatura da compra; fora dele (o boleto), a
 parcela n vence n - 1 meses depois da primeira."""
 
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID, uuid5
 
 import psycopg
-from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel, Field, field_validator, model_validator
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from app import faturas, lancamentos
 from app.backup import LINHAS_POR_LOTE
@@ -18,9 +20,13 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import (
     conferir_ligacoes,
+    excluir,
+    gravar_categorias,
     ids_das_tags,
     recusar,
+    registrar_mudancas,
     sem_repetidas,
+    subir_versao,
     tags_limpas,
     url_do_banco,
 )
@@ -91,6 +97,65 @@ class Parcelamento(DadosDoParcelamento):
     criado_em: datetime
     alterado_por: str
     alterado_em: datetime
+
+
+class AlteracaoDeParcelamento(BaseModel):
+    """O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,
+    tags, pessoa e item valem para todas as parcelas, inclusive as realizadas. Valor, número de
+    parcelas e data refazem as parcelas, salvo as que uma pessoa editou à mão; se uma realizada
+    mudar ou sair, o pedido só vale com `confirmar_realizadas`."""
+
+    # Sem `None` no tipo: mandar null num campo obrigatório do parcelamento é erro, não "limpar".
+    descricao: str = Field(default=None)
+    categoria_ids: list[UUID] = Field(default=None, min_length=1)
+    tags: list[str] = Field(default=None)
+    # Vazia, passa o parcelamento para o conjunto.
+    pessoa: str | None = None
+    # Vazio tira a escolha; ela também sai com a categoria dela.
+    item_categoria_id: UUID | None = None
+    # O total novo, ou o da parcela (vale vezes o número de parcelas); só o número de parcelas
+    # mantém o total, e as parcelas se dividem de novo.
+    valor_total_centavos: int | None = Field(default=None, gt=0)
+    valor_da_parcela_centavos: int | None = Field(default=None, gt=0)
+    parcelas: int = Field(default=None, ge=2, le=MAXIMO_DE_PARCELAS)
+    # Como na criação: no cartão, a data da compra; fora dele, a da 1ª parcela.
+    data: date = Field(default=None)
+    confirmar_realizadas: bool = False
+
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
+
+    @model_validator(mode="after")
+    def _um_valor(self):
+        if self.valor_total_centavos is not None and self.valor_da_parcela_centavos is not None:
+            raise ValueError("informe o valor total ou o da parcela, um dos dois")
+        return self
+
+
+class ParcelaQueMuda(BaseModel):
+    """Uma parcela realizada que a correção muda ou tira."""
+
+    id: UUID
+    parcela: int
+    valor_centavos: int
+    data: date
+    # Como fica; vazios quando ela sai.
+    valor_novo_centavos: int | None
+    data_nova: date | None
+    sai: bool
+
+
+class AvisoDeRealizadas(BaseModel):
+    """A correção mudaria parcelas já realizadas; nada foi gravado. Repetir o pedido com
+    `confirmar_realizadas` as muda."""
+
+    motivo: str
+    parcelas: list[ParcelaQueMuda]
+
+
+class RealizadasMudam(Exception):
+    def __init__(self, aviso: AvisoDeRealizadas):
+        self.aviso = aviso
 
 
 _COLUNAS = (
@@ -328,3 +393,371 @@ def criar_parcelamento(
 def listar_parcelamentos(usuario: UsuarioLogado, request: Request) -> list[Parcelamento]:
     with conectar(url_do_banco(request)) as conn:
         return _ler(conn)
+
+
+def _tags_do_parcelamento(conn, id: UUID) -> list[UUID]:
+    return [
+        tag
+        for (tag,) in conn.execute(
+            "SELECT tag_id FROM parcelamento_tags WHERE parcelamento_id = %s", (id,)
+        )
+    ]
+
+
+def _por_lote(regra: Parcelamento) -> int:
+    """Quantas parcelas cabem numa transação, pelas linhas que cada uma mexe (a folga do DSQL é
+    a mesma da geração)."""
+    return max(1, LINHAS_POR_LOTE // (10 + 2 * (len(regra.categoria_ids) + len(regra.tags))))
+
+
+@dataclass
+class _Trabalho:
+    """O que falta fazer numa parcela para ela ficar como o parcelamento manda: sair, voltar
+    (uma que a correção tirou antes) ou mudar. `valor`, `dia` e `mes` são os de depois."""
+
+    id: UUID
+    versao: int
+    parcela: int
+    acao: Literal["excluir", "reviver", "atualizar"]
+    mudou: list[str]
+    valor: int
+    dia: date
+    mes: date
+    realizada: bool
+    valor_antes: int
+    dia_antes: date
+
+    @property
+    def muda_o_cronograma(self) -> bool:
+        return self.acao == "excluir" or (self.valor, self.dia) != (
+            self.valor_antes,
+            self.dia_antes,
+        )
+
+    @property
+    def aviso(self) -> ParcelaQueMuda:
+        sai = self.acao == "excluir"
+        return ParcelaQueMuda(
+            id=self.id,
+            parcela=self.parcela,
+            valor_centavos=self.valor_antes,
+            data=self.dia_antes,
+            valor_novo_centavos=None if sai else self.valor,
+            data_nova=None if sai else self.dia,
+            sai=sai,
+        )
+
+
+def _trabalho(conn, regra: Parcelamento, geradas: int) -> list[_Trabalho]:
+    """As parcelas que não estão como o parcelamento manda, na ordem do número. A que uma pessoa
+    editou à mão (valor, data, conta ou fatura) fica como está nessas coisas; a classificação vale
+    para todas. A parcela que saiu antes, quando o parcelamento encolheu, volta se ele crescer
+    de novo (as de depois de `geradas`)."""
+    parcelas = conn.execute(
+        f"SELECT id, parcela, data, valor_centavos, descricao, pessoa, situacao,"
+        f" excluido_em IS NOT NULL, {lancamentos.VERSAO}, item_categoria_id, mes,"
+        f" {lancamentos.ALTERADA_A_MAO} FROM lancamentos WHERE parcelamento_id = %s"
+        " ORDER BY parcela",
+        (regra.id,),
+    ).fetchall()
+    ids = [linha[0] for linha in parcelas]
+    categorias: dict[UUID, set[UUID]] = {}
+    for lancamento_id, categoria_id in conn.execute(
+        "SELECT lancamento_id, categoria_id FROM lancamento_categorias"
+        " WHERE lancamento_id = ANY(%s)",
+        (ids,),
+    ):
+        categorias.setdefault(lancamento_id, set()).add(categoria_id)
+    tags: dict[UUID, set[str]] = {}
+    for lancamento_id, nome in conn.execute(
+        "SELECT lt.lancamento_id, t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
+        " WHERE lt.lancamento_id = ANY(%s)",
+        (ids,),
+    ):
+        tags.setdefault(lancamento_id, set()).add(nome.casefold())
+    no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
+    quer = {
+        "descricao": regra.descricao,
+        "pessoa": regra.pessoa,
+        "item_categoria_id": regra.item_categoria_id,
+        "categoria_ids": set(regra.categoria_ids),
+        "tags": {tag.casefold() for tag in regra.tags},
+    }
+    trabalho = []
+    for (
+        lancamento_id,
+        n,
+        dia_antes,
+        valor_antes,
+        descricao,
+        pessoa,
+        situacao,
+        excluida,
+        versao,
+        item_categoria_id,
+        mes_antes,
+        a_mao,
+    ) in parcelas:
+        acao: Literal["excluir", "reviver", "atualizar"] = "atualizar"
+        if excluida:
+            if not geradas < n <= regra.parcelas:
+                continue
+            acao = "reviver"
+        elif n > regra.parcelas:
+            if a_mao:
+                continue
+            acao = "excluir"
+        tem = {
+            "descricao": descricao,
+            "pessoa": pessoa,
+            "item_categoria_id": item_categoria_id,
+            "categoria_ids": categorias.get(lancamento_id, set()),
+            "tags": tags.get(lancamento_id, set()),
+        }
+        mudou = [campo for campo in quer if quer[campo] != tem[campo]]
+        valor, dia, mes = valor_antes, dia_antes, mes_antes
+        if acao != "excluir" and not a_mao:
+            valor = valor_da_parcela(regra.valor_total_centavos, regra.parcelas, n)
+            dia = regra.data if no_cartao else mais_meses(regra.data, n - 1)
+            if dia != dia_antes or acao == "reviver":
+                mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia, n)
+            if valor != valor_antes:
+                mudou.append("valor_centavos")
+            if dia != dia_antes:
+                mudou.append("data")
+            # A fatura que o app escolheu de novo conta como mudança do parcelamento (ADR 0011).
+            if no_cartao and mes != mes_antes:
+                mudou.append("fatura_mes")
+        if acao != "atualizar" or mudou:
+            trabalho.append(
+                _Trabalho(
+                    lancamento_id,
+                    versao,
+                    n,
+                    acao,
+                    mudou,
+                    valor,
+                    dia,
+                    mes,
+                    situacao == "realizado",
+                    valor_antes,
+                    dia_antes,
+                )
+            )
+    return trabalho
+
+
+def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> None:
+    """Valida e grava o parcelamento corrigido (recusa antes de gravar, e avisa se uma realizada
+    mudaria sem `confirmar_realizadas`); as parcelas são refeitas depois, em lotes."""
+    if not (lidos := _ler(conn, "id = %s", (id,))):
+        raise HTTPException(status_code=404, detail="parcelamento não encontrado")
+    [atual] = lidos
+    (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
+    pedidas = alteracao.model_dump(
+        include=alteracao.model_fields_set
+        - {"valor_total_centavos", "valor_da_parcela_centavos", "confirmar_realizadas"}
+    )
+    if atual.item_categoria_id not in pedidas.get("categoria_ids", [atual.item_categoria_id]):
+        pedidas.setdefault("item_categoria_id", None)  # a escolha sai com a categoria dela
+    parcelas = pedidas.get("parcelas", atual.parcelas)
+    if alteracao.valor_total_centavos:
+        total = alteracao.valor_total_centavos
+    elif alteracao.valor_da_parcela_centavos:
+        total = alteracao.valor_da_parcela_centavos * parcelas
+    else:
+        total = atual.valor_total_centavos
+    if total < parcelas:
+        raise recusar("o total não chega a um centavo por parcela")
+    try:
+        nova = Parcelamento(**(atual.model_dump() | pedidas | {"valor_total_centavos": total}))
+    except ValidationError as erro:
+        raise recusar("; ".join(e["msg"] for e in erro.errors())) from erro
+    conferir_ligacoes(conn, nova, atual.conta_id, frozenset(atual.categoria_ids))
+    (a_mao,) = conn.execute(
+        f"SELECT max(parcela) FROM lancamentos WHERE parcelamento_id = %s"
+        f" AND excluido_em IS NULL AND {lancamentos.ALTERADA_A_MAO}",
+        (id,),
+    ).fetchone()
+    if a_mao and a_mao > nova.parcelas:
+        raise recusar(
+            f"a parcela {a_mao} foi editada à mão: exclua-a antes de tirá-la do parcelamento"
+        )
+    geradas_depois = min(geradas, nova.parcelas)
+    realizadas = [
+        t.aviso
+        for t in _trabalho(conn, nova, geradas_depois)
+        if t.realizada and t.acao != "reviver" and t.muda_o_cronograma
+    ]
+    if realizadas and not alteracao.confirmar_realizadas:
+        raise RealizadasMudam(
+            AvisoDeRealizadas(
+                motivo="a correção muda parcelas que já foram realizadas", parcelas=realizadas
+            )
+        )
+    tags_de_antes = set(_tags_do_parcelamento(conn, id))
+    tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes)
+    if not conn.execute(
+        "UPDATE parcelamentos SET valor_total_centavos = %s, parcelas = %s, data = %s,"
+        " descricao = %s, pessoa = %s, item_categoria_id = %s, geradas = %s, alterado_por = %s,"
+        " alterado_em = now() WHERE id = %s AND geradas = %s",
+        (
+            nova.valor_total_centavos,
+            nova.parcelas,
+            nova.data,
+            nova.descricao,
+            nova.pessoa,
+            nova.item_categoria_id,
+            geradas_depois,
+            usuario,
+            id,
+            geradas,
+        ),
+    ).rowcount:
+        raise psycopg.errors.SerializationFailure("o parcelamento mudou durante a correção")
+    if set(nova.categoria_ids) != set(atual.categoria_ids):
+        conn.execute("DELETE FROM parcelamento_categorias WHERE parcelamento_id = %s", (id,))
+        for categoria in nova.categoria_ids:
+            conn.execute(
+                "INSERT INTO parcelamento_categorias (parcelamento_id, categoria_id)"
+                " VALUES (%s, %s)",
+                (id, categoria),
+            )
+    if set(tags) != tags_de_antes:
+        conn.execute("DELETE FROM parcelamento_tags WHERE parcelamento_id = %s", (id,))
+        for tag in tags:
+            conn.execute(
+                "INSERT INTO parcelamento_tags (parcelamento_id, tag_id) VALUES (%s, %s)",
+                (id, tag),
+            )
+
+
+def _reajustar_um_lote(conn, id: UUID, usuario: str) -> bool:
+    """Põe as parcelas de acordo com o parcelamento de hoje, até um lote, e devolve se pode faltar
+    alguma. A que já está como ele manda não conta, por isso o lote seguinte sempre anda."""
+    if not (lidos := _ler(conn, "id = %s", (id,))):
+        return False
+    [regra] = lidos
+    (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
+    trabalho = _trabalho(conn, regra, geradas)
+    tags = _tags_do_parcelamento(conn, id)
+    agora = datetime.now(UTC)
+    por_lote = _por_lote(regra)
+    for item in trabalho[:por_lote]:
+        if item.acao == "excluir":
+            excluir(conn, item.id, None, usuario)
+            continue
+        atribuicoes = (
+            "descricao = %s, pessoa = %s, item_categoria_id = %s, valor_centavos = %s,"
+            " data = %s, mes = %s, alterado_por = %s, alterado_em = %s"
+        )
+        parametros: tuple = (
+            regra.descricao,
+            regra.pessoa,
+            regra.item_categoria_id,
+            item.valor,
+            item.dia,
+            item.mes,
+            usuario,
+            agora,
+        )
+        if item.acao == "reviver":
+            atribuicoes += ", excluido_em = NULL, excluido_por = NULL"
+        if {"categoria_ids", "fatura_mes"} & set(item.mudou) or item.acao == "reviver":
+            # No mês novo ou com a categoria nova, a parcela fica no item em que estava.
+            lancamentos.guardar_item_atual_do_lancamento(conn, item.id)
+            (atual,) = conn.execute(
+                "SELECT item_atual_categoria_id FROM lancamentos WHERE id = %s", (item.id,)
+            ).fetchone()
+            atribuicoes += ", item_atual_categoria_id = %s"
+            parametros += (atual if atual in regra.categoria_ids else None,)
+        nova = subir_versao(conn, item.id, item.versao, atribuicoes, parametros)
+        registrar_mudancas(
+            conn, item.id, item.mudou, nova, usuario, agora, origem=origem(regra.descricao)
+        )
+        if "categoria_ids" in item.mudou:
+            gravar_categorias(conn, item.id, regra.categoria_ids)
+        if "tags" in item.mudou:
+            conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (item.id,))
+            for tag in tags:
+                conn.execute(
+                    "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
+                    (item.id, tag),
+                )
+    return len(trabalho) > por_lote
+
+
+_AVISO = {409: {"model": AvisoDeRealizadas, "description": "A correção muda parcelas realizadas"}}
+
+
+@router.patch(
+    "/parcelamentos/{id}",
+    response_model=Parcelamento,
+    operation_id="alterar_parcelamento",
+    responses=_AVISO,
+)
+def alterar_parcelamento(
+    id: UUID, alteracao: AlteracaoDeParcelamento, usuario: UsuarioLogado, request: Request
+) -> Parcelamento | JSONResponse:
+    """Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa editou à mão fica como
+    está. Se uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o
+    pedido vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua."""
+    # Import aqui: `automaticos` importa este módulo.
+    from app import automaticos
+
+    url = url_do_banco(request)
+    try:
+        em_transacao(url, lambda conn: _mudar(conn, id, alteracao, usuario))
+    except RealizadasMudam as e:
+        return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
+    while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, usuario)):
+        pass
+    gerar_as_parcelas(url, id)
+    # A parcela automática que a data nova já alcançou se realiza agora, como na criação.
+    automaticos.realizar_automaticos(url, id)
+    with conectar(url) as conn:
+        return _ler(conn, "id = %s", (id,))[0]
+
+
+def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
+    """Exclui, até um lote, as parcelas do parcelamento, as realizadas também, e devolve se pode
+    faltar alguma."""
+    if not (lidos := _ler(conn, "id = %s", (id,))):
+        return False
+    por_lote = _por_lote(lidos[0])
+    a_excluir = [
+        lancamento_id
+        for (lancamento_id,) in conn.execute(
+            "SELECT id FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL"
+            " ORDER BY parcela LIMIT %s",
+            (id, por_lote + 1),
+        )
+    ]
+    for lancamento_id in a_excluir[:por_lote]:
+        excluir(conn, lancamento_id, None, usuario)
+    return len(a_excluir) > por_lote
+
+
+@router.delete("/parcelamentos/{id}", status_code=204, operation_id="excluir_parcelamento")
+def excluir_parcelamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
+    """Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
+    que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
+    recebe o aviso de excluído)."""
+    url = url_do_banco(request)
+
+    def fechar(conn) -> None:
+        # Com todas as parcelas dadas por geradas, a tarefa diária não gera novas enquanto as de
+        # agora saem.
+        conn.execute("UPDATE parcelamentos SET geradas = parcelas WHERE id = %s", (id,))
+
+    em_transacao(url, fechar)
+    while em_transacao(url, lambda conn: _excluir_um_lote(conn, id, usuario)):
+        pass
+
+    def tirar(conn) -> None:
+        conn.execute("DELETE FROM parcelamento_categorias WHERE parcelamento_id = %s", (id,))
+        conn.execute("DELETE FROM parcelamento_tags WHERE parcelamento_id = %s", (id,))
+        conn.execute("DELETE FROM parcelamentos WHERE id = %s", (id,))
+
+    em_transacao(url, tirar)
+    return Response(status_code=204)
