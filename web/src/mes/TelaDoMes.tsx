@@ -69,29 +69,29 @@ function Fechamento({ leitura, categorias }: { leitura: LeituraDoMes; categorias
 /** Os lançamentos com duas ou mais categorias com item: a escolha vai pela fila, com ou sem internet. */
 function AEscolher({ leitura, categorias, lancamentos, aoEscolher }: { leitura: LeituraDoMes; categorias: Categorias; lancamentos: LancamentoNaTela[]; aoEscolher: () => void }) {
   // A escolha que ainda está na fila já tira o lançamento da lista.
-  const pendentes = leitura.planejamento.a_escolher.flatMap((a) => {
-    const l = lancamentos.find((x) => x.id === a.lancamento_id);
-    return l && !l.item_categoria_id ? [{ a, l }] : [];
+  const aEscolher = leitura.planejamento.a_escolher.flatMap((escolha) => {
+    const lancamento = lancamentos.find((l) => l.id === escolha.lancamento_id);
+    return lancamento && !lancamento.item_categoria_id ? [{ escolha, lancamento }] : [];
   });
-  if (!pendentes.length) return null;
+  if (!aEscolher.length) return null;
   return (
     <section aria-label="A escolher">
       <h3>A escolher</h3>
       <p className="vazio">Têm duas ou mais categorias com item no planejamento. Em qual item cada um conta?</p>
       <ul className="lista">
-        {pendentes.map(({ a, l }) => (
-          <li key={l.id} aria-label={tituloDoLancamento(l, categorias)}>
+        {aEscolher.map(({ escolha, lancamento }) => (
+          <li key={lancamento.id} aria-label={tituloDoLancamento(lancamento, categorias)}>
             <div>
-              <strong>{tituloDoLancamento(l, categorias)}</strong>
-              <ValorComSinal l={l} />
+              <strong>{tituloDoLancamento(lancamento, categorias)}</strong>
+              <ValorComSinal l={lancamento} />
             </div>
             <p className="vazio">
-              {dataPorExtenso(l.data)}
-              {a.item_categoria_id && ` · por ora conta em ${nomePorId(categorias, a.item_categoria_id)}`}
+              {dataPorExtenso(lancamento.data)}
+              {escolha.item_categoria_id && ` · por ora conta em ${nomePorId(categorias, escolha.item_categoria_id)}`}
             </p>
             <div className="acoes-em-linha">
-              {a.categorias_com_item.map((c) => (
-                <button key={c} className="secundario" onClick={() => void escolherItem(l, c).then(aoEscolher)}>
+              {escolha.categorias_com_item.map((c) => (
+                <button key={c} className="secundario" onClick={() => void escolherItem(lancamento, c).then(aoEscolher)}>
                   Conta em {nomePorId(categorias, c)}
                 </button>
               ))}
@@ -235,10 +235,10 @@ function Comparacao({ leitura, categorias }: { leitura: LeituraDoMes; categorias
 }
 
 type Dimensao = "categoria" | "tag" | "pessoa";
-const DIMENSOES: { id: Dimensao; nome: string }[] = [
-  { id: "categoria", nome: "Categoria" },
-  { id: "tag", nome: "Tag" },
-  { id: "pessoa", nome: "Pessoa" },
+const DIMENSOES: { id: Dimensao; nome: string; linhas: keyof LeituraDoMes["ranking"]; vazio: string; somaMais: boolean }[] = [
+  { id: "categoria", nome: "Categoria", linhas: "por_categoria", vazio: "Nenhuma despesa neste mês.", somaMais: true },
+  { id: "tag", nome: "Tag", linhas: "por_tag", vazio: "Nenhuma despesa com tag neste mês.", somaMais: true },
+  { id: "pessoa", nome: "Pessoa", linhas: "por_pessoa", vazio: "Nenhuma despesa neste mês.", somaMais: false },
 ];
 
 type LinhaAberta = { nome: string; centavos: number; ids: string[] };
@@ -274,12 +274,17 @@ function FolhaDoRanking({ linha, categorias, lancamentos, aoFechar }: { linha: L
 
 /** Para onde foi o dinheiro: barras por categoria, tag ou pessoa, sem pizza. */
 function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; categorias: Categorias; lancamentos: LancamentoNaTela[] }) {
-  const [dimensao, setDimensao] = useState<Dimensao>("categoria");
+  const [dimensao, setDimensao] = useState(DIMENSOES[0]);
   const [aberta, setAberta] = useState<LinhaAberta | null>(null);
   const { nomeDe } = usePessoas();
-  const { por_categoria, por_tag, por_pessoa } = leitura.ranking;
-  const linhas = { categoria: por_categoria, tag: por_tag, pessoa: por_pessoa }[dimensao];
-  const nome = (chave: string | null) => (dimensao === "categoria" ? nomePorId(categorias, chave ?? "") : dimensao === "tag" ? `#${chave}` : chave ? nomeDe(chave) : "Conjunto");
+  const linhas = leitura.ranking[dimensao.linhas];
+  // A chave é o id da categoria, o nome da tag ou o id da pessoa (vazia, o conjunto).
+  const nomesDaChave: Record<Dimensao, (chave: string | null) => string> = {
+    categoria: (chave) => nomePorId(categorias, chave ?? ""),
+    tag: (chave) => `#${chave}`,
+    pessoa: (chave) => (chave ? nomeDe(chave) : "Conjunto"),
+  };
+  const nome = nomesDaChave[dimensao.id];
   const maior = Math.max(...linhas.map((l) => l.centavos), 1);
   const total = leitura.despesas.realizado_centavos + leitura.despesas.previsto_centavos;
   return (
@@ -287,13 +292,13 @@ function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; 
       <h3>Ranking</h3>
       <div className="alternancia tres" role="group" aria-label="Ranking por">
         {DIMENSOES.map((d) => (
-          <button key={d.id} className={dimensao === d.id ? undefined : "secundario"} aria-pressed={dimensao === d.id} onClick={() => setDimensao(d.id)}>
+          <button key={d.id} className={dimensao.id === d.id ? undefined : "secundario"} aria-pressed={dimensao.id === d.id} onClick={() => setDimensao(d)}>
             {d.nome}
           </button>
         ))}
       </div>
       {linhas.length === 0 ? (
-        <p className="vazio">{dimensao === "tag" ? "Nenhuma despesa com tag neste mês." : "Nenhuma despesa neste mês."}</p>
+        <p className="vazio">{dimensao.vazio}</p>
       ) : (
         <ol className="ranking">
           {linhas.map((l) => (
@@ -311,19 +316,20 @@ function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; 
       )}
       <p className="vazio">
         Toque numa linha para ver os lançamentos.
-        {dimensao !== "pessoa" && ` Um lançamento conta inteiro em cada ${dimensao} que tem, então as linhas podem somar mais que as despesas do mês (${formatarCentavos(total)}).`}
+        {dimensao.somaMais && ` Um lançamento conta inteiro em cada ${dimensao.id} que tem, então as linhas podem somar mais que as despesas do mês (${formatarCentavos(total)}).`}
       </p>
       {aberta && <FolhaDoRanking linha={aberta} categorias={categorias} lancamentos={lancamentos} aoFechar={() => setAberta(null)} />}
     </section>
   );
 }
 
+const SITUACAO: Record<LeituraDoMes["situacao"], string> = { passado: "mês fechado", atual: "mês atual", futuro: "mês que vem pela frente" };
+
 /** A aba Mês: navega mês a mês; o mês passado mostra o fechamento, o atual e o futuro, a barra. */
 export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
   const { dados: leitura, atualizadoEm, semDados, buscar } = useMes(mes);
   const { categorias } = useCadastro();
   const { lancamentos } = useLancamentos();
-  const situacao = leitura?.situacao ?? (mes < hoje().slice(0, 7) ? "passado" : mes === hoje().slice(0, 7) ? "atual" : "futuro");
 
   return (
     <section className="aba-mes">
@@ -334,7 +340,7 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
         </a>
         <div>
           <h3 className="nome-do-mes">{nomeDoMes(mes).replace(/^./, (c) => c.toUpperCase())}</h3>
-          <p className="vazio">{situacao === "passado" ? "mês fechado" : situacao === "atual" ? "mês atual" : "mês que vem pela frente"}</p>
+          {leitura && <p className="vazio">{SITUACAO[leitura.situacao]}</p>}
         </div>
         <a className="botao secundario" href={`#/mes/${mesVizinho(mes, 1)}`} aria-label="Próximo mês">
           ›

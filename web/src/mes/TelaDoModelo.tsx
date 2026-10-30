@@ -44,7 +44,7 @@ export function TelaDoModelo() {
     setSalvando(true);
     const recusa = await definirModeloPadrao(itens as { categoria_id: string; valor_centavos: number }[]);
     setSalvando(false);
-    setAviso(recusa ? { erro: true, texto: `Não deu: ${recusa}.` } : { erro: false, texto: "Modelo salvo." });
+    setAviso(recusa ? { erro: true, texto: `Não deu: ${recusa}.` } : { erro: false, texto: "Modelo padrão salvo." });
     if (!recusa) void buscar();
   }
 
@@ -53,8 +53,8 @@ export function TelaDoModelo() {
       <a href="#/mes">Voltar ao mês</a>
       <h2>Modelo padrão do planejamento</h2>
       <p className="vazio">Os itens que "Aplicar modelo padrão" cria num mês sem planejamento.</p>
-      {!online && <p className="vazio">Sem internet: o modelo só se salva com conexão.</p>}
-      {atuais.length === 0 && <p className="vazio">O modelo ainda não tem itens.</p>}
+      {!online && <p className="vazio">Sem internet: o modelo padrão só se salva com conexão.</p>}
+      {atuais.length === 0 && <p className="vazio">O modelo padrão ainda não tem itens.</p>}
       <ul className="lista">
         {atuais.map((l, posicao) => {
           const categoria = categorias.find((c) => c.id === l.categoria_id);
@@ -63,7 +63,7 @@ export function TelaDoModelo() {
               <label htmlFor={`modelo-${l.categoria_id}`}>{categoria?.nome ?? "?"}</label>
               <div className="linha">
                 <input id={`modelo-${l.categoria_id}`} inputMode="decimal" autoComplete="off" placeholder="0,00" value={l.reais} onChange={(e) => mudar(posicao, { reais: e.target.value })} />
-                <button className="secundario" onClick={() => setLinhas(atuais.filter((_, i) => i !== posicao))} aria-label={`Tirar ${categoria?.nome ?? "item"} do modelo`}>
+                <button className="secundario" onClick={() => setLinhas(atuais.filter((_, i) => i !== posicao))} aria-label={`Tirar ${categoria?.nome ?? "item"} do modelo padrão`}>
                   Tirar
                 </button>
               </div>
@@ -85,7 +85,7 @@ export function TelaDoModelo() {
         </label>
       )}
       <button disabled={!online || salvando || linhas === null} onClick={() => void salvar()}>
-        Salvar modelo
+        Salvar modelo padrão
       </button>
       {aviso && (
         <p role={aviso.erro ? "alert" : "status"} className={aviso.erro ? "erro" : undefined}>

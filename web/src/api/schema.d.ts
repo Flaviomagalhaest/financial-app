@@ -988,16 +988,7 @@ export interface components {
             ano_passado: string;
             /** Linhas */
             linhas: components["schemas"]["LinhaDaComparacao"][];
-            total: components["schemas"]["Comparado"];
-        };
-        /** Comparado */
-        Comparado: {
-            /** Mes Centavos */
-            mes_centavos: number;
-            /** Anterior Centavos */
-            anterior_centavos: number;
-            /** Ano Passado Centavos */
-            ano_passado_centavos: number;
+            total: components["schemas"]["ValoresDaComparacao"];
         };
         /**
          * Confirmacao
@@ -1068,7 +1059,10 @@ export interface components {
              */
             de: string;
         };
-        /** Despesas */
+        /**
+         * Despesas
+         * @description As despesas do mês (compras menos estornos), com os ajustes de fatura no realizado.
+         */
         Despesas: {
             /** Realizado Centavos */
             realizado_centavos: number;
@@ -1188,8 +1182,9 @@ export interface components {
         };
         /**
          * Fechamento
-         * @description O fechamento do mês (glossário), para o texto corrido do mês que já passou. Receitas e
-         *     despesas levam o realizado e o previsto que ficou sem confirmar (`previstos` diz quantos).
+         * @description O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que
+         *     aconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz
+         *     quantos lançamentos são.
          */
         Fechamento: {
             /** Receitas Centavos */
@@ -2077,6 +2072,15 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ValoresDaComparacao */
+        ValoresDaComparacao: {
+            /** Mes Centavos */
+            mes_centavos: number;
+            /** Anterior Centavos */
+            anterior_centavos: number;
+            /** Ano Passado Centavos */
+            ano_passado_centavos: number;
         };
     };
     responses: never;

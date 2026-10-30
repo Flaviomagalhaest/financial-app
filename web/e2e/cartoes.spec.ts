@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { tokenDaPagina } from "./api";
 import { entrar } from "./entrar";
 
 // O dia do casal é o de São Paulo, como na API.
@@ -13,13 +14,6 @@ function dia(deslocamento: number): string {
 const porExtenso = (iso: string) => iso.split("-").reverse().join("/");
 /** `2026-11-01` vira `11/2026`. */
 const mesDaFatura = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
-
-/** Ainda não há tela de cadastro de cartão (ticket 88): o teste cadastra pela API, com o token da página. */
-async function tokenDaPagina(page: Page): Promise<string> {
-  const pedido = page.waitForRequest((r) => r.url().includes("/api/") && !!r.headers().authorization);
-  await page.reload();
-  return (await pedido).headers().authorization;
-}
 
 test("a aba Cartões mostra a fatura anterior, a atual e a próxima, e o detalhe agrupa as compras por dia com filtros", async ({ page }) => {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;

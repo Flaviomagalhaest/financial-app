@@ -406,14 +406,8 @@ export type NovaTransferencia = components["schemas"]["NovaTransferencia"];
  * Transferência precisa de internet (ADR 0011): não entra na fila. Devolve o motivo da recusa, ou
  * `null` quando gravou. Reenviar o mesmo id não duplica.
  */
-export async function criarTransferencia(transferencia: NovaTransferencia): Promise<string | null> {
-  try {
-    const { data, error } = await api.POST("/api/transferencias", { body: transferencia });
-    if (data) return null;
-    return typeof error?.detail === "string" ? error.detail : "o servidor recusou a transferência";
-  } catch {
-    return "sem resposta do servidor";
-  }
+export function criarTransferencia(transferencia: NovaTransferencia): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/transferencias", { body: transferencia }), "o servidor recusou a transferência");
 }
 
 /** O motivo da recusa do servidor, ou `null` quando ele aceitou. */
@@ -434,12 +428,12 @@ export function copiarPlanejamento(mes: string, de: string): Promise<string | nu
 }
 
 export function aplicarModeloPadrao(mes: string): Promise<string | null> {
-  return recusaDe(() => api.POST("/api/planejamento/{mes}/aplicar-modelo", { params: { path: { mes } } }), "o servidor recusou o modelo");
+  return recusaDe(() => api.POST("/api/planejamento/{mes}/aplicar-modelo", { params: { path: { mes } } }), "o servidor recusou o modelo padrão");
 }
 
 /** Troca o modelo padrão inteiro pelos itens enviados. */
 export function definirModeloPadrao(itens: ItemDoModelo[]): Promise<string | null> {
-  return recusaDe(() => api.PUT("/api/planejamento/modelo", { body: { itens } }), "o servidor recusou o modelo");
+  return recusaDe(() => api.PUT("/api/planejamento/modelo", { body: { itens } }), "o servidor recusou o modelo padrão");
 }
 
 export async function contarNaoEnviados(): Promise<number> {

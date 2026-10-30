@@ -190,6 +190,16 @@ def test_fechamento_do_mes_passado_resume_sobra_guardado_itens_estourados_e_vari
     transferir(
         casal, corrente, poupanca, categoria_id=reserva, valor_centavos=100000, data="2026-09-10"
     )
+    # A transferência prevista com categoria ainda não foi guardada.
+    transferir(
+        casal,
+        corrente,
+        poupanca,
+        categoria_id=reserva,
+        valor_centavos=5000,
+        data="2026-09-12",
+        situacao="previsto",
+    )
     transferir(casal, corrente, poupanca, valor_centavos=7000, data="2026-09-11")
     lancar(casal, corrente, [mercado], valor_centavos=80000, data="2026-08-06")
     lancar(casal, corrente, [mercado], valor_centavos=125000, data="2025-09-06")
@@ -218,13 +228,15 @@ def test_fechamento_do_mes_passado_resume_sobra_guardado_itens_estourados_e_vari
 def test_fechamento_sem_receitas_nem_mes_de_comparacao_nao_inventa_porcentagem(casal: Casal):
     conta, mercado = casal.conta(), casal.categoria("Mercado")
     lancar(casal, conta, [mercado], valor_centavos=10000, data="2026-09-06")
-    # O previsto que ninguém confirmou continua no mês, e o fechamento diz quantos são.
+    # O previsto que ninguém confirmou não aconteceu: fica fora das contas, e o fechamento diz
+    # quantos são.
     lancar(casal, conta, [mercado], valor_centavos=500, data="2026-09-07", situacao="previsto")
+    lancar(casal, conta, [mercado], valor_centavos=700, data="2026-08-07", situacao="previsto")
 
     fechamento = ler_mes(casal, "2026-09")["fechamento"]
 
-    assert fechamento["despesas_centavos"] == 10500
-    assert fechamento["sobra_centavos"] == -10500
+    assert fechamento["despesas_centavos"] == 10000
+    assert fechamento["sobra_centavos"] == -10000
     assert fechamento["sobra_percentual"] is None
     assert fechamento["previstos"] == 1
     assert fechamento["variacao_anterior_percentual"] is None

@@ -14,6 +14,7 @@ from app.banco import conectar
 from app.lancamentos import MES_EM_QUE_CONTA, VALOR_COM_SINAL, url_do_banco
 from app.login import UsuarioLogado
 from app.planejamento import Mes, Planejamento, planejamento_do_mes, primeiro_dia
+from app.recorrencias import mais_meses
 
 router = APIRouter(prefix="/api")
 
@@ -83,28 +84,31 @@ def ler_totais(mes: Mes, usuario: UsuarioLogado, request: Request) -> TotaisDoMe
         return _totais(conn, mes)
 
 
-class Despesas(BaseModel):
-    # As despesas do mês (compras menos estornos), e os ajustes de fatura no realizado.
+class PorSituacao(BaseModel):
     realizado_centavos: int
     previsto_centavos: int
+
+
+class Despesas(PorSituacao):
+    """As despesas do mês (compras menos estornos), com os ajustes de fatura no realizado."""
+
     # A soma dos itens do planejamento de categorias de despesa.
     planejado_centavos: int
     # O planejado que sobra depois do realizado e do previsto; nunca abaixo de zero.
     livre_centavos: int
 
 
-class Receitas(BaseModel):
-    realizado_centavos: int
-    previsto_centavos: int
+class Receitas(PorSituacao):
+    pass
 
 
-class Comparado(BaseModel):
+class ValoresDaComparacao(BaseModel):
     mes_centavos: int
     anterior_centavos: int
     ano_passado_centavos: int
 
 
-class LinhaDaComparacao(Comparado):
+class LinhaDaComparacao(ValoresDaComparacao):
     categoria_id: UUID
 
 
@@ -116,7 +120,7 @@ class Comparacao(BaseModel):
     anterior: str
     ano_passado: str
     linhas: list[LinhaDaComparacao]
-    total: Comparado
+    total: ValoresDaComparacao
 
 
 class LinhaDoRanking(BaseModel):
@@ -139,26 +143,29 @@ class Ranking(BaseModel):
 
 class ItemAcima(BaseModel):
     categoria_id: UUID
-    # O realizado e o previsto que passaram do planejado.
+    # O realizado e o previsto do item que passaram do planejado.
     passou_centavos: int
 
 
 class Fechamento(BaseModel):
-    """O fechamento do mês (glossário), para o texto corrido do mês que já passou. Receitas e
-    despesas levam o realizado e o previsto que ficou sem confirmar (`previstos` diz quantos)."""
+    """O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que
+    aconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz
+    quantos lançamentos são."""
 
     receitas_centavos: int
     despesas_centavos: int
     sobra_centavos: int
     # A sobra sobre as receitas, arredondada; sem receitas, não há.
     sobra_percentual: int | None
-    # As transferências com categoria (guardar na reserva); o pagamento de fatura não tem.
+    # As transferências realizadas com categoria (guardar na reserva); o pagamento de fatura não
+    # tem.
     guardado_centavos: int
     previstos: int
     # Os itens de despesa que passaram do planejado, do que mais passou ao que menos passou.
     itens_acima: list[ItemAcima]
     itens_de_despesa: int
-    # As despesas contra as do mês anterior e as do mesmo mês do ano passado; sem despesa lá, não há.
+    # As despesas realizadas contra as do mês anterior e as do mesmo mês do ano passado; sem
+    # despesa lá, não há.
     variacao_anterior_percentual: int | None
     variacao_ano_passado_percentual: int | None
 
@@ -179,22 +186,30 @@ class LeituraDoMes(BaseModel):
     fechamento: Fechamento | None
 
 
-def _por_situacao(conn, tipo: str, dia) -> dict[str, int]:
-    somas = {"realizado": 0, "previsto": 0}
-    for situacao, centavos in conn.execute(
-        f"SELECT situacao, SUM({VALOR_COM_SINAL if tipo == 'despesa' else 'valor_centavos'})"
-        f"::bigint FROM lancamentos WHERE excluido_em IS NULL AND tipo = %s"
-        f" AND {MES_EM_QUE_CONTA} = %s GROUP BY situacao",
-        (tipo, dia),
+def _somas(conn, dia: date) -> tuple[Receitas, PorSituacao]:
+    """As receitas e as despesas do mês por situação; as despesas com os ajustes de fatura."""
+    somas = {(t, s): 0 for t in ("receita", "despesa") for s in ("realizado", "previsto")}
+    for tipo, situacao, centavos in conn.execute(
+        f"SELECT tipo, situacao, SUM(CASE WHEN tipo = 'receita' THEN valor_centavos"
+        f" ELSE {VALOR_COM_SINAL} END)::bigint FROM lancamentos WHERE excluido_em IS NULL"
+        f" AND {MES_EM_QUE_CONTA} = %s GROUP BY tipo, situacao",
+        (dia,),
     ):
-        somas[situacao] = centavos
-    return somas
+        somas[tipo, situacao] = centavos
+    receitas = Receitas(
+        realizado_centavos=somas["receita", "realizado"],
+        previsto_centavos=somas["receita", "previsto"],
+    )
+    despesas = PorSituacao(
+        realizado_centavos=somas["despesa", "realizado"] + faturas.ajustes_do_mes(conn, dia),
+        previsto_centavos=somas["despesa", "previsto"],
+    )
+    return receitas, despesas
 
 
 def _outro_mes(dia: date, meses: int) -> str:
     """`AAAA-MM` do mês `meses` meses depois (antes, se negativo) de `dia`."""
-    indice = dia.year * 12 + dia.month - 1 + meses
-    return f"{indice // 12:04d}-{indice % 12 + 1:02d}"
+    return mais_meses(dia, meses).strftime("%Y-%m")
 
 
 def _comparacao(conn, dia: date) -> Comparacao:
@@ -219,7 +234,7 @@ def _comparacao(conn, dia: date) -> Comparacao:
             )
             for categoria, valores in linhas
         ],
-        total=Comparado(
+        total=ValoresDaComparacao(
             mes_centavos=periodos[0].despesas_centavos,
             anterior_centavos=periodos[1].despesas_centavos,
             ano_passado_centavos=periodos[2].despesas_centavos,
@@ -280,17 +295,13 @@ def _porcentagem(parte: int, todo: int) -> int | None:
     return round(parte * 100 / todo) if todo else None
 
 
-def _fechamento(
-    conn,
-    dia: date,
-    despesas: Despesas,
-    receitas: Receitas,
-    planejamento: Planejamento,
-    comparacao: Comparacao,
-) -> Fechamento:
+def _fechamento(conn, dia: date, planejamento: Planejamento) -> Fechamento:
+    receitas, despesas = (s.realizado_centavos for s in _somas(conn, dia))
+    anterior = _somas(conn, primeiro_dia(_outro_mes(dia, -1)))[1].realizado_centavos
+    ano_passado = _somas(conn, primeiro_dia(_outro_mes(dia, -12)))[1].realizado_centavos
     (guardado,) = conn.execute(
         "SELECT COALESCE(SUM(valor_centavos), 0)::bigint FROM transferencias"
-        " WHERE categoria_id IS NOT NULL AND data >= %s AND data < %s",
+        " WHERE categoria_id IS NOT NULL AND situacao = 'realizado' AND data >= %s AND data < %s",
         (dia, primeiro_dia(_outro_mes(dia, 1))),
     ).fetchone()
     (previstos,) = conn.execute(
@@ -314,63 +325,46 @@ def _fechamento(
         ),
         key=lambda item: (-item.passou_centavos, str(item.categoria_id)),
     )
-    total = comparacao.total
-    receitas_do_mes = receitas.realizado_centavos + receitas.previsto_centavos
-    despesas_do_mes = despesas.realizado_centavos + despesas.previsto_centavos
     return Fechamento(
-        receitas_centavos=receitas_do_mes,
-        despesas_centavos=despesas_do_mes,
-        sobra_centavos=receitas_do_mes - despesas_do_mes,
-        sobra_percentual=_porcentagem(receitas_do_mes - despesas_do_mes, receitas_do_mes),
+        receitas_centavos=receitas,
+        despesas_centavos=despesas,
+        sobra_centavos=receitas - despesas,
+        sobra_percentual=_porcentagem(receitas - despesas, receitas),
         guardado_centavos=guardado,
         previstos=previstos,
         itens_acima=acima,
         itens_de_despesa=len(itens),
-        variacao_anterior_percentual=_porcentagem(
-            total.mes_centavos - total.anterior_centavos, total.anterior_centavos
-        ),
-        variacao_ano_passado_percentual=_porcentagem(
-            total.mes_centavos - total.ano_passado_centavos, total.ano_passado_centavos
-        ),
+        variacao_anterior_percentual=_porcentagem(despesas - anterior, anterior),
+        variacao_ano_passado_percentual=_porcentagem(despesas - ano_passado, ano_passado),
     )
 
 
 def _ler_mes(conn, mes: str) -> LeituraDoMes:
     dia = primeiro_dia(mes)
     hoje = lancamentos.hoje().replace(day=1)
-    despesas = _por_situacao(conn, "despesa", dia)
-    despesas["realizado"] += faturas.ajustes_do_mes(conn, dia)
-    receitas = _por_situacao(conn, "receita", dia)
+    receitas, despesas = _somas(conn, dia)
     (planejado,) = conn.execute(
         "SELECT COALESCE(SUM(i.valor_centavos), 0)::bigint FROM itens_do_planejamento i"
         " JOIN categorias c ON c.id = i.categoria_id WHERE i.mes = %s AND c.tipo = 'despesa'",
         (dia,),
     ).fetchone()
     situacao = "passado" if dia < hoje else "atual" if dia == hoje else "futuro"
-    resumo_das_despesas = Despesas(
-        realizado_centavos=despesas["realizado"],
-        previsto_centavos=despesas["previsto"],
-        planejado_centavos=planejado,
-        livre_centavos=max(planejado - despesas["realizado"] - despesas["previsto"], 0),
-    )
-    resumo_das_receitas = Receitas(
-        realizado_centavos=receitas["realizado"], previsto_centavos=receitas["previsto"]
-    )
     planejamento = planejamento_do_mes(conn, mes)
-    comparacao = _comparacao(conn, dia)
     return LeituraDoMes(
         mes=mes,
         situacao=situacao,
-        despesas=resumo_das_despesas,
-        receitas=resumo_das_receitas,
+        despesas=Despesas(
+            **despesas.model_dump(),
+            planejado_centavos=planejado,
+            livre_centavos=max(
+                planejado - despesas.realizado_centavos - despesas.previsto_centavos, 0
+            ),
+        ),
+        receitas=receitas,
         planejamento=planejamento,
-        comparacao=comparacao,
+        comparacao=_comparacao(conn, dia),
         ranking=_ranking(conn, dia),
-        fechamento=_fechamento(
-            conn, dia, resumo_das_despesas, resumo_das_receitas, planejamento, comparacao
-        )
-        if situacao == "passado"
-        else None,
+        fechamento=_fechamento(conn, dia, planejamento) if situacao == "passado" else None,
     )
 
 

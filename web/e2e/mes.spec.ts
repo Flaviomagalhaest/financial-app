@@ -1,32 +1,37 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 
 test.use({ timezoneId: "America/Sao_Paulo" });
 
-/** Ainda não há tela de itens avulsos do planejamento: o teste prepara o mês pela API, com o token da página. */
-async function tokenDaPagina(page: Page): Promise<string> {
-  const pedido = page.waitForRequest((r) => r.url().includes("/api/") && !!r.headers().authorization);
-  await page.reload();
-  return (await pedido).headers().authorization;
+type Api = Awaited<ReturnType<typeof apiDaPagina>>;
+
+/**
+ * Os testes dividem o banco: um ano antigo em que os meses usados ainda estão vazios (sem
+ * lançamento nem item) deixa os totais só com o que o teste lança.
+ */
+async function anoVazio(api: Api, meses: (ano: number) => string[]): Promise<number> {
+  for (;;) {
+    const ano = 1100 + Math.floor(Math.random() * 800);
+    const leituras = await Promise.all(meses(ano).map((mes) => api.ler(`/api/meses/${mes}`)));
+    const vazio = (l: { despesas: { realizado_centavos: number; previsto_centavos: number }; receitas: { realizado_centavos: number; previsto_centavos: number }; planejamento: { itens: unknown[] } }) =>
+      !l.despesas.realizado_centavos && !l.despesas.previsto_centavos && !l.receitas.realizado_centavos && !l.receitas.previsto_centavos && !l.planejamento.itens.length;
+    if (leituras.every(vazio)) return ano;
+  }
 }
 
 test("a aba Mês navega até um mês passado, lê o fechamento, compara, abre o ranking e escolhe o item", async ({ page, context }) => {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-  // Os testes dividem o banco: um ano antigo sorteado deixa os totais do mês só com o que este teste lança.
-  const ano = 1100 + Math.floor(Math.random() * 800);
-  const [marco, fevereiro, marcoDoAnoPassado] = [`${ano}-03`, `${ano}-02`, `${ano - 1}-03`];
   await page.goto("/#/mes");
   await entrar(page);
   await expect(page.getByText("mês atual")).toBeVisible();
   await expect(page.getByRole("region", { name: "Despesas × planejamento" })).toBeVisible();
 
-  const headers = { authorization: await tokenDaPagina(page) };
-  const criar = async (caminho: string, data: object) => {
-    const resposta = await page.request.post(caminho, { headers, data });
-    expect(resposta.ok(), await resposta.text()).toBe(true);
-    return resposta.json();
-  };
+  const api = await apiDaPagina(page);
+  const { criar } = api;
+  const ano = await anoVazio(api, (a) => [`${a}-03`, `${a}-02`, `${a - 1}-03`]);
+  const [marco, fevereiro, marcoDoAnoPassado] = [`${ano}-03`, `${ano}-02`, `${ano - 1}-03`];
   const conta = await criar("/api/contas", { nome: `Corrente ${s}`, tipo: "corrente" });
   const categoria = async (nome: string, tipo = "despesa") => (await criar("/api/categorias", { nome: `${nome} ${s}`, tipo })).id as string;
   const [mercado, restaurante, viagem, salario] = [await categoria("Mercado"), await categoria("Restaurante"), await categoria("Viagem"), await categoria("Salário", "receita")];
@@ -40,6 +45,8 @@ test("a aba Mês navega até um mês passado, lê o fechamento, compara, abre o 
   await lancar(400000, `${marco}-05`, [salario], { tipo: "receita", descricao: `Salário ${s}` });
   await lancar(60000, `${marco}-06`, [mercado], { descricao: `Feira ${s}`, tags: [`feira ${s}`], pessoa: "sub-esposa" });
   await lancar(20000, `${marco}-07`, [restaurante, viagem], { descricao: `Jantar ${s}` });
+  // O previsto que ninguém confirmou fica fora do fechamento.
+  await lancar(9900, `${marco}-20`, [salario], { tipo: "receita", situacao: "previsto" });
   await lancar(50000, `${fevereiro}-06`, [mercado]);
   await lancar(100000, `${marcoDoAnoPassado}-06`, [mercado]);
 
@@ -50,6 +57,7 @@ test("a aba Mês navega até um mês passado, lê o fechamento, compara, abre o 
   await expect(fechamento).toContainText(`Março de ${ano} fechou com R$ 4.000,00 de receitas e R$ 800,00 de despesas. Sobraram R$ 3.200,00 (80% das receitas).`);
   await expect(fechamento).toContainText(`Passou do planejado em Mercado ${s} (+R$ 100,00); 2 de 3 itens ficaram dentro.`);
   await expect(fechamento).toContainText(`Em relação a fevereiro de ${ano}, as despesas subiram 60%. Em relação a março de ${ano - 1}, as despesas caíram 20%.`);
+  await expect(fechamento).toContainText("1 previsto ficou sem confirmar e não entra nas contas acima.");
 
   // Comparação: o total conta o jantar uma vez; tocar na linha mostra os valores antigos.
   const comparacao = page.getByRole("region", { name: "Comparação" });
@@ -86,16 +94,12 @@ test("a aba Mês navega até um mês passado, lê o fechamento, compara, abre o 
 
 test("o mês vazio copia o planejamento do anterior ou aplica o modelo padrão", async ({ page }) => {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-  const ano = 1100 + Math.floor(Math.random() * 800);
   await page.goto("/#/configuracoes");
   await entrar(page);
   await expect(page.getByRole("heading", { name: "Configurações" })).toBeVisible();
-  const headers = { authorization: await tokenDaPagina(page) };
-  const criar = async (caminho: string, data: object) => {
-    const resposta = await page.request.post(caminho, { headers, data });
-    expect(resposta.ok(), await resposta.text()).toBe(true);
-    return resposta.json();
-  };
+  const api = await apiDaPagina(page);
+  const { criar } = api;
+  const ano = await anoVazio(api, (a) => [`${a}-04`, `${a}-05`, `${a}-06`]);
   const [casa] = [await criar("/api/categorias", { nome: `Casa ${s}`, tipo: "despesa" })];
   await criar("/api/categorias", { nome: `Lazer ${s}`, tipo: "despesa" });
   await criar(`/api/planejamento/${ano}-04/itens`, { id: randomUUID(), categoria_id: casa.id, valor_centavos: 150000 });
@@ -104,12 +108,12 @@ test("o mês vazio copia o planejamento do anterior ou aplica o modelo padrão",
   await page.reload();
   await page.getByRole("link", { name: "Modelo padrão do planejamento" }).click();
   await expect(page.getByRole("heading", { name: "Modelo padrão do planejamento" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Salvar modelo" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Salvar modelo padrão" })).toBeEnabled();
   for (const item of await page.getByRole("button", { name: /^Tirar / }).all()) await item.click();
   await page.getByLabel("Adicionar item").selectOption({ label: `Lazer ${s}` });
   await page.getByRole("textbox", { name: `Lazer ${s}` }).fill("250,50");
-  await page.getByRole("button", { name: "Salvar modelo" }).click();
-  await expect(page.getByRole("status")).toHaveText("Modelo salvo.");
+  await page.getByRole("button", { name: "Salvar modelo padrão" }).click();
+  await expect(page.getByRole("status")).toHaveText("Modelo padrão salvo.");
 
   await page.goto(`/#/mes/${ano}-05`);
   const itens = page.getByRole("region", { name: "Itens do planejamento" });

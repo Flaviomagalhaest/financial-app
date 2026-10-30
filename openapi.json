@@ -2979,7 +2979,7 @@
             "title": "Linhas"
           },
           "total": {
-            "$ref": "#/components/schemas/Comparado"
+            "$ref": "#/components/schemas/ValoresDaComparacao"
           }
         },
         "type": "object",
@@ -2991,29 +2991,6 @@
         ],
         "title": "Comparacao",
         "description": "As despesas do mês por categoria contra o mês anterior e o mesmo mês do ano passado, com o\nrealizado e o previsto. O lançamento com várias categorias conta inteiro em cada linha, e o\ntotal o conta uma vez (com os ajustes de fatura), então as linhas somam mais que o total."
-      },
-      "Comparado": {
-        "properties": {
-          "mes_centavos": {
-            "type": "integer",
-            "title": "Mes Centavos"
-          },
-          "anterior_centavos": {
-            "type": "integer",
-            "title": "Anterior Centavos"
-          },
-          "ano_passado_centavos": {
-            "type": "integer",
-            "title": "Ano Passado Centavos"
-          }
-        },
-        "type": "object",
-        "required": [
-          "mes_centavos",
-          "anterior_centavos",
-          "ano_passado_centavos"
-        ],
-        "title": "Comparado"
       },
       "Confirmacao": {
         "properties": {
@@ -3231,7 +3208,8 @@
           "planejado_centavos",
           "livre_centavos"
         ],
-        "title": "Despesas"
+        "title": "Despesas",
+        "description": "As despesas do mês (compras menos estornos), com os ajustes de fatura no realizado."
       },
       "EdicaoDeCartao": {
         "properties": {
@@ -3605,7 +3583,7 @@
           "variacao_ano_passado_percentual"
         ],
         "title": "Fechamento",
-        "description": "O fechamento do mês (glossário), para o texto corrido do mês que já passou. Receitas e\ndespesas levam o realizado e o previsto que ficou sem confirmar (`previstos` diz quantos)."
+        "description": "O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que\naconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz\nquantos lançamentos são."
       },
       "HTTPValidationError": {
         "properties": {
@@ -5694,6 +5672,29 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValoresDaComparacao": {
+        "properties": {
+          "mes_centavos": {
+            "type": "integer",
+            "title": "Mes Centavos"
+          },
+          "anterior_centavos": {
+            "type": "integer",
+            "title": "Anterior Centavos"
+          },
+          "ano_passado_centavos": {
+            "type": "integer",
+            "title": "Ano Passado Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes_centavos",
+          "anterior_centavos",
+          "ano_passado_centavos"
+        ],
+        "title": "ValoresDaComparacao"
       }
     },
     "securitySchemes": {

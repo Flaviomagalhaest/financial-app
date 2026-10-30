@@ -1,4 +1,5 @@
 import type { LeituraDoMes } from "../dados";
+import { mesDepois } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 
 const NOMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -15,9 +16,7 @@ export function mesCurto(mes: string): string {
 
 /** O mês `deslocamento` meses depois de `mes`, como `AAAA-MM`. */
 export function mesVizinho(mes: string, deslocamento: number): string {
-  const [ano, numero] = mes.split("-").map(Number);
-  const indice = ano * 12 + numero - 1 + deslocamento;
-  return `${String(Math.floor(indice / 12)).padStart(4, "0")}-${String((indice % 12) + 1).padStart(2, "0")}`;
+  return mesDepois(`${mes}-01`, deslocamento).slice(0, 7);
 }
 
 /** "▲ 25%" ou "▼ 20%" do antigo para o atual; "novo" quando antes não havia, "—" quando nunca houve. */
@@ -68,7 +67,7 @@ export function textoDoFechamento(leitura: LeituraDoMes, nomeDaCategoria: (id: s
     `${frasesDaVariacao(f.variacao_anterior_percentual, nomeDoMes(leitura.comparacao.anterior))} ${frasesDaVariacao(f.variacao_ano_passado_percentual, nomeDoMes(leitura.comparacao.ano_passado))}`,
   );
   if (f.previstos > 0) {
-    paragrafos.push(`${f.previstos === 1 ? "1 previsto ficou sem confirmar e entra" : `${f.previstos} previstos ficaram sem confirmar e entram`} nas contas acima.`);
+    paragrafos.push(`${f.previstos === 1 ? "1 previsto ficou sem confirmar e não entra" : `${f.previstos} previstos ficaram sem confirmar e não entram`} nas contas acima.`);
   }
   return paragrafos;
 }
