@@ -20,7 +20,6 @@ import {
   type NovoLancamento,
 } from "./armazem";
 import {
-  CONTAS_DA_SEMANA,
   decidirConflito,
   descartar,
   enfileirarConfirmar,
@@ -31,6 +30,8 @@ import {
   excluirMesmoAssim,
   lancarDeNovo,
   LISTA,
+  naSemana,
+  pelaData,
   type Ajustes,
   type Remessa,
 } from "./fila";
@@ -41,6 +42,7 @@ export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
+export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
@@ -84,7 +86,6 @@ const LEITURAS = {
   "/api/tags": () => api.GET("/api/tags"),
   "/api/cartoes": () => api.GET("/api/cartoes"),
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
-  "/api/contas-da-semana": () => api.GET("/api/contas-da-semana"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -107,6 +108,11 @@ function useResposta<C extends Caminho>(caminho: C) {
 export function useFaturas(cartaoId: string) {
   const ler = () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id: cartaoId } } });
   return useRespostaDe<Fatura[]>(`/api/cartoes/${cartaoId}/faturas`, ler);
+}
+
+/** A leitura da tela Hoje, em uma chamada; sem internet, a última guardada. */
+export function useHoje() {
+  return useRespostaDe<LeituraDaHoje>("/api/hoje", () => api.GET("/api/hoje"));
 }
 
 /** O limite comprometido e disponível do cartão titular (o adicional divide o dele). */
@@ -219,23 +225,20 @@ export function useLancamentos() {
 }
 
 /**
- * Os previstos a confirmar (atrasados e os dos próximos dias), na ordem do servidor, com a fila por
- * cima: o que se confirmou ou excluiu no aparelho sai, e o editado aparece como ficou.
+ * As contas da semana da leitura da Hoje com a fila por cima: o previsto criado ou mudado no
+ * aparelho entra ou sai pela mesma janela do servidor, e o confirmado sai. O conflito e a recusa de
+ * uma conta da semana ficam, para decidir ou confirmar de novo.
  */
-export function useContasDaSemana() {
-  const { dados, atualizadoEm, semDados } = useResposta(CONTAS_DA_SEMANA);
+export function useContasDaSemana(doServidor: Lancamento[] | null): LancamentoNaTela[] | null {
   const fila = useFila();
-  const lancamentos = useMemo(() => {
-    if (!dados) return null;
-    const ids = new Set(dados.lancamentos.map((l) => l.id));
-    // Só as mudanças destes: o resto da fila não é conta da semana.
-    const mostrados = new Map(naTela(dados.lancamentos, fila.filter((item) => ids.has(item.id))).map((l) => [l.id, l]));
-    return dados.lancamentos.flatMap((l) => {
-      const mostrado = mostrados.get(l.id);
-      return mostrado?.situacao === "previsto" ? [mostrado] : [];
-    });
-  }, [dados, fila]);
-  return { lancamentos, atualizadoEm, semDados };
+  return useMemo(() => {
+    if (!doServidor) return null;
+    const ids = new Set(doServidor.map((l) => l.id));
+    const esperam = (l: LancamentoNaTela) => ids.has(l.id) && !!(l.conflito || l.recusa);
+    return naTela(doServidor, fila)
+      .filter((l) => esperam(l) || naSemana(l))
+      .sort(pelaData);
+  }, [doServidor, fila]);
 }
 
 /**

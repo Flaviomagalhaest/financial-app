@@ -12,6 +12,8 @@ function dia(deslocamento: number): string {
 
 const porExtenso = (iso: string) => iso.split("-").reverse().join("/");
 
+const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: nome }).click();
+
 const digitar = async (page: Page, ...teclas: string[]) => {
   for (const tecla of teclas) await page.getByRole("button", { name: tecla, exact: true }).click();
 };
@@ -105,11 +107,9 @@ test("confirma as contas da semana em um toque ou ajustando, e só o realizado m
   await expect(luzNaLista).not.toContainText("atrasado");
 });
 
-const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: nome }).click();
-
 test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe uma vez só", async ({ page, context }) => {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-  const [conta, luz, aluguel, agua] = [`Corrente ${s}`, `Luz ${s}`, `Aluguel ${s}`, `Água ${s}`];
+  const [conta, luz, aluguel, agua, gas] = [`Corrente ${s}`, `Luz ${s}`, `Aluguel ${s}`, `Água ${s}`, `Gás ${s}`];
   await page.goto("/#/contas-e-categorias");
   await entrar(page);
   await cadastrar(page, "Nova conta", conta, "corrente");
@@ -125,7 +125,22 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await context.setOffline(true);
   await aba(page, "Histórico");
   await aba(page, "Hoje");
-  await expect(bloco).toContainText(/Sem internet: atualizado às \d\d:\d\d/);
+  await expect(page.getByTestId("atualizado-em")).toContainText(/Sem internet: atualizado às \d\d:\d\d/);
+  await expect(minhas).toHaveCount(2);
+
+  // O previsto lançado sem internet já é conta da semana; confirmá-lo muda o pedido de criar.
+  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await digitar(page, "3", "0", "00");
+  await page.getByRole("button", { name: conta }).click();
+  await page.getByRole("button", { name: luz }).click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(gas);
+  await page.getByLabel("Data").fill(dia(1));
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await aba(page, "Hoje");
+  await expect(minhas).toHaveCount(3);
+  await bloco.getByRole("button", { name: `Confirmar ${gas}` }).click();
   await expect(minhas).toHaveCount(2);
 
   // Confirmar em um toque e ajustando: os dois saem do bloco e esperam na fila.
@@ -137,7 +152,7 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await bloco.getByRole("button", { name: "Confirmar com ajuste" }).click();
   await expect(minhas).toHaveCount(0);
   await expect(bloco.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByTestId("nao-enviados")).toContainText("2 lançamentos não enviados");
+  await expect(page.getByTestId("nao-enviados")).toContainText("3 lançamentos não enviados");
 
   // No Histórico, já realizados, com o ajuste e o ⏳.
   await aba(page, "Histórico");
@@ -149,6 +164,9 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await expect(linhaDaAgua).toContainText(porExtenso(dia(0)));
   await expect(linhaDaAgua).toContainText("⏳ não enviado");
   await expect(linhaDaAgua).not.toContainText("previsto");
+  const linhaDoGas = page.getByRole("listitem").filter({ hasText: gas });
+  await expect(linhaDoGas).toContainText("⏳ não enviado");
+  await expect(linhaDoGas).not.toContainText("previsto");
 
   // Editar o confirmado que ainda não subiu muda o pedido e não desfaz a confirmação.
   await linhaDoAluguel.getByRole("link", { name: `Editar ${aluguel}` }).click();
@@ -171,7 +189,7 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await aba(page, "Hoje");
   await context.setOffline(false);
   await expect.poll(() => perdidas).toBe(1);
-  await expect(page.getByTestId("nao-enviados")).toContainText("2 lançamentos não enviados");
+  await expect(page.getByTestId("nao-enviados")).toContainText("3 lançamentos não enviados");
   await page.getByRole("button", { name: "Enviar agora" }).click();
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
   await expect(minhas).toHaveCount(0);
@@ -187,6 +205,8 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await expect(linhaDoAluguel).not.toContainText("previsto");
   await expect(linhaDaAgua).toHaveCount(1);
   await expect(linhaDaAgua).toContainText("− R$ 900,01");
+  await expect(linhaDoGas).toHaveCount(1);
+  await expect(linhaDoGas).not.toContainText("previsto");
   await page.goto("/#/contas-e-categorias");
-  await expect(page.getByRole("listitem").filter({ hasText: conta })).toContainText(/-R\$ 970,01/);
+  await expect(page.getByRole("listitem").filter({ hasText: conta })).toContainText(/-R\$ 1\.000,01/);
 });

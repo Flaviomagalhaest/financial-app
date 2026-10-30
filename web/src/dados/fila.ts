@@ -1,6 +1,8 @@
 // A fila dos lançamentos não enviados: o que se faz no aparelho entra aqui e sobe em lote, na
 // ordem (ADR 0011). Sem React nem cliente da API, porque o service worker também envia.
 import type { components } from "../api/schema";
+import { config } from "../config";
+import { hoje } from "../lancamentos/datas";
 import {
   comTrava,
   emTransacao,
@@ -14,7 +16,7 @@ import {
 } from "./armazem";
 
 export type Acao = components["schemas"]["Lote"]["acoes"][number];
-type ContasDaSemana = components["schemas"]["ContasDaSemana"];
+type LeituraDaHoje = components["schemas"]["Hoje"];
 export type Resultado = components["schemas"]["Resultado"];
 export type Alteracao = components["schemas"]["AlteracaoDeLancamento"];
 export type Campo = components["schemas"]["CampoEmConflito"]["campo"];
@@ -25,8 +27,8 @@ export type Remessa = (acoes: Acao[]) => Promise<Resultado[] | number>;
 export const ETIQUETA_DO_ENVIO = "enviar-fila";
 /** A lista de lançamentos guardada, que o resultado do envio já acerta. */
 export const LISTA = "/api/lancamentos";
-/** Os previstos a confirmar guardados, que o resultado do envio também acerta. */
-export const CONTAS_DA_SEMANA = "/api/contas-da-semana";
+/** A leitura da Hoje guardada: o resultado do envio acerta as contas da semana dela. */
+export const HOJE = "/api/hoje";
 /** O mesmo limite do servidor (`LIMITE_DO_LOTE`). */
 const LIMITE_DO_LOTE = 100;
 /** Os campos que o servidor versiona um a um (`CAMPOS` em `lancamentos.py`). */
@@ -73,10 +75,12 @@ export function comoNovo(l: NovoLancamento): NovoLancamento {
   return { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa };
 }
 
-function salvo(atual: ItemDaFila | undefined, lancamento: NovoLancamento, novo: boolean, base?: Base): Proximo {
+/** O pedido de criar ou de editar que fica na fila no lugar de `atual`. */
+function pedidoDeSalvar(atual: ItemDaFila | undefined, mudado: NovoLancamento, novo: boolean, base?: Base): Proximo {
   // A situação escolhida antes (à mão ou ao confirmar) fica enquanto a data não muda, como a tela a mostra.
   const antes = atual?.conflito ? undefined : atual?.lancamento;
-  if (!lancamento.situacao && antes?.situacao && antes.data === lancamento.data) lancamento = { ...lancamento, situacao: antes.situacao };
+  const ficaASituacao = !mudado.situacao && antes?.situacao && antes.data === mudado.data;
+  const lancamento = ficaASituacao ? { ...mudado, situacao: antes.situacao } : mudado;
   return atual?.acao === "criar" || novo
     ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, base: atual?.base }
     : // Sobre um conflito, a tela já mostrava a versão do servidor.
@@ -88,12 +92,12 @@ function salvo(atual: ItemDaFila | undefined, lancamento: NovoLancamento, novo: 
  * conflito. `base` é a versão do servidor que a tela mostrava; a primeira mudança a guarda.
  */
 export function enfileirarSalvar(lancamento: NovoLancamento, novo: boolean, base?: Base): Promise<void> {
-  return mudar(lancamento.id, (atual) => salvo(atual, lancamento, novo, base));
+  return mudar(lancamento.id, (atual) => pedidoDeSalvar(atual, lancamento, novo, base));
 }
 
-/** O que a pessoa acertou ao confirmar o previsto; o que falta fica como estava. */
-export type Ajustes = Partial<Pick<NovoLancamento, "valor_centavos" | "data" | "conta_id">>;
 const AJUSTAVEIS = ["valor_centavos", "data", "conta_id"] as const;
+/** O que a pessoa acertou ao confirmar o previsto; o que falta fica como estava. */
+export type Ajustes = Partial<Pick<NovoLancamento, (typeof AJUSTAVEIS)[number]>>;
 
 /**
  * Confirmar o previsto que a tela mostrava. Sobre uma mudança que ainda não subiu, muda o pedido
@@ -106,7 +110,7 @@ export function enfileirarConfirmar(mostrado: NovoLancamento, ajustes: Ajustes, 
     const lancamento: NovoLancamento = { ...antes, ...ajustes, situacao: "realizado" };
     return !atual || (atual.acao === "confirmar" && !atual.conflito)
       ? { acao: "confirmar", lancamento, base: atual?.base ?? base }
-      : salvo(atual, lancamento, false, base);
+      : pedidoDeSalvar(atual, lancamento, false, base);
   });
 }
 
@@ -177,8 +181,8 @@ function acoesDo(item: ItemDaFila): Acao[] {
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
   if (item.acao === "confirmar") {
     // Só os ajustes que a pessoa fez, sobre a versão que a tela mostrava, como na rota de confirmar.
-    const ajustes: Ajustes = {};
-    for (const campo of AJUSTAVEIS) if (item.lancamento![campo] !== item.base?.[campo]) Object.assign(ajustes, { [campo]: item.lancamento![campo] });
+    const lancamento = item.lancamento!;
+    const ajustes: Ajustes = Object.fromEntries(AJUSTAVEIS.filter((campo) => lancamento[campo] !== item.base?.[campo]).map((campo) => [campo, lancamento[campo]]));
     return [{ acao: "confirmar", id: item.id, confirmacao: { versao: item.base?.versao, ...ajustes, acao_em } }];
   }
   const lancamento = { ...item.lancamento!, acao_em };
@@ -188,17 +192,31 @@ function acoesDo(item: ItemDaFila): Acao[] {
   return comEdicao ? [{ acao: "criar", lancamento }, editar] : [{ acao: "criar", lancamento }];
 }
 
+/** Previsto que pede confirmação, atrasado ou até `contasDaSemanaDias` dias depois de hoje (`contas_da_semana_de_hoje`). */
+export function naSemana(l: Pick<Lancamento, "data"> & { situacao?: Lancamento["situacao"]; automatico?: Lancamento["automatico"] }): boolean {
+  const [ano, mes, dia] = hoje().split("-").map(Number);
+  const ate = new Date(Date.UTC(ano, mes - 1, dia + config.contasDaSemanaDias)).toISOString().slice(0, 10);
+  return l.situacao === "previsto" && !l.automatico && l.data <= ate;
+}
+
+/** Do mais antigo ao mais novo, como o servidor; o que só existe no aparelho fecha o dia. */
+export const pelaData = (a: { data: string; criado_em?: string }, b: { data: string; criado_em?: string }) =>
+  a.data.localeCompare(b.data) || (a.criado_em ?? "\uffff").localeCompare(b.criado_em ?? "\uffff");
+
 async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
   await emTransacao("readwrite", async (fila, respostas) => {
     const guardada: Guardada<Lancamento[]> | undefined = await pedido(respostas.get(LISTA));
     let lista = guardada?.dados ?? [];
-    const semana: Guardada<ContasDaSemana> | undefined = await pedido(respostas.get(CONTAS_DA_SEMANA));
-    let previstos = semana?.dados.lancamentos ?? [];
+    const daHoje: Guardada<LeituraDaHoje> | undefined = await pedido(respostas.get(HOJE));
+    let previstos = daHoje?.dados.contas_da_semana ?? [];
     for (const [i, enviado] of enviados.entries()) {
       const { resultado, motivo, lancamento, campos, exclusao } = resultados[i];
-      // Nas contas da semana, o previsto fica com a versão do servidor; o confirmado ou excluído sai.
-      if (resultado !== "recusada")
-        previstos = previstos.flatMap((l) => (l.id !== enviado.id ? [l] : lancamento?.situacao === "previsto" ? [lancamento] : []));
+      // Nas contas da semana, vale a versão do servidor: o confirmado ou excluído sai, e o conflito
+      // fica (com a do servidor, mesmo já realizada) para o bloco mostrar "Decidir".
+      if (resultado !== "recusada") {
+        previstos = previstos.filter((l) => l.id !== enviado.id);
+        if (lancamento && (resultado === "conflito" || naSemana(lancamento))) previstos = [...previstos, lancamento].sort(pelaData);
+      }
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       const intacto = atual?.revisao === enviado.revisao;
       if (resultado === "recusada") {
@@ -228,7 +246,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, base: lancamento ?? atual.base }));
     }
     if (guardada) await pedido(respostas.put({ dados: ordenar(lista), em: guardada.em }, LISTA));
-    if (semana) await pedido(respostas.put({ dados: { ...semana.dados, lancamentos: previstos }, em: semana.em }, CONTAS_DA_SEMANA));
+    if (daHoje) await pedido(respostas.put({ dados: { ...daHoje.dados, contas_da_semana: previstos }, em: daHoje.em }, HOJE));
   });
 }
 

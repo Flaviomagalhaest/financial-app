@@ -625,6 +625,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hoje": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Hoje */
+        get: operations["ler_hoje"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pessoas": {
         parameters: {
             query?: never;
@@ -1299,6 +1316,32 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** Hoje */
+        Hoje: {
+            /**
+             * Dia
+             * Format: date
+             */
+            dia: string;
+            /** Mes */
+            mes: string;
+            /** Planejado Centavos */
+            planejado_centavos: number;
+            /** Ainda Da Para Gastar Centavos */
+            ainda_da_para_gastar_centavos: number;
+            /** Ajustes De Fatura Centavos */
+            ajustes_de_fatura_centavos: number;
+            /** A Escolher */
+            a_escolher: components["schemas"]["AEscolher"][];
+            /** Lancamentos A Escolher */
+            lancamentos_a_escolher: components["schemas"]["Lancamento"][];
+            /** Contas Da Semana */
+            contas_da_semana: components["schemas"]["Lancamento"][];
+            /** Faturas Que Vencem */
+            faturas_que_vencem: components["schemas"]["Fatura"][];
+            /** Itens Em Destaque */
+            itens_em_destaque: components["schemas"]["ItemDoPlanejamento"][];
         };
         /** IndiceDeSugestao */
         IndiceDeSugestao: {
@@ -3565,6 +3608,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_hoje: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hoje"];
                 };
             };
         };

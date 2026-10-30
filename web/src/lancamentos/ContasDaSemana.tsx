@@ -3,31 +3,32 @@ import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresent
 import { dataPorExtenso } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { Teclado } from "./Teclado";
-import { atualizadoAs, confirmarPrevisto, useCadastro, useContasDaSemana, type LancamentoNaTela } from "../dados";
+import { confirmarPrevisto, useCadastro, type Ajustes, type LancamentoNaTela } from "../dados";
 
-type Ajuste = { centavos: number; data: string; contaId: string };
+type Props = {
+  /** As contas da semana da leitura da Hoje, com a fila por cima; `null` enquanto não há resposta, nem guardada. */
+  lancamentos: LancamentoNaTela[] | null;
+};
 
 /**
  * Previstos a confirmar (atrasados e os dos próximos 7 dias), com "Confirmar" em um toque ou
  * "Ajustar". A confirmação vai pela fila: sem internet, o previsto sai daqui e fica realizado ⏳.
  */
-export function ContasDaSemana() {
+export function ContasDaSemana({ lancamentos }: Props) {
   const { contas, contasECartoes, categorias } = useCadastro();
-  const { lancamentos, atualizadoEm, semDados } = useContasDaSemana();
-  const [ajustando, setAjustando] = useState<{ id: string } & Ajuste | null>(null);
+  const [ajustando, setAjustando] = useState<{ id: string } & Required<Ajustes> | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
 
-  async function confirmar(l: LancamentoNaTela, ajuste?: Ajuste) {
+  async function confirmar(l: LancamentoNaTela, ajustes?: Ajustes) {
     setErro("");
     setEnviando(true);
     try {
-      const naFila = await confirmarPrevisto(l, ajuste && { valor_centavos: ajuste.centavos, data: ajuste.data, conta_id: ajuste.contaId });
+      const naFila = await confirmarPrevisto(l, ajustes);
       setAjustando(null);
       // Já confirmado com outros valores: a decisão é campo a campo, na tela de conflito.
       if (naFila?.conflito) window.location.hash = `#/conflito/${l.id}`;
       else if (naFila?.exclusao) setErro("A outra pessoa excluiu este lançamento.");
-      else if (naFila?.recusa) setErro(`O servidor recusou a confirmação: ${naFila.recusa}.`);
     } catch {
       setErro("Não foi possível guardar a confirmação no aparelho.");
     } finally {
@@ -45,12 +46,6 @@ export function ContasDaSemana() {
           {quantas === 0
             ? "Nenhuma conta da semana para confirmar."
             : `${quantas} ${quantas === 1 ? "conta" : "contas"} da semana para confirmar`}
-        </p>
-      )}
-      {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
-      {semDados && (
-        <p role="alert" className="erro">
-          Sem internet: as contas da semana ainda não estão no aparelho.
         </p>
       )}
       {erro && (
@@ -72,6 +67,8 @@ export function ContasDaSemana() {
                 {l.atrasado && <span className="selo-atrasado">atrasado</span>}
                 {dataPorExtenso(l.data)} · {nome(contasECartoes, l.conta_id)}
               </p>
+              {/* A confirmação recusada fica aqui para confirmar de novo, com outra conta, por exemplo. */}
+              {l.recusa && <p className="erro">⏳ não enviado: {l.recusa}</p>}
               {l.conflito ? (
                 // A mudança do aparelho espera a decisão: confirmar por cima a perderia.
                 <div className="acoes">
@@ -83,20 +80,27 @@ export function ContasDaSemana() {
               ) : ajuste ? (
                 <div className="ajuste" role="group" aria-label={`Ajuste de ${titulo}`}>
                   <p className="valor" data-testid="valor" aria-live="polite">
-                    {formatarCentavos(ajuste.centavos)}
+                    {formatarCentavos(ajuste.valor_centavos)}
                   </p>
-                  <Teclado centavos={ajuste.centavos} onMudar={(centavos) => setAjustando({ ...ajuste, centavos })} />
+                  <Teclado centavos={ajuste.valor_centavos} onMudar={(valor_centavos) => setAjustando({ ...ajuste, valor_centavos })} />
                   <label htmlFor={`data-${l.id}`}>Data</label>
                   <input id={`data-${l.id}`} type="date" value={ajuste.data} required onChange={(e) => setAjustando({ ...ajuste, data: e.target.value })} />
                   <div className="fileira" role="group" aria-label="Conta">
                     {contas.map((c) => (
-                      <button type="button" key={c.id} className={`ficha${c.id === ajuste.contaId ? " marcada" : ""}`} aria-pressed={c.id === ajuste.contaId} onClick={() => setAjustando({ ...ajuste, contaId: c.id })}>
+                      <button type="button" key={c.id} className={`ficha${c.id === ajuste.conta_id ? " marcada" : ""}`} aria-pressed={c.id === ajuste.conta_id} onClick={() => setAjustando({ ...ajuste, conta_id: c.id })}>
                         {c.nome}
                       </button>
                     ))}
                   </div>
                   <div className="acoes">
-                    <button type="button" disabled={enviando || ajuste.centavos === 0 || !ajuste.data} onClick={() => void confirmar(l, ajuste)}>
+                    <button
+                      type="button"
+                      disabled={enviando || ajuste.valor_centavos === 0 || !ajuste.data}
+                      onClick={() => {
+                        const { id: _, ...ajustes } = ajuste;
+                        void confirmar(l, ajustes);
+                      }}
+                    >
                       Confirmar com ajuste
                     </button>
                     <button type="button" className="secundario" onClick={() => setAjustando(null)}>
@@ -113,7 +117,7 @@ export function ContasDaSemana() {
                     type="button"
                     className="secundario"
                     aria-label={`Ajustar ${titulo}`}
-                    onClick={() => setAjustando({ id: l.id, centavos: l.valor_centavos, data: l.data, contaId: l.conta_id })}
+                    onClick={() => setAjustando({ id: l.id, valor_centavos: l.valor_centavos, data: l.data, conta_id: l.conta_id })}
                   >
                     Ajustar
                   </button>
