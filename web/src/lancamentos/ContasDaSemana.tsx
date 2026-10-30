@@ -25,7 +25,8 @@ export function ContasDaSemana({ lancamentos }: Props) {
     setEnviando(true);
     try {
       const naFila = await confirmarPrevisto(l, ajustes);
-      setAjustando(null);
+      // O envio pode terminar depois de a pessoa abrir o ajuste de outra conta: esse fica aberto.
+      setAjustando((aberto) => (aberto?.id === l.id ? null : aberto));
       // Já confirmado com outros valores: a decisão é campo a campo, na tela de conflito.
       if (naFila?.conflito) window.location.hash = `#/conflito/${l.id}`;
       else if (naFila?.exclusao) setErro("A outra pessoa excluiu este lançamento.");
