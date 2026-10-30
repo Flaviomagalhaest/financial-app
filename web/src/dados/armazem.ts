@@ -14,7 +14,8 @@ export type Base = NovoLancamento & { versao: number };
 export interface ItemDaFila {
   /** O id do lançamento. */
   id: string;
-  acao: "criar" | "editar" | "excluir";
+  acao: "criar" | "editar" | "excluir" | "confirmar";
+  /** No confirmar, o previsto já realizado, com os ajustes. */
   lancamento?: NovoLancamento;
   /** Quando a primeira mudança ainda não enviada foi feita (ms), para o aviso de 24 h. */
   desde: number;

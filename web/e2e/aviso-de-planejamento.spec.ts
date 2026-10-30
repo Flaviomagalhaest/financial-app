@@ -43,6 +43,26 @@ async function novoLancamento(page: Page) {
 
 const aviso = (page: Page) => page.getByRole("region", { name: "Aviso de planejamento" });
 
+/** O realizado do item da categoria no planejamento do mês que o aparelho guardou (IndexedDB de `web/src/dados/armazem.ts`). */
+function planejamentoGuardado(page: Page, mes: string, categoriaId: string) {
+  return page.evaluate(
+    ([mes, categoriaId]) =>
+      new Promise<number | null>((resolve) => {
+        const abertura = indexedDB.open("financial-app-dados");
+        abertura.onsuccess = () => {
+          const pedido = abertura.result.transaction("respostas").objectStore("respostas").get(`/api/planejamento/${mes}`);
+          pedido.onsuccess = () => {
+            abertura.result.close();
+            const itens: { categoria_id: string; realizado_centavos: number }[] = pedido.result?.dados.itens ?? [];
+            resolve(itens.find((i) => i.categoria_id === categoriaId)?.realizado_centavos ?? null);
+          };
+        };
+        abertura.onerror = () => resolve(null);
+      }),
+    [mes, categoriaId],
+  );
+}
+
 test("a cada toque, o aviso mostra o item antes e depois e quanto ainda dá para gastar ou quanto passa", async ({ page }) => {
   const { conta, categoria, despesa } = await prepararCasal(page);
   const mercado = await categoria("Mercado", 100000);
@@ -125,11 +145,11 @@ test("sem internet, o aviso usa o planejamento guardado e já conta o não envia
   const { s, conta, categoria, despesa } = await prepararCasal(page);
   const mercado = await categoria("Mercado", 100000);
   await despesa({ valor_centavos: 82000, categoria_ids: [mercado.id] });
-  // Ao abrir, o app guarda o planejamento do mês.
-  const guardou = page.waitForResponse((r) => r.url().includes(`/api/planejamento/${hoje().slice(0, 7)}`));
+  // Ao abrir, o app guarda o planejamento do mês. A resposta chega antes de ser gravada no
+  // aparelho: espera a gravação (com o item já criado) antes de desligar a rede.
   await page.reload();
-  await guardou;
   await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
+  await expect.poll(() => planejamentoGuardado(page, hoje().slice(0, 7), mercado.id)).toBe(82000);
 
   await context.setOffline(true);
   await lancar(page, { teclas: ["1", "0", "0", "0", "0"], conta, categoria: mercado.nome, descricao: `Feira ${s}` });

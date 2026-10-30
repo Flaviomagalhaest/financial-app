@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
 import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta } from "../dados";
-import { formatarCentavos } from "../lancamentos/dinheiro";
+import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
+import { SecaoDeCartoes } from "./SecaoDeCartoes";
 
 const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: "Carteira" } as const;
 const TIPOS_DE_CATEGORIA = { despesa: "Despesa", receita: "Receita", transferencia: "Transferência" } as const;
@@ -157,6 +158,7 @@ export function TelaDeContasECategorias() {
         <input id="conta-data" name="data_abertura" type="date" />
         <button type="submit">Cadastrar</button>
       </form>
+      <SecaoDeCartoes executar={executar} setErro={setErro} />
       <h3>Categorias</h3>
       {(Object.keys(TIPOS_DE_CATEGORIA) as (keyof typeof TIPOS_DE_CATEGORIA)[]).map((tipo) => (
         <div key={tipo}>
@@ -214,14 +216,6 @@ export function TelaDeContasECategorias() {
       <a href="#/hoje">Voltar</a>
     </section>
   );
-}
-
-/** "1.234,56" ou "1234.56" em centavos; vazio é `null` e o que não for número é `undefined`. */
-function emCentavos(texto: string): number | null | undefined {
-  const limpo = texto.trim().replace(/\./g, texto.includes(",") ? "" : ".").replace(",", ".");
-  if (limpo === "") return null;
-  const reais = Number(limpo);
-  return Number.isFinite(reais) ? Math.round(reais * 100) : undefined;
 }
 
 function LinhaDeConta({

@@ -271,3 +271,66 @@ def test_confirmar_ajustando_o_valor_que_o_outro_lado_mudou_depois_e_conflito(ca
     assert [c["campo"] for c in resposta.json()["campos"]] == ["valor_centavos"]
     [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
     assert (visto["situacao"], visto["valor_centavos"]) == ("previsto", 12000)
+
+
+def confirmacao(criado: dict, **ajustes) -> dict:
+    return {"acao": "confirmar", "id": criado["id"], "confirmacao": {"versao": 1, **ajustes}}
+
+
+def test_no_lote_confirmar_segue_as_regras_da_rota_de_confirmar(casal: Casal):
+    """Sem internet, a confirmação sobe na fila (ticket 83): o reenvio igual devolve o gravado, e
+    o ajuste diferente sobre um já confirmado é conflito com quem confirmou."""
+    um_toque, ajustado, confirmado_por_ela, excluido = (
+        criar(casal, data="2099-01-10", valor_centavos=10000) for _ in range(4)
+    )
+    casal.pedir("esposa", "POST", f"/api/lancamentos/{confirmado_por_ela['id']}/confirmar", json={})
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{excluido['id']}")
+    acoes = [
+        confirmacao(um_toque),
+        confirmacao(ajustado, valor_centavos=12345, data="2099-01-09"),
+        confirmacao(confirmado_por_ela, valor_centavos=999),
+        confirmacao(excluido),
+    ]
+
+    resposta = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json={"acoes": acoes})
+    reenvio = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json={"acoes": acoes[:2]})
+
+    aceita, com_ajuste, conflito, descartada = resposta.json()["resultados"]
+    assert (aceita["resultado"], aceita["lancamento"]["situacao"]) == ("aceita", "realizado")
+    assert aceita["lancamento"]["valor_centavos"] == 10000
+    assert com_ajuste["resultado"] == "aceita"
+    assert (com_ajuste["lancamento"]["valor_centavos"], com_ajuste["lancamento"]["data"]) == (
+        12345,
+        "2099-01-09",
+    )
+    assert conflito["resultado"] == "conflito"
+    assert conflito["motivo"] == "já confirmado com outros valores"
+    assert [(c["campo"], c["alterado_por"]) for c in conflito["campos"]] == [
+        ("valor_centavos", "esposa")
+    ]
+    assert descartada["resultado"] == "descartada"
+    assert [r["resultado"] for r in reenvio.json()["resultados"]] == ["aceita", "aceita"]
+    assert [r["lancamento"] for r in reenvio.json()["resultados"]] == [
+        aceita["lancamento"],
+        com_ajuste["lancamento"],
+    ]
+
+
+def test_no_lote_confirmar_o_valor_que_o_outro_lado_mudou_depois_da_versao_e_conflito(
+    casal: Casal,
+):
+    criado = criar(casal, data="2099-01-10", valor_centavos=10000)
+    editar(casal, "esposa", criado["id"], 1, valor_centavos=12000)
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json={"acoes": [confirmacao(criado, valor_centavos=9000)]},
+    )
+
+    [conflito] = resposta.json()["resultados"]
+    assert conflito["resultado"] == "conflito"
+    assert [c["campo"] for c in conflito["campos"]] == ["valor_centavos"]
+    [visto] = casal.pedir("flavio", "GET", "/api/lancamentos").json()
+    assert (visto["situacao"], visto["valor_centavos"]) == ("previsto", 12000)
