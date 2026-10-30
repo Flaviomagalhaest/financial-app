@@ -1,7 +1,7 @@
 # Telas de tags e de manutenção de categorias e tags
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design`
 Modelo recomendado: Sonnet

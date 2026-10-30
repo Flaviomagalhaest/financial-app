@@ -62,8 +62,8 @@ export function TelaDeContasECategorias() {
   }
 
   /** Roda uma chamada de manutenção e recarrega; `false` com a mensagem na tela quando não deu. */
-  async function manter(
-    o: string,
+  async function executar(
+    acao: string,
     chamar: () => Promise<{ data?: unknown; response: Response; error?: unknown }>,
   ): Promise<boolean> {
     setErro("");
@@ -71,7 +71,7 @@ export function TelaDeContasECategorias() {
       const { response, error } = await chamar();
       if (!response.ok) {
         const motivo = (error as { detail?: unknown } | undefined)?.detail;
-        setErro(`Não foi possível ${o}${typeof motivo === "string" ? `: ${motivo}` : ""}.`);
+        setErro(`Não foi possível ${acao}${typeof motivo === "string" ? `: ${motivo}` : ""}.`);
         return false;
       }
       await recarregar();
@@ -87,14 +87,14 @@ export function TelaDeContasECategorias() {
     const singular = rota === "tags" ? "tag" : "categoria";
     return rota === "tags"
       ? {
-          alterar: (i, corpo) => manter(`alterar a ${singular}`, () => api.PATCH("/api/tags/{id}", { ...id(i), body: corpo })),
-          juntar: (i, destino) => manter(`juntar a ${singular}`, () => api.POST("/api/tags/{id}/juntar", { ...id(i), body: { destino_id: destino } })),
-          excluir: (i) => manter(`excluir a ${singular}`, () => api.DELETE("/api/tags/{id}", id(i))),
+          alterar: (i, corpo) => executar(`alterar a ${singular}`, () => api.PATCH("/api/tags/{id}", { ...id(i), body: corpo })),
+          juntar: (i, destino) => executar(`juntar a ${singular}`, () => api.POST("/api/tags/{id}/juntar", { ...id(i), body: { destino_id: destino } })),
+          excluir: (i) => executar(`excluir a ${singular}`, () => api.DELETE("/api/tags/{id}", id(i))),
         }
       : {
-          alterar: (i, corpo) => manter(`alterar a ${singular}`, () => api.PATCH("/api/categorias/{id}", { ...id(i), body: corpo })),
-          juntar: (i, destino) => manter(`juntar a ${singular}`, () => api.POST("/api/categorias/{id}/juntar", { ...id(i), body: { destino_id: destino } })),
-          excluir: (i) => manter(`excluir a ${singular}`, () => api.DELETE("/api/categorias/{id}", id(i))),
+          alterar: (i, corpo) => executar(`alterar a ${singular}`, () => api.PATCH("/api/categorias/{id}", { ...id(i), body: corpo })),
+          juntar: (i, destino) => executar(`juntar a ${singular}`, () => api.POST("/api/categorias/{id}/juntar", { ...id(i), body: { destino_id: destino } })),
+          excluir: (i) => executar(`excluir a ${singular}`, () => api.DELETE("/api/categorias/{id}", id(i))),
         };
   };
   const dasCategorias = manutencaoDe("categorias");
@@ -104,7 +104,7 @@ export function TelaDeContasECategorias() {
     e.preventDefault();
     const form = e.currentTarget;
     const nome = String(new FormData(form).get("nome")).trim();
-    if (await manter("criar a tag", () => api.POST("/api/tags", { body: { nome } }))) form.reset();
+    if (await executar("criar a tag", () => api.POST("/api/tags", { body: { nome } }))) form.reset();
   }
 
   return (
