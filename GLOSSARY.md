@@ -97,6 +97,10 @@ _Avoid_: compra parcelada, financiamento
 Lançamento que é uma das N partes de um parcelamento (ex.: 3/10). No cartão, todas têm a data da compra e a parcela n cai n − 1 faturas depois da fatura da compra; fora dele (o boleto), a parcela n vence n − 1 meses depois da primeira.
 _Avoid_: prestação
 
+**Antecipação**:
+Pagamento adiantado das últimas parcelas de um parcelamento que ainda não foram pagas, no dia de hoje ou em outro, por um valor editável (o desconto é a diferença para o valor das parcelas). As parcelas viram realizadas na data do pagamento, e no cartão contam na fatura em que foi paga, por troca à mão. **Quitação** é a antecipação de todas as parcelas que faltam.
+_Avoid_: adiantamento, amortização
+
 **Automático**:
 Recorrência de valor fixo ou parcelamento cujos previstos viram realizados sozinhos na data, sem confirmação; a parcela no cartão, que tem a data da compra, vira realizada quando entra na fatura aberta (a fatura de antes fechou).
 _Avoid_: débito automático, efetivação automática

@@ -49,7 +49,9 @@ def ler_hoje(usuario: UsuarioLogado, request: Request) -> Hoje:
             ainda_da_para_gastar_centavos=plano.ainda_da_para_gastar_centavos,
             ajustes_de_fatura_centavos=plano.ajustes_de_fatura_centavos,
             a_escolher=plano.a_escolher,
-            lancamentos_a_escolher=lancamentos.por_ids(conn, a_escolher_ids),
+            lancamentos_a_escolher=lancamentos.ler_por_ids(conn, a_escolher_ids)
+            if a_escolher_ids
+            else [],
             contas_da_semana=lancamentos.contas_da_semana_de_hoje(conn),
             faturas_que_vencem=cartoes.faturas_que_vencem_ate(
                 conn, dia + timedelta(days=config["contasDaSemanaDias"])

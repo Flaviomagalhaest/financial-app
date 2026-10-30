@@ -1063,9 +1063,9 @@ def _todos(
     ]
 
 
-def por_ids(conn, ids: list[UUID]) -> list[Lancamento]:
-    """Os não excluídos com esses ids, do mais novo ao mais antigo."""
-    return _todos(conn, "id = ANY(%s)", (ids,)) if ids else []
+def ler_por_ids(conn, ids: list[UUID]) -> list[Lancamento]:
+    """Os lançamentos não excluídos com esses ids."""
+    return _todos(conn, "id = ANY(%s)", (ids,))
 
 
 def _um(conn, id: UUID) -> Lancamento:
