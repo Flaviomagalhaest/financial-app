@@ -100,7 +100,7 @@ function ItensEmDestaque({ itens }: { itens: LeituraDaHoje["itens_em_destaque"] 
   if (itens.length === 0) return null;
   return (
     <section aria-labelledby="itens-em-destaque" className="bloco-da-hoje">
-      <h3 id="itens-em-destaque">Perto do limite</h3>
+      <h3 id="itens-em-destaque">Itens em destaque</h3>
       <ul className="lista">
         {itens.map((i) => (
           <li key={i.id}>

@@ -34,29 +34,13 @@ class Hoje(BaseModel):
     itens_em_destaque: list[planejamento.ItemDoPlanejamento]
 
 
-def _faturas_que_vencem(conn, ate: date) -> list[cartoes.Fatura]:
-    titulares = [
-        id
-        for (id,) in conn.execute(
-            "SELECT id FROM cartoes WHERE titular_id IS NULL AND arquivado_em IS NULL"
-        )
-    ]
-    que_vencem = [
-        f
-        for titular in titulares
-        for f in cartoes._faturas(conn, titular)
-        if f.situacao == "fechada" and f.vencimento and f.vencimento <= ate
-    ]
-    return sorted(que_vencem, key=lambda f: (f.vencimento, f.cartao_id, f.mes))
-
-
 @router.get("/hoje", response_model=Hoje, operation_id="ler_hoje")
 def ler_hoje(usuario: UsuarioLogado, request: Request) -> Hoje:
     config = valores_iniciais()
     dia = lancamentos.hoje()
     mes = f"{dia.year}-{dia.month:02d}"
     with conectar(url_do_banco(request)) as conn:
-        plano = planejamento._ler(conn, mes)
+        plano = planejamento.ler_mes(conn, mes)
         a_escolher_ids: list[UUID] = [a.lancamento_id for a in plano.a_escolher]
         return Hoje(
             dia=dia,
@@ -67,7 +51,7 @@ def ler_hoje(usuario: UsuarioLogado, request: Request) -> Hoje:
             a_escolher=plano.a_escolher,
             lancamentos_a_escolher=lancamentos.por_ids(conn, a_escolher_ids),
             contas_da_semana=lancamentos.contas_da_semana_de_hoje(conn),
-            faturas_que_vencem=_faturas_que_vencem(
+            faturas_que_vencem=cartoes.faturas_que_vencem_ate(
                 conn, dia + timedelta(days=config["contasDaSemanaDias"])
             ),
             itens_em_destaque=sorted(

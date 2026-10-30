@@ -56,7 +56,7 @@ test("a Hoje junta ainda dá para gastar, a escolher, atrasados, fatura que venc
   await expect(page.getByRole("region", { name: "Ainda dá para gastar este mês" })).toContainText("planejados");
 
   // Itens acima de 80%: a luz, com o boleto atrasado previsto somando.
-  const perto = page.getByRole("region", { name: "Perto do limite" });
+  const perto = page.getByRole("region", { name: "Itens em destaque" });
   await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText("94%");
   await expect(perto).not.toContainText(restaurante);
 

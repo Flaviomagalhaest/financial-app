@@ -267,6 +267,27 @@ def _faturas(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
     return resultado
 
 
+def faturas_que_vencem_ate(conn, ate: date) -> list[Fatura]:
+    """As faturas fechadas, com saldo a pagar, que vencem até `ate` (as já vencidas inclusive), dos
+    cartões titulares não arquivados, da que vence primeiro à que vence depois."""
+    titulares = [
+        id
+        for (id,) in conn.execute(
+            "SELECT id FROM cartoes WHERE titular_id IS NULL AND arquivado_em IS NULL"
+        )
+    ]
+    que_vencem = [
+        f
+        for titular in titulares
+        for f in _faturas(conn, titular)
+        if f.situacao == "fechada"
+        and f.a_pagar_centavos > 0
+        and f.vencimento
+        and f.vencimento <= ate
+    ]
+    return sorted(que_vencem, key=lambda f: (f.vencimento, f.cartao_id, f.mes))
+
+
 def _cartao(conn, id: UUID) -> faturas.CartaoComTitular:
     cartao = faturas.ler_cartao(conn, id)
     if not cartao:
