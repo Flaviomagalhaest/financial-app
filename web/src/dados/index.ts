@@ -39,6 +39,7 @@ export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
+export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
@@ -105,6 +106,11 @@ function useResposta<C extends Caminho>(caminho: C) {
 export function useFaturas(cartaoId: string) {
   const ler = () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id: cartaoId } } });
   return useRespostaDe<Fatura[]>(`/api/cartoes/${cartaoId}/faturas`, ler);
+}
+
+/** A leitura da tela Hoje, em uma chamada; sem internet, a última guardada. */
+export function useHoje() {
+  return useRespostaDe<LeituraDaHoje>("/api/hoje", () => api.GET("/api/hoje"));
 }
 
 /** O limite comprometido e disponível do cartão titular (o adicional divide o dele). */

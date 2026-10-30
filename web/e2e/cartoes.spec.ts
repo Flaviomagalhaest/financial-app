@@ -89,6 +89,8 @@ test("a linha do cartão com limite mostra a barra e o detalhe do comprometido; 
   const [comLimite, semLimite, mercado] = [`Com limite ${s}`, `Sem limite ${s}`, `Mercado ${s}`];
   await page.goto("/#/cartoes");
   await entrar(page);
+  // Sem esperar a tela, o reload corta o login no meio e nenhuma chamada com token chega a sair.
+  await expect(page.getByRole("heading", { name: "Cartões", level: 2 })).toBeVisible();
   const headers = { authorization: await tokenDaPagina(page) };
   const criar = async (caminho: string, data: object) => {
     const resposta = await page.request.post(caminho, { headers, data });
