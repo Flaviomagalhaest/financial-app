@@ -86,6 +86,7 @@ const LEITURAS = {
   "/api/pessoas": () => api.GET("/api/pessoas"),
   "/api/tags": () => api.GET("/api/tags"),
   "/api/cartoes": () => api.GET("/api/cartoes"),
+  "/api/cartoes?arquivados=true": () => api.GET("/api/cartoes", { params: { query: { arquivados: true } } }),
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
 };
 type Caminho = keyof typeof LEITURAS;
@@ -314,6 +315,16 @@ export function useSugestao(): FonteDeSugestao {
 export function useContasComArquivadas() {
   const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
   return { contas: dados ?? [], atualizadoEm, recarregar: buscar };
+}
+
+/** Todos os cartões, arquivados inclusive, para a tela que os configura; recarregar atualiza também a lista dos ativos. */
+export function useCartoesComArquivados() {
+  const todos = useResposta("/api/cartoes?arquivados=true");
+  const ativos = useResposta("/api/cartoes");
+  const recarregar = useCallback(async () => {
+    await Promise.all([todos.buscar(), ativos.buscar()]);
+  }, [todos.buscar, ativos.buscar]);
+  return { cartoes: todos.dados ?? [], atualizadoEm: todos.atualizadoEm, recarregar };
 }
 
 /** Todas as tags, arquivadas inclusive, com o id, para a tela que as configura. */

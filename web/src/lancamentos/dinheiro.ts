@@ -17,3 +17,11 @@ export function digitar(centavos: number, tecla: string): number {
 export function apagar(centavos: number): number {
   return Math.floor(centavos / 10);
 }
+
+/** "1.234,56" ou "1234.56" em centavos; vazio é `null` e o que não for número é `undefined`. */
+export function emCentavos(texto: string): number | null | undefined {
+  const limpo = texto.trim().replace(/\./g, texto.includes(",") ? "" : ".").replace(",", ".");
+  if (limpo === "") return null;
+  const reais = Number(limpo);
+  return Number.isFinite(reais) ? Math.round(reais * 100) : undefined;
+}
