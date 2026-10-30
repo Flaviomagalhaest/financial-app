@@ -38,7 +38,7 @@ test("a casca abre sem internet depois de instalada", async ({ page, context }) 
   await expect(page.getByTestId("estado-da-api")).toHaveText("Sem conexão");
 });
 
-test("navega entre as abas vazias e abre o novo lançamento pelo botão e pelo atalho", async ({ page }) => {
+test("navega entre as abas e abre o novo lançamento pelo botão e pelo atalho", async ({ page }) => {
   await page.goto("/");
   await entrar(page);
   const abas = page.getByRole("navigation", { name: "Telas" });

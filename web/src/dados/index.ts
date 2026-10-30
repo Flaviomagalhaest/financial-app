@@ -46,6 +46,7 @@ export type LeituraDoMes = components["schemas"]["LeituraDoMes"];
 export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
 export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
+export type Futuro = components["schemas"]["Futuro"];
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovaRecorrencia, NovoLancamento };
@@ -88,6 +89,7 @@ const LEITURAS = {
   "/api/pessoas": () => api.GET("/api/pessoas"),
   "/api/tags": () => api.GET("/api/tags"),
   "/api/cartoes": () => api.GET("/api/cartoes"),
+  "/api/cartoes?arquivados=true": () => api.GET("/api/cartoes", { params: { query: { arquivados: true } } }),
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
 };
 type Caminho = keyof typeof LEITURAS;
@@ -133,6 +135,11 @@ export function useHoje() {
 export function useLimite(cartaoId: string) {
   const ler = () => api.GET("/api/cartoes/{id}/limite", { params: { path: { id: cartaoId } } });
   return useRespostaDe<LimiteDoCartao>(`/api/cartoes/${cartaoId}/limite`, ler);
+}
+
+/** A projeção de saldo da aba Futuro: o realizado no passado e as duas linhas adiante. */
+export function useFuturo() {
+  return useRespostaDe<Futuro>("/api/futuro", () => api.GET("/api/futuro"));
 }
 
 function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
@@ -336,6 +343,16 @@ export function useSugestao(): FonteDeSugestao {
 export function useContasComArquivadas() {
   const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
   return { contas: dados ?? [], atualizadoEm, recarregar: buscar };
+}
+
+/** Todos os cartões, arquivados inclusive, para a tela que os configura; recarregar atualiza também a lista dos ativos. */
+export function useCartoesComArquivados() {
+  const todos = useResposta("/api/cartoes?arquivados=true");
+  const ativos = useResposta("/api/cartoes");
+  const recarregar = useCallback(async () => {
+    await Promise.all([todos.buscar(), ativos.buscar()]);
+  }, [todos.buscar, ativos.buscar]);
+  return { cartoes: todos.dados ?? [], atualizadoEm: todos.atualizadoEm, recarregar };
 }
 
 /** Todas as tags, arquivadas inclusive, com o id, para a tela que as configura. */
