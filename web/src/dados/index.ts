@@ -591,9 +591,12 @@ function pedirEnvioEmSegundoPlano() {
 export async function enviarAgora(): Promise<boolean> {
   // O envio tira o item da fila e só atualiza a lista que já está guardada: sem ela, o lançamento
   // enviado sumiria do aparelho até a próxima leitura com internet (ticket 90).
-  if ((await lerFila()).length > 0 && !(await lerResposta(LISTA))) await buscarEGuardar(LISTA, LEITURAS[LISTA]);
+  const pendentes = (await lerFila()).length;
+  if (pendentes > 0 && !(await lerResposta(LISTA))) await buscarEGuardar(LISTA, LEITURAS[LISTA]);
   const enviou = await enviarFila(remeter);
   if (!enviou) pedirEnvioEmSegundoPlano();
+  // O saldo guardado das contas não conta o que acabou de subir: sem a fila para cobrir a diferença, buscá-lo de novo (ticket 81).
+  else if (pendentes > 0) void Promise.all((["/api/contas", "/api/contas?arquivadas=true"] as const).map((c) => buscarEGuardar(c, LEITURAS[c])));
   return enviou;
 }
 
