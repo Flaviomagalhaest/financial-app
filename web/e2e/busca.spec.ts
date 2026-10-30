@@ -35,7 +35,7 @@ const buscarPeloTexto = async (page: Page, texto: string) => {
   await expect(page).toHaveURL(new RegExp(`texto=${encodeURIComponent(texto).replace(/%20/g, "\\+")}`));
 };
 
-test("a lupa abre a busca, combina texto e filtros, mostra a compra parcelada numa linha e os totais", async ({ page }) => {
+test("a lupa abre a busca, combina texto e filtros, mostra o parcelamento numa linha e os totais", async ({ page }) => {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   await page.goto("/#/mes");
   await entrar(page);
@@ -44,7 +44,7 @@ test("a lupa abre a busca, combina texto e filtros, mostra a compra parcelada nu
   await lancamento({ valor_centavos: 10000, data: dia(-3), descricao: `Feira ${s}`, tags: [`casa ${s}`] });
   await lancamento({ valor_centavos: 100000, data: dia(-2), descricao: `Salário ${s}`, tipo: "receita", categoria_ids: [salario.id] });
   await lancamento({ valor_centavos: 30000, data: dia(20), descricao: `Aluguel ${s}` });
-  // A compra parcelada antiga já tem todas as parcelas realizadas.
+  // O parcelamento antigo já tem todas as parcelas realizadas.
   await api.criar("/api/parcelamentos", { id: randomUUID(), valor_total_centavos: 250000, parcelas: 10, descricao: `Geladeira ${s}`, conta_id: cartao.id, categoria_ids: [eletro.id], data: "2020-03-04" });
   await api.criar("/api/transferencias", { id: randomUUID(), conta_origem_id: conta.id, conta_destino_id: poupanca.id, valor_centavos: 5000, data: dia(-1), descricao: `Reserva ${s}` });
 
@@ -58,11 +58,12 @@ test("a lupa abre a busca, combina texto e filtros, mostra a compra parcelada nu
   const linhas = resultado.locator(":scope > li");
   await expect(linhas).toHaveCount(5);
   const totais = page.getByRole("definition");
-  await expect(page.getByLabel("Totais da busca")).toContainText("Lançamentos5");
+  // A transferência aparece na lista, mas fica fora dos totais e da contagem.
+  await expect(page.getByLabel("Totais da busca")).toContainText("Lançamentos4");
   await expect(totais.nth(1)).toHaveText("R$ 2.600,00");
   await expect(totais.nth(2)).toHaveText("R$ 1.000,00");
   await expect(totais.nth(3)).toHaveText("-R$ 1.600,00");
-  await expect(page.getByLabel("Previstos à parte")).toContainText("R$ 300,00 de despesas e R$ 0,00 de receitas");
+  await expect(page.getByLabel("Previstos à parte")).toContainText("R$ 300,00 de despesas e R$ 0,00 de receitas, saldo de -R$ 300,00");
   // Mais recente primeiro: o aluguel previsto, a reserva, o salário, a feira e a geladeira de 2020.
   await expect(linhas.nth(0)).toContainText(`Aluguel ${s}`);
   await expect(linhas.nth(1)).toContainText(`Reserva ${s}`);
@@ -70,13 +71,13 @@ test("a lupa abre a busca, combina texto e filtros, mostra a compra parcelada nu
   await expect(linhas.nth(4)).toContainText("04/03/2020");
   await expect(linhas.nth(4)).toContainText("− R$ 2.500,00");
 
-  // A compra parcelada abre as parcelas, cada uma com a fatura.
+  // O parcelamento abre as parcelas, cada uma com a fatura e a situação.
   await linhas.nth(4).getByRole("button", { name: `Geladeira ${s} · 10x` }).click();
   const parcelas = page.getByRole("list", { name: `Parcelas de Geladeira ${s}` }).getByRole("listitem");
   await expect(parcelas).toHaveCount(10);
   await expect(parcelas.nth(2)).toContainText("03/10");
   await expect(parcelas.nth(2)).toContainText("− R$ 250,00");
-  await expect(parcelas.nth(2)).toContainText("fatura de 05/2020");
+  await expect(parcelas.nth(2)).toContainText("fatura de 05/2020 · realizado");
 
   // Maior valor primeiro.
   await page.getByRole("group", { name: "Ordem" }).getByRole("button", { name: "Maior valor" }).click();

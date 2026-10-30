@@ -1,5 +1,5 @@
 """A busca em todo o histórico (ticket 59): texto livre e filtros combinados, período pela data da
-compra e filtro Fatura à parte (ADR 0013), compra parcelada numa linha, totais e paginação."""
+compra e filtro Fatura à parte (ADR 0013), parcelamento numa linha, totais e paginação."""
 
 from datetime import date
 from uuid import uuid4
@@ -36,7 +36,7 @@ def lancar(casal: Casal, conta: str, categorias: list[str], **campos) -> dict:
 
 def descricoes(resultado: dict) -> list[str]:
     return [
-        (linha["lancamento"] or linha["compra_parcelada"] or linha["transferencia"])["descricao"]
+        (linha["lancamento"] or linha["parcelamento"] or linha["transferencia"])["descricao"]
         for linha in resultado["linhas"]
     ]
 
@@ -132,7 +132,7 @@ def parcelar(casal: Casal, conta: str, categorias: list[str], **campos) -> str:
     return novo["id"]
 
 
-def test_compra_parcelada_numa_linha_com_o_total_e_parcela_por_linha_no_filtro_fatura(
+def test_parcelamento_numa_linha_com_o_total_e_parcela_por_linha_no_filtro_fatura(
     casal: Casal,
 ):
     nubank, eletro = novo_cartao(casal)["id"], casal.categoria("Eletrodomésticos")
@@ -143,7 +143,7 @@ def test_compra_parcelada_numa_linha_com_o_total_e_parcela_por_linha_no_filtro_f
 
     # A compra conta pelo valor total, uma vez, e o filtro de valor olha o total.
     assert len(resultado["linhas"]) == 1
-    compra = resultado["linhas"][0]["compra_parcelada"]
+    compra = resultado["linhas"][0]["parcelamento"]
     assert {k: compra[k] for k in ("parcelamento_id", "descricao", "data", "parcelas")} == {
         "parcelamento_id": geladeira,
         "descricao": "Geladeira",
@@ -165,12 +165,12 @@ def test_compra_parcelada_numa_linha_com_o_total_e_parcela_por_linha_no_filtro_f
     assert buscar(casal, fatura={"mes": "2026-05-01"}, valor_minimo_centavos=100000)["linhas"] == []
 
 
-def test_periodo_da_compra_parcelada_no_boleto_e_o_da_primeira_parcela(casal: Casal):
+def test_periodo_do_parcelamento_no_boleto_e_o_da_primeira_parcela(casal: Casal):
     conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
     parcelar(casal, conta, [emprestimo], parcelas=3, data="2026-11-10", descricao="Empréstimo")
 
     novembro = buscar(casal, periodo_de="2026-11-01", periodo_ate="2026-11-30")
-    assert [p["parcela"] for p in novembro["linhas"][0]["compra_parcelada"]["lancamentos"]] == [
+    assert [p["parcela"] for p in novembro["linhas"][0]["parcelamento"]["lancamentos"]] == [
         1,
         2,
         3,
@@ -197,7 +197,7 @@ def test_totais_no_topo_com_previstos_a_parte_e_o_estorno_diminuindo(casal: Casa
     }
 
 
-def test_compra_parcelada_conta_o_total_uma_vez_e_a_parcela_no_filtro_fatura(casal: Casal):
+def test_parcelamento_conta_o_total_uma_vez_e_a_parcela_no_filtro_fatura(casal: Casal):
     nubank, eletro = novo_cartao(casal)["id"], casal.categoria("Eletrodomésticos")
     parcelar(casal, nubank, [eletro], data="2026-09-04", parcelas=4, valor_total_centavos=100000)
 
@@ -245,7 +245,7 @@ def test_transferencia_aparece_fora_dos_totais_e_o_pagamento_de_fatura_so_pelo_t
     tudo = buscar(casal)
     assert descricoes(tudo) == ["Guardar na reserva", "Feira", "Cinema"]
     assert tudo["linhas"][0]["transferencia"]["conta_destino_id"] == poupanca
-    assert tudo["totais"]["quantidade"] == 3
+    assert tudo["totais"]["quantidade"] == 2
     assert tudo["totais"]["despesas"]["realizado_centavos"] == 7000
     assert tudo["totais"]["saldo"]["realizado_centavos"] == -7000
     assert descricoes(buscar(casal, tipos=["transferencia"])) == [

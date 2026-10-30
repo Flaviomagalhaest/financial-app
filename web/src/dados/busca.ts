@@ -6,7 +6,6 @@ import type { components } from "../api/schema";
 type PedidoDeBusca = components["schemas"]["PedidoDeBusca"];
 /** Sem um critério, ele não restringe. */
 export type Criterios = Partial<Omit<PedidoDeBusca, "pagina">>;
-export type Ordem = NonNullable<Criterios["ordem"]>;
 export type Transferencia = components["schemas"]["Transferencia"];
 type TotaisDaBusca = components["schemas"]["TotaisDaBusca"];
 
@@ -30,7 +29,7 @@ export type LancamentoDaBusca = {
   parcelas?: number | null;
 };
 
-export type CompraNaTela<L> = {
+export type ParcelamentoNaTela<L> = {
   parcelamento_id: string;
   descricao: string;
   data: string;
@@ -39,7 +38,7 @@ export type CompraNaTela<L> = {
   lancamentos: L[];
 };
 
-export type LinhaNaTela<L> = { lancamento: L } | { compra: CompraNaTela<L> } | { transferencia: Transferencia };
+export type LinhaNaTela<L> = { lancamento: L } | { parcelamento: ParcelamentoNaTela<L> } | { transferencia: Transferencia };
 
 export type ResultadoNaTela<L> = { totais: TotaisDaBusca; linhas: LinhaNaTela<L>[] };
 
@@ -132,7 +131,7 @@ type Cartao = { id: string; titular_id?: string | null };
 
 /**
  * A busca no aparelho, com as regras da do servidor: entre filtros é E, dentro de um filtro OU; o
- * período pela data da compra; fora do filtro Fatura, a compra parcelada numa linha. O aparelho não
+ * período pela data da compra; fora do filtro Fatura, o parcelamento numa linha. O aparelho não
  * guarda transferências nem o parcelamento: a data da compra é a da primeira parcela que ele tem.
  */
 export function buscarNoAparelho<L extends LancamentoDaBusca>(lancamentos: L[], criterios: Criterios, cartoes: Cartao[]): ResultadoNaTela<L> {
@@ -175,7 +174,7 @@ export function buscarNoAparelho<L extends LancamentoDaBusca>(lancamentos: L[], 
       const linha: LinhaNaTela<L> =
         agrupar && primeira.parcelamento_id
           ? {
-              compra: {
+              parcelamento: {
                 parcelamento_id: chave,
                 descricao: primeira.descricao ?? "",
                 data: dataDaLinha(primeira),

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useCadastro, usePessoas, useTags, type Criterios } from "../dados";
 import { emCentavos } from "../lancamentos/dinheiro";
+import { SITUACOES, TIPOS } from "./apresentacao";
 
 type Lista = "categoria_ids" | "tags" | "conta_ids" | "pessoas" | "situacoes" | "tipos";
 
@@ -68,11 +69,7 @@ export function FolhaDeFiltros({ criterios, onMudar, onFechar }: { criterios: Cr
       <h4>Tipo</h4>
       <Fichas
         nome="Tipo"
-        opcoes={[
-          { valor: "despesa", rotulo: "Despesa" },
-          { valor: "receita", rotulo: "Receita" },
-          { valor: "transferencia", rotulo: "Transferência" },
-        ]}
+        opcoes={Object.entries(TIPOS).map(([valor, rotulo]) => ({ valor, rotulo }))}
         marcada={marcada("tipos")}
         onAlternar={alternar("tipos")}
       />
@@ -81,10 +78,7 @@ export function FolhaDeFiltros({ criterios, onMudar, onFechar }: { criterios: Cr
       <h4>Situação</h4>
       <Fichas
         nome="Situação"
-        opcoes={[
-          { valor: "realizado", rotulo: "Realizado" },
-          { valor: "previsto", rotulo: "Previsto" },
-        ]}
+        opcoes={Object.entries(SITUACOES).map(([valor, rotulo]) => ({ valor, rotulo }))}
         marcada={marcada("situacoes")}
         onAlternar={alternar("situacoes")}
       />

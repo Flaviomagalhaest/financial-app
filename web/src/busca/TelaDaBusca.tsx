@@ -5,15 +5,16 @@ import {
   useBusca,
   useCadastro,
   usePessoas,
-  type CompraNaTela,
   type Criterios,
   type LancamentoNaTela,
+  type ParcelamentoNaTela,
   type Transferencia,
 } from "../dados";
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { mesPorExtenso } from "../cartoes/apresentacao";
+import { SITUACOES, TIPOS } from "./apresentacao";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";
 
 type Cadastro = ReturnType<typeof useCadastro>;
@@ -27,10 +28,9 @@ type Ficha = { rotulo: string; tirar: (c: Criterios) => Criterios };
 function fichasDos(criterios: Criterios, { contasECartoes, cartoes, categorias }: Cadastro, nomeDe: (id: string) => string): Ficha[] {
   const sem = <K extends keyof Criterios>(campo: K, valor?: string): Ficha["tirar"] =>
     (c) => ({ ...c, [campo]: valor === undefined ? undefined : ((c[campo] ?? []) as string[]).filter((v) => v !== valor) });
-  const TIPOS = { despesa: "Despesa", receita: "Receita", transferencia: "Transferência" };
   const fichas: Ficha[] = [
     ...(criterios.tipos ?? []).map((t) => ({ rotulo: TIPOS[t], tirar: sem("tipos", t) })),
-    ...(criterios.situacoes ?? []).map((s) => ({ rotulo: s === "previsto" ? "Previsto" : "Realizado", tirar: sem("situacoes", s) })),
+    ...(criterios.situacoes ?? []).map((s) => ({ rotulo: SITUACOES[s], tirar: sem("situacoes", s) })),
   ];
   if (criterios.periodo_de) fichas.push({ rotulo: `De ${dataPorExtenso(criterios.periodo_de)}`, tirar: sem("periodo_de") });
   if (criterios.periodo_ate) fichas.push({ rotulo: `Até ${dataPorExtenso(criterios.periodo_ate)}`, tirar: sem("periodo_ate") });
@@ -50,15 +50,18 @@ function fichasDos(criterios: Criterios, { contasECartoes, cartoes, categorias }
   return fichas;
 }
 
-/** O que a linha mostra embaixo do título: data da compra, onde, categorias, tags, fatura e situação. */
-function Detalhes({ l, cadastro, comData = true }: { l: LancamentoNaTela; cadastro: Cadastro; comData?: boolean }) {
+/**
+ * O que a linha mostra embaixo do título: data da compra, onde, categorias, tags, fatura e situação.
+ * A parcela, que aparece dentro do parcelamento, mostra a situação sempre e não repete a data.
+ */
+function Detalhes({ l, cadastro, parcela = false }: { l: LancamentoNaTela; cadastro: Cadastro; parcela?: boolean }) {
   return (
     <p className="vazio">
-      {comData && `${dataPorExtenso(l.data)} · `}
+      {!parcela && `${dataPorExtenso(l.data)} · `}
       {nomePorId(cadastro.contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nomePorId(cadastro.categorias, c)).join(", ")}
       {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
       {l.fatura_mes && ` · fatura de ${mesPorExtenso(l.fatura_mes)}`}
-      {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
+      {l.situacao === "previsto" ? (l.atrasado ? " · previsto, atrasado" : " · previsto") : parcela && " · realizado"}
       {l.naoEnviado && " · ⏳ não enviado"}
     </p>
   );
@@ -83,31 +86,31 @@ function LinhaDoLancamento({ l, cadastro }: { l: LancamentoNaTela; cadastro: Cad
   );
 }
 
-/** A compra parcelada numa linha, com o total; tocar abre as parcelas (ADR 0013). */
-function LinhaDaCompra({ compra, cadastro }: { compra: CompraNaTela<LancamentoNaTela>; cadastro: Cadastro }) {
+/** O parcelamento numa linha, com o total; tocar abre as parcelas (ADR 0013). */
+function LinhaDoParcelamento({ parcelamento, cadastro }: { parcelamento: ParcelamentoNaTela<LancamentoNaTela>; cadastro: Cadastro }) {
   const [aberta, setAberta] = useState(false);
-  const titulo = compra.descricao || tituloDoLancamento(compra.lancamentos[0], cadastro.categorias);
+  const titulo = parcelamento.descricao || tituloDoLancamento(parcelamento.lancamentos[0], cadastro.categorias);
   return (
     <li>
       <div>
         <button className="linha-que-abre" aria-expanded={aberta} onClick={() => setAberta(!aberta)}>
-          <strong>{titulo}</strong> · {compra.parcelas}x
+          <strong>{titulo}</strong> · {parcelamento.parcelas}x
         </button>
-        <ValorComSinal l={{ ...compra.lancamentos[0], valor_centavos: compra.valor_centavos }} />
+        <ValorComSinal l={{ ...parcelamento.lancamentos[0], valor_centavos: parcelamento.valor_centavos }} />
       </div>
       <p className="vazio">
-        {dataPorExtenso(compra.data)} · compra parcelada
-        {compra.lancamentos.length < compra.parcelas && `, ${compra.lancamentos.length} das ${compra.parcelas} parcelas na busca`}
+        {dataPorExtenso(parcelamento.data)} · parcelado
+        {parcelamento.lancamentos.length < parcelamento.parcelas && `, ${parcelamento.lancamentos.length} das ${parcelamento.parcelas} parcelas na busca`}
       </p>
       {aberta && (
         <ul className="lista parcelas" aria-label={`Parcelas de ${titulo}`}>
-          {compra.lancamentos.map((p) => (
+          {parcelamento.lancamentos.map((p) => (
             <li key={p.id}>
               <div>
-                <span>{p.parcela && numeroDaParcela(p.parcela, compra.parcelas)}</span>
+                <span>{p.parcela && numeroDaParcela(p.parcela, parcelamento.parcelas)}</span>
                 <ValorComSinal l={p} />
               </div>
-              <Detalhes l={p} cadastro={cadastro} comData={false} />
+              <Detalhes l={p} cadastro={cadastro} parcela />
             </li>
           ))}
         </ul>
@@ -222,7 +225,8 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
       )}
       {previstos && (
         <p className="vazio" aria-label="Previstos à parte">
-          Previstos à parte: {formatarCentavos(totais.despesas.previsto_centavos)} de despesas e {formatarCentavos(totais.receitas.previsto_centavos)} de receitas.
+          Previstos à parte: {formatarCentavos(totais.despesas.previsto_centavos)} de despesas e {formatarCentavos(totais.receitas.previsto_centavos)} de receitas, saldo de{" "}
+          {formatarCentavos(totais.saldo.previsto_centavos)}.
         </p>
       )}
       {totais && <p className="vazio">Transferências ficam fora dos totais.</p>}
@@ -230,8 +234,8 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
       {resultado && resultado.linhas.length === 0 && <p className="vazio">Nenhum lançamento com esses critérios.</p>}
       <ul className="lista" aria-label="Resultado da busca">
         {resultado?.linhas.map((linha) =>
-          "compra" in linha ? (
-            <LinhaDaCompra key={linha.compra.parcelamento_id} compra={linha.compra} cadastro={cadastro} />
+          "parcelamento" in linha ? (
+            <LinhaDoParcelamento key={linha.parcelamento.parcelamento_id} parcelamento={linha.parcelamento} cadastro={cadastro} />
           ) : "transferencia" in linha ? (
             <LinhaDaTransferencia key={linha.transferencia.id} t={linha.transferencia} cadastro={cadastro} />
           ) : (

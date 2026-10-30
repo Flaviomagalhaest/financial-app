@@ -3710,50 +3710,6 @@
         "title": "Comparacao",
         "description": "As despesas do mês por categoria contra o mês anterior e o mesmo mês do ano passado, com o\nrealizado e o previsto. O lançamento com várias categorias conta inteiro em cada linha, e o\ntotal o conta uma vez (com os ajustes de fatura), então as linhas somam mais que o total."
       },
-      "CompraParcelada": {
-        "properties": {
-          "parcelamento_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Parcelamento Id"
-          },
-          "descricao": {
-            "type": "string",
-            "title": "Descricao"
-          },
-          "data": {
-            "type": "string",
-            "format": "date",
-            "title": "Data"
-          },
-          "parcelas": {
-            "type": "integer",
-            "title": "Parcelas"
-          },
-          "valor_centavos": {
-            "type": "integer",
-            "title": "Valor Centavos"
-          },
-          "lancamentos": {
-            "items": {
-              "$ref": "#/components/schemas/Lancamento"
-            },
-            "type": "array",
-            "title": "Lancamentos"
-          }
-        },
-        "type": "object",
-        "required": [
-          "parcelamento_id",
-          "descricao",
-          "data",
-          "parcelas",
-          "valor_centavos",
-          "lancamentos"
-        ],
-        "title": "CompraParcelada",
-        "description": "O parcelamento numa linha só, fora do filtro Fatura (ADR 0013)."
-      },
       "Confirmacao": {
         "properties": {
           "versao": {
@@ -5115,10 +5071,10 @@
               }
             ]
           },
-          "compra_parcelada": {
+          "parcelamento": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/CompraParcelada"
+                "$ref": "#/components/schemas/ParcelamentoNaBusca"
               },
               {
                 "type": "null"
@@ -5138,7 +5094,7 @@
         },
         "type": "object",
         "title": "LinhaDaBusca",
-        "description": "Uma linha do resultado: um lançamento, uma compra parcelada ou uma transferência."
+        "description": "Uma linha do resultado: um lançamento, um parcelamento ou uma transferência."
       },
       "LinhaDaComparacao": {
         "properties": {
@@ -6366,6 +6322,50 @@
         ],
         "title": "ParcelamentoEmAndamento"
       },
+      "ParcelamentoNaBusca": {
+        "properties": {
+          "parcelamento_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parcelamento Id"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "parcelas": {
+            "type": "integer",
+            "title": "Parcelas"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "title": "Valor Centavos"
+          },
+          "lancamentos": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Lancamentos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parcelamento_id",
+          "descricao",
+          "data",
+          "parcelas",
+          "valor_centavos",
+          "lancamentos"
+        ],
+        "title": "ParcelamentoNaBusca",
+        "description": "O parcelamento numa linha só, fora do filtro Fatura (ADR 0013)."
+      },
       "PedidoDeBusca": {
         "properties": {
           "texto": {
@@ -7201,7 +7201,7 @@
           "saldo"
         ],
         "title": "TotaisDaBusca",
-        "description": "O resumo do resultado inteiro, não só da página. A transferência fica fora das somas; o\nestorno diminui as despesas; a compra parcelada conta uma vez, pelas parcelas achadas."
+        "description": "O resumo do resultado inteiro, não só da página. A transferência fica fora das somas; o\nestorno diminui as despesas; o parcelamento conta uma vez, pelas parcelas achadas."
       },
       "TotaisDoMes": {
         "properties": {

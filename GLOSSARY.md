@@ -166,6 +166,14 @@ _Avoid_: modelo (sozinho), template
 
 ### Consulta
 
+**Busca**:
+Tela única que acha lançamentos e transferências em todo o histórico, por texto livre na descrição e filtros combinados (entre filtros é E, dentro de um filtro OU). O período usa a **data da compra**, não o **mês da fatura** (ADR 0013); fora do **filtro Fatura**, o **parcelamento** é uma linha só. Abre pela lupa, de qualquer aba.
+_Avoid_: pesquisa, consulta (que é o nome da etapa)
+
+**Filtro Fatura**:
+Filtro da **busca** pelo **mês da fatura** de um cartão, com as compras dos adicionais; sem cartão, pelo mês em que cada lançamento conta, como na aba Mês. Com ele, cada **parcela** é uma linha e os números batem com a aba Mês e com a fatura. É o que os atalhos "Ver os lançamentos" do Mês e dos Cartões abrem.
+_Avoid_: filtro por competência
+
 **Filtro salvo**:
 Busca que o casal guarda com nome: os critérios (texto e filtros), a ordenação e o período, relativo ("este mês") ou fixo; é do casal inteiro. Não é um **Favorito**, que é um lançamento-modelo.
 _Avoid_: busca salva, visão

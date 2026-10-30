@@ -55,7 +55,7 @@ export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { identidadeDe, oferecerFavoritar, useOfertaDeFavoritar } from "./favoritos";
 export { criteriosDoEndereco, enderecoDaBusca } from "./busca";
-export type { CompraNaTela, Criterios, Ordem, Transferencia } from "./busca";
+export type { Criterios, ParcelamentoNaTela, Transferencia } from "./busca";
 export type { DadosDoFavorito, Favorito, Oferta, Sugerido } from "./favoritos";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
@@ -265,7 +265,7 @@ export type LinhaDaBusca = LinhaNaTela<LancamentoNaTela>;
 const naTelaDoServidor = (l: Lancamento): LancamentoNaTela => ({ ...l, naoEnviado: false });
 
 function linhaDoServidor(linha: components["schemas"]["LinhaDaBusca"]): LinhaDaBusca {
-  if (linha.compra_parcelada) return { compra: { ...linha.compra_parcelada, lancamentos: linha.compra_parcelada.lancamentos.map(naTelaDoServidor) } };
+  if (linha.parcelamento) return { parcelamento: { ...linha.parcelamento, lancamentos: linha.parcelamento.lancamentos.map(naTelaDoServidor) } };
   if (linha.transferencia) return { transferencia: linha.transferencia };
   return { lancamento: naTelaDoServidor(linha.lancamento!) };
 }
@@ -311,13 +311,13 @@ export function useBusca(criterios: Criterios) {
   }, [pedir]);
 
   // A fila subiu (ou mudou): o que estava só no aparelho já está no servidor.
-  const pendentes = useFila().length;
-  const antes = useRef(pendentes);
+  const naoEnviados = useFila().length;
+  const antes = useRef(naoEnviados);
   useEffect(() => {
-    if (antes.current === pendentes) return;
-    antes.current = pendentes;
+    if (antes.current === naoEnviados) return;
+    antes.current = naoEnviados;
     void pedir(0);
-  }, [pendentes, pedir]);
+  }, [naoEnviados, pedir]);
 
   const noAparelho = useMemo(() => (parcial && lancamentos ? buscarNoAparelho(lancamentos, JSON.parse(chave) as Criterios, cartoes) : null), [parcial, lancamentos, chave, cartoes]);
   const atual = doServidor?.chave === chave ? doServidor : null;
@@ -328,7 +328,6 @@ export function useBusca(criterios: Criterios) {
     carregando,
     temMais: !noAparelho && !!atual?.temMais,
     carregarMais: () => atual && void pedir(atual.paginas),
-    buscarDeNovo: () => void pedir(0),
   };
 }
 

@@ -1285,30 +1285,6 @@ export interface components {
             total: components["schemas"]["ValoresDaComparacao"];
         };
         /**
-         * CompraParcelada
-         * @description O parcelamento numa linha só, fora do filtro Fatura (ADR 0013).
-         */
-        CompraParcelada: {
-            /**
-             * Parcelamento Id
-             * Format: uuid
-             */
-            parcelamento_id: string;
-            /** Descricao */
-            descricao: string;
-            /**
-             * Data
-             * Format: date
-             */
-            data: string;
-            /** Parcelas */
-            parcelas: number;
-            /** Valor Centavos */
-            valor_centavos: number;
-            /** Lancamentos */
-            lancamentos: components["schemas"]["Lancamento"][];
-        };
-        /**
          * Confirmacao
          * @description O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o
          *     ajuste num campo que o outro lado mudou depois dela é conflito, como na edição.
@@ -1840,11 +1816,11 @@ export interface components {
         };
         /**
          * LinhaDaBusca
-         * @description Uma linha do resultado: um lançamento, uma compra parcelada ou uma transferência.
+         * @description Uma linha do resultado: um lançamento, um parcelamento ou uma transferência.
          */
         LinhaDaBusca: {
             lancamento?: components["schemas"]["Lancamento"] | null;
-            compra_parcelada?: components["schemas"]["CompraParcelada"] | null;
+            parcelamento?: components["schemas"]["ParcelamentoNaBusca"] | null;
             transferencia?: components["schemas"]["Transferencia"] | null;
         };
         /** LinhaDaComparacao */
@@ -2344,6 +2320,30 @@ export interface components {
              */
             fim_previsto: string;
         };
+        /**
+         * ParcelamentoNaBusca
+         * @description O parcelamento numa linha só, fora do filtro Fatura (ADR 0013).
+         */
+        ParcelamentoNaBusca: {
+            /**
+             * Parcelamento Id
+             * Format: uuid
+             */
+            parcelamento_id: string;
+            /** Descricao */
+            descricao: string;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /** Parcelas */
+            parcelas: number;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /** Lancamentos */
+            lancamentos: components["schemas"]["Lancamento"][];
+        };
         /** PedidoDeBusca */
         PedidoDeBusca: {
             /**
@@ -2700,7 +2700,7 @@ export interface components {
         /**
          * TotaisDaBusca
          * @description O resumo do resultado inteiro, não só da página. A transferência fica fora das somas; o
-         *     estorno diminui as despesas; a compra parcelada conta uma vez, pelas parcelas achadas.
+         *     estorno diminui as despesas; o parcelamento conta uma vez, pelas parcelas achadas.
          */
         TotaisDaBusca: {
             /** Quantidade */

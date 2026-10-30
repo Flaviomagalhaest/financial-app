@@ -63,7 +63,7 @@ class CriteriosDaBusca(BaseModel):
     tipos: list[Literal["despesa", "receita", "transferencia"]] = []
 
 
-class CompraParcelada(BaseModel):
+class ParcelamentoNaBusca(BaseModel):
     """O parcelamento numa linha só, fora do filtro Fatura (ADR 0013)."""
 
     parcelamento_id: UUID
@@ -92,10 +92,10 @@ _ORDENS = {
 
 
 class LinhaDaBusca(BaseModel):
-    """Uma linha do resultado: um lançamento, uma compra parcelada ou uma transferência."""
+    """Uma linha do resultado: um lançamento, um parcelamento ou uma transferência."""
 
     lancamento: Lancamento | None = None
-    compra_parcelada: CompraParcelada | None = None
+    parcelamento: ParcelamentoNaBusca | None = None
     transferencia: Transferencia | None = None
 
 
@@ -106,9 +106,9 @@ class PorSituacao(BaseModel):
 
 class TotaisDaBusca(BaseModel):
     """O resumo do resultado inteiro, não só da página. A transferência fica fora das somas; o
-    estorno diminui as despesas; a compra parcelada conta uma vez, pelas parcelas achadas."""
+    estorno diminui as despesas; o parcelamento conta uma vez, pelas parcelas achadas."""
 
-    # As linhas do resultado.
+    # As linhas do resultado, sem as transferências: o parcelamento conta como uma.
     quantidade: int
     despesas: PorSituacao
     receitas: PorSituacao
@@ -152,7 +152,7 @@ class _Filtro:
     def __init__(self, *condicoes: str) -> None:
         self.condicoes, self.parametros = list(condicoes), []
 
-    def e(self, condicao: str, *parametros) -> None:
+    def exigir(self, condicao: str, *parametros) -> None:
         self.condicoes.append(condicao)
         self.parametros.extend(parametros)
 
@@ -178,14 +178,16 @@ _DO_CARTAO = "IN (SELECT id FROM cartoes WHERE %s IN (id, titular_id))"
 
 def _texto(criterios: CriteriosDaBusca, filtro: _Filtro, tabela: str) -> None:
     if texto := _normalizado(criterios.texto):
-        filtro.e(f"{_sem_acento(f'{tabela}.descricao')} LIKE %s ESCAPE '\\'", _como_padrao(texto))
+        filtro.exigir(
+            f"{_sem_acento(f'{tabela}.descricao')} LIKE %s ESCAPE '\\'", _como_padrao(texto)
+        )
 
 
 def _do_lancamento(criterios: CriteriosDaBusca) -> _Filtro:
     filtro = _Filtro("lancamentos.excluido_em IS NULL")
     _texto(criterios, filtro, "lancamentos")
     if criterios.categoria_ids or criterios.sem_categoria:
-        filtro.e(
+        filtro.exigir(
             _qualquer(
                 criterios.categoria_ids and _TEM_CATEGORIA,
                 criterios.sem_categoria and _SEM_CATEGORIA,
@@ -193,14 +195,14 @@ def _do_lancamento(criterios: CriteriosDaBusca) -> _Filtro:
             *[criterios.categoria_ids] * bool(criterios.categoria_ids),
         )
     if criterios.tags or criterios.sem_tag:
-        filtro.e(
+        filtro.exigir(
             _qualquer(criterios.tags and _TEM_TAG, criterios.sem_tag and _SEM_TAG),
             *[[t.strip().lower() for t in criterios.tags]] * bool(criterios.tags),
         )
     if criterios.conta_ids:
-        filtro.e("lancamentos.conta_id = ANY(%s)", criterios.conta_ids)
+        filtro.exigir("lancamentos.conta_id = ANY(%s)", criterios.conta_ids)
     if criterios.pessoas or criterios.conjunto:
-        filtro.e(
+        filtro.exigir(
             _qualquer(
                 criterios.pessoas and "lancamentos.pessoa = ANY(%s)",
                 criterios.conjunto and "lancamentos.pessoa IS NULL",
@@ -208,17 +210,17 @@ def _do_lancamento(criterios: CriteriosDaBusca) -> _Filtro:
             *[criterios.pessoas] * bool(criterios.pessoas),
         )
     if criterios.periodo_de:
-        filtro.e(f"{_data_da_linha(criterios)} >= %s", criterios.periodo_de)
+        filtro.exigir(f"{_data_da_linha(criterios)} >= %s", criterios.periodo_de)
     if criterios.periodo_ate:
-        filtro.e(f"{_data_da_linha(criterios)} <= %s", criterios.periodo_ate)
+        filtro.exigir(f"{_data_da_linha(criterios)} <= %s", criterios.periodo_ate)
     if fatura := criterios.fatura:
-        filtro.e(f"{MES_EM_QUE_CONTA} = %s", fatura.mes)
+        filtro.exigir(f"{MES_EM_QUE_CONTA} = %s", fatura.mes)
         if fatura.cartao_id:
-            filtro.e(f"lancamentos.conta_id {_DO_CARTAO}", fatura.cartao_id)
+            filtro.exigir(f"lancamentos.conta_id {_DO_CARTAO}", fatura.cartao_id)
     if criterios.situacoes:
-        filtro.e("lancamentos.situacao = ANY(%s)", criterios.situacoes)
+        filtro.exigir("lancamentos.situacao = ANY(%s)", criterios.situacoes)
     if criterios.tipos:
-        filtro.e("lancamentos.tipo = ANY(%s)", criterios.tipos)
+        filtro.exigir("lancamentos.tipo = ANY(%s)", criterios.tipos)
     return filtro
 
 
@@ -232,12 +234,12 @@ def _da_transferencia(criterios: CriteriosDaBusca) -> _Filtro | None:
         return None
     filtro = _Filtro()
     if not criterios.tipos:
-        filtro.e(
+        filtro.exigir(
             "NOT EXISTS (SELECT FROM cartoes WHERE cartoes.id = transferencias.conta_destino_id)"
         )
     _texto(criterios, filtro, "transferencias")
     if criterios.categoria_ids or criterios.sem_categoria:
-        filtro.e(
+        filtro.exigir(
             _qualquer(
                 criterios.categoria_ids and "transferencias.categoria_id = ANY(%s)",
                 criterios.sem_categoria and "transferencias.categoria_id IS NULL",
@@ -245,26 +247,26 @@ def _da_transferencia(criterios: CriteriosDaBusca) -> _Filtro | None:
             *[criterios.categoria_ids] * bool(criterios.categoria_ids),
         )
     if criterios.conta_ids:
-        filtro.e(
+        filtro.exigir(
             "(transferencias.conta_origem_id = ANY(%s) OR transferencias.conta_destino_id = ANY(%s))",
             criterios.conta_ids,
             criterios.conta_ids,
         )
     if criterios.periodo_de:
-        filtro.e("transferencias.data >= %s", criterios.periodo_de)
+        filtro.exigir("transferencias.data >= %s", criterios.periodo_de)
     if criterios.periodo_ate:
-        filtro.e("transferencias.data <= %s", criterios.periodo_ate)
+        filtro.exigir("transferencias.data <= %s", criterios.periodo_ate)
     if fatura := criterios.fatura:
-        filtro.e("transferencias.fatura_mes = %s", fatura.mes)
+        filtro.exigir("transferencias.fatura_mes = %s", fatura.mes)
         if fatura.cartao_id:
-            filtro.e(f"transferencias.conta_destino_id {_DO_CARTAO}", fatura.cartao_id)
+            filtro.exigir(f"transferencias.conta_destino_id {_DO_CARTAO}", fatura.cartao_id)
     if criterios.situacoes:
-        filtro.e("transferencias.situacao = ANY(%s)", criterios.situacoes)
+        filtro.exigir("transferencias.situacao = ANY(%s)", criterios.situacoes)
     return filtro
 
 
 def _agrupar(criterios: CriteriosDaBusca) -> bool:
-    """Fora do filtro Fatura, a compra parcelada é uma linha; nele, cada parcela é uma."""
+    """Fora do filtro Fatura, o parcelamento é uma linha; nele, cada parcela é uma."""
     return criterios.fatura is None
 
 
@@ -279,7 +281,7 @@ def _data_da_linha(criterios: CriteriosDaBusca) -> str:
 
 
 def _filtro_de_valor(criterios: CriteriosDaBusca) -> tuple[str, list]:
-    """O valor da linha: o total da compra parcelada, ou o da parcela no filtro Fatura."""
+    """O valor da linha: a soma das parcelas do parcelamento, ou o da parcela no filtro Fatura."""
     condicoes, parametros = [], []
     if criterios.valor_minimo_centavos is not None:
         condicoes.append("valor >= %s")
@@ -310,7 +312,7 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
     do_lancamento, da_transferencia = _do_lancamento(criterios), _da_transferencia(criterios)
     agrupar = _agrupar(criterios)
     chave = "COALESCE(lancamentos.parcelamento_id, lancamentos.id)" if agrupar else "lancamentos.id"
-    compra = "bool_or(lancamentos.parcelamento_id IS NOT NULL)" if agrupar else "false"
+    parcelado = "bool_or(lancamentos.parcelamento_id IS NOT NULL)" if agrupar else "false"
     somas = ", ".join(f"{_soma(t, s)} AS {t}_{s}" for t, s in _SOMAS)
     # A transferência é uma linha, fora das somas.
     transferencias_sql, parametros_das_transferencias = "", []
@@ -322,10 +324,10 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
         )
         parametros_das_transferencias = da_transferencia.parametros
     valor, parametros_do_valor = _filtro_de_valor(criterios)
-    # Uma linha por lançamento, compra parcelada ou transferência, com o valor dela e as somas.
+    # Uma linha por lançamento, parcelamento ou transferência, com o valor dela e as somas.
     linhas = (
         f"(SELECT * FROM ("
-        f" SELECT {chave} AS chave, {compra} AS compra, false AS transferencia,"
+        f" SELECT {chave} AS chave, {parcelado} AS parcelado, false AS transferencia,"
         f" min({_data_da_linha(criterios)}) AS data, max(lancamentos.criado_em) AS criado_em,"
         f" sum(lancamentos.valor_centavos) AS valor, {somas}"
         f" FROM lancamentos WHERE {do_lancamento.sql} GROUP BY 1"
@@ -338,20 +340,20 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
         *parametros_do_valor,
     ]
     quantidade, *centavos = conn.execute(
-        f"SELECT count(*), {', '.join(f'COALESCE(sum({t}_{s}), 0)::bigint' for t, s in _SOMAS)}"
+        f"SELECT count(*) FILTER (WHERE NOT transferencia), {', '.join(f'COALESCE(sum({t}_{s}), 0)::bigint' for t, s in _SOMAS)}"
         f" FROM {linhas}",
         parametros_das_linhas,
     ).fetchone()
     soma = dict(zip(_SOMAS, centavos))
     pagina = conn.execute(
-        f"SELECT chave, compra, transferencia FROM {linhas} ORDER BY {_ORDENS[criterios.ordem]}"
+        f"SELECT chave, parcelado, transferencia FROM {linhas} ORDER BY {_ORDENS[criterios.ordem]}"
         " LIMIT %s OFFSET %s",
         [*parametros_das_linhas, POR_PAGINA + 1, criterios.pagina * POR_PAGINA],
     ).fetchall()
     tem_mais = len(pagina) > POR_PAGINA
     pagina = pagina[:POR_PAGINA]
-    compras = _compras(conn, do_lancamento, [c for c, e_compra, _ in pagina if e_compra])
-    avulsos = [c for c, e_compra, e_transferencia in pagina if not e_compra and not e_transferencia]
+    parcelamentos = _parcelamentos(conn, do_lancamento, [c for c, e_parc, _ in pagina if e_parc])
+    avulsos = [c for c, e_parc, e_transferencia in pagina if not e_parc and not e_transferencia]
     por_id = {l.id: l for l in ler_por_ids(conn, avulsos)}
     das_transferencias = {
         t.id: t for t in transferencias.ler_por_ids(conn, [c for c, _, e in pagina if e])
@@ -369,12 +371,12 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
             ),
         ),
         linhas=[
-            LinhaDaBusca(compra_parcelada=compras[c])
-            if e_compra
+            LinhaDaBusca(parcelamento=parcelamentos[c])
+            if e_parc
             else LinhaDaBusca(transferencia=das_transferencias[c])
             if e_transferencia
             else LinhaDaBusca(lancamento=por_id[c])
-            for c, e_compra, e_transferencia in pagina
+            for c, e_parc, e_transferencia in pagina
         ],
         tem_mais=tem_mais,
     )
@@ -386,8 +388,10 @@ def _por_situacao(soma: dict[tuple[str, str], int], tipo: str) -> PorSituacao:
     )
 
 
-def _compras(conn, do_lancamento: _Filtro, ids: list[UUID]) -> dict[UUID, CompraParcelada]:
-    """As compras parceladas, com as parcelas que a busca achou."""
+def _parcelamentos(
+    conn, do_lancamento: _Filtro, ids: list[UUID]
+) -> dict[UUID, ParcelamentoNaBusca]:
+    """Os parcelamentos, com as parcelas que a busca achou."""
     if not ids:
         return {}
     achadas = [
@@ -402,7 +406,7 @@ def _compras(conn, do_lancamento: _Filtro, ids: list[UUID]) -> dict[UUID, Compra
     for parcela in sorted(ler_por_ids(conn, achadas), key=lambda l: l.parcela or 0):
         parcelas.setdefault(parcela.parcelamento_id, []).append(parcela)
     return {
-        id: CompraParcelada(
+        id: ParcelamentoNaBusca(
             parcelamento_id=id,
             descricao=descricao,
             data=data,
