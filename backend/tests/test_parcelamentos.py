@@ -590,15 +590,16 @@ def test_corrigir_descricao_tags_e_pessoa_vale_para_todas_as_parcelas_inclusive_
 
     assert resposta.status_code == 200
     assert resposta.json()["descricao"] == "Geladeira"
-    assert (resposta.json()["tags"], resposta.json()["pessoa"]) == (
-        ["Eletro", "casa nova"],
+    # A ordem das tags é a do collation do banco: compara como conjunto.
+    assert (set(resposta.json()["tags"]), resposta.json()["pessoa"]) == (
+        {"Eletro", "casa nova"},
         "esposa",
     )
     assert resposta.json()["alterado_por"] == "flavio"
     for l in parcelas(casal, novo["id"]):
-        assert (l["descricao"], l["tags"], l["pessoa"], l["categoria_ids"]) == (
+        assert (l["descricao"], set(l["tags"]), l["pessoa"], l["categoria_ids"]) == (
             "Geladeira",
-            ["Eletro", "casa nova"],
+            {"Eletro", "casa nova"},
             "esposa",
             [casa],
         )
