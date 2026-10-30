@@ -668,3 +668,128 @@ def test_mudar_o_dia_da_recorrencia_no_cartao_registra_a_fatura_como_mudanca_da_
     assert [(c["campo"], c["origem"]) for c in resposta.json()["campos"]] == [
         ("fatura_mes", "a recorrência Luz")
     ]
+
+
+def test_reabrir_o_fim_traz_de_volta_o_que_o_fim_tirou_e_nao_o_mes_que_o_casal_pulou(
+    casal: Casal,
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", tags=["casa"])
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    dezembro = gerados(casal, nova["id"])[1]
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{dezembro['id']}")
+    mudar(casal, nova["id"], 1, ate="2027-01-10")
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [1, 3]
+
+    # Tirar o fim: a 4ª em diante volta pela regra, a 2ª continua pulada, e o pedido pode vir de
+    # uma ocorrência que só existe por causa do fim que saiu.
+    resposta = mudar(casal, nova["id"], 10, ate=None)
+
+    assert resposta.status_code == 200
+    previstos = gerados(casal, nova["id"])
+    assert [l["ocorrencia"] for l in previstos] == [1, *range(3, 25)]
+    assert previstos[-1]["data"] == "2028-10-10"
+    volta = previstos[5]
+    assert (volta["situacao"], volta["tags"], volta["categoria_ids"]) == (
+        "previsto",
+        ["casa"],
+        [luz],
+    )
+    assert len({l["id"] for l in previstos}) == len(previstos)
+
+
+def test_adiar_o_fim_para_uma_data_mais_tarde_gera_as_ocorrencias_do_meio(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", ate="2027-04-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    mudar(casal, nova["id"], 1, ate="2027-01-10")
+    assert len(gerados(casal, nova["id"])) == 3
+
+    mudar(casal, nova["id"], 1, ate="2027-06-10")
+
+    assert [l["data"] for l in gerados(casal, nova["id"])] == [
+        "2026-11-10",
+        "2026-12-10",
+        "2027-01-10",
+        "2027-02-10",
+        "2027-03-10",
+        "2027-04-10",
+        "2027-05-10",
+        "2027-06-10",
+    ]
+
+
+def test_aumentar_o_numero_de_vezes_depois_de_encerrar_nao_deixa_buraco(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=5)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    mudar(casal, nova["id"], 1, vezes=2)
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [1, 2]
+
+    mudar(casal, nova["id"], 1, vezes=4)
+
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [1, 2, 3, 4]
+
+
+def test_a_ocorrencia_trazida_de_volta_vem_com_a_regra_de_hoje(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=4)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    mudar(casal, nova["id"], 1, vezes=2)
+
+    mudar(casal, nova["id"], 1, vezes=4, valor_centavos=21000, descricao="Luz (reajuste)")
+
+    assert [
+        (l["ocorrencia"], l["valor_centavos"], l["descricao"]) for l in gerados(casal, nova["id"])
+    ] == [
+        (1, 21000, "Luz (reajuste)"),
+        (2, 21000, "Luz (reajuste)"),
+        (3, 21000, "Luz (reajuste)"),
+        (4, 21000, "Luz (reajuste)"),
+    ]
+
+
+def test_reagendar_para_menos_frequente_tira_os_previstos_alem_do_horizonte_e_a_tarefa_diaria_os_traz(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    assert len(gerados(casal, nova["id"])) == 24
+
+    # De mês em mês para de 3 em 3 meses: a 9ª cairia em 10/11/2028, depois do horizonte
+    # (28/10/2028).
+    mudar(casal, nova["id"], 1, a_cada=3)
+
+    previstos = gerados(casal, nova["id"])
+    assert [l["ocorrencia"] for l in previstos] == list(range(1, 9))
+    assert previstos[-1]["data"] == "2028-08-10"
+    # O horizonte anda: 9ª e 10ª entram, a 11ª (10/05/2029) ainda não.
+    no_dia(monkeypatch, "2027-03-01")
+    fazer_tarefa_diaria(database_url)
+    previstos = gerados(casal, nova["id"])
+    assert [(l["ocorrencia"], l["data"]) for l in previstos[-3:]] == [
+        (8, "2028-08-10"),
+        (9, "2028-11-10"),
+        (10, "2029-02-10"),
+    ]
+    assert len(previstos) == len({l["id"] for l in previstos}) == 10
+
+
+def test_reagendar_nao_tira_o_previsto_que_o_casal_alterou_a_mao(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    ultimo = gerados(casal, nova["id"])[-1]
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{ultimo['id']}",
+        json={"versao": 1, "valor_centavos": 5000},
+    )
+
+    mudar(casal, nova["id"], 1, a_cada=3)
+
+    previstos = gerados(casal, nova["id"])
+    assert [l["ocorrencia"] for l in previstos] == [*range(1, 9), 24]
+    assert (previstos[-1]["data"], previstos[-1]["valor_centavos"]) == ("2028-10-10", 5000)
