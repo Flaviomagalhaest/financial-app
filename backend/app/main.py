@@ -12,6 +12,7 @@ from app.banco import conectar
 from app.cartoes import router as cartoes
 from app.classificacao import router as classificacao
 from app.exportacao import Formato, exportar
+from app.hoje import router as hoje
 from app.lancamentos import router as lancamentos
 from app.limite import router as limite
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
@@ -95,6 +96,7 @@ def create_app(
     app.include_router(limite)
     app.include_router(planejamento)
     app.include_router(meses)
+    app.include_router(hoje)
     app.include_router(pessoas)
     app.include_router(recorrencias)
     app.include_router(parcelamentos)

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Configuracoes } from "../configuracoes/Configuracoes";
-import { ContasDaSemana } from "../lancamentos/ContasDaSemana";
+import { TelaHoje } from "../hoje/TelaHoje";
 import { ListaDeLancamentos } from "../lancamentos/ListaDeLancamentos";
 import { NovoLancamento } from "../lancamentos/NovoLancamento";
 import { TelaDeContasECategorias } from "../contas-e-categorias/TelaDeContasECategorias";
@@ -9,26 +9,15 @@ import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
 import { TelaDeCartoes } from "../cartoes/TelaDeCartoes";
 import { TelaDaFatura } from "../cartoes/TelaDaFatura";
 import { TelaDoFuturo } from "../futuro/TelaDoFuturo";
+import { TelaDoMes } from "../mes/TelaDoMes";
+import { TelaDoModelo } from "../mes/TelaDoModelo";
 import { ABAS, useRota } from "./rota";
 
-/** As abas que já têm tela; as outras mostram o aviso de que chegam depois. */
-const PRONTAS = new Set<string>(["hoje", "historico", "cartoes", "futuro"]);
-
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
-
-function Vazia({ nome }: { nome: string }) {
-  return (
-    <section>
-      <h2>{nome}</h2>
-      <p className="vazio">Esta tela chega nas próximas etapas.</p>
-    </section>
-  );
-}
 
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
   const { rota, id, mes } = useRota();
-  const aba = ABAS.find((a) => a.id === rota);
 
   return (
     <div className="casca">
@@ -54,7 +43,7 @@ export function Casca({ email, onSair, hoje }: Props) {
             <a className="botao" href="#/novo">
               + Novo lançamento
             </a>
-            <ContasDaSemana />
+            <TelaHoje />
             {hoje}
             <a href="#/contas-e-categorias">Contas e categorias</a>
           </section>
@@ -64,9 +53,10 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}
         {rota === "historico" && <ListaDeLancamentos />}
+        {rota === "mes" && <TelaDoMes key={mes ?? "atual"} mes={mes} />}
+        {rota === "modelo-do-planejamento" && <TelaDoModelo />}
         {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}
         {rota === "futuro" && <TelaDoFuturo />}
-        {aba && !PRONTAS.has(aba.id) && <Vazia nome={aba.nome} />}
       </main>
     </div>
   );

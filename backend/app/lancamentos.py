@@ -1117,17 +1117,21 @@ class ContasDaSemana(BaseModel):
     lancamentos: list[Lancamento]
 
 
+def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
+    """Os atrasados e os previstos até `contasDaSemanaDias` dias a partir de hoje."""
+    ate = hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
+    return _todos(
+        conn,
+        "situacao = 'previsto' AND NOT COALESCE(automatico, false) AND data <= %s",
+        (ate,),
+        ordem="data, criado_em, id",
+    )
+
+
 @router.get("/contas-da-semana", response_model=ContasDaSemana, operation_id="contas_da_semana")
 def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana:
-    ate = hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
     with conectar(url_do_banco(request)) as conn:
-        lancamentos = _todos(
-            conn,
-            "situacao = 'previsto' AND NOT COALESCE(automatico, false) AND data <= %s",
-            (ate,),
-            ordem="data, criado_em, id",
-        )
-    return ContasDaSemana(lancamentos=lancamentos)
+        return ContasDaSemana(lancamentos=contas_da_semana_de_hoje(conn))
 
 
 class Confirmacao(BaseModel):

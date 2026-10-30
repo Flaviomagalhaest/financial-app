@@ -2,6 +2,7 @@
 // rede volta. O vite.config.ts empacota este arquivo dentro do service-worker.js; ele importa só
 // o que roda fora da tela (sem React, sem o cliente da API, sem a biblioteca do SRP).
 import { tokenEmSegundoPlano } from "../login/renovacao";
+import { fetchComTempoLimite } from "./rede";
 import { enviarFila, type Remessa } from "./fila";
 
 export { ETIQUETA_DO_ENVIO } from "./fila";
@@ -10,7 +11,7 @@ const remeter: Remessa = async (acoes) => {
   const token = await tokenEmSegundoPlano();
   if (!token) return 401;
   try {
-    const resposta = await fetch("/api/lancamentos/lote", {
+    const resposta = await fetchComTempoLimite("/api/lancamentos/lote", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ acoes }),

@@ -120,6 +120,17 @@ _Avoid_: efetivação, baixa
 Previsto que pede confirmação e cuja data já passou sem ela; continua previsto até ser confirmado ou excluído.
 _Avoid_: vencido, pendente
 
+**Hoje**:
+A aba que o casal vê ao abrir o app: quanto ainda dá para gastar no mês, o que está a escolher, as contas da semana e as atrasadas, a fatura que vence e os itens em destaque, mais os avisos de não enviados e de conflitos. Vem de uma leitura só.
+_Avoid_: início, painel
+
+**Fatura que vence**:
+Fatura fechada, ainda com saldo a pagar, que vence nos próximos 7 dias ou já venceu; aparece na Hoje.
+
+**Item em destaque**:
+Item do planejamento do mês que já usou 80% ou mais do planejado (realizado mais previsto), inclusive o que estourou; aparece na Hoje.
+_Avoid_: perto do limite
+
 **Contas da semana**:
 Lista dos previstos que pedem confirmação, atrasados ou com data nos próximos 7 dias, despesas e receitas.
 _Avoid_: agenda, a pagar

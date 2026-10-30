@@ -133,7 +133,7 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
     return movimentos, a_escolher
 
 
-def ler(conn, mes: str) -> Planejamento:
+def ler_mes(conn, mes: str) -> Planejamento:
     dia = primeiro_dia(mes)
     linhas = conn.execute(
         "SELECT id, categoria_id, valor_centavos FROM itens_do_planejamento WHERE mes = %s"
@@ -178,7 +178,7 @@ def a_lancar_nas_despesas(conn, mes: date) -> int:
     previsto), sem compensar o item estourado com a sobra de outro, menos os ajustes de fatura,
     como o "ainda dá para gastar". O item de transferência fica de fora: guardar na reserva move
     dinheiro entre contas e não muda a soma delas."""
-    plano = ler(conn, mes.strftime("%Y-%m"))
+    plano = ler_mes(conn, mes.strftime("%Y-%m"))
     de_despesa = {
         id
         for (id,) in conn.execute(
@@ -211,7 +211,7 @@ def _item(conn, id: UUID) -> ItemDoPlanejamento:
     mes = conn.execute("SELECT mes FROM itens_do_planejamento WHERE id = %s", (id,)).fetchone()
     if not mes:
         raise HTTPException(status_code=404, detail="item não encontrado")
-    return next(i for i in ler(conn, mes[0].strftime("%Y-%m")).itens if i.id == id)
+    return next(i for i in ler_mes(conn, mes[0].strftime("%Y-%m")).itens if i.id == id)
 
 
 def _modelo(conn) -> ModeloPadrao:
@@ -275,7 +275,7 @@ def aplicar_modelo(mes: Mes, usuario: UsuarioLogado, request: Request) -> Planej
         if not itens:
             raise recusar("o modelo padrão está vazio")
         _gravar_itens_no_mes_vazio(conn, dia, itens, usuario)
-        return ler(conn, mes)
+        return ler_mes(conn, mes)
 
     return em_transacao(url_do_banco(request), gravar)
 
@@ -283,7 +283,7 @@ def aplicar_modelo(mes: Mes, usuario: UsuarioLogado, request: Request) -> Planej
 @router.get("/planejamento/{mes}", response_model=Planejamento, operation_id="ler_planejamento")
 def ler_planejamento(mes: Mes, usuario: UsuarioLogado, request: Request) -> Planejamento:
     with conectar(url_do_banco(request)) as conn:
-        return ler(conn, mes)
+        return ler_mes(conn, mes)
 
 
 @router.post(
@@ -355,7 +355,7 @@ def copiar_planejamento(
         if not itens:
             raise recusar("o mês de origem não tem itens")
         _gravar_itens_no_mes_vazio(conn, dia, itens, usuario)
-        return ler(conn, mes)
+        return ler_mes(conn, mes)
 
     return em_transacao(url_do_banco(request), gravar)
 
