@@ -22,14 +22,17 @@ import {
 import {
   decidirConflito,
   descartar,
+  enfileirarConfirmar,
   enfileirarExcluir,
   enfileirarSalvar,
   enviarFila,
   ETIQUETA_DO_ENVIO,
   excluirMesmoAssim,
-  guardarConflito,
   lancarDeNovo,
   LISTA,
+  naSemana,
+  pelaData,
+  type Ajustes,
   type Remessa,
 } from "./fila";
 import { fetchComTempoLimite, ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
@@ -45,10 +48,9 @@ export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
 export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type Futuro = components["schemas"]["Futuro"];
-export type { Campo } from "./fila";
+export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
-export { comoNovo } from "./fila";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
 export type LancamentoNaTela = NovoLancamento & {
@@ -244,6 +246,23 @@ export function useLancamentos() {
 }
 
 /**
+ * As contas da semana da leitura da Hoje com a fila por cima: o previsto criado ou mudado no
+ * aparelho entra ou sai pela mesma janela do servidor, e o confirmado sai. O conflito e a recusa de
+ * uma conta da semana ficam, para decidir ou confirmar de novo.
+ */
+export function useContasDaSemana(doServidor: Lancamento[] | null): LancamentoNaTela[] | null {
+  const fila = useFila();
+  return useMemo(() => {
+    if (!doServidor) return null;
+    const ids = new Set(doServidor.map((l) => l.id));
+    const esperam = (l: LancamentoNaTela) => ids.has(l.id) && !!(l.conflito || l.recusa);
+    return naTela(doServidor, fila)
+      .filter((l) => esperam(l) || naSemana(l))
+      .sort(pelaData);
+  }, [doServidor, fila]);
+}
+
+/**
  * Contas, cartões e categorias do casal; `carregado` quando há resposta do servidor, nova ou
  * guardada. Os cartões não arquivados (titulares e adicionais) vêm à parte, e `contasECartoes`
  * dá o nome de qualquer `conta_id`: a compra no cartão guarda nele o cartão (ADR 0015).
@@ -417,6 +436,16 @@ export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<voi
   void enviarAgora();
 }
 
+/**
+ * Confirma o previsto pela fila (ADR 0011) e já tenta subir. Devolve a mudança se ela ainda está na
+ * fila: sem internet, recusada, em conflito ou vencida pela exclusão.
+ */
+export async function confirmarPrevisto(mostrado: LancamentoNaTela, ajustes: Ajustes = {}): Promise<ItemDaFila | undefined> {
+  await enfileirarConfirmar(mostrado, ajustes, baseDe(mostrado));
+  await enviarAgora();
+  return (await lerFila()).find((item) => item.id === mostrado.id);
+}
+
 export const descartarNaoEnviado = descartar;
 
 /** O casal conferiu o "Parece repetido": exige internet, porque não é uma mudança do lançamento. */
@@ -439,7 +468,6 @@ function eEnvia<A extends unknown[]>(mudar: (...args: A) => Promise<void>) {
 export const decidir = eEnvia(decidirConflito);
 export const excluirApesarDoConflito = eEnvia(excluirMesmoAssim);
 export const lancarDeNovoOExcluido = eEnvia(lancarDeNovo);
-export { guardarConflito };
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */
 export async function criarConta(nome: string, tipo: Conta["tipo"]): Promise<boolean> {
