@@ -2566,6 +2566,191 @@
           }
         ]
       }
+    },
+    "/api/favoritos": {
+      "get": {
+        "summary": "Listar Favoritos",
+        "operationId": "listar_favoritos",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Favoritos"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Criar Favorito",
+        "description": "Reenviar o mesmo id, ou favoritar o que já é favorito, devolve o que já está gravado, com\n200. Favoritar o que foi removido ou dispensado o traz de volta.",
+        "operationId": "criar_favorito",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoFavorito"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Favorito"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/favoritos/{id}": {
+      "delete": {
+        "summary": "Remover Favorito",
+        "description": "Idempotente. O removido vira dispensado: com 5 usos ou mais, não volta como sugerido.",
+        "operationId": "remover_favorito",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/favoritos/ordem": {
+      "put": {
+        "summary": "Reordenar Favoritos",
+        "description": "A lista inteira, na ordem nova: o que faltar ou sobrar recusa (alguém mudou a lista).",
+        "operationId": "reordenar_favoritos",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaOrdem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Favoritos"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/favoritos/sugeridos/dispensar": {
+      "post": {
+        "summary": "Dispensar Sugerido",
+        "description": "Idempotente: dispensar de novo o mesmo sugerido também dá 204.",
+        "operationId": "dispensar_sugerido",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dispensa"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3654,6 +3839,19 @@
         "title": "Despesas",
         "description": "As despesas do mês (compras menos estornos), com os ajustes de fatura no realizado."
       },
+      "Dispensa": {
+        "properties": {
+          "chave": {
+            "type": "string",
+            "title": "Chave"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chave"
+        ],
+        "title": "Dispensa"
+      },
       "EdicaoDeCartao": {
         "properties": {
           "nome": {
@@ -3944,6 +4142,109 @@
           "a_pagar_centavos"
         ],
         "title": "Fatura"
+      },
+      "Favorito": {
+        "properties": {
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ordem": {
+            "type": "integer",
+            "title": "Ordem"
+          },
+          "valor_padrao_centavos": {
+            "type": "integer",
+            "title": "Valor Padrao Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "conta_id",
+          "categoria_ids",
+          "valor_centavos",
+          "id",
+          "ordem",
+          "valor_padrao_centavos"
+        ],
+        "title": "Favorito"
+      },
+      "Favoritos": {
+        "properties": {
+          "favoritos": {
+            "items": {
+              "$ref": "#/components/schemas/Favorito"
+            },
+            "type": "array",
+            "title": "Favoritos"
+          },
+          "sugeridos": {
+            "items": {
+              "$ref": "#/components/schemas/Sugerido"
+            },
+            "type": "array",
+            "title": "Sugeridos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "favoritos",
+          "sugeridos"
+        ],
+        "title": "Favoritos"
       },
       "Fechamento": {
         "properties": {
@@ -4868,6 +5169,23 @@
         ],
         "title": "NovaConta"
       },
+      "NovaOrdem": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "NovaOrdem"
+      },
       "NovaRecorrencia": {
         "properties": {
           "id": {
@@ -5173,6 +5491,75 @@
         ],
         "title": "NovoCartao",
         "description": "O titular tem os dias padrão, a regra do mês e o limite; o adicional (`titular_id`) usa\nos do titular e as compras dele caem na fatura do titular."
+      },
+      "NovoFavorito": {
+        "properties": {
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "conta_id",
+          "categoria_ids",
+          "valor_centavos",
+          "id"
+        ],
+        "title": "NovoFavorito"
       },
       "NovoItem": {
         "properties": {
@@ -6112,6 +6499,79 @@
           "migrations"
         ],
         "title": "Saude"
+      },
+      "Sugerido": {
+        "properties": {
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "chave": {
+            "type": "string",
+            "title": "Chave"
+          },
+          "usos": {
+            "type": "integer",
+            "title": "Usos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "conta_id",
+          "categoria_ids",
+          "valor_centavos",
+          "chave",
+          "usos"
+        ],
+        "title": "Sugerido"
       },
       "Sugestao": {
         "properties": {

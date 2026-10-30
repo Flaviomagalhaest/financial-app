@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { atualizadoAs, salvarLancamento, useCadastro, useFila, useHoje, useLancamentos, type LancamentoNaTela, type LeituraDaHoje } from "../dados";
+import { GradeDeFavoritos } from "./GradeDeFavoritos";
 import { AvisoDaFila } from "../lancamentos/AvisoDaFila";
 import { ContasDaSemana } from "../lancamentos/ContasDaSemana";
 import { nomePorId, tituloDoLancamento } from "../lancamentos/apresentacao";
@@ -169,6 +170,7 @@ export function TelaHoje() {
           <ItensEmDestaque itens={dados.itens_em_destaque} />
         </>
       )}
+      <GradeDeFavoritos />
       <ContasDaSemana lancamentos={dados?.contas_da_semana ?? null} aoMudar={buscar} />
     </>
   );
