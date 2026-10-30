@@ -865,6 +865,53 @@ label.caixa > input {
   accent-color: var(--destaque);
 }
 
+/* Favoritos: a grade da Hoje, a ⭐ do novo lançamento e a oferta "Favoritar" depois de salvar. */
+.grade-de-favoritos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
+.favorito-da-grade {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.75rem;
+  border: 1px solid var(--borda);
+  border-radius: 0.75rem;
+  background: var(--superficie);
+  color: var(--texto);
+  text-decoration: none;
+}
+
+.favorito-da-grade span {
+  color: var(--texto-suave);
+}
+
+.repetir.favorito {
+  white-space: nowrap;
+  border-style: solid;
+}
+
+.estrela {
+  align-self: flex-start;
+  background: transparent;
+  color: var(--texto-suave);
+  border: 1px solid var(--borda);
+}
+
+.estrela[aria-pressed="true"] {
+  color: var(--texto);
+  border-color: var(--destaque);
+}
+
+.oferta-de-favoritar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Aba Futuro: o gráfico da projeção (passado à esquerda, futuro sombreado) e a tabela dos meses. */
 .projecao {
   display: flex;

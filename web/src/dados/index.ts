@@ -38,6 +38,7 @@ import {
   type Remessa,
 } from "./fila";
 import { fetchComTempoLimite, ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
+import { comValorPadrao, type DadosDoFavorito, type Favorito, type NovoFavorito, type Sugerido } from "./favoritos";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
@@ -53,6 +54,8 @@ export type Futuro = components["schemas"]["Futuro"];
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovaRecorrencia, NovoLancamento };
+export { identidadeDe, oferecerFavoritar, useOfertaDeFavoritar } from "./favoritos";
+export type { DadosDoFavorito, Favorito, Oferta, Sugerido } from "./favoritos";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
 export type LancamentoNaTela = NovoLancamento & {
@@ -93,6 +96,7 @@ const LEITURAS = {
   "/api/cartoes": () => api.GET("/api/cartoes"),
   "/api/cartoes?arquivados=true": () => api.GET("/api/cartoes", { params: { query: { arquivados: true } } }),
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
+  "/api/favoritos": () => api.GET("/api/favoritos"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -189,12 +193,12 @@ export function atualizadoAs(em: number): string {
   return `atualizado às ${new Date(em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-/** A fila do aparelho, atualizada a cada mudança. */
-export function useFila(): ItemDaFila[] {
-  const [itens, setItens] = useState<ItemDaFila[]>([]);
+/** A fila do aparelho, atualizada a cada mudança; `lida` só depois da primeira leitura. */
+function useFilaLida() {
+  const [estado, setEstado] = useState<{ itens: ItemDaFila[]; lida: boolean }>({ itens: [], lida: false });
   useEffect(() => {
     let ativo = true;
-    const ler = () => void lerFila().then((lidos) => ativo && setItens(lidos));
+    const ler = () => void lerFila().then((lidos) => ativo && setEstado({ itens: lidos, lida: true }));
     ler();
     const parar = ouvirMudancas(ler);
     return () => {
@@ -202,7 +206,11 @@ export function useFila(): ItemDaFila[] {
       parar();
     };
   }, []);
-  return itens;
+  return estado;
+}
+
+export function useFila(): ItemDaFila[] {
+  return useFilaLida().itens;
 }
 
 
@@ -244,9 +252,9 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
 /** Lançamentos do servidor (ou os guardados) com a fila por cima. */
 export function useLancamentos() {
   const { dados, atualizadoEm, semDados } = useResposta(LISTA);
-  const fila = useFila();
+  const { itens: fila, lida } = useFilaLida();
   const lancamentos = useMemo(() => (dados ? naTela(dados, fila) : semDados ? naTela([], fila) : null), [dados, fila, semDados]);
-  return { lancamentos, atualizadoEm, semDados };
+  return { lancamentos, atualizadoEm, semDados, filaLida: lida };
 }
 
 /**
@@ -356,6 +364,18 @@ export function useSugestao(): FonteDeSugestao {
     });
     return fonteDoHistorico([...depois, ...(indice?.sugestoes ?? [])]);
   }, [indice, lancamentos]);
+}
+
+/**
+ * Os favoritos e os sugeridos, para lançar sem internet: a lista que o servidor mandou por último,
+ * com o valor padrão do último lançamento que o aparelho conhece por cima.
+ */
+export function useFavoritos() {
+  const { dados, atualizadoEm, semDados, buscar } = useResposta("/api/favoritos");
+  const { lancamentos, filaLida } = useLancamentos();
+  const favoritos = useMemo(() => comValorPadrao(dados?.favoritos ?? [], lancamentos ?? [], hoje()), [dados, lancamentos]);
+  // `carregado` espera os lançamentos do aparelho: sem eles e sem a fila o valor padrão ainda não é o do último.
+  return { favoritos, sugeridos: dados?.sugeridos ?? [], carregado: !!dados && lancamentos !== null && filaLida, atualizadoEm, semDados, recarregar: buscar };
 }
 
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
@@ -536,6 +556,35 @@ async function recusaDe(pedir: () => Promise<{ data?: unknown; error?: unknown }
   }
 }
 
+/** Favoritos mudam só com internet (ADR 0011): devolvem o motivo da recusa, ou `null` quando o servidor aceitou. */
+async function mudarFavoritos(pedir: () => Promise<{ data?: unknown; error?: unknown; response: Response }>, padrao: string): Promise<string | null> {
+  const motivo = await recusaDe(pedir, padrao);
+  if (motivo === null) await buscarEGuardar("/api/favoritos", LEITURAS["/api/favoritos"]);
+  return motivo;
+}
+
+/** Marca como favorito (a ⭐, o "Favoritar" depois de salvar ou a promoção de um sugerido). */
+export function favoritar(dados: DadosDoFavorito & { id?: string }): Promise<string | null> {
+  const novo: NovoFavorito = { ...dados, id: dados.id ?? crypto.randomUUID() };
+  return mudarFavoritos(() => api.POST("/api/favoritos", { body: novo }), "o servidor recusou o favorito");
+}
+
+export function promoverSugerido({ chave: _chave, usos: _usos, ...dados }: Sugerido): Promise<string | null> {
+  return favoritar(dados);
+}
+
+export function removerFavorito(id: string): Promise<string | null> {
+  return mudarFavoritos(() => api.DELETE("/api/favoritos/{id}", { params: { path: { id } } }), "o servidor recusou remover o favorito");
+}
+
+export function reordenarFavoritos(ids: string[]): Promise<string | null> {
+  return mudarFavoritos(() => api.PUT("/api/favoritos/ordem", { body: { ids } }), "o servidor recusou a nova ordem");
+}
+
+export function dispensarSugerido(chave: string): Promise<string | null> {
+  return mudarFavoritos(() => api.POST("/api/favoritos/sugeridos/dispensar", { body: { chave } }), "o servidor recusou dispensar o sugerido");
+}
+
 /** O planejamento precisa de internet (ADR 0011). Copia os itens de `de` para `mes`, que precisa estar vazio. */
 export function copiarPlanejamento(mes: string, de: string): Promise<string | null> {
   return recusaDe(() => api.POST("/api/planejamento/{mes}/copiar", { params: { path: { mes } }, body: { de } }), "o servidor recusou a cópia");
@@ -557,11 +606,13 @@ export async function contarNaoEnviados(): Promise<number> {
 export const apagarDadosDoAparelho = apagarTudo;
 
 /**
- * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão vem
- * logo depois, para o aparelho tê-lo sem internet mesmo sem ter aberto o novo lançamento.
+ * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão e os
+ * favoritos vêm logo depois, para o aparelho tê-lo sem internet mesmo sem ter aberto o novo lançamento.
  */
 export function iniciarEnvioAutomatico(): () => void {
-  const enviar = () => void enviarAgora().then(() => buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]));
+  // Os favoritos também vêm antes de a rede cair: a fileira do novo lançamento funciona sem internet.
+  const enviar = () =>
+    void enviarAgora().then(() => Promise.all([buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]), buscarEGuardar("/api/favoritos", LEITURAS["/api/favoritos"])]));
   const aoVoltar = () => document.visibilityState === "visible" && enviar();
   enviar();
   window.addEventListener("online", enviar);

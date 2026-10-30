@@ -17,3 +17,8 @@ export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_c
     </span>
   );
 }
+
+/** O nome de um favorito (ou sugerido): a descrição, ou as categorias quando não há descrição. */
+export function tituloDoFavorito(f: { descricao: string; categoria_ids: string[] }, categorias: ComNome[]): string {
+  return f.descricao || f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ");
+}
