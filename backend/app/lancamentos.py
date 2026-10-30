@@ -1135,7 +1135,8 @@ class Confirmacao(BaseModel):
     acao_em: datetime | None = None
 
 
-def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancamento:
+def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancamento:
+    """O previsto vira realizado com os ajustes; serve à rota e à fila (ticket 83)."""
     atual = _atual(conn, id, usuario)
     versoes = _versoes(conn, atual)
     ajustes = {
@@ -1196,7 +1197,7 @@ def confirmar_lancamento(
     """Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
     toque) devolve o gravado; com ajuste diferente é 409 com os campos em conflito e quem
     confirmou, para nada se perder em silêncio."""
-    return _na_rota(request, lambda conn: _confirmar(conn, id, confirmacao, usuario))
+    return _na_rota(request, lambda conn: confirmar(conn, id, confirmacao, usuario))
 
 
 @router.delete(

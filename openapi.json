@@ -2536,6 +2536,30 @@
         "title": "AEscolher",
         "description": "Lançamento com duas ou mais categorias com item no mês e sem escolha explícita."
       },
+      "AcaoConfirmar": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "confirmar",
+            "title": "Acao"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "confirmacao": {
+            "$ref": "#/components/schemas/Confirmacao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "id",
+          "confirmacao"
+        ],
+        "title": "AcaoConfirmar"
+      },
       "AcaoCriar": {
         "properties": {
           "acao": {
@@ -4258,12 +4282,16 @@
                   "$ref": "#/components/schemas/AcaoExcluir"
                 },
                 {
+                  "$ref": "#/components/schemas/AcaoConfirmar"
+                },
+                {
                   "$ref": "#/components/schemas/AcaoCriarParcelamento"
                 }
               ],
               "discriminator": {
                 "propertyName": "acao",
                 "mapping": {
+                  "confirmar": "#/components/schemas/AcaoConfirmar",
                   "criar": "#/components/schemas/AcaoCriar",
                   "criar_parcelamento": "#/components/schemas/AcaoCriarParcelamento",
                   "editar": "#/components/schemas/AcaoEditar",

@@ -20,16 +20,18 @@ import {
   type NovoLancamento,
 } from "./armazem";
 import {
+  CONTAS_DA_SEMANA,
   decidirConflito,
   descartar,
+  enfileirarConfirmar,
   enfileirarExcluir,
   enfileirarSalvar,
   enviarFila,
   ETIQUETA_DO_ENVIO,
   excluirMesmoAssim,
-  guardarConflito,
   lancarDeNovo,
   LISTA,
+  type Ajustes,
   type Remessa,
 } from "./fila";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
@@ -40,10 +42,9 @@ export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
-export type { Campo } from "./fila";
+export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
-export { comoNovo } from "./fila";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
 export type LancamentoNaTela = NovoLancamento & {
@@ -83,6 +84,7 @@ const LEITURAS = {
   "/api/tags": () => api.GET("/api/tags"),
   "/api/cartoes": () => api.GET("/api/cartoes"),
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
+  "/api/contas-da-semana": () => api.GET("/api/contas-da-semana"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -213,6 +215,26 @@ export function useLancamentos() {
   const { dados, atualizadoEm, semDados } = useResposta(LISTA);
   const fila = useFila();
   const lancamentos = useMemo(() => (dados ? naTela(dados, fila) : semDados ? naTela([], fila) : null), [dados, fila, semDados]);
+  return { lancamentos, atualizadoEm, semDados };
+}
+
+/**
+ * Os previstos a confirmar (atrasados e os dos próximos dias), na ordem do servidor, com a fila por
+ * cima: o que se confirmou ou excluiu no aparelho sai, e o editado aparece como ficou.
+ */
+export function useContasDaSemana() {
+  const { dados, atualizadoEm, semDados } = useResposta(CONTAS_DA_SEMANA);
+  const fila = useFila();
+  const lancamentos = useMemo(() => {
+    if (!dados) return null;
+    const ids = new Set(dados.lancamentos.map((l) => l.id));
+    // Só as mudanças destes: o resto da fila não é conta da semana.
+    const mostrados = new Map(naTela(dados.lancamentos, fila.filter((item) => ids.has(item.id))).map((l) => [l.id, l]));
+    return dados.lancamentos.flatMap((l) => {
+      const mostrado = mostrados.get(l.id);
+      return mostrado?.situacao === "previsto" ? [mostrado] : [];
+    });
+  }, [dados, fila]);
   return { lancamentos, atualizadoEm, semDados };
 }
 
@@ -356,6 +378,16 @@ export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<voi
   void enviarAgora();
 }
 
+/**
+ * Confirma o previsto pela fila (ADR 0011) e já tenta subir. Devolve a mudança se ela ainda está na
+ * fila: sem internet, recusada, em conflito ou vencida pela exclusão.
+ */
+export async function confirmarPrevisto(mostrado: LancamentoNaTela, ajustes: Ajustes = {}): Promise<ItemDaFila | undefined> {
+  await enfileirarConfirmar(mostrado, ajustes, baseDe(mostrado));
+  await enviarAgora();
+  return (await lerFila()).find((item) => item.id === mostrado.id);
+}
+
 export const descartarNaoEnviado = descartar;
 
 /** O casal conferiu o "Parece repetido": exige internet, porque não é uma mudança do lançamento. */
@@ -378,7 +410,6 @@ function eEnvia<A extends unknown[]>(mudar: (...args: A) => Promise<void>) {
 export const decidir = eEnvia(decidirConflito);
 export const excluirApesarDoConflito = eEnvia(excluirMesmoAssim);
 export const lancarDeNovoOExcluido = eEnvia(lancarDeNovo);
-export { guardarConflito };
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */
 export async function criarConta(nome: string, tipo: Conta["tipo"]): Promise<boolean> {

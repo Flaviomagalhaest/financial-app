@@ -7,7 +7,6 @@ import {
   lerFila,
   pedido,
   type Base,
-  type Conflito,
   type Guardada,
   type ItemDaFila,
   type Lancamento,
@@ -15,6 +14,7 @@ import {
 } from "./armazem";
 
 export type Acao = components["schemas"]["Lote"]["acoes"][number];
+type ContasDaSemana = components["schemas"]["ContasDaSemana"];
 export type Resultado = components["schemas"]["Resultado"];
 export type Alteracao = components["schemas"]["AlteracaoDeLancamento"];
 export type Campo = components["schemas"]["CampoEmConflito"]["campo"];
@@ -25,6 +25,8 @@ export type Remessa = (acoes: Acao[]) => Promise<Resultado[] | number>;
 export const ETIQUETA_DO_ENVIO = "enviar-fila";
 /** A lista de lançamentos guardada, que o resultado do envio já acerta. */
 export const LISTA = "/api/lancamentos";
+/** Os previstos a confirmar guardados, que o resultado do envio também acerta. */
+export const CONTAS_DA_SEMANA = "/api/contas-da-semana";
 /** O mesmo limite do servidor (`LIMITE_DO_LOTE`). */
 const LIMITE_DO_LOTE = 100;
 /** Os campos que o servidor versiona um a um (`CAMPOS` em `lancamentos.py`). */
@@ -66,9 +68,19 @@ export function alteracao(lancamento: NovoLancamento, base: Base | undefined): A
   return { versao: base?.versao ?? 0, ...mudou };
 }
 
-export function comoNovo(l: Lancamento): NovoLancamento {
+export function comoNovo(l: NovoLancamento): NovoLancamento {
   const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa } = l;
   return { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa };
+}
+
+function salvo(atual: ItemDaFila | undefined, lancamento: NovoLancamento, novo: boolean, base?: Base): Proximo {
+  // A situação escolhida antes (à mão ou ao confirmar) fica enquanto a data não muda, como a tela a mostra.
+  const antes = atual?.conflito ? undefined : atual?.lancamento;
+  if (!lancamento.situacao && antes?.situacao && antes.data === lancamento.data) lancamento = { ...lancamento, situacao: antes.situacao };
+  return atual?.acao === "criar" || novo
+    ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, base: atual?.base }
+    : // Sobre um conflito, a tela já mostrava a versão do servidor.
+      { acao: "editar", lancamento, base: atual?.conflito?.lancamento ?? atual?.base ?? base };
 }
 
 /**
@@ -76,12 +88,26 @@ export function comoNovo(l: Lancamento): NovoLancamento {
  * conflito. `base` é a versão do servidor que a tela mostrava; a primeira mudança a guarda.
  */
 export function enfileirarSalvar(lancamento: NovoLancamento, novo: boolean, base?: Base): Promise<void> {
-  return mudar(lancamento.id, (atual) =>
-    atual?.acao === "criar" || novo
-      ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, base: atual?.base }
-      : // Sobre um conflito, a tela já mostrava a versão do servidor.
-        { acao: "editar", lancamento, base: atual?.conflito?.lancamento ?? atual?.base ?? base },
-  );
+  return mudar(lancamento.id, (atual) => salvo(atual, lancamento, novo, base));
+}
+
+/** O que a pessoa acertou ao confirmar o previsto; o que falta fica como estava. */
+export type Ajustes = Partial<Pick<NovoLancamento, "valor_centavos" | "data" | "conta_id">>;
+const AJUSTAVEIS = ["valor_centavos", "data", "conta_id"] as const;
+
+/**
+ * Confirmar o previsto que a tela mostrava. Sobre uma mudança que ainda não subiu, muda o pedido
+ * que já está lá (o criar sobe realizado, a edição leva a situação); senão, sobe como confirmação
+ * sobre a versão `base`.
+ */
+export function enfileirarConfirmar(mostrado: NovoLancamento, ajustes: Ajustes, base?: Base): Promise<void> {
+  return mudar(mostrado.id, (atual) => {
+    const antes = atual?.lancamento && !atual.conflito ? atual.lancamento : comoNovo(mostrado);
+    const lancamento: NovoLancamento = { ...antes, ...ajustes, situacao: "realizado" };
+    return !atual || (atual.acao === "confirmar" && !atual.conflito)
+      ? { acao: "confirmar", lancamento, base: atual?.base ?? base }
+      : salvo(atual, lancamento, false, base);
+  });
 }
 
 /** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
@@ -138,37 +164,6 @@ export function ordenar(lista: Lancamento[]): Lancamento[] {
   return lista.sort((a, b) => b.data.localeCompare(a.data) || b.criado_em.localeCompare(a.criado_em));
 }
 
-/** Põe na lista guardada a versão do servidor; enquanto o conflito espera, é a que se vê. */
-async function trocarNaLista(respostas: IDBObjectStore, lancamento: Lancamento) {
-  const guardada: Guardada<Lancamento[]> | undefined = await pedido(respostas.get(LISTA));
-  if (!guardada) return;
-  const lista = guardada.dados.filter((l) => l.id !== lancamento.id);
-  await pedido(respostas.put({ dados: ordenar([...lista, lancamento]), em: guardada.em }, LISTA));
-}
-
-/**
- * A confirmação feita direto na API deu conflito (ticket 43): ela entra na fila como edição
- * sobre o previsto que a tela mostrava, já em conflito, para a mesma tela de decisão.
- */
-export function guardarConflito(lancamento: NovoLancamento, base: Base, conflito: Conflito): Promise<void> {
-  return emTransacao("readwrite", async (fila, respostas) => {
-    const atual: ItemDaFila | undefined = await pedido(fila.get(lancamento.id));
-    await pedido(
-      fila.put({
-        id: lancamento.id,
-        acao: "editar",
-        lancamento,
-        base,
-        conflito,
-        desde: atual?.desde ?? Date.now(),
-        feitoEm: Date.now(),
-        revisao: (atual?.revisao ?? 0) + 1,
-      }),
-    );
-    await trocarNaLista(respostas, conflito.lancamento);
-  });
-}
-
 /** Recusado, em conflito ou vencido pela exclusão: não sobe até a pessoa decidir. */
 export const esperaAPessoa = (item: ItemDaFila) => !!(item.recusa || item.conflito || item.exclusao);
 
@@ -180,6 +175,12 @@ function acoesDo(item: ItemDaFila): Acao[] {
   // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
   const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
+  if (item.acao === "confirmar") {
+    // Só os ajustes que a pessoa fez, sobre a versão que a tela mostrava, como na rota de confirmar.
+    const ajustes: Ajustes = {};
+    for (const campo of AJUSTAVEIS) if (item.lancamento![campo] !== item.base?.[campo]) Object.assign(ajustes, { [campo]: item.lancamento![campo] });
+    return [{ acao: "confirmar", id: item.id, confirmacao: { versao: item.base?.versao, ...ajustes, acao_em } }];
+  }
   const lancamento = { ...item.lancamento!, acao_em };
   const editar: Acao = { acao: "editar", id: item.id, alteracao: { ...alteracao(lancamento, item.base), acao_em } };
   if (item.acao === "editar") return [editar];
@@ -191,8 +192,13 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
   await emTransacao("readwrite", async (fila, respostas) => {
     const guardada: Guardada<Lancamento[]> | undefined = await pedido(respostas.get(LISTA));
     let lista = guardada?.dados ?? [];
+    const semana: Guardada<ContasDaSemana> | undefined = await pedido(respostas.get(CONTAS_DA_SEMANA));
+    let previstos = semana?.dados.lancamentos ?? [];
     for (const [i, enviado] of enviados.entries()) {
       const { resultado, motivo, lancamento, campos, exclusao } = resultados[i];
+      // Nas contas da semana, o previsto fica com a versão do servidor; o confirmado ou excluído sai.
+      if (resultado !== "recusada")
+        previstos = previstos.flatMap((l) => (l.id !== enviado.id ? [l] : lancamento?.situacao === "previsto" ? [lancamento] : []));
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       const intacto = atual?.revisao === enviado.revisao;
       if (resultado === "recusada") {
@@ -222,6 +228,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, base: lancamento ?? atual.base }));
     }
     if (guardada) await pedido(respostas.put({ dados: ordenar(lista), em: guardada.em }, LISTA));
+    if (semana) await pedido(respostas.put({ dados: { ...semana.dados, lancamentos: previstos }, em: semana.em }, CONTAS_DA_SEMANA));
   });
 }
 

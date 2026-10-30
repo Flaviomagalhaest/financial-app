@@ -104,3 +104,89 @@ test("confirma as contas da semana em um toque ou ajustando, e só o realizado m
   await expect(pagamento).not.toContainText("previsto");
   await expect(luzNaLista).not.toContainText("atrasado");
 });
+
+const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: nome }).click();
+
+test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe uma vez só", async ({ page, context }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const [conta, luz, aluguel, agua] = [`Corrente ${s}`, `Luz ${s}`, `Aluguel ${s}`, `Água ${s}`];
+  await page.goto("/#/contas-e-categorias");
+  await entrar(page);
+  await cadastrar(page, "Nova conta", conta, "corrente");
+  await cadastrar(page, "Nova categoria", luz, "despesa");
+  await lancar(page, conta, { tipo: "Despesa", teclas: ["7", "0", "00"], categoria: luz, descricao: aluguel, data: dia(-1), previsto: true });
+  await lancar(page, conta, { tipo: "Despesa", teclas: ["9", "0", "00"], categoria: luz, descricao: agua, data: dia(2) });
+  await aba(page, "Hoje");
+  const bloco = page.getByRole("region", { name: "Contas da semana" });
+  const minhas = bloco.getByRole("listitem").filter({ hasText: s });
+  await expect(minhas).toHaveCount(2);
+
+  // Sem internet, a Hoje aberta de novo mostra as contas guardadas, com a hora delas.
+  await context.setOffline(true);
+  await aba(page, "Histórico");
+  await aba(page, "Hoje");
+  await expect(bloco).toContainText(/Sem internet: atualizado às \d\d:\d\d/);
+  await expect(minhas).toHaveCount(2);
+
+  // Confirmar em um toque e ajustando: os dois saem do bloco e esperam na fila.
+  await bloco.getByRole("button", { name: `Confirmar ${aluguel}` }).click();
+  await expect(minhas).toHaveCount(1);
+  await bloco.getByRole("button", { name: `Ajustar ${agua}` }).click();
+  await page.getByRole("button", { name: "1", exact: true }).click();
+  await bloco.getByRole("group", { name: `Ajuste de ${agua}` }).getByLabel("Data").fill(dia(0));
+  await bloco.getByRole("button", { name: "Confirmar com ajuste" }).click();
+  await expect(minhas).toHaveCount(0);
+  await expect(bloco.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByTestId("nao-enviados")).toContainText("2 lançamentos não enviados");
+
+  // No Histórico, já realizados, com o ajuste e o ⏳.
+  await aba(page, "Histórico");
+  const linhaDoAluguel = page.getByRole("listitem").filter({ hasText: aluguel });
+  const linhaDaAgua = page.getByRole("listitem").filter({ hasText: agua });
+  await expect(linhaDoAluguel).toContainText("⏳ não enviado");
+  await expect(linhaDoAluguel).not.toContainText("previsto");
+  await expect(linhaDaAgua).toContainText("− R$ 900,01");
+  await expect(linhaDaAgua).toContainText(porExtenso(dia(0)));
+  await expect(linhaDaAgua).toContainText("⏳ não enviado");
+  await expect(linhaDaAgua).not.toContainText("previsto");
+
+  // Editar o confirmado que ainda não subiu muda o pedido e não desfaz a confirmação.
+  await linhaDoAluguel.getByRole("link", { name: `Editar ${aluguel}` }).click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(`${aluguel} de outubro`);
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(linhaDoAluguel).toContainText(`${aluguel} de outubro`);
+  await expect(linhaDoAluguel).toContainText("⏳ não enviado");
+  await expect(linhaDoAluguel).not.toContainText("previsto");
+
+  // O servidor grava o lote, mas a resposta não chega: reenviar não confirma duas vezes.
+  let perdidas = 0;
+  await page.route("**/api/lancamentos/lote", async (rota) => {
+    if (perdidas > 0) return rota.continue();
+    perdidas++;
+    await rota.fetch();
+    await rota.abort("connectionreset");
+  });
+  await aba(page, "Hoje");
+  await context.setOffline(false);
+  await expect.poll(() => perdidas).toBe(1);
+  await expect(page.getByTestId("nao-enviados")).toContainText("2 lançamentos não enviados");
+  await page.getByRole("button", { name: "Enviar agora" }).click();
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await expect(minhas).toHaveCount(0);
+
+  await page.reload();
+  await expect(bloco.getByTestId("quantas-contas")).toBeVisible();
+  await expect(minhas).toHaveCount(0);
+  await aba(page, "Histórico");
+  await expect(linhaDoAluguel).toHaveCount(1);
+  await expect(linhaDoAluguel).toContainText(`${aluguel} de outubro`);
+  await expect(linhaDoAluguel).toContainText("− R$ 70,00");
+  await expect(linhaDoAluguel).not.toContainText("não enviado");
+  await expect(linhaDoAluguel).not.toContainText("previsto");
+  await expect(linhaDaAgua).toHaveCount(1);
+  await expect(linhaDaAgua).toContainText("− R$ 900,01");
+  await page.goto("/#/contas-e-categorias");
+  await expect(page.getByRole("listitem").filter({ hasText: conta })).toContainText(/-R\$ 970,01/);
+});
