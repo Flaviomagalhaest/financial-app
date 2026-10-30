@@ -1,7 +1,7 @@
 # Confirmar previsto sem internet pela fila
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 43
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Opus
