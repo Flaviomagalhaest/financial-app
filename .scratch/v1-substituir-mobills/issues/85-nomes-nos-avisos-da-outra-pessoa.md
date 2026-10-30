@@ -1,7 +1,7 @@
 # Nomes nos avisos que ainda dizem "a outra pessoa"
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,7 +15,7 @@ Trocar "a outra pessoa" pelo nome nos avisos que o ticket 41 não tocou, com `us
 
 ## Checklist
 
-- [ ] `AvisoDaFila.tsx`: "N excluído pela outra pessoa" passa a dizer quem excluiu
-- [ ] `ContasDaSemana.tsx`: "A outra pessoa excluiu este lançamento." passa a dizer o nome (o corpo do 410 traz `excluido_por`)
-- [ ] Ajustar os testes de navegador que citam esses textos (`web/e2e/conflito.spec.ts`)
+- [x] `AvisoDaFila.tsx`: "N excluído pela outra pessoa" passa a dizer quem excluiu
+- [x] `ContasDaSemana.tsx`: "A outra pessoa excluiu este lançamento." passa a dizer o nome (o corpo do 410 traz `excluido_por`)
+- [x] Ajustar os testes de navegador que citam esses textos (`web/e2e/conflito.spec.ts`)
 - [ ] Verificações do projeto rodando e PR aberto para `main`

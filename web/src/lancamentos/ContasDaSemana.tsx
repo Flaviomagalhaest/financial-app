@@ -45,8 +45,9 @@ export function ContasDaSemana({ lancamentos, aoMudar }: Props) {
       if (response.status === 410) {
         setAjustando(null);
         await aoMudar();
-        const { excluido_por: por } = (error ?? {}) as { excluido_por?: string };
-        return setErro(`${nomeDe(por)} excluiu este lançamento.`);
+        const exclusao = error && "excluido_por" in error ? error : undefined;
+        const quem = exclusao?.por_voce ? "Você" : nomeDe(exclusao?.excluido_por);
+        return setErro(`${quem[0].toUpperCase()}${quem.slice(1)} excluiu este lançamento.`);
       }
       if (error) return setErro("O servidor recusou a confirmação.");
       setAjustando(null);

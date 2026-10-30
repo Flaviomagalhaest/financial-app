@@ -25,11 +25,12 @@ export function AvisoDaFila() {
 
   const atrasado = agora - fila[0].desde > AVISO_DE_NAO_ENVIADO_MS;
   const contar = (n: number, um: string, varios: string) => (n === 0 ? null : `${n} ${n === 1 ? um : varios}`);
-  const excluidos = fila.filter((item) => item.exclusao);
-  const quemExcluiu = [...new Set(excluidos.map((item) => (item.exclusao?.por_voce ? "você" : nomeDe(item.exclusao?.excluido_por))))].join(" e ");
+  const exclusoes = fila.flatMap((item) => (item.exclusao ? [item.exclusao] : []));
+  const quemExcluiu = [...new Set(exclusoes.map((e) => (e.por_voce ? "você" : nomeDe(e.excluido_por))))].join(" e ");
+  const excluidos = contar(exclusoes.length, "excluído", "excluídos");
   const esperando = [
     contar(fila.filter((item) => item.recusa).length, "recusado", "recusados"),
-    contar(excluidos.length, "excluído", "excluídos") && `${contar(excluidos.length, "excluído", "excluídos")} por ${quemExcluiu}`,
+    excluidos && `${excluidos} por ${quemExcluiu}`,
   ].filter(Boolean);
 
   async function enviar() {
