@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api/cliente";
 import { Casca } from "./casca/Casca";
 import { apagarDadosDoAparelho, contarNaoEnviados, iniciarEnvioAutomatico } from "./dados";
-import { AvisoDaFila } from "./lancamentos/AvisoDaFila";
 import { sair, TelaDeLogin, useSessao } from "./login";
 
 type Estado = "verificando" | "no ar" | "sem conexão";
@@ -54,7 +53,6 @@ function Inicio({ email }: { email: string }) {
       onSair={() => void sairDaConta()}
       hoje={
         <>
-          <AvisoDaFila />
           <p data-testid="estado-da-api">{textos[estado]}</p>
           <button onClick={() => void verificar()}>Verificar de novo</button>
         </>
