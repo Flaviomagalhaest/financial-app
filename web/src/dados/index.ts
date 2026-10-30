@@ -41,6 +41,7 @@ export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
 export type LeituraDoMes = components["schemas"]["LeituraDoMes"];
 export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
+export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
@@ -118,6 +119,11 @@ export function useMes(mes: string) {
 /** O modelo padrão do planejamento, que "Aplicar modelo padrão" copia para um mês vazio. */
 export function useModeloPadrao() {
   return useRespostaDe<{ itens: ItemDoModelo[] }>("/api/planejamento/modelo", () => api.GET("/api/planejamento/modelo"));
+}
+
+/** A leitura da tela Hoje, em uma chamada; sem internet, a última guardada. */
+export function useHoje() {
+  return useRespostaDe<LeituraDaHoje>("/api/hoje", () => api.GET("/api/hoje"));
 }
 
 /** O limite comprometido e disponível do cartão titular (o adicional divide o dele). */

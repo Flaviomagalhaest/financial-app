@@ -2040,6 +2040,29 @@
         }
       }
     },
+    "/api/hoje": {
+      "get": {
+        "summary": "Ler Hoje",
+        "operationId": "ler_hoje",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hoje"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/pessoas": {
       "get": {
         "summary": "Listar Pessoas",
@@ -4017,6 +4040,80 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "Hoje": {
+        "properties": {
+          "dia": {
+            "type": "string",
+            "format": "date",
+            "title": "Dia"
+          },
+          "mes": {
+            "type": "string",
+            "title": "Mes"
+          },
+          "planejado_centavos": {
+            "type": "integer",
+            "title": "Planejado Centavos"
+          },
+          "ainda_da_para_gastar_centavos": {
+            "type": "integer",
+            "title": "Ainda Da Para Gastar Centavos"
+          },
+          "ajustes_de_fatura_centavos": {
+            "type": "integer",
+            "title": "Ajustes De Fatura Centavos"
+          },
+          "a_escolher": {
+            "items": {
+              "$ref": "#/components/schemas/AEscolher"
+            },
+            "type": "array",
+            "title": "A Escolher"
+          },
+          "lancamentos_a_escolher": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Lancamentos A Escolher"
+          },
+          "contas_da_semana": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Contas Da Semana"
+          },
+          "faturas_que_vencem": {
+            "items": {
+              "$ref": "#/components/schemas/Fatura"
+            },
+            "type": "array",
+            "title": "Faturas Que Vencem"
+          },
+          "itens_em_destaque": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoPlanejamento"
+            },
+            "type": "array",
+            "title": "Itens Em Destaque"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dia",
+          "mes",
+          "planejado_centavos",
+          "ainda_da_para_gastar_centavos",
+          "ajustes_de_fatura_centavos",
+          "a_escolher",
+          "lancamentos_a_escolher",
+          "contas_da_semana",
+          "faturas_que_vencem",
+          "itens_em_destaque"
+        ],
+        "title": "Hoje"
       },
       "IndiceDeSugestao": {
         "properties": {

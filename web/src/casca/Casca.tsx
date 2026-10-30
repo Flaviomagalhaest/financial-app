@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Configuracoes } from "../configuracoes/Configuracoes";
-import { ContasDaSemana } from "../lancamentos/ContasDaSemana";
+import { TelaHoje } from "../hoje/TelaHoje";
 import { ListaDeLancamentos } from "../lancamentos/ListaDeLancamentos";
 import { NovoLancamento } from "../lancamentos/NovoLancamento";
 import { TelaDeContasECategorias } from "../contas-e-categorias/TelaDeContasECategorias";
@@ -52,7 +52,7 @@ export function Casca({ email, onSair, hoje }: Props) {
             <a className="botao" href="#/novo">
               + Novo lançamento
             </a>
-            <ContasDaSemana />
+            <TelaHoje />
             {hoje}
             <a href="#/contas-e-categorias">Contas e categorias</a>
           </section>

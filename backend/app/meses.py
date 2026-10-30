@@ -9,11 +9,11 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from app import faturas, lancamentos
+from app import faturas, lancamentos, planejamento
 from app.banco import conectar
 from app.lancamentos import MES_EM_QUE_CONTA, VALOR_COM_SINAL, url_do_banco
 from app.login import UsuarioLogado
-from app.planejamento import Mes, Planejamento, planejamento_do_mes, primeiro_dia
+from app.planejamento import Mes, Planejamento, primeiro_dia
 from app.recorrencias import mais_meses
 
 router = APIRouter(prefix="/api")
@@ -295,7 +295,7 @@ def _porcentagem(parte: int, todo: int) -> int | None:
     return round(parte * 100 / todo) if todo else None
 
 
-def _fechamento(conn, dia: date, planejamento: Planejamento) -> Fechamento:
+def _fechamento(conn, dia: date, do_mes: Planejamento) -> Fechamento:
     receitas, despesas = (s.realizado_centavos for s in _somas(conn, dia))
     anterior = _somas(conn, primeiro_dia(_outro_mes(dia, -1)))[1].realizado_centavos
     ano_passado = _somas(conn, primeiro_dia(_outro_mes(dia, -12)))[1].realizado_centavos
@@ -313,10 +313,10 @@ def _fechamento(conn, dia: date, planejamento: Planejamento) -> Fechamento:
         id
         for (id,) in conn.execute(
             "SELECT id FROM categorias WHERE tipo = 'despesa' AND id = ANY(%s)",
-            ([i.categoria_id for i in planejamento.itens],),
+            ([i.categoria_id for i in do_mes.itens],),
         )
     }
-    itens = [i for i in planejamento.itens if i.categoria_id in de_despesa]
+    itens = [i for i in do_mes.itens if i.categoria_id in de_despesa]
     acima = sorted(
         (
             ItemAcima(categoria_id=i.categoria_id, passou_centavos=-i.ainda_da_para_gastar_centavos)
@@ -349,7 +349,7 @@ def _ler_mes(conn, mes: str) -> LeituraDoMes:
         (dia,),
     ).fetchone()
     situacao = "passado" if dia < hoje else "atual" if dia == hoje else "futuro"
-    planejamento = planejamento_do_mes(conn, mes)
+    do_mes = planejamento.ler_mes(conn, mes)
     return LeituraDoMes(
         mes=mes,
         situacao=situacao,
@@ -361,10 +361,10 @@ def _ler_mes(conn, mes: str) -> LeituraDoMes:
             ),
         ),
         receitas=receitas,
-        planejamento=planejamento,
+        planejamento=do_mes,
         comparacao=_comparacao(conn, dia),
         ranking=_ranking(conn, dia),
-        fechamento=_fechamento(conn, dia, planejamento) if situacao == "passado" else None,
+        fechamento=_fechamento(conn, dia, do_mes) if situacao == "passado" else None,
     )
 
 
