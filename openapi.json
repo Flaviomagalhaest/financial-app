@@ -2040,6 +2040,91 @@
         }
       }
     },
+    "/api/historico": {
+      "get": {
+        "summary": "Ler Historico",
+        "operationId": "ler_historico",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metrica",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "despesas",
+                "receitas",
+                "sobra",
+                "categoria"
+              ],
+              "type": "string",
+              "title": "Metrica"
+            }
+          },
+          {
+            "name": "categoria_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria Id"
+            }
+          },
+          {
+            "name": "mes_do_ano",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 12,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mes Do Ano"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Historico"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/hoje": {
       "get": {
         "summary": "Ler Hoje",
@@ -3406,6 +3491,47 @@
         "title": "AlteracaoDeRecorrencia",
         "description": "Os campos da regra que mudam \"daqui para frente\", a partir da ocorrência dada: a regra\npassa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,\nsão refeitos. O que já foi realizado e os previstos de antes ficam como estão. Campo\nausente fica como está; `pessoa` vazia passa a regra para o conjunto."
       },
+      "AnoDaSerie": {
+        "properties": {
+          "ano": {
+            "type": "integer",
+            "title": "Ano"
+          },
+          "centavos": {
+            "type": "integer",
+            "title": "Centavos"
+          },
+          "parcial": {
+            "type": "boolean",
+            "title": "Parcial"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ano",
+          "centavos",
+          "parcial"
+        ],
+        "title": "AnoDaSerie"
+      },
+      "AnoDoMesmoMes": {
+        "properties": {
+          "ano": {
+            "type": "integer",
+            "title": "Ano"
+          },
+          "centavos": {
+            "type": "integer",
+            "title": "Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ano",
+          "centavos"
+        ],
+        "title": "AnoDoMesmoMes"
+      },
       "Antecipacao": {
         "properties": {
           "parcelas": {
@@ -4424,6 +4550,69 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "Historico": {
+        "properties": {
+          "metrica": {
+            "type": "string",
+            "enum": [
+              "despesas",
+              "receitas",
+              "sobra",
+              "categoria"
+            ],
+            "title": "Metrica"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "doze_meses": {
+            "items": {
+              "$ref": "#/components/schemas/MesDaSerie"
+            },
+            "type": "array",
+            "title": "Doze Meses"
+          },
+          "total_centavos": {
+            "type": "integer",
+            "title": "Total Centavos"
+          },
+          "total_anterior_centavos": {
+            "type": "integer",
+            "title": "Total Anterior Centavos"
+          },
+          "por_ano": {
+            "items": {
+              "$ref": "#/components/schemas/AnoDaSerie"
+            },
+            "type": "array",
+            "title": "Por Ano"
+          },
+          "mesmo_mes": {
+            "$ref": "#/components/schemas/MesmoMesEmCadaAno"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metrica",
+          "categoria_id",
+          "doze_meses",
+          "total_centavos",
+          "total_anterior_centavos",
+          "por_ano",
+          "mesmo_mes"
+        ],
+        "title": "Historico",
+        "description": "Tudo o que a aba Histórico mostra de uma métrica, numa leitura só. A despesa leva os\najustes de fatura e o estorno diminui; a categoria conta o lançamento inteiro e não leva o\najuste (ADR 0008); a sobra são as receitas menos as despesas."
+      },
       "Hoje": {
         "properties": {
           "dia": {
@@ -5134,6 +5323,29 @@
         ],
         "title": "MesDaProjecao"
       },
+      "MesDaSerie": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "title": "Mes"
+          },
+          "centavos": {
+            "type": "integer",
+            "title": "Centavos"
+          },
+          "anterior_centavos": {
+            "type": "integer",
+            "title": "Anterior Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "centavos",
+          "anterior_centavos"
+        ],
+        "title": "MesDaSerie"
+      },
       "MesDoLimite": {
         "properties": {
           "mes": {
@@ -5189,6 +5401,27 @@
           "saldo_centavos"
         ],
         "title": "MesDoPassado"
+      },
+      "MesmoMesEmCadaAno": {
+        "properties": {
+          "mes_do_ano": {
+            "type": "integer",
+            "title": "Mes Do Ano"
+          },
+          "anos": {
+            "items": {
+              "$ref": "#/components/schemas/AnoDoMesmoMes"
+            },
+            "type": "array",
+            "title": "Anos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes_do_ano",
+          "anos"
+        ],
+        "title": "MesmoMesEmCadaAno"
       },
       "ModeloPadrao": {
         "properties": {

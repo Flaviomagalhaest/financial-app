@@ -49,6 +49,7 @@ export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
 export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type Futuro = components["schemas"]["Futuro"];
+export type Historico = components["schemas"]["Historico"];
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
@@ -144,6 +145,13 @@ export function useLimite(cartaoId: string) {
 /** A projeção de saldo da aba Futuro: o realizado no passado e as duas linhas adiante. */
 export function useFuturo() {
   return useRespostaDe<Futuro>("/api/futuro", () => api.GET("/api/futuro"));
+}
+
+/** A evolução de uma métrica na aba Histórico (uma leitura por métrica e mês), guardada para mostrar sem internet. */
+export function useHistorico(metrica: Historico["metrica"], categoriaId: string | undefined, mesDoAno: number) {
+  const query = { metrica, categoria_id: categoriaId, mes_do_ano: mesDoAno };
+  const caminho = `/api/historico?metrica=${metrica}&categoria_id=${categoriaId ?? ""}&mes_do_ano=${mesDoAno}`;
+  return useRespostaDe<Historico>(caminho, () => api.GET("/api/historico", { params: { query } }));
 }
 
 function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
