@@ -46,6 +46,8 @@ export function Configuracoes() {
   return (
     <section className="configuracoes">
       <h2>Configurações</h2>
+      <h3>Planejamento</h3>
+      <a href="#/modelo-do-planejamento">Modelo padrão do planejamento</a>
       <h3>Exportar</h3>
       <p className="vazio">
         O backup traz todas as tabelas com os ids originais. A planilha traz os lançamentos de todo

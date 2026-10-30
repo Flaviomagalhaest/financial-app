@@ -172,7 +172,7 @@ Resumo de um mês que já passou: receitas, despesas, sobra, o que foi guardado,
 _Avoid_: balanço, extrato do mês
 
 **Projeção de saldo**:
-Estimativa da soma das contas no fim de cada mês que vem, em duas linhas: o saldo de hoje mais os previstos, e a mesma linha descontando o que ainda falta de cada item do planejamento.
+Estimativa da soma das contas no fim de cada mês que vem, em duas linhas: o saldo de hoje mais os previstos, com cada fatura descontada no mês dela, e a mesma linha descontando o que ainda falta de cada item do planejamento. No passado, mostra o saldo realizado no fim de cada mês, desde a abertura das contas.
 _Avoid_: previsão de saldo, fluxo de caixa
 
 ### Contas e cartões

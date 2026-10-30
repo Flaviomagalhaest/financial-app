@@ -1,6 +1,7 @@
 {
   "favoritos": { "sugeridos": 3, "usosMinimos": 5 },
   "sugestao": { "letrasMinimas": 2, "maximoDeSugestoes": 3 },
+  "tempoLimiteDaRedeSegundos": 10,
   "avisoDeNaoEnviadoHoras": 24,
   "pareceRepetidoDias": 1,
   "desfazerEdicaoEmLoteDias": 30,
