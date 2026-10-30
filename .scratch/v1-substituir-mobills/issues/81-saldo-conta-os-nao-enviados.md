@@ -1,7 +1,7 @@
 # Saldo da conta conta os não enviados do aparelho
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -15,7 +15,13 @@ O saldo de cada conta mostrado no aparelho soma, sobre o saldo guardado do servi
 
 ## Checklist
 
-- [ ] Saldo no aparelho = saldo guardado + efeito da fila, numa função da camada de dados usada por toda tela que mostra saldo
-- [ ] ⏳ ao lado do saldo que inclui não enviados
-- [ ] Teste de navegador: sem internet, lançar uma despesa realizada muda o saldo da conta; ao enviar, o saldo do servidor fica igual
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Saldo no aparelho = saldo guardado + efeito da fila, numa função da camada de dados usada por toda tela que mostra saldo
+- [x] ⏳ ao lado do saldo que inclui não enviados
+- [x] Teste de navegador: sem internet, lançar uma despesa realizada muda o saldo da conta; ao enviar, o saldo do servidor fica igual
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas da implementação
+
+- `web/src/dados/saldo.ts` (`saldoNoAparelho`, sem React) soma, sobre `saldo_centavos`, a diferença entre como cada item da fila fica no aparelho e como o servidor o tem; `useCadastro` e `useContasComArquivadas` entregam as contas já com o saldo do aparelho e `saldoNaoEnviado` (⏳ em `TelaDeContasECategorias`). Só entram lançamentos (transferência precisa de internet); conflito e exclusão pela outra pessoa não mexem; a recusa conta, como na lista.
+- Teste de navegador em `web/e2e/sem-internet.spec.ts` (criar, excluir e editar offline; igual ao servidor depois de enviar).
+- `cartoes.spec.ts:87` já falhava na `main` (espera pelo token na recarga), sem relação com este ticket.

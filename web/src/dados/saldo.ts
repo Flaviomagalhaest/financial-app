@@ -22,7 +22,8 @@ function efeito(l: ParaOSaldo | undefined, conta: ContaComSaldo): number {
 /**
  * Saldo guardado + (como cada lançamento da fila fica no aparelho − como o servidor o tem):
  * criar soma, excluir tira, editar vale a diferença. `naTela` é a lista do servidor com a fila por
- * cima; mudança em conflito ou já excluída pela outra pessoa não mexe no saldo.
+ * cima; só lançamentos entram, porque transferência precisa de internet (ADR 0011). A mudança recusada
+ * conta, como na lista, que a mostra com ⏳ até ser corrigida ou descartada; a em conflito ou já excluída pela outra pessoa não mexe no saldo.
  */
 export function saldoNoAparelho(
   conta: ContaComSaldo,

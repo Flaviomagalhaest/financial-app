@@ -301,26 +301,33 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
     await page.getByRole("link", { name: "Contas e categorias" }).click();
   };
   await verSaldo();
-  await expect(saldo()).toContainText("R$ 1,00");
+  await expect(saldo()).toContainText("-R$ 1,00");
   await expect(saldo()).not.toContainText("⏳");
 
   await context.setOffline(true);
   await lancar(page, { teclas: ["4", "5", "00"], conta, categoria: mercado, descricao: `Padaria ${s}` });
   await verSaldo();
-  await expect(saldo()).toContainText("R$ 46,00");
+  await expect(saldo()).toContainText("-R$ 46,00");
   await expect(saldo()).toContainText("⏳");
 
   await aba(page, "Histórico");
   page.once("dialog", (dialogo) => void dialogo.accept());
   await page.getByRole("button", { name: `Excluir Enviado ${s}` }).click();
   await verSaldo();
-  await expect(saldo()).toContainText("R$ 45,00");
-  await expect(saldo()).not.toContainText("R$ 46,00");
+  await expect(saldo()).toContainText("-R$ 45,00");
+
+  // Editar vale a diferença: 45,00 vira 450,07.
+  await aba(page, "Histórico");
+  await page.getByRole("link", { name: `Editar Padaria ${s}` }).click();
+  await page.getByRole("button", { name: "7", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await verSaldo();
+  await expect(saldo()).toContainText("-R$ 450,07");
 
   await context.setOffline(false);
   await expect(saldo()).not.toContainText("⏳");
-  await expect(saldo()).toContainText("R$ 45,00");
+  await expect(saldo()).toContainText("-R$ 450,07");
   await page.reload();
-  await expect(saldo()).toContainText("R$ 45,00");
+  await expect(saldo()).toContainText("-R$ 450,07");
   await expect(saldo()).not.toContainText("⏳");
 });
