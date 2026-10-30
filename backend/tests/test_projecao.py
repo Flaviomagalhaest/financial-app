@@ -149,21 +149,26 @@ def test_com_planejamento_desconta_o_que_falta_de_cada_item_sem_compensar_o_esto
     assert com_planejamento["2026-06-01"] == -95000
 
 
-def test_passado_mostra_o_saldo_realizado_no_fim_de_cada_mes_desde_a_abertura(casal: Casal):
-    corrente = casal.conta()
-    criada = casal.pedir(
+def conta_com_abertura(casal: Casal, nome: str, saldo: int, data: str) -> str:
+    resposta = casal.pedir(
         "flavio",
         "POST",
         "/api/contas",
         json={
-            "nome": "Poupança",
-            "tipo": "poupanca",
-            "saldo_abertura_centavos": 50000,
-            "data_abertura": "2026-02-01",
+            "nome": nome,
+            "tipo": "corrente",
+            "saldo_abertura_centavos": saldo,
+            "data_abertura": data,
         },
     )
-    assert criada.status_code == 201, criada.text
-    poupanca = criada.json()["id"]
+    assert resposta.status_code == 201, resposta.text
+    return resposta.json()["id"]
+
+
+def test_passado_mostra_o_saldo_realizado_no_fim_de_cada_mes_desde_a_abertura(casal: Casal):
+    corrente = conta_com_abertura(casal, "Corrente", 10000, "2025-12-31")
+    # A poupança abriu depois: entra na soma só a partir da abertura dela.
+    poupanca = conta_com_abertura(casal, "Poupança", 50000, "2026-02-15")
     cartao = novo_cartao(casal)["id"]
     lancar(casal, corrente, "2026-01-15", 100000, tipo="receita")
     lancar(casal, corrente, "2026-02-10", 30000)
@@ -190,12 +195,13 @@ def test_passado_mostra_o_saldo_realizado_no_fim_de_cada_mes_desde_a_abertura(ca
     passado = {m["mes"]: m["saldo_centavos"] for m in projecao["passado"]}
     assert projecao["passado"][0]["mes"] == "2025-04-01"
     assert len(passado) == 12
-    # Antes da abertura da poupança não há saldo das contas para mostrar.
-    assert passado["2025-12-01"] is None
-    assert passado["2026-01-01"] is None
-    assert passado["2026-02-01"] == 120000
-    assert passado["2026-03-01"] == 115000
-    assert projecao["saldo_hoje_centavos"] == 105000
+    # Antes da primeira abertura não há saldo das contas para mostrar (ADR 0007).
+    assert passado["2025-11-01"] is None
+    assert passado["2025-12-01"] == 10000
+    assert passado["2026-01-01"] == 110000
+    assert passado["2026-02-01"] == 130000
+    assert passado["2026-03-01"] == 125000
+    assert projecao["saldo_hoje_centavos"] == 115000
 
 
 def test_parcelas_e_recorrencia_caem_cada_uma_no_seu_mes_e_o_pagamento_previsto_nao_repete(

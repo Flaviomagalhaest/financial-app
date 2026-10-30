@@ -10,7 +10,7 @@ export function mesCurto(mes: string): string {
 }
 
 /** `2026-04-01` vira `abril de 2026`. */
-export const mesPorExtenso = (mes: string) => `${POR_EXTENSO[Number(mes.slice(5, 7)) - 1]} de ${mes.slice(0, 4)}`;
+export const mesEAno = (mes: string) => `${POR_EXTENSO[Number(mes.slice(5, 7)) - 1]} de ${mes.slice(0, 4)}`;
 
 const compacto = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 

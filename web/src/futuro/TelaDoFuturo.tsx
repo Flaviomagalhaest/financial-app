@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { atualizadoAs, useFuturo, type Futuro } from "../dados";
 import { formatarCentavos } from "../lancamentos/dinheiro";
-import { marcasDoEixo, mesCurto, mesPorExtenso, pontosDaProjecao, reaisCompactos, type Ponto } from "./apresentacao";
+import { marcasDoEixo, mesCurto, mesEAno, pontosDaProjecao, reaisCompactos, type Ponto } from "./apresentacao";
 
 const ALTURA = 220;
 const MARGEM = { topo: 12, direita: 12, base: 28, esquerda: 72 };
@@ -112,7 +112,7 @@ function GraficoDaProjecao({ pontos, passados }: { pontos: Ponto[]; passados: nu
         </svg>
       )}
       <p className="leitura" aria-live="polite">
-        <strong>Fim de {mesPorExtenso(lido.mes)}</strong>
+        <strong>Fim de {mesEAno(lido.mes)}</strong>
         {LINHAS.map(
           (linha) =>
             lido[linha.chave] != null &&
@@ -144,7 +144,7 @@ function Legenda() {
 }
 
 const comSinal = (centavos: number) => (centavos > 0 ? `+${formatarCentavos(centavos)}` : formatarCentavos(centavos));
-const saida = (centavos: number) => (centavos === 0 ? formatarCentavos(0) : formatarCentavos(-centavos));
+const descontado = (centavos: number) => (centavos === 0 ? formatarCentavos(0) : formatarCentavos(-centavos));
 
 function TabelaDosProximosMeses({ futuro }: { futuro: Futuro }) {
   return (
@@ -163,10 +163,10 @@ function TabelaDosProximosMeses({ futuro }: { futuro: Futuro }) {
         <tbody>
           {futuro.proximos_meses.map((m) => (
             <tr key={m.mes}>
-              <th scope="row">{mesPorExtenso(m.mes)}</th>
+              <th scope="row">{mesEAno(m.mes)}</th>
               <td>{comSinal(m.previstos_centavos)}</td>
-              <td>{saida(m.faturas_centavos)}</td>
-              <td>{saida(m.planejamento_centavos)}</td>
+              <td>{descontado(m.faturas_centavos)}</td>
+              <td>{descontado(m.planejamento_centavos)}</td>
               <td className={m.so_previstos_centavos < 0 ? "negativo" : undefined}>{formatarCentavos(m.so_previstos_centavos)}</td>
               <td className={m.com_planejamento_centavos < 0 ? "negativo" : undefined}>
                 <strong>{formatarCentavos(m.com_planejamento_centavos)}</strong>
@@ -198,7 +198,7 @@ export function TelaDoFuturo() {
           <section aria-label="Projeção de saldo" className="projecao">
             <h3>Projeção de saldo</h3>
             <p>
-              Hoje, nas contas: <strong>{formatarCentavos(dados.saldo_hoje_centavos)}</strong>. No fim de {mesPorExtenso(esteMes.mes)}:{" "}
+              Hoje, nas contas: <strong>{formatarCentavos(dados.saldo_hoje_centavos)}</strong>. No fim de {mesEAno(esteMes.mes)}:{" "}
               <strong className={esteMes.com_planejamento_centavos < 0 ? "negativo" : undefined}>{formatarCentavos(esteMes.com_planejamento_centavos)}</strong>{" "}
               com o planejamento, {formatarCentavos(esteMes.so_previstos_centavos)} só com os previstos.
             </p>

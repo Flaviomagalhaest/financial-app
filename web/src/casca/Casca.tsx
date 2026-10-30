@@ -11,6 +11,9 @@ import { TelaDaFatura } from "../cartoes/TelaDaFatura";
 import { TelaDoFuturo } from "../futuro/TelaDoFuturo";
 import { ABAS, useRota } from "./rota";
 
+/** As abas que já têm tela; as outras mostram o aviso de que chegam depois. */
+const PRONTAS = new Set<string>(["hoje", "historico", "cartoes", "futuro"]);
+
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
 
 function Vazia({ nome }: { nome: string }) {
@@ -63,7 +66,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "historico" && <ListaDeLancamentos />}
         {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}
         {rota === "futuro" && <TelaDoFuturo />}
-        {aba && aba.id !== "hoje" && aba.id !== "historico" && aba.id !== "cartoes" && aba.id !== "futuro" && <Vazia nome={aba.nome} />}
+        {aba && !PRONTAS.has(aba.id) && <Vazia nome={aba.nome} />}
       </main>
     </div>
   );

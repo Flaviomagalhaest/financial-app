@@ -276,6 +276,8 @@ VALOR_COM_SINAL = (
     "CASE WHEN lancamentos.tipo = 'despesa' AND lancamentos.estorno_de IS NULL"
     " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
 )
+# O valor com o sinal do saldo de uma conta, no lançamento `l`: a receita entra, a despesa sai.
+VALOR_NA_CONTA = "CASE l.tipo WHEN 'receita' THEN l.valor_centavos ELSE -l.valor_centavos END"
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 # Quantas parcelas tem o parcelamento da parcela (o 10 de 3/10); o avulso não tem.
 PARCELAS = "(SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
@@ -295,12 +297,11 @@ def url_do_banco(request: Request) -> str | None:
 # Saldo = abertura + realizados (lançamentos e transferências) depois da data de abertura
 # (sem abertura, todos, a partir de zero). O que veio antes (ou no dia) da abertura já está no
 # valor informado e só serve às estatísticas.
-_SALDO = """
+_SALDO = f"""
     SELECT c.id, c.nome, c.tipo, c.saldo_abertura_centavos, c.data_abertura,
            c.arquivada_em IS NOT NULL,
            COALESCE(c.saldo_abertura_centavos, 0) + COALESCE((
-               SELECT SUM(CASE l.tipo WHEN 'receita' THEN l.valor_centavos
-                                      ELSE -l.valor_centavos END)
+               SELECT SUM({VALOR_NA_CONTA})
                FROM lancamentos l
                WHERE l.conta_id = c.id AND l.situacao = 'realizado' AND l.excluido_em IS NULL
                  AND (c.data_abertura IS NULL OR l.data > c.data_abertura)
@@ -315,10 +316,9 @@ _SALDO = """
 """
 
 
-def saldo_das_contas(conn) -> int:
-    """A soma do saldo de todas as contas, arquivadas inclusive; o cartão não é conta."""
-    linhas = conn.execute(_SALDO).fetchall()
-    return sum(_conta(linha).saldo_centavos for linha in linhas)
+def contas_com_saldo(conn) -> list[Conta]:
+    """Todas as contas, arquivadas inclusive, com o saldo; o cartão não é conta."""
+    return [_conta(linha) for linha in conn.execute(_SALDO).fetchall()]
 
 
 def _conta(linha) -> Conta:
