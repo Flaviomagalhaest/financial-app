@@ -32,6 +32,7 @@ import {
   LISTA,
   type Remessa,
 } from "./fila";
+import { ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
@@ -302,19 +303,26 @@ export function useTagsComArquivadas() {
   return { tags: dados ?? [], atualizadoEm, recarregar: buscar };
 }
 
-/** Se o navegador diz que há rede; para desativar o que precisa de internet. */
+/** Se há rede: o navegador diz que sim e a última chamada ao servidor não falhou nem demorou. */
 export function useConexao(): boolean {
   const [online, setOnline] = useState(navigator.onLine);
+  const [semResposta, setSemResposta] = useState(ultimaChamadaFalhou);
   useEffect(() => {
     const mudou = () => setOnline(navigator.onLine);
-    window.addEventListener("online", mudou);
+    const voltou = () => {
+      mudou();
+      redeVoltou();
+    };
+    window.addEventListener("online", voltou);
     window.addEventListener("offline", mudou);
+    const parar = ouvirFalhaDeRede(() => setSemResposta(ultimaChamadaFalhou()));
     return () => {
-      window.removeEventListener("online", mudou);
+      window.removeEventListener("online", voltou);
       window.removeEventListener("offline", mudou);
+      parar();
     };
   }, []);
-  return online;
+  return online && !semResposta;
 }
 
 const remeter: Remessa = async (acoes) => {

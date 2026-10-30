@@ -158,6 +158,32 @@ test("sem internet, as telas abertas mostram a última resposta com 'atualizado 
   await expect(page.getByText(/atualizado às/)).toHaveCount(0);
 });
 
+test("rede que não responde: a tela mostra a resposta guardada, o lançamento fica não enviado e sobe quando a rede responde", async ({ page }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await lancar(page, { teclas: ["9", "00"], conta, categoria: mercado, descricao: `Guardado ${s}` });
+  const guardado = page.getByRole("listitem").filter({ hasText: `Guardado ${s}` });
+  await expect(guardado).not.toContainText("não enviado");
+
+  // O Wi-Fi diz que há rede (navigator.onLine), mas nenhuma chamada da API recebe resposta.
+  let respondendo = false;
+  await page.route("**/api/**", (rota) => (respondendo ? rota.continue() : undefined));
+  await page.reload();
+  await expect(guardado).toContainText("− R$ 9,00");
+  await expect(page.getByText(/Sem internet: atualizado às \d\d:\d\d/)).toBeVisible({ timeout: 20_000 });
+
+  await lancar(page, { teclas: ["4", "00"], conta, categoria: mercado, descricao: `Mudo ${s}` });
+  const mudo = page.getByRole("listitem").filter({ hasText: `Mudo ${s}` });
+  await expect(mudo).toContainText("⏳ não enviado");
+  await page.goto("/#/contas-e-categorias");
+  await expect(page.getByRole("form", { name: "Nova conta" }).getByRole("button", { name: "Cadastrar" })).toBeDisabled();
+
+  respondendo = true;
+  await aba(page, "Hoje");
+  await page.getByRole("button", { name: "Enviar agora" }).click();
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0, { timeout: 20_000 });
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
 test("sair com lançamentos não enviados pede confirmação e, confirmado, apaga a fila do aparelho", async ({ page, context }) => {
   const { s, conta, mercado } = await prepararCasal(page, "esposa@teste.com");
   await context.setOffline(true);
