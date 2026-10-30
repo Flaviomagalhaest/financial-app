@@ -615,3 +615,13 @@ dialog.folha > input {
   font-weight: 400;
   overflow-wrap: anywhere;
 }
+
+.limite summary {
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+}
+.limite progress {
+  width: 100%;
+  accent-color: var(--destaque);
+}
