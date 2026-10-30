@@ -1,7 +1,7 @@
 # Importador do Mobills: parcelamentos, pendentes e ajustes
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 67, 47, 39
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` se mexer na interface
 Modelo recomendado: Opus
