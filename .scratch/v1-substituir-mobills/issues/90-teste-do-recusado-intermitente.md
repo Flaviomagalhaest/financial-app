@@ -1,7 +1,7 @@
 # Testes de navegador que falham às vezes na suíte completa
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -25,12 +25,24 @@ Achar a corrida de cada um (provável: o teste desliga a rede ou recarrega antes
 
 ## Checklist
 
-- [ ] Reproduzir na suíte inteira, com `--repeat-each` (`workers: 1`)
-- [ ] Corrigir a causa de cada um no teste (ou no app, se for dele) e rodar a suíte completa algumas vezes sem falha
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Reproduzir na suíte inteira, com `--repeat-each` (`workers: 1`)
+- [x] Corrigir a causa de cada um no teste (ou no app, se for dele) e rodar a suíte completa algumas vezes sem falha
+- [x] Verificações do projeto rodando e PR aberto para `main`
 
 ## Notas
 
 - O [ticket 42](42-jornada-completa-do-lancamento-rapido.md) corrigiu três corridas, todas no teste. Em `conflito.spec.ts`, "mudança no mesmo campo", "descartar a minha mudança" e "excluir o que a outra pessoa mudou depois" agora esperam a mudança da outra pessoa subir antes de o aparelho voltar à rede, porque a mudança dele chegava primeiro e o conflito ficava com ela. O último também espera a exclusão subir antes de a outra pessoa recarregar. Em `sem-internet.spec.ts`, "recusado pelo servidor" agora desfaz a rota de `/api/contas` no fim, porque a leitura em andamento estourava no teste seguinte (`route.fetch: Test ended`) e a falha ia para "sem internet, as telas abertas...".
 - Ainda falha às vezes: "criado com a resposta perdida e depois editado ou excluído sem internet". O Histórico abre sem a lista guardada. Hipótese: o `sync` do service worker reenvia a fila, que o `page.route` da página não intercepta, e a esvazia antes de a lista do servidor ser guardada.
 - Na repetição local do [ticket 83](83-confirmar-previsto-sem-internet-pela-fila.md) (`--repeat-each=4`), `e2e/conflito.spec.ts` › "a exclusão vence a edição, com aviso e 'Lançar de novo'" falhou uma vez: a edição dele voltou como recusada, "⏳ não enviado: erro no servidor", e não como descartada. Sozinho, passou 8 de 8. Hipótese: a exclusão dela ainda estava subindo pela fila quando o aparelho dele voltou à rede, e as duas chegaram juntas ao servidor. O teste não espera a exclusão subir (`toHaveCount(0)` só olha a tela dela), e a exceção do lote não ficou no log.
+
+## Resolução
+
+Reproduzido com laços de CPU e `--repeat-each`. Causas achadas:
+
+- **Backend (`app/banco.py`)**: no Postgres em READ COMMITTED, `_todos` lia o lançamento e depois as categorias em instantes diferentes; a exclusão da outra pessoa entre as duas leituras devolvia o lançamento sem categorias e dava "erro no servidor" (a família do `IndexError` do ticket 37). Agora a conexão é REPEATABLE READ, como o DSQL lê. Teste: `test_postgres_le_tudo_do_mesmo_instante_como_o_dsql`.
+- **App (`dados/index.ts`)**: o envio da fila só atualiza a lista guardada se ela existir; sem ela, o lançamento enviado sumia do aparelho ("não foi possível carregar os lançamentos", "Editar" que não aparece). `enviarAgora` busca e guarda a lista antes de subir a fila. Teste: "lançado sem internet antes de a lista ser guardada..." (vermelho 3/3 antes, verde depois).
+- **Testes**: "a pessoa se troca na edição", "confirmar com ajuste" e "excluir o que a outra pessoa mudou depois" recarregavam a outra tela sem esperar a mudança subir (`nao-enviados` a 0 passa antes de a fila ser lida); agora esperam o "não enviado" sumir ou recarregam até a exclusão chegar.
+
+A falha do ticket 83 ("a exclusão vence a edição" com "erro no servidor") é a primeira causa acima: reproduzida sob carga e sumida com o REPEATABLE READ.
+
+Sobra o que só aparece com a CPU saturada: ticket [109](109-testes-de-navegador-sob-cpu-saturada.md).
