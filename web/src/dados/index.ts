@@ -202,6 +202,25 @@ function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
   };
 }
 
+/** A resposta que o aparelho já guardou, sem ir ao servidor: quem só precisa dela não pede leitura a mais. */
+function useRespostaGuardada<D>(caminho: string): D | null {
+  const [guardada, setGuardada] = useState<D | null>(null);
+  useEffect(() => {
+    let ativo = true;
+    const ler = () =>
+      void lerResposta<D>(caminho).then((g) => {
+        if (ativo && g) setGuardada(g.dados);
+      });
+    ler();
+    const parar = ouvirMudancas(ler);
+    return () => {
+      ativo = false;
+      parar();
+    };
+  }, [caminho]);
+  return guardada;
+}
+
 /** "atualizado às 14:32", para a resposta guardada que a tela mostra sem internet. */
 export function atualizadoAs(em: number): string {
   return `atualizado às ${new Date(em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
@@ -291,7 +310,8 @@ export type ContaNaTela = Conta & { saldoNaoEnviado: boolean };
 
 /** As contas com o saldo do aparelho; toda tela que mostra saldo passa por aqui. */
 function useComSaldoDoAparelho(contas: Conta[]): ContaNaTela[] {
-  const { dados } = useResposta(LISTA);
+  // Só lê a lista guardada: a leitura do servidor é das telas de lançamentos, e outra aqui mexeria no que elas mostram.
+  const dados = useRespostaGuardada<Lancamento[]>(LISTA);
   const fila = useFila();
   return useMemo(() => {
     const doServidor = new Map((dados ?? []).map((l) => [l.id, l]));
