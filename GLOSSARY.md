@@ -230,7 +230,7 @@ _Avoid_: compra estornada (estorno é o crédito que aparece numa fatura posteri
 Dinheiro que passa de uma conta do casal para outra; não é entrada nem saída do dinheiro do casal, mas pode ter categoria e contar no planejamento (ex.: guardar na reserva).
 
 **Ajuste de fatura**:
-Diferença entre a soma das compras lançadas numa fatura e o valor real dela (uma compra esquecida ou lançada errada), guardada na própria fatura; não é lançamento, conta no total da fatura e nas despesas do mês, mas não em categoria, tag nem item do planejamento.
+Diferença entre a soma das compras lançadas numa fatura e o valor real dela (uma compra esquecida ou lançada errada), guardada na própria fatura; não é lançamento, conta no total da fatura e nas despesas do mês, mas não em categoria, tag nem item do planejamento. Na tela, o casal informa o valor real da fatura (o ajuste é o que falta para o total chegar nele) ou a diferença para o total que o app mostra (soma ao ajuste que a fatura já tem).
 _Avoid_: reajuste, arredondamento, diferença de fatura
 
 **Saldo de abertura**:

@@ -119,6 +119,17 @@ export function useFaturas(cartaoId: string) {
   return useRespostaDe<Fatura[]>(`/api/cartoes/${cartaoId}/faturas`, ler);
 }
 
+/**
+ * Em que situação está a fatura `mes` do cartão: a do servidor, ou a última guardada sem internet.
+ * `undefined` quando não se sabe (nunca se leu as faturas do cartão).
+ */
+export async function situacaoDaFatura(cartaoId: string, mes: string): Promise<Fatura["situacao"] | undefined> {
+  const caminho = `/api/cartoes/${cartaoId}/faturas`;
+  const lidas = await buscarEGuardar<Fatura[]>(caminho, () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id: cartaoId } } }));
+  const faturas = lidas ?? (await lerResposta<Fatura[]>(caminho))?.dados;
+  return faturas?.find((f) => f.mes === mes)?.situacao;
+}
+
 /** A aba Mês de um mês (`AAAA-MM`), numa leitura só, guardada para mostrar sem internet. */
 export function useMes(mes: string) {
   const ler = () => api.GET("/api/meses/{mes}", { params: { path: { mes } } });

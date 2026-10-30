@@ -1,27 +1,39 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   atualizadoAs,
   descartarNaoEnviado,
   excluirLancamento,
   lancarDeNovoOExcluido,
   manterOsDois,
+  situacaoDaFatura,
   useCadastro,
   useLancamentos,
   usePessoas,
   type LancamentoNaTela,
 } from "../dados";
-import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresentacao";
+import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
+import { mesPorExtenso } from "../cartoes/apresentacao";
 import { dataPorExtenso, quando } from "./datas";
 
 /** Lançamentos do casal, do mais recente ao mais antigo, com editar e excluir em cada linha. */
 export function ListaDeLancamentos() {
-  const { contasECartoes, categorias } = useCadastro();
+  const { cartoes, contasECartoes, categorias } = useCadastro();
   const { lancamentos, atualizadoEm, semDados } = useLancamentos();
   const { euId, nomeDe } = usePessoas();
   const [erro, setErro] = useState("");
   const [informacoes, setInformacoes] = useState<string | null>(null);
+  // A compra de fatura já fechada que se pediu para excluir: a tela sugere o estorno antes.
+  const [sugerindoEstorno, setSugerindoEstorno] = useState<string | null>(null);
+  const estornos = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
 
-  async function excluir(l: LancamentoNaTela) {
+  async function excluir(l: LancamentoNaTela, mesmoFechada = false) {
+    setSugerindoEstorno(null);
+    // Cancelar a compra de uma fatura aberta é excluir; depois do fechamento o valor já foi cobrado e o certo é estornar.
+    const cartao = cartoes.find((c) => c.id === l.conta_id);
+    if (!mesmoFechada && cartao && l.mes && !l.naoEnviado) {
+      const situacao = await situacaoDaFatura(cartao.titular_id ?? cartao.id, l.mes);
+      if (situacao && situacao !== "aberta" && !l.estorno_de) return setSugerindoEstorno(l.id);
+    }
     if (!window.confirm(`Excluir "${l.descricao || "este lançamento"}"?`)) return;
     setErro("");
     await excluirLancamento(l).catch(() => setErro("Não foi possível excluir no aparelho."));
@@ -63,6 +75,7 @@ export function ListaDeLancamentos() {
       <ul className="lista">
         {lancamentos?.map((l) => {
           const titulo = tituloDoLancamento(l, categorias);
+          const ligacao = ligacaoDoEstorno(l, estornos, categorias);
           return (
             <li key={l.id}>
               <div>
@@ -72,6 +85,7 @@ export function ListaDeLancamentos() {
               <p className="vazio">
                 {dataPorExtenso(l.data)} · {nome(contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
                 {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
+                {ligacao && ` · ${ligacao}`}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
                 {" · "}
                 {l.pessoa ? nomeDe(l.pessoa) : "conjunto"}
@@ -85,6 +99,26 @@ export function ListaDeLancamentos() {
                     </button>
                     <button type="button" className="secundario" aria-label={`Excluir este ${titulo}`} onClick={() => void excluir(l)}>
                       Excluir este
+                    </button>
+                  </div>
+                </div>
+              )}
+              {sugerindoEstorno === l.id && (
+                <div className="aviso" role="group" aria-label="Fatura fechada">
+                  <p>
+                    A fatura de {mesPorExtenso(l.mes!)} já fechou: excluir a compra não devolve o valor cobrado. Estorne a compra para acertar a fatura.
+                  </p>
+                  <div className="acoes">
+                    {podeEstornar(l, cartoes, estornos) && (
+                      <a className="botao" href={`#/estornar/${l.id}`}>
+                        Estornar
+                      </a>
+                    )}
+                    <button type="button" className="secundario" onClick={() => void excluir(l, true)}>
+                      Excluir mesmo assim
+                    </button>
+                    <button type="button" className="secundario" onClick={() => setSugerindoEstorno(null)}>
+                      Voltar
                     </button>
                   </div>
                 </div>
@@ -118,6 +152,11 @@ export function ListaDeLancamentos() {
                     <a className="botao secundario" href={`#/novo/${l.id}`} aria-label={`${l.recusa ? "Corrigir" : "Editar"} ${titulo}`}>
                       {l.recusa ? "Corrigir" : "Editar"}
                     </a>
+                    {podeEstornar(l, cartoes, estornos) && (
+                      <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${titulo}`}>
+                        Estornar
+                      </a>
+                    )}
                     {l.recusa ? (
                       <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(l)}>
                         Descartar

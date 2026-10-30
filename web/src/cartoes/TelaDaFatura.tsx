@@ -1,16 +1,90 @@
-import { useMemo, useState } from "react";
-import { useCadastro, useFaturas, useLancamentos, usePessoas } from "../dados";
-import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
+import { useMemo, useState, type FormEvent } from "react";
+import { api } from "../api/cliente";
+import { useCadastro, useConexao, useFaturas, useLancamentos, usePessoas, type Fatura } from "../dados";
+import { eCredito, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
-import { formatarCentavos } from "../lancamentos/dinheiro";
-import { mesPorExtenso, SITUACAO } from "./apresentacao";
+import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
+import { comSinal, mesPorExtenso, SITUACAO } from "./apresentacao";
 
 const TODAS = "";
+
+type Modo = "real" | "diferenca";
+
+/**
+ * Acerta a fatura com o que o banco cobra: o valor real da fatura (o ajuste é o que falta para o total
+ * do app chegar nele) ou a diferença para o total que o app mostra (soma ao ajuste que já existe).
+ * Positivo ou negativo. Precisa de internet, como as datas da fatura.
+ */
+function FormularioDeAjuste({ cartaoId, fatura, aoFechar, aoSalvar }: { cartaoId: string; fatura: Fatura; aoFechar: () => void; aoSalvar: () => Promise<void> }) {
+  const [modo, setModo] = useState<Modo>("real");
+  const [texto, setTexto] = useState("");
+  const [erro, setErro] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const valor = emCentavos(texto);
+  const ajuste = typeof valor === "number" ? (modo === "real" ? valor - fatura.compras_centavos : fatura.ajuste_centavos + valor) : undefined;
+
+  async function salvar(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (ajuste === undefined) return;
+    setErro("");
+    setEnviando(true);
+    try {
+      const { response, error } = await api.PATCH("/api/cartoes/{id}/faturas/{mes}", {
+        params: { path: { id: cartaoId, mes: fatura.mes } },
+        body: { ajuste_centavos: ajuste },
+      });
+      if (!response.ok) {
+        const motivo = (error as { detail?: unknown } | undefined)?.detail;
+        return setErro(`Não foi possível ajustar a fatura${typeof motivo === "string" ? `: ${motivo}` : ""}.`);
+      }
+      await aoSalvar();
+      aoFechar();
+    } catch {
+      setErro("Sem internet: o ajuste da fatura precisa de internet.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <form aria-label="Ajustar fatura" onSubmit={(e) => void salvar(e)}>
+      <label>
+        <input type="radio" name="modo-do-ajuste" checked={modo === "real"} onChange={() => setModo("real")} />
+        Valor real da fatura
+      </label>
+      <label>
+        <input type="radio" name="modo-do-ajuste" checked={modo === "diferenca"} onChange={() => setModo("diferenca")} />
+        Diferença
+      </label>
+      <label>
+        Valor
+        <input inputMode="decimal" value={texto} placeholder={modo === "real" ? "o total no app do banco" : "ex.: 10,00 ou -5,00"} onChange={(e) => setTexto(e.target.value)} />
+      </label>
+      <p className="vazio">
+        {modo === "real" ? "O ajuste é o que falta para o total chegar ao valor do banco." : "A diferença soma ao ajuste que a fatura já tem; negativa, a fatura do banco é menor que a do app."}
+      </p>
+      {ajuste !== undefined && <p>{ajuste === 0 ? "Sem ajuste" : `Ajuste de ${comSinal(ajuste)}`}</p>}
+      {erro && (
+        <p role="alert" className="erro">
+          {erro}
+        </p>
+      )}
+      <button type="submit" disabled={ajuste === undefined || enviando}>
+        Salvar ajuste
+      </button>
+      <button type="button" className="secundario" onClick={aoFechar}>
+        Cancelar
+      </button>
+    </form>
+  );
+}
 
 /** As compras da fatura agrupadas por dia, para conferir com o app do banco, com filtro por categoria e por tag. */
 export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string }) {
   const { cartoes, contasECartoes, categorias } = useCadastro();
-  const { dados: faturas } = useFaturas(cartaoId);
+  const { dados: faturas, buscar } = useFaturas(cartaoId);
+  const online = useConexao();
+  const [ajustando, setAjustando] = useState(false);
   const { lancamentos } = useLancamentos();
   const { nomeDe } = usePessoas();
   const [categoria, setCategoria] = useState(TODAS);
@@ -21,12 +95,15 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   // As compras do adicional caem na fatura do titular.
   const doCartao = useMemo(() => new Set(cartoes.filter((c) => c.id === cartaoId || c.titular_id === cartaoId).map((c) => c.id)), [cartoes, cartaoId]);
   const compras = useMemo(() => (lancamentos ?? []).filter((l) => l.mes === mes && doCartao.has(l.conta_id)), [lancamentos, mes, doCartao]);
+  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
+  // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
+  const estornosCentavos = compras.filter((l) => l.estorno_de && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
   const tags = useMemo(() => [...new Set(compras.flatMap((l) => l.tags ?? []))].sort((a, b) => a.localeCompare(b, "pt-BR")), [compras]);
 
   const filtradas = compras.filter((l) => (categoria === TODAS || l.categoria_ids.includes(categoria)) && (tag === TODAS || !!l.tags?.includes(tag)));
   const dias = [...new Set(filtradas.map((l) => l.data))].sort((a, b) => b.localeCompare(a));
   const filtrando = categoria !== TODAS || tag !== TODAS;
-  const somaFiltrada = filtradas.reduce((soma, l) => soma + (l.tipo === "despesa" ? l.valor_centavos : -l.valor_centavos), 0);
+  const somaFiltrada = filtradas.reduce((soma, l) => soma + (eCredito(l) ? -l.valor_centavos : l.valor_centavos), 0);
 
   return (
     <section>
@@ -49,12 +126,26 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
               <dd>{dataPorExtenso(fatura.vencimento)}</dd>
             </>
           )}
+          <dt>Compras</dt>
+          <dd>{formatarCentavos(fatura.compras_centavos + estornosCentavos)}</dd>
+          <dt>Estornos</dt>
+          <dd>{estornosCentavos > 0 ? `− ${formatarCentavos(estornosCentavos)}` : formatarCentavos(0)}</dd>
+          <dt>Ajuste</dt>
+          <dd>{comSinal(fatura.ajuste_centavos)}</dd>
           <dt>Total</dt>
           <dd>{formatarCentavos(fatura.total_centavos)}</dd>
           <dt>A pagar</dt>
           <dd>{formatarCentavos(fatura.a_pagar_centavos)}</dd>
         </dl>
       )}
+      {fatura && !ajustando && (
+        <button type="button" className="secundario" disabled={!online} onClick={() => setAjustando(true)}>
+          Ajustar fatura
+        </button>
+      )}
+      {fatura && !online && <p className="vazio">Ajustar a fatura precisa de internet.</p>}
+      {fatura && ajustando && <FormularioDeAjuste cartaoId={cartaoId} fatura={fatura} aoFechar={() => setAjustando(false)} aoSalvar={buscar} />}
+      {fatura && fatura.situacao !== "aberta" && <p className="aviso">Esta fatura já fechou: para cancelar uma compra, estorne-a.</p>}
       <label>
         Categoria
         <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
@@ -98,7 +189,15 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
                     {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                     {l.situacao === "previsto" && " · previsto"}
                     {l.pessoa ? ` · ${nomeDe(l.pessoa)}` : ""}
+                    {ligacaoDoEstorno(l, indice, categorias) && ` · ${ligacaoDoEstorno(l, indice, categorias)}`}
                   </p>
+                  {podeEstornar(l, cartoes, indice) && (
+                    <div className="acoes">
+                      <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${tituloDoLancamento(l, categorias)}`}>
+                        Estornar
+                      </a>
+                    </div>
+                  )}
                 </li>
               ))}
           </ul>
