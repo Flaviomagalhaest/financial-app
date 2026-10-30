@@ -21,3 +21,4 @@ O casal marca "Parcelado" na folha de detalhes do novo lançamento e o parcelame
 - [ ] Tempo do lote: cada `criar_parcelamento` gera as parcelas em transações próprias (até 420 parcelas); conferir se um lote cheio (100 ações) com parcelamentos longos cabe no tempo limite da Lambda e da HTTP API, ou limitar os parcelamentos por lote
 - [ ] Testes de API, se a ação mudar, e de navegador do fluxo, online e sem internet
 - [ ] Verificações do projeto rodando e PR aberto para `main`
+- [ ] Corrigir e excluir o parcelamento pela tela (ticket 47: `PATCH` e `DELETE /api/parcelamentos/{id}`, hoje só a API): o aviso 409 `AvisoDeRealizadas` mostra as realizadas que mudam ou saem e o pedido repete com `confirmar_realizadas`; a lista mostra a marca `alterada_a_mao` da parcela editada à mão; decidir se corrigir e excluir sem internet entram na fila ou pedem rede (o lote só aceita `criar_parcelamento`)

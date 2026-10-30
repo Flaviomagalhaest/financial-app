@@ -61,16 +61,17 @@ def _realizar(conn, id: UUID) -> bool:
     return True
 
 
-def realizar_automaticos(url: str | None) -> int:
+def realizar_automaticos(url: str | None, parcelamento_id: UUID | None = None) -> int:
     """Vira realizado, sem confirmação, cada previsto automático que chegou, um por transação;
-    devolve quantos."""
+    devolve quantos. Com `parcelamento_id`, só as parcelas dele (depois de corrigido)."""
     with conectar(url) as conn:
         devidos = [
             id
             for id, conta_id, parcela, mes, data in conn.execute(
                 "SELECT l.id, l.conta_id, l.parcela, l.mes, l.data FROM lancamentos l"
-                f" WHERE {_DEVIDO}",
-                (lancamentos.hoje(),),
+                f" WHERE {_DEVIDO}"
+                + ("" if parcelamento_id is None else " AND l.parcelamento_id = %s"),
+                (lancamentos.hoje(), *([] if parcelamento_id is None else [parcelamento_id])),
             ).fetchall()
             if _chegou(conn, conta_id, parcela, mes, data)
         ]
