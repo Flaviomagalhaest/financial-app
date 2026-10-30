@@ -77,7 +77,7 @@ Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem f
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 
 **Ocorrência**:
-Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a excluída não volta.
+Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a que o casal pulou (excluída) não volta. A que o fim ou o horizonte tirou volta quando o fim sai ou o horizonte chega a ela: `geradas` recua até antes dela, e só o excluído com número acima de `geradas` é trazido de volta.
 _Avoid_: instância, repetição
 
 **Daqui para frente**:
@@ -89,7 +89,7 @@ Previsto de uma recorrência que uma pessoa editou (qualquer campo): uma mudanç
 _Avoid_: customizado, manual
 
 **Horizonte**:
-Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária.
+Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária. Reagendar para menos frequente tira os previstos que passam dele, e a tarefa diária os traz quando ele chega.
 _Avoid_: janela, limite
 
 **Tarefa diária**:

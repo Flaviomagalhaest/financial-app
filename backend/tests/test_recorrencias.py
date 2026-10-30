@@ -749,7 +749,7 @@ def test_a_ocorrencia_trazida_de_volta_vem_com_a_regra_de_hoje(casal: Casal):
     ]
 
 
-def test_reagendar_para_menos_frequente_tira_os_previstos_alem_do_horizonte_e_a_tarefa_diaria_os_traz(
+def test_reagendar_para_menos_frequente_tira_o_que_passa_do_horizonte_e_a_tarefa_diaria_traz(
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
     conta, luz = casal.conta(), casal.categoria("Luz")
@@ -793,3 +793,38 @@ def test_reagendar_nao_tira_o_previsto_que_o_casal_alterou_a_mao(casal: Casal):
     previstos = gerados(casal, nova["id"])
     assert [l["ocorrencia"] for l in previstos] == [*range(1, 9), 24]
     assert (previstos[-1]["data"], previstos[-1]["valor_centavos"]) == ("2028-10-10", 5000)
+
+
+def test_tirar_o_numero_de_vezes_traz_de_volta_o_que_o_fim_tirou(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=3)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    mudar(casal, nova["id"], 1, vezes=1)
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [1]
+
+    resposta = mudar(casal, nova["id"], 1, vezes=None)
+
+    assert (resposta.json()["ate"], resposta.json()["vezes"]) == (None, None)
+    assert len(gerados(casal, nova["id"])) == 24
+
+
+def test_previsto_alterado_a_mao_que_o_fim_tirou_volta_com_a_regra_e_a_mudanca_seguinte_o_alcanca(
+    casal: Casal,
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=3)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    terceiro = gerados(casal, nova["id"])[2]
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{terceiro['id']}",
+        json={"versao": 1, "valor_centavos": 5000},
+    )
+    mudar(casal, nova["id"], 1, vezes=2)
+
+    mudar(casal, nova["id"], 1, vezes=3)
+    assert [l["valor_centavos"] for l in gerados(casal, nova["id"])] == [18990] * 3
+    mudar(casal, nova["id"], 1, valor_centavos=21000)
+
+    assert [l["valor_centavos"] for l in gerados(casal, nova["id"])] == [21000] * 3
