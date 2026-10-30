@@ -45,6 +45,7 @@ export type LeituraDoMes = components["schemas"]["LeituraDoMes"];
 export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
 export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
+export type Futuro = components["schemas"]["Futuro"];
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
@@ -135,6 +136,11 @@ export function useHoje() {
 export function useLimite(cartaoId: string) {
   const ler = () => api.GET("/api/cartoes/{id}/limite", { params: { path: { id: cartaoId } } });
   return useRespostaDe<LimiteDoCartao>(`/api/cartoes/${cartaoId}/limite`, ler);
+}
+
+/** A projeção de saldo da aba Futuro: o realizado no passado e as duas linhas adiante. */
+export function useFuturo() {
+  return useRespostaDe<Futuro>("/api/futuro", () => api.GET("/api/futuro"));
 }
 
 function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {

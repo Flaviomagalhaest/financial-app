@@ -211,6 +211,11 @@ def listar_cartoes(
         return [Cartao(**dict(zip(_NOMES, linha))) for linha in linhas]
 
 
+def titulares(conn) -> list[UUID]:
+    """Os cartões que têm faturas: os titulares, arquivados inclusive."""
+    return [id for (id,) in conn.execute("SELECT id FROM cartoes WHERE titular_id IS NULL")]
+
+
 def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
     """As faturas do titular, com os números. O saldo anterior de cada uma vem da anterior
     fechada, por isso a conta corre desde a mais antiga, mesmo quando se pede um mês só."""
