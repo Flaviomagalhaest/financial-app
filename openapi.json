@@ -2250,6 +2250,109 @@
         ]
       }
     },
+    "/api/parcelamentos/{id}": {
+      "patch": {
+        "summary": "Alterar Parcelamento",
+        "description": "Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa editou à mão fica como\nestá. Se uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o\npedido vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.",
+        "operationId": "alterar_parcelamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlteracaoDeParcelamento"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcelamento"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A correção muda parcelas realizadas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvisoDeRealizadas"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Excluir Parcelamento",
+        "description": "Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as\nque uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois\nrecebe o aviso de excluído).",
+        "operationId": "excluir_parcelamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/parcelamentos/{id}/antecipacoes": {
       "post": {
         "summary": "Antecipar Parcelas",
@@ -2780,6 +2883,96 @@
         "title": "AlteracaoDeLancamento",
         "description": "Só os campos que a pessoa mudou, feitos sobre a `versao` que o aparelho tinha; o campo\nausente fica como está no servidor, com o que o outro lado tiver mudado nele (ADR 0011)."
       },
+      "AlteracaoDeParcelamento": {
+        "properties": {
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
+          "valor_total_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Total Centavos"
+          },
+          "valor_da_parcela_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Da Parcela Centavos"
+          },
+          "parcelas": {
+            "type": "integer",
+            "maximum": 420.0,
+            "minimum": 2.0,
+            "title": "Parcelas"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "confirmar_realizadas": {
+            "type": "boolean",
+            "title": "Confirmar Realizadas",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "AlteracaoDeParcelamento",
+        "description": "O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,\ntags, pessoa e item valem para todas as parcelas, inclusive as realizadas. Valor, número de\nparcelas e data refazem as parcelas, salvo as que uma pessoa editou à mão; se uma realizada\nmudar ou sair, o pedido só vale com `confirmar_realizadas`."
+      },
       "AlteracaoDeRecorrencia": {
         "properties": {
           "a_partir_da_ocorrencia": {
@@ -2948,6 +3141,28 @@
         ],
         "title": "Antecipacao",
         "description": "O pagamento adiantado das últimas parcelas que ainda não foram pagas."
+      },
+      "AvisoDeRealizadas": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          },
+          "parcelas": {
+            "items": {
+              "$ref": "#/components/schemas/ParcelaQueMuda"
+            },
+            "type": "array",
+            "title": "Parcelas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivo",
+          "parcelas"
+        ],
+        "title": "AvisoDeRealizadas",
+        "description": "A correção mudaria parcelas já realizadas; nada foi gravado. Repetir o pedido com\n`confirmar_realizadas` as muda."
       },
       "CampoEmConflito": {
         "properties": {
@@ -3891,6 +4106,11 @@
             ],
             "title": "Parcelas"
           },
+          "alterada_a_mao": {
+            "type": "boolean",
+            "title": "Alterada A Mao",
+            "default": false
+          },
           "versao": {
             "type": "integer",
             "title": "Versao"
@@ -4812,6 +5032,67 @@
           "categoria_ids"
         ],
         "title": "NovoParcelamento"
+      },
+      "ParcelaQueMuda": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "parcela": {
+            "type": "integer",
+            "title": "Parcela"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "valor_novo_centavos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Novo Centavos"
+          },
+          "data_nova": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Nova"
+          },
+          "sai": {
+            "type": "boolean",
+            "title": "Sai"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "parcela",
+          "valor_centavos",
+          "data",
+          "valor_novo_centavos",
+          "data_nova",
+          "sai"
+        ],
+        "title": "ParcelaQueMuda",
+        "description": "Uma parcela realizada que a correção muda ou tira."
       },
       "Parcelamento": {
         "properties": {
