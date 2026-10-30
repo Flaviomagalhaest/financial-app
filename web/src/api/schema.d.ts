@@ -625,6 +625,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/meses/{mes}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Mes */
+        get: operations["ler_mes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/hoje": {
         parameters: {
             query?: never;
@@ -1123,6 +1140,21 @@ export interface components {
             arquivada: boolean;
         };
         /**
+         * Comparacao
+         * @description As despesas do mês por categoria contra o mês anterior e o mesmo mês do ano passado, com o
+         *     realizado e o previsto. O lançamento com várias categorias conta inteiro em cada linha, e o
+         *     total o conta uma vez (com os ajustes de fatura), então as linhas somam mais que o total.
+         */
+        Comparacao: {
+            /** Anterior */
+            anterior: string;
+            /** Ano Passado */
+            ano_passado: string;
+            /** Linhas */
+            linhas: components["schemas"]["LinhaDaComparacao"][];
+            total: components["schemas"]["ValoresDaComparacao"];
+        };
+        /**
          * Confirmacao
          * @description O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o
          *     ajuste num campo que o outro lado mudou depois dela é conflito, como na edição.
@@ -1190,6 +1222,20 @@ export interface components {
              * @example 2026-09
              */
             de: string;
+        };
+        /**
+         * Despesas
+         * @description As despesas do mês (compras menos estornos), com os ajustes de fatura no realizado.
+         */
+        Despesas: {
+            /** Realizado Centavos */
+            realizado_centavos: number;
+            /** Previsto Centavos */
+            previsto_centavos: number;
+            /** Planejado Centavos */
+            planejado_centavos: number;
+            /** Livre Centavos */
+            livre_centavos: number;
         };
         /** EdicaoDeCartao */
         EdicaoDeCartao: {
@@ -1298,6 +1344,34 @@ export interface components {
             /** A Pagar Centavos */
             a_pagar_centavos: number;
         };
+        /**
+         * Fechamento
+         * @description O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que
+         *     aconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz
+         *     quantos lançamentos são.
+         */
+        Fechamento: {
+            /** Receitas Centavos */
+            receitas_centavos: number;
+            /** Despesas Centavos */
+            despesas_centavos: number;
+            /** Sobra Centavos */
+            sobra_centavos: number;
+            /** Sobra Percentual */
+            sobra_percentual: number | null;
+            /** Guardado Centavos */
+            guardado_centavos: number;
+            /** Previstos */
+            previstos: number;
+            /** Itens Acima */
+            itens_acima: components["schemas"]["ItemAcima"][];
+            /** Itens De Despesa */
+            itens_de_despesa: number;
+            /** Variacao Anterior Percentual */
+            variacao_anterior_percentual: number | null;
+            /** Variacao Ano Passado Percentual */
+            variacao_ano_passado_percentual: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1338,6 +1412,16 @@ export interface components {
             gerado_em: string;
             /** Sugestoes */
             sugestoes: components["schemas"]["Sugestao"][];
+        };
+        /** ItemAcima */
+        ItemAcima: {
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+            /** Passou Centavos */
+            passou_centavos: number;
         };
         /** ItemDoModelo */
         ItemDoModelo: {
@@ -1482,6 +1566,25 @@ export interface components {
             parece_repetido_de?: string | null;
         };
         /**
+         * LeituraDoMes
+         * @description Tudo o que a aba Mês mostra de um mês, numa leitura só.
+         */
+        LeituraDoMes: {
+            /** Mes */
+            mes: string;
+            /**
+             * Situacao
+             * @enum {string}
+             */
+            situacao: "passado" | "atual" | "futuro";
+            despesas: components["schemas"]["Despesas"];
+            receitas: components["schemas"]["Receitas"];
+            planejamento: components["schemas"]["Planejamento"];
+            comparacao: components["schemas"]["Comparacao"];
+            ranking: components["schemas"]["Ranking"];
+            fechamento: components["schemas"]["Fechamento"] | null;
+        };
+        /**
          * LimiteDoCartao
          * @description Sem `limite_centavos` o cartão não mostra limite, mas o comprometido continua a conta.
          */
@@ -1502,6 +1605,29 @@ export interface components {
             parcelamentos: components["schemas"]["ParcelamentoEmAndamento"][];
             /** Proximos Meses */
             proximos_meses: components["schemas"]["MesDoLimite"][];
+        };
+        /** LinhaDaComparacao */
+        LinhaDaComparacao: {
+            /** Mes Centavos */
+            mes_centavos: number;
+            /** Anterior Centavos */
+            anterior_centavos: number;
+            /** Ano Passado Centavos */
+            ano_passado_centavos: number;
+            /**
+             * Categoria Id
+             * Format: uuid
+             */
+            categoria_id: string;
+        };
+        /** LinhaDoRanking */
+        LinhaDoRanking: {
+            /** Chave */
+            chave: string | null;
+            /** Centavos */
+            centavos: number;
+            /** Lancamento Ids */
+            lancamento_ids: string[];
         };
         /** Lote */
         Lote: {
@@ -1956,6 +2082,27 @@ export interface components {
             /** Valor Total Centavos */
             valor_total_centavos?: number | null;
         };
+        /**
+         * Ranking
+         * @description Para onde foram as despesas do mês (realizado e previsto, sem o ajuste de fatura), da
+         *     linha maior à menor. Por categoria e por tag o lançamento conta inteiro em cada uma que tem;
+         *     por pessoa, uma vez.
+         */
+        Ranking: {
+            /** Por Categoria */
+            por_categoria: components["schemas"]["LinhaDoRanking"][];
+            /** Por Tag */
+            por_tag: components["schemas"]["LinhaDoRanking"][];
+            /** Por Pessoa */
+            por_pessoa: components["schemas"]["LinhaDoRanking"][];
+        };
+        /** Receitas */
+        Receitas: {
+            /** Realizado Centavos */
+            realizado_centavos: number;
+            /** Previsto Centavos */
+            previsto_centavos: number;
+        };
         /** Recorrencia */
         Recorrencia: {
             /**
@@ -2216,6 +2363,15 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ValoresDaComparacao */
+        ValoresDaComparacao: {
+            /** Mes Centavos */
+            mes_centavos: number;
+            /** Anterior Centavos */
+            anterior_centavos: number;
+            /** Ano Passado Centavos */
+            ano_passado_centavos: number;
         };
     };
     responses: never;
@@ -3585,6 +3741,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TotaisDoMes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_mes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeituraDoMes"];
                 };
             };
             /** @description Validation Error */
