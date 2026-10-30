@@ -39,7 +39,7 @@ export function SecaoDeCartoes({ executar, setErro }: { executar: Executar; setE
     const dados = new FormData(form);
     const adicional = titularId !== "";
     const limite = adicional ? null : emCentavos(String(dados.get("limite") ?? ""));
-    if (limite === undefined) return setErro("Informe o limite em reais (ex.: 5000,00).");
+    if (limite === undefined || limite === 0) return setErro("Informe o limite em reais, maior que zero (ex.: 5000,00).");
     const dia = (campo: string) => (adicional || dados.get(campo) === "" ? null : Number(dados.get(campo)));
     const ok = await executar("cadastrar o cartão", () =>
       api.POST("/api/cartoes", {
@@ -64,7 +64,7 @@ export function SecaoDeCartoes({ executar, setErro }: { executar: Executar; setE
       <h3 id="titulo-cartoes">Cartões</h3>
       <ul className="lista">
         {cartoes.map((c) => (
-          <LinhaDeCartao key={c.id} cartao={c} titular={nomeDe(c.titular_id)} aoSalvar={salvar} />
+          <LinhaDeCartao key={c.id} cartao={c} titular={nomeDe(c.titular_id)} aoSalvar={salvar} setErro={setErro} />
         ))}
       </ul>
       <form aria-label="Novo cartão" onSubmit={(e) => void criar(e)}>
@@ -108,16 +108,18 @@ function resumoDoTitular(c: Cartao): string {
 }
 
 const AVISO_DO_DIA_PADRAO =
-  "Mudar o dia padrão vale só para as faturas abertas e futuras: só as faturas abertas e futuras mudam, e as compras delas vão para a fatura certa. As fechadas e pagas ficam como estão.";
+  "Ao mudar o dia padrão, só as faturas abertas e futuras mudam, e as compras delas vão para a fatura certa. As fechadas e pagas ficam como estão.";
 
 function LinhaDeCartao({
   cartao,
   titular,
   aoSalvar,
+  setErro,
 }: {
   cartao: Cartao;
   titular: string;
   aoSalvar: (cartao: Cartao, mudanca: Partial<Cartao>) => Promise<boolean>;
+  setErro: (erro: string) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(cartao.nome);
@@ -144,7 +146,7 @@ function LinhaDeCartao({
           onSubmit={(e) => {
             e.preventDefault();
             const centavos = adicional ? null : emCentavos(limite);
-            if (centavos === undefined) return;
+            if (centavos === undefined || centavos === 0) return setErro("Informe o limite em reais, maior que zero (ex.: 5000,00).");
             const mudanca: Partial<Cartao> = { nome: nome.trim() };
             if (!adicional) {
               Object.assign(mudanca, {
@@ -244,9 +246,12 @@ function FormularioDeFatura({ cartao, aoFechar }: { cartao: Cartao; aoFechar: ()
   const mesAtual = atual?.mes;
   useEffect(() => {
     // Só se a pessoa ainda não escolheu: a lista pode chegar depois do primeiro toque.
-    if (mesAtual && escolha === "") escolher(mesAtual);
+    if (escolha !== "") return;
+    if (mesAtual) escolher(mesAtual);
+    else if (faturas) setEscolha("outro"); // cartão sem fatura ainda: só dá para escolher o mês
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mesAtual]);
+  }, [mesAtual, faturas]);
 
   async function salvar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

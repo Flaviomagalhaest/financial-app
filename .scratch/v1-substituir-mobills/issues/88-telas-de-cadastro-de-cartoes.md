@@ -29,3 +29,4 @@ Na configuração, junto das contas (`#/contas-e-categorias`, ticket 74), o casa
 - "Acertar fatura de <cartão>" lista as faturas que já nasceram (abre na aberta mais antiga) e "Outro mês…" para uma que ainda vai nascer; só aparece para titular não arquivado. O aviso de redistribuição das compras está no formulário, e o do dia padrão no formulário de edição.
 - `emCentavos` saiu da tela de contas para `web/src/lancamentos/dinheiro.ts`, porque as duas telas usam.
 - Testes de navegador: `web/e2e/cartoes-cadastro.spec.ts`.
+- Limitações conhecidas (sem ticket próprio ainda): a lista de faturas só tem as que já nasceram, então "a próxima" ainda inexistente se acerta por "Outro mês…"; um campo de data em branco é enviado como "sem mudança" (a API não limpa data de fatura); o aviso do dia padrão é fixo no formulário de edição, não reage ao dia digitado.
