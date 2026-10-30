@@ -16,8 +16,8 @@ Interface para o que a API do ticket 40 já faz: escolher e criar tags no própr
 ## Checklist
 
 - [x] Campo de tags no lançamento, criando a tag nova ali mesmo (ticket 42)
-- [ ] Configuração de categorias: juntar e excluir (renomear e arquivar já existem, do ticket 74)
-- [ ] Configuração de tags: renomear, arquivar, juntar e excluir
-- [ ] Decidir com o dono se despesa e receita precisam sempre ter uma categoria ativa (a API hoje deixa arquivar ou excluir a última)
-- [ ] Testes de navegador
+- [x] Configuração de categorias: juntar e excluir (renomear e arquivar já existem, do ticket 74)
+- [x] Configuração de tags: renomear, arquivar, juntar e excluir
+- [x] Decidido com o dono: despesa e receita não precisam sempre ter uma categoria ativa; a API segue como está
+- [x] Testes de navegador (`web/e2e/tags-e-manutencao.spec.ts`)
 - [ ] Verificações do projeto rodando e PR aberto para `main`

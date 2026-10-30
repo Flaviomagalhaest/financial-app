@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
-import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, type Categoria, type Conta } from "../dados";
+import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta } from "../dados";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 
 const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: "Carteira" } as const;
@@ -11,10 +11,11 @@ export function TelaDeContasECategorias() {
   const { categorias, atualizadoEm, recarregar: recarregarCadastro } = useCadastro();
   // Aqui as arquivadas aparecem também, para poderem voltar.
   const { contas, recarregar: recarregarContas } = useContasComArquivadas();
+  const { tags, recarregar: recarregarTags } = useTagsComArquivadas();
   const online = useConexao();
   const [erro, setErro] = useState("");
   const recarregar = async () => {
-    await Promise.all([recarregarCadastro(), recarregarContas()]);
+    await Promise.all([recarregarCadastro(), recarregarContas(), recarregarTags()]);
   };
 
   async function cadastrar(
@@ -60,12 +61,17 @@ export function TelaDeContasECategorias() {
     }
   }
 
-  async function alterar(id: string, mudanca: { nome?: string; arquivada?: boolean }): Promise<boolean> {
+  /** Roda uma chamada de manutenção e recarrega; `false` com a mensagem na tela quando não deu. */
+  async function manter(
+    o: string,
+    chamar: () => Promise<{ data?: unknown; response: Response; error?: unknown }>,
+  ): Promise<boolean> {
     setErro("");
     try {
-      const { data } = await api.PATCH("/api/categorias/{id}", { params: { path: { id } }, body: mudanca });
-      if (!data) {
-        setErro("Não foi possível alterar a categoria.");
+      const { response, error } = await chamar();
+      if (!response.ok) {
+        const motivo = (error as { detail?: unknown } | undefined)?.detail;
+        setErro(`Não foi possível ${o}${typeof motivo === "string" ? `: ${motivo}` : ""}.`);
         return false;
       }
       await recarregar();
@@ -74,6 +80,31 @@ export function TelaDeContasECategorias() {
       setErro("Sem internet: a alteração precisa de internet.");
       return false;
     }
+  }
+
+  const manutencaoDe = (rota: "categorias" | "tags"): Manutencao => {
+    const id = (i: string) => ({ params: { path: { id: i } } });
+    const singular = rota === "tags" ? "tag" : "categoria";
+    return rota === "tags"
+      ? {
+          alterar: (i, corpo) => manter(`alterar a ${singular}`, () => api.PATCH("/api/tags/{id}", { ...id(i), body: corpo })),
+          juntar: (i, destino) => manter(`juntar a ${singular}`, () => api.POST("/api/tags/{id}/juntar", { ...id(i), body: { destino_id: destino } })),
+          excluir: (i) => manter(`excluir a ${singular}`, () => api.DELETE("/api/tags/{id}", id(i))),
+        }
+      : {
+          alterar: (i, corpo) => manter(`alterar a ${singular}`, () => api.PATCH("/api/categorias/{id}", { ...id(i), body: corpo })),
+          juntar: (i, destino) => manter(`juntar a ${singular}`, () => api.POST("/api/categorias/{id}/juntar", { ...id(i), body: { destino_id: destino } })),
+          excluir: (i) => manter(`excluir a ${singular}`, () => api.DELETE("/api/categorias/{id}", id(i))),
+        };
+  };
+  const dasCategorias = manutencaoDe("categorias");
+  const dasTags = manutencaoDe("tags");
+
+  async function criarTag(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const nome = String(new FormData(form).get("nome")).trim();
+    if (await manter("criar a tag", () => api.POST("/api/tags", { body: { nome } }))) form.reset();
   }
 
   return (
@@ -134,7 +165,12 @@ export function TelaDeContasECategorias() {
             {categorias
               .filter((c) => c.tipo === tipo)
               .map((c) => (
-                <LinhaDeCategoria key={c.id} categoria={c} aoAlterar={alterar} />
+                <LinhaDeItem
+                    key={c.id}
+                    item={c}
+                    manutencao={dasCategorias}
+                    destinos={categorias.filter((d) => d.tipo === c.tipo && d.id !== c.id && !d.arquivada)}
+                  />
               ))}
           </ul>
         </div>
@@ -161,6 +197,19 @@ export function TelaDeContasECategorias() {
         </select>
         <button type="submit">Cadastrar</button>
       </form>
+      <section aria-labelledby="titulo-tags">
+        <h3 id="titulo-tags">Tags</h3>
+        <ul className="lista">
+          {tags.map((t) => (
+            <LinhaDeItem key={t.id} item={t} manutencao={dasTags} destinos={tags.filter((d) => d.id !== t.id && !d.arquivada)} />
+          ))}
+        </ul>
+        <form aria-label="Nova tag" onSubmit={(e) => void criarTag(e)}>
+          <label htmlFor="tag-nome">Nome da nova tag</label>
+          <input id="tag-nome" name="nome" required pattern=".*\S.*" />
+          <button type="submit">Criar tag</button>
+        </form>
+      </section>
       </fieldset>
       <a href="#/hoje">Voltar</a>
     </section>
@@ -255,28 +304,39 @@ function LinhaDeConta({
   );
 }
 
-function LinhaDeCategoria({
-  categoria,
-  aoAlterar,
+type Manutencao = {
+  alterar: (id: string, mudanca: { nome?: string; arquivada?: boolean }) => Promise<boolean>;
+  juntar: (id: string, destinoId: string) => Promise<boolean>;
+  excluir: (id: string) => Promise<boolean>;
+};
+
+/** Uma categoria ou tag: renomear, arquivar, juntar em outra e excluir. */
+function LinhaDeItem({
+  item,
+  manutencao,
+  destinos,
 }: {
-  categoria: Categoria;
-  aoAlterar: (id: string, mudanca: { nome?: string; arquivada?: boolean }) => Promise<boolean>;
+  item: { id: string; nome: string; arquivada: boolean };
+  manutencao: Manutencao;
+  destinos: { id: string; nome: string }[];
 }) {
   const [editando, setEditando] = useState(false);
-  const [nome, setNome] = useState(categoria.nome);
+  const [nome, setNome] = useState(item.nome);
+  const [juntando, setJuntando] = useState(false);
+  const [destino, setDestino] = useState("");
 
   if (editando) {
     return (
       <li>
         <form
-          aria-label={`Renomear ${categoria.nome}`}
+          aria-label={`Renomear ${item.nome}`}
           onSubmit={(e) => {
             e.preventDefault();
-            void aoAlterar(categoria.id, { nome: nome.trim() }).then((ok) => ok && setEditando(false));
+            void manutencao.alterar(item.id, { nome: nome.trim() }).then((ok) => ok && setEditando(false));
           }}
         >
-          <label htmlFor={`nome-${categoria.id}`}>Novo nome de {categoria.nome}</label>
-          <input id={`nome-${categoria.id}`} value={nome} onChange={(e) => setNome(e.target.value)} pattern=".*\S.*" required />
+          <label htmlFor={`nome-${item.id}`}>Novo nome de {item.nome}</label>
+          <input id={`nome-${item.id}`} value={nome} onChange={(e) => setNome(e.target.value)} pattern=".*\S.*" required />
           <button type="submit">Salvar nome</button>
           <button type="button" className="secundario" onClick={() => setEditando(false)}>
             Cancelar
@@ -286,26 +346,62 @@ function LinhaDeCategoria({
     );
   }
   return (
-    <li className={categoria.arquivada ? "arquivada" : undefined}>
+    <li className={item.arquivada ? "arquivada" : undefined}>
       <div>
-        {categoria.nome}
-        {categoria.arquivada && " (arquivada)"}
+        {item.nome}
+        {item.arquivada && " (arquivada)"}
       </div>
       <div className="acoes">
         <button
           type="button"
           className="secundario"
           onClick={() => {
-            setNome(categoria.nome);
+            setNome(item.nome);
             setEditando(true);
           }}
         >
-          Renomear {categoria.nome}
+          Renomear {item.nome}
         </button>
-        <button type="button" className="secundario" onClick={() => void aoAlterar(categoria.id, { arquivada: !categoria.arquivada })}>
-          {categoria.arquivada ? "Desarquivar" : "Arquivar"} {categoria.nome}
+        <button type="button" className="secundario" onClick={() => void manutencao.alterar(item.id, { arquivada: !item.arquivada })}>
+          {item.arquivada ? "Desarquivar" : "Arquivar"} {item.nome}
         </button>
+        <button type="button" className="secundario" onClick={() => void manutencao.excluir(item.id)}>
+          Excluir {item.nome}
+        </button>
+        {destinos.length > 0 && !juntando && (
+          <button type="button" className="secundario" onClick={() => setJuntando(true)}>
+            Juntar {item.nome}
+          </button>
+        )}
       </div>
+      {juntando && (
+        <form
+          aria-label={`Juntar ${item.nome}`}
+          className="acoes"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (destino) void manutencao.juntar(item.id, destino).then((ok) => ok && setJuntando(false));
+          }}
+        >
+          <label htmlFor={`juntar-${item.id}`} className="oculto">
+            Juntar {item.nome} em
+          </label>
+          <select id={`juntar-${item.id}`} value={destino} onChange={(e) => setDestino(e.target.value)}>
+            <option value="">Juntar em…</option>
+            {destinos.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.nome}
+              </option>
+            ))}
+          </select>
+          <button type="submit" disabled={!destino}>
+            Confirmar junção
+          </button>
+          <button type="button" className="secundario" onClick={() => setJuntando(false)}>
+            Cancelar
+          </button>
+        </form>
+      )}
     </li>
   );
 }

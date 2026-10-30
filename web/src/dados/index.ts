@@ -289,6 +289,12 @@ export function useContasComArquivadas() {
   return { contas: dados ?? [], atualizadoEm, recarregar: buscar };
 }
 
+/** Todas as tags, arquivadas inclusive, com o id, para a tela que as configura. */
+export function useTagsComArquivadas() {
+  const { dados, atualizadoEm, buscar } = useResposta("/api/tags");
+  return { tags: dados ?? [], atualizadoEm, recarregar: buscar };
+}
+
 /** Se o navegador diz que há rede; para desativar o que precisa de internet. */
 export function useConexao(): boolean {
   const [online, setOnline] = useState(navigator.onLine);
