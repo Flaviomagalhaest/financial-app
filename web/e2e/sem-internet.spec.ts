@@ -318,3 +318,17 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   await expect(editado).toContainText("− R$ 0,19");
   await expect(excluido).toHaveCount(0);
 });
+
+test("lançado sem internet antes de a lista ser guardada continua no Histórico depois de enviado, mesmo sem internet", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["3", "00"], conta, categoria: mercado, descricao: `Sem lista ${s}` });
+  await aba(page, "Hoje");
+  await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento não enviado");
+  await context.setOffline(false);
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+
+  await context.setOffline(true);
+  await aba(page, "Histórico");
+  await expect(page.getByRole("listitem").filter({ hasText: `Sem lista ${s}` })).toContainText("− R$ 3,00");
+});

@@ -368,6 +368,9 @@ function pedirEnvioEmSegundoPlano() {
 
 /** Sobe a fila agora; `false` quando o servidor não respondeu. */
 export async function enviarAgora(): Promise<boolean> {
+  // O envio tira o item da fila e só atualiza a lista que já está guardada: sem ela, o lançamento
+  // enviado sumiria do aparelho até a próxima leitura com internet (ticket 90).
+  if ((await lerFila()).length > 0 && !(await lerResposta(LISTA))) await buscarEGuardar(LISTA, LEITURAS[LISTA]);
   const enviou = await enviarFila(remeter);
   if (!enviou) pedirEnvioEmSegundoPlano();
   return enviou;
