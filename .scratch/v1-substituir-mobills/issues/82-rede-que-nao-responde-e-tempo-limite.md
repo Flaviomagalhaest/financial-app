@@ -1,7 +1,7 @@
 # Sem internet de verdade: rede que não responde e tempo limite
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -15,7 +15,11 @@ A camada de dados (`web/src/dados/`) decide "sem internet" também pela última 
 
 ## Checklist
 
-- [ ] Tempo limite nas chamadas de `web/src/dados/` (tela e `segundoPlano.ts`); o valor é provisório: entra em `config/valores-iniciais.json` e o dono confirma
-- [ ] Estado de conexão que junta `navigator.onLine` e a última falha, usado pelo "precisa de internet" (`useConexao`)
-- [ ] Teste de navegador com uma rota que nunca responde: a tela mostra a resposta guardada e o lançamento fica não enviado até a rede voltar
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Tempo limite nas chamadas de `web/src/dados/` (tela e `segundoPlano.ts`); o valor é provisório: entra em `config/valores-iniciais.json` e o dono confirma
+- [x] Estado de conexão que junta `navigator.onLine` e a última falha, usado pelo "precisa de internet" (`useConexao`)
+- [x] Teste de navegador com uma rota que nunca responde: a tela mostra a resposta guardada e o lançamento fica não enviado até a rede voltar
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Resolução
+
+`web/src/dados/rede.ts` embrulha o `fetch` (cliente da API e `segundoPlano.ts`) com `tempoLimiteDaRedeSegundos` (10 s, provisório) e guarda se a última chamada falhou; `useConexao` junta isso ao `navigator.onLine`, e o evento `online` limpa o aviso. Teste e2e em `sem-internet.spec.ts`. A renovação do token no Cognito também tem o tempo limite, e enquanto a última chamada falhou `useConexao` tenta `/api/saude` a cada 10 s para limpar o aviso num Wi-Fi sem saída. O `cartoes.spec.ts:87` já falhava antes da mudança: [ticket 104](104-e2e-cartoes-token-da-pagina.md). Pendência: valor do tempo limite, [ticket 103](103-tempo-limite-da-rede-valor-provisorio.md).

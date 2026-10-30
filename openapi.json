@@ -1992,6 +1992,77 @@
         }
       }
     },
+    "/api/meses/{mes}": {
+      "get": {
+        "summary": "Ler Mes",
+        "operationId": "ler_mes",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeituraDoMes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hoje": {
+      "get": {
+        "summary": "Ler Hoje",
+        "operationId": "ler_hoje",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hoje"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/pessoas": {
       "get": {
         "summary": "Listar Pessoas",
@@ -3333,6 +3404,37 @@
         ],
         "title": "Categoria"
       },
+      "Comparacao": {
+        "properties": {
+          "anterior": {
+            "type": "string",
+            "title": "Anterior"
+          },
+          "ano_passado": {
+            "type": "string",
+            "title": "Ano Passado"
+          },
+          "linhas": {
+            "items": {
+              "$ref": "#/components/schemas/LinhaDaComparacao"
+            },
+            "type": "array",
+            "title": "Linhas"
+          },
+          "total": {
+            "$ref": "#/components/schemas/ValoresDaComparacao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "anterior",
+          "ano_passado",
+          "linhas",
+          "total"
+        ],
+        "title": "Comparacao",
+        "description": "As despesas do mês por categoria contra o mês anterior e o mesmo mês do ano passado, com o\nrealizado e o previsto. O lançamento com várias categorias conta inteiro em cada linha, e o\ntotal o conta uma vez (com os ajustes de fatura), então as linhas somam mais que o total."
+      },
       "Confirmacao": {
         "properties": {
           "versao": {
@@ -3522,6 +3624,35 @@
           "de"
         ],
         "title": "CopiaDeMes"
+      },
+      "Despesas": {
+        "properties": {
+          "realizado_centavos": {
+            "type": "integer",
+            "title": "Realizado Centavos"
+          },
+          "previsto_centavos": {
+            "type": "integer",
+            "title": "Previsto Centavos"
+          },
+          "planejado_centavos": {
+            "type": "integer",
+            "title": "Planejado Centavos"
+          },
+          "livre_centavos": {
+            "type": "integer",
+            "title": "Livre Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "realizado_centavos",
+          "previsto_centavos",
+          "planejado_centavos",
+          "livre_centavos"
+        ],
+        "title": "Despesas",
+        "description": "As despesas do mês (compras menos estornos), com os ajustes de fatura no realizado."
       },
       "EdicaoDeCartao": {
         "properties": {
@@ -3814,6 +3945,89 @@
         ],
         "title": "Fatura"
       },
+      "Fechamento": {
+        "properties": {
+          "receitas_centavos": {
+            "type": "integer",
+            "title": "Receitas Centavos"
+          },
+          "despesas_centavos": {
+            "type": "integer",
+            "title": "Despesas Centavos"
+          },
+          "sobra_centavos": {
+            "type": "integer",
+            "title": "Sobra Centavos"
+          },
+          "sobra_percentual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sobra Percentual"
+          },
+          "guardado_centavos": {
+            "type": "integer",
+            "title": "Guardado Centavos"
+          },
+          "previstos": {
+            "type": "integer",
+            "title": "Previstos"
+          },
+          "itens_acima": {
+            "items": {
+              "$ref": "#/components/schemas/ItemAcima"
+            },
+            "type": "array",
+            "title": "Itens Acima"
+          },
+          "itens_de_despesa": {
+            "type": "integer",
+            "title": "Itens De Despesa"
+          },
+          "variacao_anterior_percentual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Anterior Percentual"
+          },
+          "variacao_ano_passado_percentual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Ano Passado Percentual"
+          }
+        },
+        "type": "object",
+        "required": [
+          "receitas_centavos",
+          "despesas_centavos",
+          "sobra_centavos",
+          "sobra_percentual",
+          "guardado_centavos",
+          "previstos",
+          "itens_acima",
+          "itens_de_despesa",
+          "variacao_anterior_percentual",
+          "variacao_ano_passado_percentual"
+        ],
+        "title": "Fechamento",
+        "description": "O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que\naconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz\nquantos lançamentos são."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3826,6 +4040,80 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "Hoje": {
+        "properties": {
+          "dia": {
+            "type": "string",
+            "format": "date",
+            "title": "Dia"
+          },
+          "mes": {
+            "type": "string",
+            "title": "Mes"
+          },
+          "planejado_centavos": {
+            "type": "integer",
+            "title": "Planejado Centavos"
+          },
+          "ainda_da_para_gastar_centavos": {
+            "type": "integer",
+            "title": "Ainda Da Para Gastar Centavos"
+          },
+          "ajustes_de_fatura_centavos": {
+            "type": "integer",
+            "title": "Ajustes De Fatura Centavos"
+          },
+          "a_escolher": {
+            "items": {
+              "$ref": "#/components/schemas/AEscolher"
+            },
+            "type": "array",
+            "title": "A Escolher"
+          },
+          "lancamentos_a_escolher": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Lancamentos A Escolher"
+          },
+          "contas_da_semana": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Contas Da Semana"
+          },
+          "faturas_que_vencem": {
+            "items": {
+              "$ref": "#/components/schemas/Fatura"
+            },
+            "type": "array",
+            "title": "Faturas Que Vencem"
+          },
+          "itens_em_destaque": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoPlanejamento"
+            },
+            "type": "array",
+            "title": "Itens Em Destaque"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dia",
+          "mes",
+          "planejado_centavos",
+          "ainda_da_para_gastar_centavos",
+          "ajustes_de_fatura_centavos",
+          "a_escolher",
+          "lancamentos_a_escolher",
+          "contas_da_semana",
+          "faturas_que_vencem",
+          "itens_em_destaque"
+        ],
+        "title": "Hoje"
       },
       "IndiceDeSugestao": {
         "properties": {
@@ -3848,6 +4136,25 @@
           "sugestoes"
         ],
         "title": "IndiceDeSugestao"
+      },
+      "ItemAcima": {
+        "properties": {
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          },
+          "passou_centavos": {
+            "type": "integer",
+            "title": "Passou Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoria_id",
+          "passou_centavos"
+        ],
+        "title": "ItemAcima"
       },
       "ItemDoModelo": {
         "properties": {
@@ -4174,6 +4481,61 @@
         ],
         "title": "Lancamento"
       },
+      "LeituraDoMes": {
+        "properties": {
+          "mes": {
+            "type": "string",
+            "title": "Mes"
+          },
+          "situacao": {
+            "type": "string",
+            "enum": [
+              "passado",
+              "atual",
+              "futuro"
+            ],
+            "title": "Situacao"
+          },
+          "despesas": {
+            "$ref": "#/components/schemas/Despesas"
+          },
+          "receitas": {
+            "$ref": "#/components/schemas/Receitas"
+          },
+          "planejamento": {
+            "$ref": "#/components/schemas/Planejamento"
+          },
+          "comparacao": {
+            "$ref": "#/components/schemas/Comparacao"
+          },
+          "ranking": {
+            "$ref": "#/components/schemas/Ranking"
+          },
+          "fechamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Fechamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes",
+          "situacao",
+          "despesas",
+          "receitas",
+          "planejamento",
+          "comparacao",
+          "ranking",
+          "fechamento"
+        ],
+        "title": "LeituraDoMes",
+        "description": "Tudo o que a aba Mês mostra de um mês, numa leitura só."
+      },
       "LimiteDoCartao": {
         "properties": {
           "limite_centavos": {
@@ -4242,6 +4604,69 @@
         ],
         "title": "LimiteDoCartao",
         "description": "Sem `limite_centavos` o cartão não mostra limite, mas o comprometido continua a conta."
+      },
+      "LinhaDaComparacao": {
+        "properties": {
+          "mes_centavos": {
+            "type": "integer",
+            "title": "Mes Centavos"
+          },
+          "anterior_centavos": {
+            "type": "integer",
+            "title": "Anterior Centavos"
+          },
+          "ano_passado_centavos": {
+            "type": "integer",
+            "title": "Ano Passado Centavos"
+          },
+          "categoria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Categoria Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes_centavos",
+          "anterior_centavos",
+          "ano_passado_centavos",
+          "categoria_id"
+        ],
+        "title": "LinhaDaComparacao"
+      },
+      "LinhaDoRanking": {
+        "properties": {
+          "chave": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chave"
+          },
+          "centavos": {
+            "type": "integer",
+            "title": "Centavos"
+          },
+          "lancamento_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Lancamento Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chave",
+          "centavos",
+          "lancamento_ids"
+        ],
+        "title": "LinhaDoRanking"
       },
       "Lote": {
         "properties": {
@@ -5361,6 +5786,57 @@
         "title": "Quitacao",
         "description": "O pagamento de uma vez de tudo o que falta."
       },
+      "Ranking": {
+        "properties": {
+          "por_categoria": {
+            "items": {
+              "$ref": "#/components/schemas/LinhaDoRanking"
+            },
+            "type": "array",
+            "title": "Por Categoria"
+          },
+          "por_tag": {
+            "items": {
+              "$ref": "#/components/schemas/LinhaDoRanking"
+            },
+            "type": "array",
+            "title": "Por Tag"
+          },
+          "por_pessoa": {
+            "items": {
+              "$ref": "#/components/schemas/LinhaDoRanking"
+            },
+            "type": "array",
+            "title": "Por Pessoa"
+          }
+        },
+        "type": "object",
+        "required": [
+          "por_categoria",
+          "por_tag",
+          "por_pessoa"
+        ],
+        "title": "Ranking",
+        "description": "Para onde foram as despesas do mês (realizado e previsto, sem o ajuste de fatura), da\nlinha maior à menor. Por categoria e por tag o lançamento conta inteiro em cada uma que tem;\npor pessoa, uma vez."
+      },
+      "Receitas": {
+        "properties": {
+          "realizado_centavos": {
+            "type": "integer",
+            "title": "Realizado Centavos"
+          },
+          "previsto_centavos": {
+            "type": "integer",
+            "title": "Previsto Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "realizado_centavos",
+          "previsto_centavos"
+        ],
+        "title": "Receitas"
+      },
       "Recorrencia": {
         "properties": {
           "id": {
@@ -5949,6 +6425,29 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValoresDaComparacao": {
+        "properties": {
+          "mes_centavos": {
+            "type": "integer",
+            "title": "Mes Centavos"
+          },
+          "anterior_centavos": {
+            "type": "integer",
+            "title": "Anterior Centavos"
+          },
+          "ano_passado_centavos": {
+            "type": "integer",
+            "title": "Ano Passado Centavos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes_centavos",
+          "anterior_centavos",
+          "ano_passado_centavos"
+        ],
+        "title": "ValoresDaComparacao"
       }
     },
     "securitySchemes": {

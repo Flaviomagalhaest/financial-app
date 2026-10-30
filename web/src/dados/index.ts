@@ -45,6 +45,7 @@ import {
   type Mudanca,
   type Planejamento,
 } from "./aviso";
+import { fetchComTempoLimite, ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
@@ -52,6 +53,9 @@ export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
+export type LeituraDoMes = components["schemas"]["LeituraDoMes"];
+export type ItemDoModelo = components["schemas"]["ItemDoModelo"];
+export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type { Aviso } from "./aviso";
 export type { Campo } from "./fila";
@@ -118,6 +122,22 @@ function useResposta<C extends Caminho>(caminho: C) {
 /** As faturas de um cartão, da mais antiga à mais nova; as do adicional são as do titular. */
 export function useFaturas(cartaoId: string) {
   return useRespostaDe<Fatura[]>(caminhoDasFaturas(cartaoId), faturasDe(cartaoId));
+}
+
+/** A aba Mês de um mês (`AAAA-MM`), numa leitura só, guardada para mostrar sem internet. */
+export function useMes(mes: string) {
+  const ler = () => api.GET("/api/meses/{mes}", { params: { path: { mes } } });
+  return useRespostaDe<LeituraDoMes>(`/api/meses/${mes}`, ler);
+}
+
+/** O modelo padrão do planejamento, que "Aplicar modelo padrão" copia para um mês vazio. */
+export function useModeloPadrao() {
+  return useRespostaDe<{ itens: ItemDoModelo[] }>("/api/planejamento/modelo", () => api.GET("/api/planejamento/modelo"));
+}
+
+/** A leitura da tela Hoje, em uma chamada; sem internet, a última guardada. */
+export function useHoje() {
+  return useRespostaDe<LeituraDaHoje>("/api/hoje", () => api.GET("/api/hoje"));
 }
 
 /** O limite comprometido e disponível do cartão titular (o adicional divide o dele). */
@@ -443,19 +463,32 @@ export function useTagsComArquivadas() {
   return { tags: dados ?? [], atualizadoEm, recarregar: buscar };
 }
 
-/** Se o navegador diz que há rede; para desativar o que precisa de internet. */
+/** Se há rede: o navegador diz que sim e a última chamada ao servidor não falhou nem demorou. */
 export function useConexao(): boolean {
   const [online, setOnline] = useState(navigator.onLine);
+  const [semResposta, setSemResposta] = useState(ultimaChamadaFalhou);
   useEffect(() => {
     const mudou = () => setOnline(navigator.onLine);
-    window.addEventListener("online", mudou);
+    const voltou = () => {
+      mudou();
+      redeVoltou();
+    };
+    window.addEventListener("online", voltou);
     window.addEventListener("offline", mudou);
+    const parar = ouvirFalhaDeRede(() => setSemResposta(ultimaChamadaFalhou()));
     return () => {
-      window.removeEventListener("online", mudou);
+      window.removeEventListener("online", voltou);
       window.removeEventListener("offline", mudou);
+      parar();
     };
   }, []);
-  return online;
+  // O navegador não avisa que um Wi-Fi sem saída voltou: enquanto a última chamada falhou, tenta de novo.
+  useEffect(() => {
+    if (!semResposta) return;
+    const tentar = setInterval(() => void fetchComTempoLimite("/api/saude").catch(() => undefined), 10_000);
+    return () => clearInterval(tentar);
+  }, [semResposta]);
+  return online && !semResposta;
 }
 
 const remeter: Remessa = async (acoes) => {
@@ -490,6 +523,17 @@ function baseDe(mostrado?: LancamentoNaTela): Base | undefined {
 export async function salvarLancamento(lancamento: NovoLancamento, novo: boolean, mostrado?: LancamentoNaTela): Promise<void> {
   await enfileirarSalvar(lancamento, novo, baseDe(mostrado));
   void enviarAgora();
+}
+
+/**
+ * Em qual item do planejamento o lançamento "a escolher" conta. É uma mudança do lançamento, então
+ * vai pela fila e vale sem internet; devolve `false` quando ela não subiu agora.
+ */
+export async function escolherItem(mostrado: LancamentoNaTela, categoriaId: string): Promise<boolean> {
+  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes } = mostrado;
+  const lancamento = { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes, item_categoria_id: categoriaId };
+  await enfileirarSalvar(lancamento, false, baseDe(mostrado));
+  return enviarAgora();
 }
 
 export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {
@@ -536,14 +580,34 @@ export type NovaTransferencia = components["schemas"]["NovaTransferencia"];
  * Transferência precisa de internet (ADR 0011): não entra na fila. Devolve o motivo da recusa, ou
  * `null` quando gravou. Reenviar o mesmo id não duplica.
  */
-export async function criarTransferencia(transferencia: NovaTransferencia): Promise<string | null> {
+export function criarTransferencia(transferencia: NovaTransferencia): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/transferencias", { body: transferencia }), "o servidor recusou a transferência");
+}
+
+/** O motivo da recusa do servidor, ou `null` quando ele aceitou. */
+async function recusaDe(pedir: () => Promise<{ data?: unknown; error?: unknown }>, padrao: string): Promise<string | null> {
   try {
-    const { data, error } = await api.POST("/api/transferencias", { body: transferencia });
+    const { data, error } = await pedir();
     if (data) return null;
-    return typeof error?.detail === "string" ? error.detail : "o servidor recusou a transferência";
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return typeof detalhe === "string" ? detalhe : padrao;
   } catch {
     return "sem resposta do servidor";
   }
+}
+
+/** O planejamento precisa de internet (ADR 0011). Copia os itens de `de` para `mes`, que precisa estar vazio. */
+export function copiarPlanejamento(mes: string, de: string): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/planejamento/{mes}/copiar", { params: { path: { mes } }, body: { de } }), "o servidor recusou a cópia");
+}
+
+export function aplicarModeloPadrao(mes: string): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/planejamento/{mes}/aplicar-modelo", { params: { path: { mes } } }), "o servidor recusou o modelo padrão");
+}
+
+/** Troca o modelo padrão inteiro pelos itens enviados. */
+export function definirModeloPadrao(itens: ItemDoModelo[]): Promise<string | null> {
+  return recusaDe(() => api.PUT("/api/planejamento/modelo", { body: { itens } }), "o servidor recusou o modelo padrão");
 }
 
 export async function contarNaoEnviados(): Promise<number> {

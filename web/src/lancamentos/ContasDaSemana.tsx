@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../api/cliente";
 import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso } from "./datas";
@@ -8,27 +8,19 @@ import { comoNovo, guardarConflito, useCadastro, type Lancamento } from "../dado
 
 type Ajuste = { centavos: number; data: string; contaId: string };
 
+type Props = {
+  /** Os previstos que a leitura da Hoje trouxe; `null` enquanto não há resposta, nem guardada. */
+  lancamentos: Lancamento[] | null;
+  /** Lê a Hoje de novo, depois de confirmar. */
+  aoMudar: () => Promise<void>;
+};
+
 /** Previstos a confirmar (atrasados e os dos próximos 7 dias), com "Confirmar" em um toque ou "Ajustar". */
-export function ContasDaSemana() {
+export function ContasDaSemana({ lancamentos, aoMudar }: Props) {
   const { contas, contasECartoes, categorias } = useCadastro();
-  const [lancamentos, setLancamentos] = useState<Lancamento[] | null>(null);
   const [ajustando, setAjustando] = useState<{ id: string } & Ajuste | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
-
-  const carregar = useCallback(async () => {
-    try {
-      const { data } = await api.GET("/api/contas-da-semana");
-      if (data) setLancamentos(data.lancamentos);
-      else setErro("Não foi possível carregar as contas da semana.");
-    } catch {
-      setErro("Sem internet: não foi possível carregar as contas da semana.");
-    }
-  }, []);
-
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
 
   async function confirmar(l: Lancamento, ajuste?: Ajuste) {
     setErro("");
@@ -51,12 +43,12 @@ export function ContasDaSemana() {
       }
       if (response.status === 410) {
         setAjustando(null);
-        await carregar();
+        await aoMudar();
         return setErro("A outra pessoa excluiu este lançamento.");
       }
       if (error) return setErro("O servidor recusou a confirmação.");
       setAjustando(null);
-      await carregar();
+      await aoMudar();
     } catch {
       // A confirmação sem internet entra na fila do ticket 33.
       setErro("Sem internet: confirmar ainda precisa de internet.");
