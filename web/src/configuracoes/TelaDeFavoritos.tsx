@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { removerFavorito, reordenarFavoritos, useCadastro, useConexao, useFavoritos } from "../dados";
-import { nomePorId } from "../lancamentos/apresentacao";
+import { nomePorId, tituloDoFavorito } from "../lancamentos/apresentacao";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { SugeridosDeFavorito } from "../lancamentos/SugeridosDeFavorito";
 
@@ -37,7 +37,7 @@ export function TelaDeFavoritos() {
       )}
       <ul className="lista" aria-label="Favoritos">
         {favoritos.map((f, i) => {
-          const titulo = f.descricao || f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ");
+          const titulo = tituloDoFavorito(f, categorias);
           return (
             <li key={f.id}>
               <div>

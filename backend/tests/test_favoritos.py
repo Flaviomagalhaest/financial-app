@@ -249,3 +249,17 @@ def test_recusa_favorito_com_conta_inexistente_categoria_de_outro_tipo_ou_valor_
 
 def test_quem_nao_entrou_nao_ve_nem_mexe_nos_favoritos(casal: Casal):
     assert casal.client.get("/api/favoritos").status_code == 401
+
+
+def test_arquivar_a_categoria_nao_perde_o_valor_padrao_mas_tira_o_sugerido(casal: Casal):
+    conta, cafe, comida = casal.conta(), casal.categoria("Café"), casal.categoria("Comida")
+    casal.pedir("flavio", "POST", "/api/favoritos", json=favorito(conta, [cafe]))
+    lancar(casal, conta, [cafe], descricao="Café da padaria", valor_centavos=1500)
+    repetir(casal, 6, conta, [comida], descricao="Mercado")
+
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{cafe}", json={"arquivada": True})
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{comida}", json={"arquivada": True})
+
+    visto = listar(casal)
+    assert visto["favoritos"][0]["valor_padrao_centavos"] == 1500
+    assert visto["sugeridos"] == []

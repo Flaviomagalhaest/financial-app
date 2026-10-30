@@ -126,7 +126,7 @@ test("os mais repetidos viram sugeridos; promover ou dispensar, e reordenar e re
   await sugeridos.getByRole("button", { name: `Favoritar Mercado ${s}` }).click();
   await expect(page.getByRole("region", { name: "Favoritos" }).getByRole("link", { name: new RegExp(`Mercado ${s}`) })).toContainText("R$ 20,00");
   await sugeridos.getByRole("button", { name: `Dispensar Feira ${s}` }).click();
-  await expect(page.getByRole("region", { name: "Sugeridos" })).toHaveCount(0);
+  await expect(sugeridos.getByRole("listitem").filter({ hasText: `Feira ${s}` })).toHaveCount(0);
 
   // Reordenar e remover ficam nas configurações.
   await api.criar("/api/favoritos", { id: randomUUID(), descricao: `Padaria ${s}`, tipo: "despesa", conta_id: conta.id, categoria_ids: [categoria.id], tags: [], pessoa: null, valor_centavos: 1200 });

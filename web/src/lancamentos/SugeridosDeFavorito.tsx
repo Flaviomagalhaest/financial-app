@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { dispensarSugerido, promoverSugerido, useCadastro, useConexao, type Sugerido } from "../dados";
-import { nomePorId } from "./apresentacao";
+import { nomePorId, tituloDoFavorito } from "./apresentacao";
 import { formatarCentavos } from "./dinheiro";
 
 /**
@@ -25,7 +25,7 @@ export function SugeridosDeFavorito({ sugeridos, aoMudar }: { sugeridos: Sugerid
       <p className="vazio">Você repete estes lançamentos com frequência. Toque na ⭐ para favoritar.</p>
       <ul className="lista">
         {sugeridos.map((s) => {
-          const titulo = s.descricao || s.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ");
+          const titulo = tituloDoFavorito(s, categorias);
           return (
             <li key={s.chave}>
               <div>

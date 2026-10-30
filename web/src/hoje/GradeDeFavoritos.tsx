@@ -1,5 +1,5 @@
 import { useCadastro, useFavoritos } from "../dados";
-import { nomePorId } from "../lancamentos/apresentacao";
+import { tituloDoFavorito } from "../lancamentos/apresentacao";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { SugeridosDeFavorito } from "../lancamentos/SugeridosDeFavorito";
 
@@ -16,7 +16,7 @@ export function GradeDeFavoritos() {
           <div className="grade-de-favoritos">
             {favoritos.map((f) => (
               <a key={f.id} className="favorito-da-grade" href={`#/favorito/${f.id}`}>
-                <strong>{f.descricao || f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")}</strong>
+                <strong>{tituloDoFavorito(f, categorias)}</strong>
                 <span>{formatarCentavos(f.valor_padrao_centavos)}</span>
               </a>
             ))}

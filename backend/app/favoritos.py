@@ -69,18 +69,17 @@ class _Grupo(BaseModel):
 
 def _grupos(conn) -> dict[str, _Grupo]:
     """Por identidade, o último lançamento (o de data mais recente, e entre os do mesmo dia o
-    criado por último) e o total. O futuro, o excluído e o sem categoria ficam de fora."""
+    criado por último) e o total. O futuro, o excluído e o sem categoria ficam de fora. Categoria
+    e tag arquivadas contam: a identidade do favorito não muda quando se arquiva."""
     categorias: dict[UUID, list[UUID]] = {}
     for lancamento_id, categoria_id in conn.execute(
-        "SELECT lc.lancamento_id, lc.categoria_id FROM lancamento_categorias lc"
-        " JOIN categorias c ON c.id = lc.categoria_id WHERE c.arquivada_em IS NULL"
-        " ORDER BY lc.categoria_id"
+        "SELECT lancamento_id, categoria_id FROM lancamento_categorias ORDER BY categoria_id"
     ):
         categorias.setdefault(lancamento_id, []).append(categoria_id)
     tags: dict[UUID, list[str]] = {}
     for lancamento_id, nome in conn.execute(
         "SELECT lt.lancamento_id, t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
-        " WHERE t.arquivada_em IS NULL ORDER BY t.nome"
+        " ORDER BY t.nome"
     ):
         tags.setdefault(lancamento_id, []).append(nome)
     grupos: dict[str, _Grupo] = {}
@@ -149,10 +148,17 @@ class Favoritos(BaseModel):
 def _sugeridos(conn, favoritos: list[Favorito]) -> list[Sugerido]:
     config = valores_iniciais()["favoritos"]
     fora = {linha[0] for linha in conn.execute("SELECT identidade FROM favoritos")}
+    arquivadas = {
+        linha[0]
+        for linha in conn.execute("SELECT id FROM categorias WHERE arquivada_em IS NOT NULL")
+    }
+    # Não se sugere o que já não se pode escolher: categoria arquivada.
     candidatos = [
         (chave_, grupo)
         for chave_, grupo in _grupos(conn).items()
-        if chave_ not in fora and grupo.usos >= config["usosMinimos"]
+        if chave_ not in fora
+        and grupo.usos >= config["usosMinimos"]
+        and not arquivadas.intersection(grupo.dados.categoria_ids)
     ]
     # Mais usados primeiro; o empate fica com o que foi lançado por último (a ordem dos grupos).
     candidatos.sort(key=lambda c: -c[1].usos)

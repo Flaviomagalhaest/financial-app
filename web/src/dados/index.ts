@@ -188,12 +188,12 @@ export function atualizadoAs(em: number): string {
   return `atualizado às ${new Date(em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-/** A fila do aparelho, atualizada a cada mudança. */
-export function useFila(): ItemDaFila[] {
-  const [itens, setItens] = useState<ItemDaFila[]>([]);
+/** A fila do aparelho, atualizada a cada mudança; `lida` só depois da primeira leitura. */
+function useFilaLida() {
+  const [estado, setEstado] = useState<{ itens: ItemDaFila[]; lida: boolean }>({ itens: [], lida: false });
   useEffect(() => {
     let ativo = true;
-    const ler = () => void lerFila().then((lidos) => ativo && setItens(lidos));
+    const ler = () => void lerFila().then((lidos) => ativo && setEstado({ itens: lidos, lida: true }));
     ler();
     const parar = ouvirMudancas(ler);
     return () => {
@@ -201,7 +201,11 @@ export function useFila(): ItemDaFila[] {
       parar();
     };
   }, []);
-  return itens;
+  return estado;
+}
+
+export function useFila(): ItemDaFila[] {
+  return useFilaLida().itens;
 }
 
 
@@ -241,9 +245,9 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
 /** Lançamentos do servidor (ou os guardados) com a fila por cima. */
 export function useLancamentos() {
   const { dados, atualizadoEm, semDados } = useResposta(LISTA);
-  const fila = useFila();
+  const { itens: fila, lida } = useFilaLida();
   const lancamentos = useMemo(() => (dados ? naTela(dados, fila) : semDados ? naTela([], fila) : null), [dados, fila, semDados]);
-  return { lancamentos, atualizadoEm, semDados };
+  return { lancamentos, atualizadoEm, semDados, filaLida: lida };
 }
 
 /**
@@ -326,9 +330,10 @@ export function useSugestao(): FonteDeSugestao {
  */
 export function useFavoritos() {
   const { dados, atualizadoEm, semDados, buscar } = useResposta("/api/favoritos");
-  const { lancamentos } = useLancamentos();
+  const { lancamentos, filaLida } = useLancamentos();
   const favoritos = useMemo(() => comValorPadrao(dados?.favoritos ?? [], lancamentos ?? [], hoje()), [dados, lancamentos]);
-  return { favoritos, sugeridos: dados?.sugeridos ?? [], carregado: !!dados, atualizadoEm, semDados, recarregar: buscar };
+  // `carregado` espera os lançamentos do aparelho: sem eles e sem a fila o valor padrão ainda não é o do último.
+  return { favoritos, sugeridos: dados?.sugeridos ?? [], carregado: !!dados && lancamentos !== null && filaLida, atualizadoEm, semDados, recarregar: buscar };
 }
 
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */

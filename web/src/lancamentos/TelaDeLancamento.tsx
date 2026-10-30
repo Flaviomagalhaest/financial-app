@@ -15,7 +15,7 @@ import {
   type LancamentoNaTela,
   type Sugestao,
 } from "../dados";
-import { nomePorId, tituloDoLancamento } from "./apresentacao";
+import { nomePorId, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
@@ -164,8 +164,8 @@ export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", cent
   useEffect(() => {
     if (!favoritoId || favoritoAplicado || !carregado) return;
     const achado = favoritos.find((f) => f.id === favoritoId);
-    if (!achado) {
-      if (favoritosCarregados || semFavoritos) setErro("Favorito não encontrado.");
+    if (!achado || !favoritosCarregados) {
+      if (semFavoritos || (favoritosCarregados && !achado)) setErro("Favorito não encontrado.");
       return;
     }
     setFavoritoAplicado(true);
@@ -280,7 +280,7 @@ export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", cent
           {favoritos.map((f) => (
             <button type="button" key={f.id} className="repetir favorito" onClick={() => usarFavorito(f)}>
               <span aria-hidden="true">⭐ </span>
-              {f.descricao || f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {formatarCentavos(f.valor_padrao_centavos)}
+              {tituloDoFavorito(f, categorias)} · {formatarCentavos(f.valor_padrao_centavos)}
             </button>
           ))}
         </div>
