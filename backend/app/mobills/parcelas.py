@@ -4,6 +4,9 @@ total e números `n` em meses consecutivos. As parcelas que o export não traz s
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import date
+
+from app.recorrencias import mais_meses
 
 TOLERANCIA_EM_CENTAVOS = 1
 
@@ -22,6 +25,23 @@ class Parcelamento:
     @property
     def ultima(self):
         return self.lancamentos[-1]
+
+    @property
+    def do_app(self) -> bool:
+        """Vira parcelamento no app: é de despesa, tem 2 parcelas ou mais e a sequência não está
+        quebrada. Os outros (a receita parcelada, o `(1/1)` e a sequência quebrada, que vai para
+        a revisão) entram como lançamentos avulsos, sem gerar o que falta: os pedaços de uma
+        sequência quebrada seriam dois parcelamentos da mesma compra."""
+        return self.primeira.tipo == "despesa" and self.total >= 2 and self.quebra is None
+
+    @property
+    def anteriores(self) -> int:
+        """Quantas parcelas vieram antes do histórico, que não entram."""
+        return self.primeira.parcela[0] - 1
+
+    def data_da_1a(self) -> date:
+        """Fora do cartão, a data da 1ª parcela, mesmo a de antes do histórico."""
+        return mais_meses(self.primeira.data, -self.anteriores)
 
     @property
     def cartao(self) -> str | None:
