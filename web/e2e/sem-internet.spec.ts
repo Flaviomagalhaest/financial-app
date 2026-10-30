@@ -159,6 +159,7 @@ test("sem internet, as telas abertas mostram a última resposta com 'atualizado 
 });
 
 test("rede que não responde: a tela mostra a resposta guardada, o lançamento fica não enviado e sobe quando a rede responde", async ({ page }) => {
+  test.setTimeout(90_000);
   const { s, conta, mercado } = await prepararCasal(page);
   await lancar(page, { teclas: ["9", "00"], conta, categoria: mercado, descricao: `Guardado ${s}` });
   const guardado = page.getByRole("listitem").filter({ hasText: `Guardado ${s}` });
@@ -178,8 +179,8 @@ test("rede que não responde: a tela mostra a resposta guardada, o lançamento f
   await expect(page.getByRole("form", { name: "Nova conta" }).getByRole("button", { name: "Cadastrar" })).toBeDisabled();
 
   respondendo = true;
+  await expect(page.getByRole("form", { name: "Nova conta" }).getByRole("button", { name: "Cadastrar" })).toBeEnabled({ timeout: 25_000 });
   await aba(page, "Hoje");
-  await page.getByRole("button", { name: "Enviar agora" }).click();
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0, { timeout: 20_000 });
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });

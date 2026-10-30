@@ -32,7 +32,7 @@ import {
   LISTA,
   type Remessa,
 } from "./fila";
-import { ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
+import { fetchComTempoLimite, ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
@@ -322,6 +322,12 @@ export function useConexao(): boolean {
       parar();
     };
   }, []);
+  // O navegador não avisa que um Wi-Fi sem saída voltou: enquanto a última chamada falhou, tenta de novo.
+  useEffect(() => {
+    if (!semResposta) return;
+    const tentar = setInterval(() => void fetchComTempoLimite("/api/saude").catch(() => undefined), 10_000);
+    return () => clearInterval(tentar);
+  }, [semResposta]);
   return online && !semResposta;
 }
 

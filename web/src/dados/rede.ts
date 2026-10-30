@@ -1,6 +1,7 @@
 // A rede como a camada de dados a conhece: toda chamada tem tempo limite, e a última que falhou ou
 // demorou conta como "sem internet", mesmo com o navegador dizendo que há rede (Wi-Fi sem saída).
-// Só o que roda fora da tela entra aqui: o service worker empacota este arquivo.
+// Só o que roda fora da tela entra aqui: o service worker empacota este arquivo, com o estado dele
+// à parte: a falha vista lá não chega às telas.
 import valoresIniciais from "../../../config/valores-iniciais.json";
 
 const TEMPO_LIMITE_MS = valoresIniciais.tempoLimiteDaRedeSegundos * 1000;
@@ -8,7 +9,7 @@ const TEMPO_LIMITE_MS = valoresIniciais.tempoLimiteDaRedeSegundos * 1000;
 let semResposta = false;
 const ouvintes = new Set<() => void>();
 
-function marcar(valor: boolean) {
+function marcarSemResposta(valor: boolean) {
   if (semResposta === valor) return;
   semResposta = valor;
   ouvintes.forEach((avisar) => avisar());
@@ -23,7 +24,7 @@ export function ouvirFalhaDeRede(avisar: () => void): () => void {
 }
 
 /** O navegador avisou que a rede voltou: a próxima chamada decide, até lá vale o aviso dele. */
-export const redeVoltou = () => marcar(false);
+export const redeVoltou = () => marcarSemResposta(false);
 
 /** `fetch` com tempo limite, que registra se o servidor respondeu. Falha como o `fetch` falha. */
 export async function fetchComTempoLimite(entrada: RequestInfo | URL, opcoes?: RequestInit): Promise<Response> {
@@ -31,11 +32,11 @@ export async function fetchComTempoLimite(entrada: RequestInfo | URL, opcoes?: R
   const sinal = opcoes?.signal ?? (entrada instanceof Request ? entrada.signal : undefined);
   try {
     const resposta = await fetch(entrada, { ...opcoes, signal: sinal ? AbortSignal.any([sinal, limite]) : limite });
-    marcar(false);
+    marcarSemResposta(false);
     return resposta;
   } catch (erro) {
     // Cancelada por quem chamou não diz nada sobre a rede.
-    if (!sinal?.aborted) marcar(true);
+    if (!sinal?.aborted) marcarSemResposta(true);
     throw erro;
   }
 }
