@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { salvarLancamento, useCadastro, useLancamentos, usePessoas, useSugestao, useTags, type LancamentoNaTela, type Sugestao } from "../dados";
+import { salvarLancamento, useAvisoDePlanejamento, useCadastro, useLancamentos, usePessoas, useSugestao, useTags, type LancamentoNaTela, type Sugestao } from "../dados";
 import { nomePorId, tituloDoLancamento } from "./apresentacao";
+import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
@@ -55,6 +56,8 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
+  // O item tocado em "Conta no planejamento em:"; sem toque, o aviso propõe um.
+  const [itemTocado, setItemTocado] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -150,6 +153,13 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
 
+  const planejamento = useAvisoDePlanejamento(
+    { id: existente?.id ?? novoId, valor_centavos: centavos, categoria_ids: categoriaIds, conta_id: conta, data, fatura_mes: noCartao ? faturaMes : null, situacao },
+    itemTocado,
+  );
+  // Sem duas categorias com item, a escolha que o lançamento já tem fica, se a categoria dela ficou.
+  const itemEscolhido = planejamento.escolha ?? (existente?.item_categoria_id && categoriaIds.includes(existente.item_categoria_id) ? existente.item_categoria_id : null);
+
   /** Outro cartão ou uma conta desfaz a fatura escolhida à mão, como no servidor. */
   function trocarConta(nova: string) {
     if (nova !== conta) setFaturaMes(null);
@@ -183,6 +193,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           categoria_ids: categoriaIds,
           pessoa,
           fatura_mes: noCartao ? faturaMes : null,
+          item_categoria_id: itemEscolhido,
           ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
           tags,
         },
@@ -245,6 +256,14 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           </p>
         )}
       </div>
+      {categoriaIds.length > 0 && (
+        <AvisoDePlanejamento
+          {...planejamento}
+          tipo={tipo}
+          nomeDaCategoria={(c) => nomePorId(categorias, c)}
+          onEscolher={setItemTocado}
+        />
+      )}
       <Teclado centavos={centavos} onMudar={setCentavos} />
       {detalhesAbertos && (
         <FolhaDeDetalhes

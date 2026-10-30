@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/cliente";
 import type { components } from "../api/schema";
-import { hoje } from "../lancamentos/datas";
+import { hoje, mesDepois } from "../lancamentos/datas";
 import {
   apagarTudo,
   comTrava,
@@ -32,6 +32,18 @@ import {
   LISTA,
   type Remessa,
 } from "./fila";
+import {
+  avisoDePlanejamento,
+  comAFila,
+  fechamentoDaFatura,
+  mesEmQueConta,
+  ultimaEscolha,
+  type Aviso,
+  type CartaoDaCompra,
+  type Contagem,
+  type Mudanca,
+  type Planejamento,
+} from "./aviso";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
 
 export type Conta = components["schemas"]["Conta"];
@@ -39,6 +51,7 @@ export type Categoria = components["schemas"]["Categoria"];
 export type Pessoa = components["schemas"]["Pessoa"];
 export type Cartao = components["schemas"]["Cartao"];
 export type Fatura = components["schemas"]["Fatura"];
+export type { Aviso } from "./aviso";
 export type { Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
@@ -169,7 +182,7 @@ export function useFila(): ItemDaFila[] {
 
 
 /** A mesma regra do servidor: sem situação, data futura é prevista; só mudar a data refaz. */
-function situacaoNoAparelho(lancamento: NovoLancamento, anterior?: LancamentoNaTela) {
+function situacaoNoAparelho(lancamento: NovoLancamento, anterior?: Pick<LancamentoNaTela, "data" | "situacao">) {
   if (lancamento.situacao) return lancamento.situacao;
   if (anterior && anterior.data === lancamento.data) return anterior.situacao;
   return lancamento.data > hoje() ? "previsto" : "realizado";
@@ -281,6 +294,141 @@ export function useSugestao(): FonteDeSugestao {
     });
     return fonteDoHistorico([...depois, ...(indice?.sugestoes ?? [])]);
   }, [indice, lancamentos]);
+}
+
+const planejamentoDe = (mes: string) => () => api.GET("/api/planejamento/{mes}", { params: { path: { mes } } });
+const faturasDe = (id: string) => () => api.GET("/api/cartoes/{id}/faturas", { params: { path: { id } } });
+
+/**
+ * As faturas guardadas dos cartões titulares, buscadas de novo ao abrir: para o aparelho saber em
+ * que fatura cai a compra no cartão sem internet (o fechamento que alguém acertou à mão).
+ */
+function useFaturasDosTitulares(cartoes: Cartao[]): Map<string, Fatura[]> {
+  const chave = cartoes
+    .filter((c) => !c.titular_id)
+    .map((c) => c.id)
+    .sort()
+    .join();
+  const [porCartao, setPorCartao] = useState(new Map<string, Fatura[]>());
+  useEffect(() => {
+    let ativo = true;
+    const ids = chave ? chave.split(",") : [];
+    const lerGuardadas = () =>
+      void Promise.all(ids.map((id) => lerResposta<Fatura[]>(`/api/cartoes/${id}/faturas`))).then(
+        (guardadas) => ativo && setPorCartao(new Map(ids.map((id, i) => [id, guardadas[i]?.dados ?? []]))),
+      );
+    lerGuardadas();
+    for (const id of ids) void buscarEGuardar(`/api/cartoes/${id}/faturas`, faturasDe(id));
+    const parar = ouvirMudancas(lerGuardadas);
+    return () => {
+      ativo = false;
+      parar();
+    };
+  }, [chave]);
+  return porCartao;
+}
+
+/** Os dias e as faturas do titular, quando `contaId` é um cartão (o adicional usa os do titular). */
+function cartaoDaCompra(cartoes: Cartao[], faturas: Map<string, Fatura[]>, contaId: string): CartaoDaCompra | undefined {
+  const cartao = cartoes.find((c) => c.id === contaId);
+  if (!cartao) return undefined;
+  const titular = (cartao.titular_id && cartoes.find((c) => c.id === cartao.titular_id)) || cartao;
+  return { titular, faturas: faturas.get(titular.id) ?? [] };
+}
+
+/** Um lançamento como conta no planejamento do aparelho, com a hora da última mudança (`em`). */
+type NoAparelho = Contagem & { conta_id: string; data: string; em: number };
+
+/**
+ * As mudanças da fila que o servidor ainda não tem, sobre a versão que ele tem (`servidor`), e a
+ * versão que o aparelho mostra de cada lançamento. O conflito mostra a do servidor, e a exclusão que
+ * venceu já saiu dela: nenhum dos dois muda nada.
+ */
+function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoDe: (contaId: string) => CartaoDaCompra | undefined) {
+  const porId = new Map<string, NoAparelho>(servidor.map((l) => [l.id, { ...l, em: Date.parse(l.alterado_em) }]));
+  const mudancas: Mudanca[] = [];
+  for (const item of fila) {
+    if (item.conflito || item.exclusao) continue;
+    const antes = porId.get(item.id);
+    if (item.acao === "excluir" || !item.lancamento) {
+      porId.delete(item.id);
+      mudancas.push({ antes });
+      continue;
+    }
+    const l = item.lancamento;
+    const depois: NoAparelho = {
+      ...l,
+      // O estorno não muda de compra: vale o que o servidor tem.
+      estorno_de: l.estorno_de ?? antes?.estorno_de,
+      situacao: situacaoNoAparelho(l, antes),
+      mes: mesEmQueConta(l, antes, cartaoDe(l.conta_id)),
+      em: item.feitoEm ?? item.desde,
+    };
+    porId.set(item.id, depois);
+    mudancas.push({ antes, depois });
+  }
+  return { mudancas, porId };
+}
+
+/** O lançamento que está na tela de lançar, como ele vai ser salvo. */
+export type LancamentoEmEdicao = Pick<NovoLancamento, "id" | "valor_centavos" | "categoria_ids" | "conta_id" | "data" | "fatura_mes"> & {
+  situacao: LancamentoNaTela["situacao"];
+};
+
+/**
+ * O aviso de planejamento da tela de lançar, com e sem internet (ticket 52): o planejamento do mês
+ * em que o lançamento conta (o do servidor ou o guardado) com a fila por cima, e o efeito do
+ * lançamento nele. Com duas ou mais categorias com item, `escolha` é a categoria em que ele conta:
+ * a tocada na tela, a que ele já tem, a do item em que ele está, a última escolha para o conjunto
+ * ou a primeira marcada.
+ */
+export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTocada: string | null) {
+  const { dados: servidor } = useResposta(LISTA);
+  const { dados: cartoes } = useResposta("/api/cartoes");
+  const fila = useFila();
+  const faturas = useFaturasDosTitulares(cartoes ?? []);
+  const cartaoDe = useCallback((contaId: string) => cartaoDaCompra(cartoes ?? [], faturas, contaId), [cartoes, faturas]);
+  const { mudancas, porId } = useMemo(() => contagensNoAparelho(servidor ?? [], fila, cartaoDe), [servidor, fila, cartaoDe]);
+
+  const antes = porId.get(lancamento.id) ?? null;
+  const cartao = cartaoDe(lancamento.conta_id);
+  const mes = mesEmQueConta(lancamento, antes ?? undefined, cartao);
+  // Sem mês (cartão sem dia de fechamento), lê o deste mês, que o aviso não usa.
+  const guardado = useRespostaDe<Planejamento>(`/api/planejamento/${(mes ?? hoje()).slice(0, 7)}`, planejamentoDe((mes ?? hoje()).slice(0, 7)));
+  const planejamento = useMemo(() => (guardado.dados ? comAFila(guardado.dados, mudancas) : null), [guardado.dados, mudancas]);
+
+  const comItem = planejamento ? lancamento.categoria_ids.filter((c) => planejamento.itens.some((i) => i.categoria_id === c)) : [];
+  const escolha =
+    comItem.length < 2
+      ? null
+      : ([
+          escolhaTocada,
+          antes?.item_categoria_id,
+          planejamento?.a_escolher.find((a) => a.lancamento_id === lancamento.id)?.item_categoria_id,
+          ultimaEscolha(comItem, [...porId.values()]),
+          comItem[0],
+        ].find((c) => c && comItem.includes(c)) ?? null);
+
+  const aviso: Aviso | null =
+    planejamento && mes
+      ? avisoDePlanejamento(planejamento, antes, {
+          ...lancamento,
+          item_categoria_id: escolha ?? antes?.item_categoria_id,
+          estorno_de: antes?.estorno_de,
+          mes,
+        })
+      : null;
+  return {
+    aviso,
+    /** O mês em que o lançamento conta; `null` no cartão sem dia de fechamento e sem fatura escolhida. */
+    mes,
+    escolha,
+    /** No cartão, o fechamento da fatura em que a compra cai. */
+    fechamento: cartao && mes ? fechamentoDaFatura(cartao.titular, cartao.faturas, mes) : null,
+    noCartao: !!cartao,
+    atualizadoEm: guardado.atualizadoEm,
+    semPlanejamento: guardado.semDados,
+  };
 }
 
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
@@ -399,11 +547,22 @@ export async function contarNaoEnviados(): Promise<number> {
 export const apagarDadosDoAparelho = apagarTudo;
 
 /**
- * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão vem
- * logo depois, para o aparelho tê-lo sem internet mesmo sem ter aberto o novo lançamento.
+ * A fila sobe ao abrir o app, ao voltar para ele e quando a rede volta; o índice de sugestão e o
+ * planejamento vêm logo depois, para o aparelho tê-los sem internet mesmo sem ter aberto o novo
+ * lançamento.
  */
 export function iniciarEnvioAutomatico(): () => void {
-  const enviar = () => void enviarAgora().then(() => buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]));
+  const enviar = () =>
+    void enviarAgora().then(() =>
+      Promise.all([
+        buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]),
+        // O planejamento deste mês e do próximo (a compra no cartão), para o aviso sem internet.
+        ...[0, 1].map((n) => {
+          const mes = mesDepois(hoje(), n).slice(0, 7);
+          return buscarEGuardar(`/api/planejamento/${mes}`, planejamentoDe(mes));
+        }),
+      ]),
+    );
   const aoVoltar = () => document.visibilityState === "visible" && enviar();
   enviar();
   window.addEventListener("online", enviar);

@@ -33,6 +33,12 @@ def _proximo_mes(dia: date) -> date:
     return date(dia.year + dia.month // 12, dia.month % 12 + 1, 1)
 
 
+def percentual(usado: int, planejado: int) -> int:
+    """(realizado + previsto) sobre o planejado, arredondado com o meio para o par; o app repete
+    a conta no aviso de planejamento (`tabelas-de-teste/percentual.json`)."""
+    return round(usado * 100 / planejado)
+
+
 class NovoItem(BaseModel):
     id: UUID
     categoria_id: UUID
@@ -154,7 +160,7 @@ def _ler(conn, mes: str) -> Planejamento:
             planejado_centavos=planejado,
             realizado_centavos=somas[id]["realizado"],
             previsto_centavos=somas[id]["previsto"],
-            percentual=round((somas[id]["realizado"] + somas[id]["previsto"]) * 100 / planejado),
+            percentual=percentual(somas[id]["realizado"] + somas[id]["previsto"], planejado),
             ainda_da_para_gastar_centavos=planejado
             - somas[id]["realizado"]
             - somas[id]["previsto"],
