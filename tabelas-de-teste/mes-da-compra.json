@@ -1,0 +1,17 @@
+{
+  "sobre": "A fatura (o mês) em que cai a compra no cartão (ADR 0003, backend/app/faturas.py e web/src/dados/aviso.ts): a primeira que fecha depois da data da compra, pelo fechamento gravado da fatura ou, sem ele, pelo dia padrão do titular. null quando não dá para escolher (cartão sem dia de fechamento).",
+  "casos": [
+    { "caso": "antes do fechamento cai na fatura do mês", "titular": { "dia_fechamento": 10, "mes_anterior_ao_fechamento": false }, "faturas": [], "data": "2026-10-05", "mes": "2026-10-01" },
+    { "caso": "no dia do fechamento já vai para a seguinte", "titular": { "dia_fechamento": 10, "mes_anterior_ao_fechamento": false }, "faturas": [], "data": "2026-10-10", "mes": "2026-11-01" },
+    { "caso": "compra do dia 28 conta no mês seguinte", "titular": { "dia_fechamento": 25, "mes_anterior_ao_fechamento": false }, "faturas": [], "data": "2026-10-28", "mes": "2026-11-01" },
+    { "caso": "dezembro depois do fechamento vai para janeiro", "titular": { "dia_fechamento": 10, "mes_anterior_ao_fechamento": false }, "faturas": [], "data": "2026-12-15", "mes": "2027-01-01" },
+    { "caso": "mês anterior ao fechamento: fecha dia 3 de novembro, conta em outubro", "titular": { "dia_fechamento": 3, "mes_anterior_ao_fechamento": true }, "faturas": [], "data": "2026-10-05", "mes": "2026-10-01" },
+    { "caso": "mês anterior ao fechamento: antes do dia 3 conta no mês de antes", "titular": { "dia_fechamento": 3, "mes_anterior_ao_fechamento": true }, "faturas": [], "data": "2026-10-02", "mes": "2026-09-01" },
+    { "caso": "dia 31 em fevereiro fecha no dia 28", "titular": { "dia_fechamento": 31, "mes_anterior_ao_fechamento": false }, "faturas": [], "data": "2026-02-28", "mes": "2026-03-01" },
+    { "caso": "dia 31 em fevereiro: antes do dia 28 fica em fevereiro", "titular": { "dia_fechamento": 31, "mes_anterior_ao_fechamento": false }, "faturas": [], "data": "2026-02-27", "mes": "2026-02-01" },
+    { "caso": "o fechamento gravado vale no lugar do padrão", "titular": { "dia_fechamento": 10, "mes_anterior_ao_fechamento": false }, "faturas": [{ "mes": "2026-10-01", "fechamento": "2026-10-12" }], "data": "2026-10-11", "mes": "2026-10-01" },
+    { "caso": "o fechamento gravado que escorregou para o mês da compra", "titular": { "dia_fechamento": 30, "mes_anterior_ao_fechamento": false }, "faturas": [{ "mes": "2026-09-01", "fechamento": "2026-10-02" }], "data": "2026-10-01", "mes": "2026-09-01" },
+    { "caso": "a fatura importada, sem fechamento, usa o padrão", "titular": { "dia_fechamento": 10, "mes_anterior_ao_fechamento": false }, "faturas": [{ "mes": "2026-10-01", "fechamento": null }], "data": "2026-10-05", "mes": "2026-10-01" },
+    { "caso": "cartão sem dia de fechamento: escolha a fatura", "titular": { "dia_fechamento": null, "mes_anterior_ao_fechamento": false }, "faturas": [], "data": "2026-10-05", "mes": null }
+  ]
+}

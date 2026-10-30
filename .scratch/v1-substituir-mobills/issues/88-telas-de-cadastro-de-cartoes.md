@@ -1,7 +1,7 @@
 # Telas de cadastro de cartões e das datas da fatura
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 37
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design`
 Modelo recomendado: Sonnet
@@ -15,9 +15,18 @@ Na configuração, junto das contas (`#/contas-e-categorias`, ticket 74), o casa
 
 ## Checklist
 
-- [ ] Cartão titular: nome, dia de fechamento e de vencimento padrão, limite opcional e "conta no mês anterior ao fechamento"; cartão adicional ligado a um titular (sem dias nem limite próprios); arquivar e desarquivar
-- [ ] Mudar o dia padrão avisa que só as faturas abertas e futuras mudam e que as compras delas vão para a fatura certa
-- [ ] Acertar o fechamento e o vencimento de uma fatura (a atual, a próxima ou outra pelo mês), com o aviso de que as compras se redistribuem
-- [ ] Botões desativados com "precisa de internet" sem rede (história 53)
-- [ ] Testes de navegador
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Cartão titular: nome, dia de fechamento e de vencimento padrão, limite opcional e "conta no mês anterior ao fechamento"; cartão adicional ligado a um titular (sem dias nem limite próprios); arquivar e desarquivar
+- [x] Mudar o dia padrão avisa que só as faturas abertas e futuras mudam e que as compras delas vão para a fatura certa
+- [x] Acertar o fechamento e o vencimento de uma fatura (a atual, a próxima ou outra pelo mês), com o aviso de que as compras se redistribuem
+- [x] Botões desativados com "precisa de internet" sem rede (história 53)
+- [x] Testes de navegador
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Notas
+
+- As telas são a seção "Cartões" de `#/contas-e-categorias` (`web/src/contas-e-categorias/SecaoDeCartoes.tsx`), dentro do mesmo `fieldset` das contas, que já desativa tudo sem rede com o aviso "Mudar contas e categorias precisa de internet." (coberto em `sem-internet.spec.ts`).
+- Cartão adicional escolhe o titular no cadastro e não tem campos de dia nem de limite; o titular de um cartão não muda depois (a API recusa). Arquivados aparecem com "(arquivado)" e voltam com "Desarquivar" (`useCartoesComArquivados`, que também recarrega a lista dos ativos).
+- "Acertar fatura de <cartão>" lista as faturas que já nasceram (abre na aberta mais antiga) e "Outro mês…" para uma que ainda vai nascer; só aparece para titular não arquivado. O aviso de redistribuição das compras está no formulário, e o do dia padrão no formulário de edição.
+- `emCentavos` saiu da tela de contas para `web/src/lancamentos/dinheiro.ts`, porque as duas telas usam.
+- Testes de navegador: `web/e2e/cartoes-cadastro.spec.ts`.
+- Limitações conhecidas (sem ticket próprio ainda): a lista de faturas só tem as que já nasceram, então "a próxima" ainda inexistente se acerta por "Outro mês…"; um campo de data em branco é enviado como "sem mudança" (a API não limpa data de fatura); o aviso do dia padrão é fixo no formulário de edição, não reage ao dia digitado.

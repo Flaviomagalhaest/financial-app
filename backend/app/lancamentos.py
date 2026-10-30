@@ -279,6 +279,8 @@ VALOR_COM_SINAL = (
     "CASE WHEN lancamentos.tipo = 'despesa' AND lancamentos.estorno_de IS NULL"
     " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
 )
+# O valor com o sinal do saldo de uma conta, no lançamento `l`: a receita entra, a despesa sai.
+VALOR_NA_CONTA = "CASE l.tipo WHEN 'receita' THEN l.valor_centavos ELSE -l.valor_centavos END"
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 # Quantas parcelas tem o parcelamento da parcela (o 10 de 3/10); o avulso não tem.
 PARCELAS = "(SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
@@ -306,12 +308,11 @@ def url_do_banco(request: Request) -> str | None:
 # Saldo = abertura + realizados (lançamentos e transferências) depois da data de abertura
 # (sem abertura, todos, a partir de zero). O que veio antes (ou no dia) da abertura já está no
 # valor informado e só serve às estatísticas.
-_SALDO = """
+_SALDO = f"""
     SELECT c.id, c.nome, c.tipo, c.saldo_abertura_centavos, c.data_abertura,
            c.arquivada_em IS NOT NULL,
            COALESCE(c.saldo_abertura_centavos, 0) + COALESCE((
-               SELECT SUM(CASE l.tipo WHEN 'receita' THEN l.valor_centavos
-                                      ELSE -l.valor_centavos END)
+               SELECT SUM({VALOR_NA_CONTA})
                FROM lancamentos l
                WHERE l.conta_id = c.id AND l.situacao = 'realizado' AND l.excluido_em IS NULL
                  AND (c.data_abertura IS NULL OR l.data > c.data_abertura)
@@ -324,6 +325,11 @@ _SALDO = """
            ), 0)::bigint
     FROM contas c
 """
+
+
+def contas_com_saldo(conn) -> list[Conta]:
+    """Todas as contas, arquivadas inclusive, com o saldo; o cartão não é conta."""
+    return [_conta(linha) for linha in conn.execute(_SALDO).fetchall()]
 
 
 def _conta(linha) -> Conta:
@@ -1139,7 +1145,8 @@ class Confirmacao(BaseModel):
     acao_em: datetime | None = None
 
 
-def _confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancamento:
+def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancamento:
+    """O previsto vira realizado com os ajustes; serve à rota e à fila (ticket 83)."""
     atual = _atual(conn, id, usuario)
     versoes = _versoes(conn, atual)
     ajustes = {
@@ -1200,7 +1207,7 @@ def confirmar_lancamento(
     """Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
     toque) devolve o gravado; com ajuste diferente é 409 com os campos em conflito e quem
     confirmou, para nada se perder em silêncio."""
-    return _na_rota(request, lambda conn: _confirmar(conn, id, confirmacao, usuario))
+    return _na_rota(request, lambda conn: confirmar(conn, id, confirmacao, usuario))
 
 
 @router.delete(

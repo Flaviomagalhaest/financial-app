@@ -20,6 +20,10 @@ O saldo de cada conta mostrado no aparelho soma, sobre o saldo guardado do servi
 - [x] Teste de navegador: sem internet, lançar uma despesa realizada muda o saldo da conta; ao enviar, o saldo do servidor fica igual
 - [x] Verificações do projeto rodando e PR aberto para `main`
 
+## Notas
+
+- Do [ticket 83](83-confirmar-previsto-sem-internet-pela-fila.md): a fila ganhou o item `confirmar` (o previsto vira realizado, com os ajustes de valor, data e conta), que também entra no saldo do aparelho como realizado novo. E o "ainda dá para gastar" da Hoje vem da leitura guardada de `GET /api/hoje`: o ajuste de valor de uma confirmação não enviada (ou qualquer outro não enviado) só aparece nele depois do envio. É o mesmo "aviso de planejamento do meu aparelho" da história 46.
+
 ## Notas da implementação
 
 - `web/src/dados/saldo.ts` (`saldoNoAparelho`, sem React) soma, sobre `saldo_centavos`, a diferença entre como cada item da fila fica no aparelho e como o servidor o tem; `useCadastro` e `useContasComArquivadas` entregam as contas já com o saldo do aparelho e `saldoNaoEnviado` (⏳ em `TelaDeContasECategorias`). Só entram lançamentos (transferência precisa de internet); conflito e exclusão pela outra pessoa não mexem; a recusa conta, como na lista.

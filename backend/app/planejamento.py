@@ -33,6 +33,12 @@ def _proximo_mes(dia: date) -> date:
     return date(dia.year + dia.month // 12, dia.month % 12 + 1, 1)
 
 
+def percentual(realizado_e_previsto: int, planejado: int) -> int:
+    """(realizado + previsto) sobre o planejado, arredondado com o meio para o par; o app repete
+    a conta no aviso de planejamento (`tabelas-de-teste/percentual.json`)."""
+    return round(realizado_e_previsto * 100 / planejado)
+
+
 class NovoItem(BaseModel):
     id: UUID
     categoria_id: UUID
@@ -154,7 +160,7 @@ def ler_mes(conn, mes: str) -> Planejamento:
             planejado_centavos=planejado,
             realizado_centavos=somas[id]["realizado"],
             previsto_centavos=somas[id]["previsto"],
-            percentual=round((somas[id]["realizado"] + somas[id]["previsto"]) * 100 / planejado),
+            percentual=percentual(somas[id]["realizado"] + somas[id]["previsto"], planejado),
             ainda_da_para_gastar_centavos=planejado
             - somas[id]["realizado"]
             - somas[id]["previsto"],
@@ -171,6 +177,25 @@ def ler_mes(conn, mes: str) -> Planejamento:
         ),
         ajustes_de_fatura_centavos=ajustes,
     )
+
+
+def a_lancar_nas_despesas(conn, mes: date) -> int:
+    """O que ainda falta lançar dos itens de despesa do mês (o planejado menos o realizado e o
+    previsto), sem compensar o item estourado com a sobra de outro, menos os ajustes de fatura,
+    como o "ainda dá para gastar". O item de transferência fica de fora: guardar na reserva move
+    dinheiro entre contas e não muda a soma delas."""
+    plano = ler_mes(conn, mes.strftime("%Y-%m"))
+    de_despesa = {
+        id
+        for (id,) in conn.execute(
+            "SELECT id FROM categorias WHERE tipo = 'despesa' AND id = ANY(%s)",
+            ([i.categoria_id for i in plano.itens],),
+        )
+    }
+    falta = sum(
+        max(i.ainda_da_para_gastar_centavos, 0) for i in plano.itens if i.categoria_id in de_despesa
+    )
+    return max(falta - plano.ajustes_de_fatura_centavos, 0)
 
 
 def _gravar_itens(conn, dia: date, itens, usuario: str) -> None:

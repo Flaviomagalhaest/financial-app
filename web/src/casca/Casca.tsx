@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Configuracoes } from "../configuracoes/Configuracoes";
+import { TelaDeFavoritos } from "../configuracoes/TelaDeFavoritos";
+import { OfertaDeFavoritar } from "../lancamentos/OfertaDeFavoritar";
 import { TelaHoje } from "../hoje/TelaHoje";
 import { ListaDeLancamentos } from "../lancamentos/ListaDeLancamentos";
 import { NovoLancamento } from "../lancamentos/NovoLancamento";
@@ -8,25 +10,16 @@ import { TelaDeConflito } from "../lancamentos/TelaDeConflito";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
 import { TelaDeCartoes } from "../cartoes/TelaDeCartoes";
 import { TelaDaFatura } from "../cartoes/TelaDaFatura";
+import { TelaDoFuturo } from "../futuro/TelaDoFuturo";
 import { TelaDoMes } from "../mes/TelaDoMes";
 import { TelaDoModelo } from "../mes/TelaDoModelo";
 import { ABAS, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
 
-function Vazia({ nome }: { nome: string }) {
-  return (
-    <section>
-      <h2>{nome}</h2>
-      <p className="vazio">Esta tela chega nas próximas etapas.</p>
-    </section>
-  );
-}
-
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
   const { rota, id, mes } = useRota();
-  const aba = ABAS.find((a) => a.id === rota);
 
   return (
     <div className="casca">
@@ -45,6 +38,7 @@ export function Casca({ email, onSair, hoje }: Props) {
           </a>
         ))}
       </nav>
+      <OfertaDeFavoritar />
       <main>
         {rota === "hoje" && (
           <section>
@@ -58,6 +52,8 @@ export function Casca({ email, onSair, hoje }: Props) {
           </section>
         )}
         {rota === "novo" && (id ? <TelaDeLancamento key={id} id={id} /> : <NovoLancamento />)}
+        {rota === "favorito" && id && <NovoLancamento key={id} favoritoId={id} />}
+        {rota === "favoritos" && <TelaDeFavoritos />}
         {rota === "conflito" && id && <TelaDeConflito key={id} id={id} />}
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}
@@ -65,7 +61,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "mes" && <TelaDoMes key={mes ?? "atual"} mes={mes} />}
         {rota === "modelo-do-planejamento" && <TelaDoModelo />}
         {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}
-        {aba && aba.id !== "hoje" && aba.id !== "mes" && aba.id !== "historico" && aba.id !== "cartoes" && <Vazia nome={aba.nome} />}
+        {rota === "futuro" && <TelaDoFuturo />}
       </main>
     </div>
   );

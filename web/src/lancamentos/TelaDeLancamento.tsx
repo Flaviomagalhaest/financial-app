@@ -1,6 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { salvarLancamento, useCadastro, useLancamentos, usePessoas, useSugestao, useTags, type LancamentoNaTela, type Sugestao } from "../dados";
-import { nomePorId, tituloDoLancamento } from "./apresentacao";
+import {
+  favoritar,
+  identidadeDe,
+  oferecerFavoritar,
+  salvarLancamento,
+  useAvisoDePlanejamento,
+  useCadastro,
+  useConexao,
+  useFavoritos,
+  useLancamentos,
+  usePessoas,
+  useSugestao,
+  useTags,
+  type Favorito,
+  type LancamentoNaTela,
+  type Sugestao,
+} from "../dados";
+import { nomePorId, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
+import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
@@ -22,6 +39,8 @@ function ultimoCriado(lancamentos: LancamentoNaTela[], euId?: string): Lancament
 
 type Props = {
   id?: string;
+  /** O favorito que preenche a tela ao abrir (a grade da Hoje). */
+  favoritoId?: string;
   tipoInicial?: Tipo;
   /** O valor já digitado na tela de transferência, ao voltar dela. */
   centavosIniciais?: number;
@@ -30,12 +49,14 @@ type Props = {
 };
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
-export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
+export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
   const { contas, cartoes, contasECartoes, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
   const opcoesDeTags = useTags();
   const sugerir = useSugestao();
+  const { favoritos, carregado: favoritosCarregados, semDados: semFavoritos } = useFavoritos();
+  const online = useConexao();
   // A identidade nasce no aparelho: reenviar o mesmo pedido nunca duplica.
   const [novoId] = useState(() => crypto.randomUUID());
   const [existente, setExistente] = useState<LancamentoNaTela | null>(null);
@@ -55,8 +76,17 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
+  // O item tocado em "Conta no planejamento em:"; sem toque, vale a escolha que o lançamento já tem
+  // ou, no novo, a última para aquelas categorias.
+  const [itemTocado, setItemTocado] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
+  // A ⭐ marcada: o lançamento vira favorito ao salvar.
+  const [favoritarAoSalvar, setFavoritarAoSalvar] = useState(false);
+  const [favoritoAplicado, setFavoritoAplicado] = useState(false);
+
+  // Um lançamento novo começa sem a oferta "Favoritar" do anterior.
+  useEffect(() => oferecerFavoritar(null), []);
 
   // Preenche uma vez só, quando o lançamento aparece; o envio da fila não apaga o que se digita.
   useEffect(() => {
@@ -101,8 +131,13 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     .filter(Boolean)
     .join(" · ");
 
+  const identidadeAtual = identidadeDe({ descricao, tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa });
+  const jaEFavorito = favoritos.some((f) => identidadeDe(f) === identidadeAtual);
+
   const ultimo = useMemo(() => (id ? undefined : ultimoCriado(lancamentos ?? [], euId)), [id, lancamentos, euId]);
-  const mostraRepetir = !!ultimo && centavos === 0 && categoriaIds.length === 0;
+  const vazio = centavos === 0 && categoriaIds.length === 0;
+  const mostraRepetir = !!ultimo && vazio;
+  const mostraFavoritos = !id && vazio && favoritos.length > 0;
 
   /** Preenche com o último lançamento, com a data de hoje e a situação que ela dá. */
   function repetirUltimo(u: LancamentoNaTela) {
@@ -116,6 +151,31 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setTags(u.tags ?? []);
     setPessoa(u.pessoa ?? null);
   }
+
+  /** Preenche com o favorito, com o valor padrão (só o ponto de partida: "Salvar" confirma) e a data de hoje. */
+  function usarFavorito(f: Favorito) {
+    setTipo(f.tipo);
+    setData(hoje());
+    setSituacaoEscolhida(null);
+    setCentavos(f.valor_padrao_centavos);
+    if (contasECartoes.some((c) => c.id === f.conta_id)) trocarConta(f.conta_id);
+    setCategoriaIds(escolhiveis(f.categoria_ids).map((c) => c.id));
+    setDescricao(f.descricao);
+    setTags(f.tags);
+    setPessoa(f.pessoa ?? null);
+  }
+
+  // O favorito que a grade da Hoje abriu preenche uma vez só, quando a lista e o cadastro já chegaram.
+  useEffect(() => {
+    if (!favoritoId || favoritoAplicado || !carregado) return;
+    const achado = favoritos.find((f) => f.id === favoritoId);
+    if (!achado || !favoritosCarregados) {
+      if (semFavoritos || (favoritosCarregados && !achado)) setErro("Favorito não encontrado.");
+      return;
+    }
+    setFavoritoAplicado(true);
+    usarFavorito(achado);
+  });
 
   /**
    * Preenche conta, categorias, tags e pessoa da sugestão, e o tipo que as categorias têm; o valor,
@@ -150,6 +210,13 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
 
+  const planejamento = useAvisoDePlanejamento(
+    { id: existente?.id ?? novoId, valor_centavos: centavos, categoria_ids: categoriaIds, conta_id: conta, data, fatura_mes: noCartao ? faturaMes : null, situacao },
+    itemTocado,
+  );
+  // Sem duas categorias com item, a escolha que o lançamento já tem fica, se a categoria dela ficou.
+  const itemEscolhido = planejamento.escolha ?? (existente?.item_categoria_id && categoriaIds.includes(existente.item_categoria_id) ? existente.item_categoria_id : null);
+
   /** Outro cartão ou uma conta desfaz a fatura escolhida à mão, como no servidor. */
   function trocarConta(nova: string) {
     if (nova !== conta) setFaturaMes(null);
@@ -171,6 +238,7 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
     setErro("");
     setEnviando(true);
     try {
+      const eFavorito = jaEFavorito;
       // Vai para a fila, que sobe na hora se houver internet; sem ela, fica como não enviado.
       await salvarLancamento(
         {
@@ -183,12 +251,19 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           categoria_ids: categoriaIds,
           pessoa,
           fatura_mes: noCartao ? faturaMes : null,
+          item_categoria_id: itemEscolhido,
           ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
           tags,
         },
         !existente,
         existente ?? undefined,
       );
+      if (!existente) {
+        // Favoritar precisa de internet (ADR 0011): sem ela, nem a ⭐ vale nem se oferece.
+        const modelo = { id: crypto.randomUUID(), descricao: descricao.trim(), tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa, valor_centavos: centavos };
+        if (favoritarAoSalvar && !eFavorito) void favoritar(modelo).then((motivo) => motivo && oferecerFavoritar(modelo));
+        else oferecerFavoritar(online && !eFavorito ? modelo : null);
+      }
       window.location.hash = "#/historico";
     } catch {
       setErro("Não foi possível guardar o lançamento no aparelho.");
@@ -213,6 +288,28 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           {formatarCentavos(ultimo.valor_centavos)} · {ultimo.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {nomePorId(contasECartoes, ultimo.conta_id)}
         </button>
       )}
+      {mostraFavoritos && (
+        <div className="fileira rolavel" role="group" aria-label="Favoritos">
+          {favoritos.map((f) => (
+            <button type="button" key={f.id} className="repetir favorito" onClick={() => usarFavorito(f)}>
+              <span aria-hidden="true">⭐ </span>
+              {tituloDoFavorito(f, categorias)} · {formatarCentavos(f.valor_padrao_centavos)}
+            </button>
+          ))}
+        </div>
+      )}
+      {!id && categoriaIds.length > 0 && (
+        <button
+          type="button"
+          className="estrela"
+          aria-pressed={jaEFavorito || favoritarAoSalvar}
+          disabled={jaEFavorito || !online}
+          onClick={() => setFavoritarAoSalvar((marcada) => !marcada)}
+        >
+          {jaEFavorito ? "⭐ É favorito" : favoritarAoSalvar ? "⭐ Será favorito" : "☆ Marcar como favorito"}
+        </button>
+      )}
+      {!id && !online && categoriaIds.length > 0 && <p className="vazio">Favoritar precisa de internet.</p>}
       <h3>Conta ou cartão</h3>
       <div className="fileira rolavel">
         {contas.map((c) => (
@@ -245,6 +342,14 @@ export function TelaDeLancamento({ id, tipoInicial = "despesa", centavosIniciais
           </p>
         )}
       </div>
+      {categoriaIds.length > 0 && (
+        <AvisoDePlanejamento
+          {...planejamento}
+          tipo={tipo}
+          nomeDaCategoria={(c) => nomePorId(categorias, c)}
+          onEscolher={setItemTocado}
+        />
+      )}
       <Teclado centavos={centavos} onMudar={setCentavos} />
       {detalhesAbertos && (
         <FolhaDeDetalhes
