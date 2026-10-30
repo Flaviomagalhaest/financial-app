@@ -25,4 +25,4 @@ O casal lança o café de sempre com um toque. Fonte da interface: branch `proto
 
 - Tabela `favoritos` (migration 0049, backup na versão 18) e rotas `GET/POST /api/favoritos`, `DELETE /api/favoritos/{id}`, `PUT /api/favoritos/ordem` e `POST /api/favoritos/sugeridos/dispensar`; decisão do valor padrão na [ADR 0017](../../../docs/adr/0017-favorito-valor-padrao-derivado-do-ultimo-lancamento.md).
 - App: fileira acima do teclado, grade e "Sugeridos" na Hoje, ⭐ e oferta "Favoritar", tela `#/favoritos` nas configurações.
-- Escolhas provisórias e acabamentos: [ticket 107](107-favoritos-decisoes-e-acabamentos.md).
+- Escolhas provisórias e acabamentos: [ticket 108](108-favoritos-decisoes-e-acabamentos.md).
