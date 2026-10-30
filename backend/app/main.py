@@ -13,6 +13,7 @@ from app.cartoes import router as cartoes
 from app.classificacao import router as classificacao
 from app.exportacao import Formato, exportar
 from app.lancamentos import router as lancamentos
+from app.limite import router as limite
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
 from app.lote import router as lote
 from app.meses import router as meses
@@ -90,6 +91,7 @@ def create_app(
     app.include_router(classificacao)
     app.include_router(transferencias)
     app.include_router(cartoes)
+    app.include_router(limite)
     app.include_router(planejamento)
     app.include_router(meses)
     app.include_router(pessoas)

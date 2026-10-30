@@ -1063,6 +1063,11 @@ def _todos(
     ]
 
 
+def ler_por_ids(conn, ids: list[UUID]) -> list[Lancamento]:
+    """Os lançamentos não excluídos com esses ids."""
+    return _todos(conn, "id = ANY(%s)", (ids,))
+
+
 def _um(conn, id: UUID) -> Lancamento:
     return _todos(conn, "id = %s", (id,))[0]
 

@@ -616,6 +616,16 @@ dialog.folha > input {
   overflow-wrap: anywhere;
 }
 
+.limite summary {
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+}
+.limite progress {
+  width: 100%;
+  accent-color: var(--destaque);
+}
+
 /* Aviso de planejamento ao lançar: o item antes e depois, numa barra do planejado. */
 .aviso-do-planejamento {
   display: flex;
