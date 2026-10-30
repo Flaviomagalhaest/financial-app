@@ -35,6 +35,7 @@ import {
   type Ajustes,
   type Remessa,
 } from "./fila";
+import { saldoNoAparelho } from "./saldo";
 import {
   avisoDePlanejamento,
   categoriasComItem,
@@ -97,6 +98,8 @@ export type LancamentoNaTela = NovoLancamento & {
   /** A outra pessoa excluiu: a tela mostra a mudança que não foi salva, para "Lançar de novo". */
   exclusao?: Exclusao;
 };
+
+const SEM_CONTAS: Conta[] = [];
 
 const LEITURAS = {
   "/api/lancamentos": () => api.GET("/api/lancamentos"),
@@ -199,6 +202,25 @@ function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
   };
 }
 
+/** A resposta que o aparelho já guardou, sem ir ao servidor: quem só precisa dela não pede leitura a mais. */
+function useRespostaGuardada<D>(caminho: string): D | null {
+  const [guardada, setGuardada] = useState<D | null>(null);
+  useEffect(() => {
+    let ativo = true;
+    const ler = () =>
+      void lerResposta<D>(caminho).then((g) => {
+        if (ativo && g) setGuardada(g.dados);
+      });
+    ler();
+    const parar = ouvirMudancas(ler);
+    return () => {
+      ativo = false;
+      parar();
+    };
+  }, [caminho]);
+  return guardada;
+}
+
 /** "atualizado às 14:32", para a resposta guardada que a tela mostra sem internet. */
 export function atualizadoAs(em: number): string {
   return `atualizado às ${new Date(em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
@@ -283,6 +305,24 @@ export function useContasDaSemana(doServidor: Lancamento[] | null): LancamentoNa
   }, [doServidor, fila]);
 }
 
+/** A conta com o saldo que o aparelho mostra: o do servidor mais os não enviados (ticket 81). */
+export type ContaNaTela = Conta & { saldoNaoEnviado: boolean };
+
+/** As contas com o saldo do aparelho; toda tela que mostra saldo passa por aqui. */
+function useComSaldoDoAparelho(contas: Conta[]): ContaNaTela[] {
+  // Só lê a lista guardada: a leitura do servidor é das telas de lançamentos, e outra aqui mexeria no que elas mostram.
+  const dados = useRespostaGuardada<Lancamento[]>(LISTA);
+  const fila = useFila();
+  return useMemo(() => {
+    const doServidor = new Map((dados ?? []).map((l) => [l.id, l]));
+    const naTelaPorId = new Map(naTela(dados ?? [], fila).map((l) => [l.id, l]));
+    return contas.map((conta) => {
+      const { centavos, naoEnviado } = saldoNoAparelho(conta, doServidor, naTelaPorId, fila);
+      return { ...conta, saldo_centavos: centavos, saldoNaoEnviado: naoEnviado };
+    });
+  }, [contas, dados, fila]);
+}
+
 /**
  * Contas, cartões e categorias do casal; `carregado` quando há resposta do servidor, nova ou
  * guardada. Os cartões não arquivados (titulares e adicionais) vêm à parte, e `contasECartoes`
@@ -295,10 +335,11 @@ export function useCadastro() {
   const recarregar = useCallback(async () => {
     await Promise.all([contas.buscar(), categorias.buscar()]);
   }, [contas.buscar, categorias.buscar]);
+  const contasNaTela = useComSaldoDoAparelho(contas.dados ?? SEM_CONTAS);
   return {
-    contas: contas.dados ?? [],
+    contas: contasNaTela,
     cartoes: cartoes.dados ?? [],
-    contasECartoes: useMemo(() => [...(contas.dados ?? []), ...(cartoes.dados ?? [])], [contas.dados, cartoes.dados]),
+    contasECartoes: useMemo(() => [...contasNaTela, ...(cartoes.dados ?? [])], [contasNaTela, cartoes.dados]),
     categorias: categorias.dados ?? [],
     carregado: !!contas.dados && !!categorias.dados,
     atualizadoEm: contas.atualizadoEm ?? categorias.atualizadoEm,
@@ -502,7 +543,8 @@ export function useFavoritos() {
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
 export function useContasComArquivadas() {
   const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
-  return { contas: dados ?? [], atualizadoEm, recarregar: buscar };
+  const contas = useComSaldoDoAparelho(dados ?? SEM_CONTAS);
+  return { contas, atualizadoEm, recarregar: buscar };
 }
 
 /** Todos os cartões, arquivados inclusive, para a tela que os configura; recarregar atualiza também a lista dos ativos. */
@@ -569,9 +611,12 @@ function pedirEnvioEmSegundoPlano() {
 export async function enviarAgora(): Promise<boolean> {
   // O envio tira o item da fila e só atualiza a lista que já está guardada: sem ela, o lançamento
   // enviado sumiria do aparelho até a próxima leitura com internet (ticket 90).
-  if ((await lerFila()).length > 0 && !(await lerResposta(LISTA))) await buscarEGuardar(LISTA, LEITURAS[LISTA]);
+  const pendentes = (await lerFila()).length;
+  if (pendentes > 0 && !(await lerResposta(LISTA))) await buscarEGuardar(LISTA, LEITURAS[LISTA]);
   const enviou = await enviarFila(remeter);
   if (!enviou) pedirEnvioEmSegundoPlano();
+  // O saldo guardado das contas não conta o que acabou de subir: sem a fila para cobrir a diferença, buscá-lo de novo (ticket 81).
+  else if (pendentes > 0) void Promise.all((["/api/contas", "/api/contas?arquivadas=true"] as const).map((c) => buscarEGuardar(c, LEITURAS[c])));
   return enviou;
 }
 
