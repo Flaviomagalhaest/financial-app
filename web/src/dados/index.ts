@@ -26,6 +26,7 @@ import {
   type NovoParcelamento,
 } from "./armazem";
 import {
+  CONTAS,
   decidirConflito,
   descartar,
   enfileirarConfirmar,
@@ -148,11 +149,24 @@ const LEITURAS = {
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
 
-/** Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. */
+/** As leituras deste aparelho, numeradas na ordem em que saem. */
+let leiturasFeitas = 0;
+/** Por caminho, o número da leitura que guardou a resposta por último. */
+const guardadaPelaLeitura = new Map<string, number>();
+
+/**
+ * Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. As leituras de uma
+ * resposta correm juntas, e a que saiu antes de uma mudança pode chegar depois da que saiu depois
+ * dela: a mais velha não troca a guardada (ticket 120).
+ */
 function buscarEGuardar<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
   return comTrava("shared", async () => {
+    const numero = ++leiturasFeitas;
     const { data } = await ler().catch(() => ({ data: undefined }));
-    if (data) await guardarResposta(caminho, data);
+    if (data && numero > (guardadaPelaLeitura.get(caminho) ?? 0)) {
+      guardadaPelaLeitura.set(caminho, numero);
+      await guardarResposta(caminho, data);
+    }
     return data;
   });
 }
@@ -895,12 +909,13 @@ function pedirEnvioEmSegundoPlano() {
 export async function enviarAgora(): Promise<boolean> {
   // O envio tira o item da fila e só atualiza a lista que já está guardada: sem ela, o lançamento
   // enviado sumiria do aparelho até a próxima leitura com internet (ticket 90).
+  // Se ela não chega (a rede caiu de novo, ou ainda não voltou de todo), a fila fica para a próxima (ticket 120).
   const pendentes = (await lerFila()).length;
-  if (pendentes > 0 && !(await lerResposta(LISTA))) await buscarEGuardar(LISTA, LEITURAS[LISTA]);
+  if (pendentes > 0 && !(await lerResposta(LISTA)) && !(await buscarEGuardar(LISTA, LEITURAS[LISTA]))) return false;
   const enviou = await enviarFila(remeter);
   if (!enviou) pedirEnvioEmSegundoPlano();
-  // O saldo guardado das contas não conta o que acabou de subir: sem a fila para cobrir a diferença, buscá-lo de novo (ticket 81).
-  else if (pendentes > 0) void Promise.all((["/api/contas", "/api/contas?arquivadas=true"] as const).map((c) => buscarEGuardar(c, LEITURAS[c])));
+  // O envio já acertou o saldo guardado das contas (ticket 120); a leitura traz o do servidor (ticket 81).
+  else if (pendentes > 0) void Promise.all(CONTAS.map((c) => buscarEGuardar(c, LEITURAS[c])));
   if (geradosNoServidor) {
     geradosNoServidor = false;
     // A tela do parcelamento e a da recorrência recém-enviados também os acham sem internet.
@@ -980,8 +995,7 @@ export const descartarNaoEnviado = descartar;
 export async function manterOsDois(id: string): Promise<boolean> {
   const { data } = await api.POST("/api/lancamentos/{id}/manter-os-dois", { params: { path: { id } } }).catch(() => ({ data: undefined }));
   if (!data) return false;
-  const { data: lista } = await api.GET("/api/lancamentos");
-  if (lista) await comTrava("shared", () => guardarResposta(LISTA, lista));
+  await buscarEGuardar(LISTA, LEITURAS[LISTA]);
   return true;
 }
 

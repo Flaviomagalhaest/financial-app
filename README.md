@@ -43,6 +43,12 @@ scripts/usuarios-do-app.sh listar prod
 
 O CI (`.github/workflows/ci.yml`) roda lint, testes, o contrato e o build com um Postgres em container.
 
+Os testes de navegador criam dados a cada rodada e não os apagam. O CI sobe um banco novo a cada run; no local, depois de umas duas suítes no mesmo banco, o Histórico do usuário de teste passa de mil lançamentos e os testes que esperam 5 s começam a falhar (tickets 120 e 123). Antes de conferir uma falha intermitente, recrie o banco local:
+
+```sh
+psql postgresql://postgres@localhost:54329/postgres -c 'DROP DATABASE financial_app' && eval "$(scripts/postgres-local.sh)"
+```
+
 ## Lançamentos
 
 `backend/app/lancamentos.py` tem contas, categorias e lançamentos simples (valor em centavos inteiros, uma ou mais categorias, id UUID gerado no aparelho). No app, `#/novo` lança (o atalho "Novo lançamento" do manifesto abre direto nele): valor pelo teclado próprio, fileiras de conta ou cartão e categorias, "Repetir último" enquanto o lançamento está vazio e a folha de detalhes (descrição, tags, pessoa, data hoje/ontem/outra, situação e, no cartão, a fatura), resumida numa linha embaixo do valor. A tag nova vai pelo nome e nasce no servidor com o lançamento. `#/historico` lista, edita e exclui, e `#/contas-e-categorias` cria conta e cria, renomeia e arquiva categoria.

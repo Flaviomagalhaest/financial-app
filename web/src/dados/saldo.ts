@@ -20,6 +20,18 @@ function efeito(l: ParaOSaldo | undefined, conta: ContaComSaldo): number {
 }
 
 /**
+ * As contas guardadas com os lançamentos que acabaram de subir: a leitura delas é de antes do envio,
+ * e o item sai da fila na mesma hora, então o saldo guardado passa a contá-los até a próxima leitura
+ * (ticket 120). `antes` e `depois` são como a lista guardada tinha e passa a ter cada lançamento.
+ */
+export function comOsEnviados<C extends ContaComSaldo>(contas: C[], enviados: [antes: ParaOSaldo | undefined, depois: ParaOSaldo | undefined][]): C[] {
+  return contas.map((conta) => {
+    const mudou = enviados.reduce((soma, [antes, depois]) => soma + efeito(depois, conta) - efeito(antes, conta), 0);
+    return mudou === 0 ? conta : { ...conta, saldo_centavos: conta.saldo_centavos + mudou };
+  });
+}
+
+/**
  * Saldo guardado + (como cada lançamento da fila fica no aparelho − como o servidor o tem):
  * criar soma, excluir tira, editar vale a diferença. `naTela` é a lista do servidor com a fila por
  * cima; só lançamentos entram, porque transferência precisa de internet (ADR 0011). A mudança recusada

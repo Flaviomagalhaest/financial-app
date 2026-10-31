@@ -21,9 +21,11 @@ import {
   type NovoLancamento,
   type NovoParcelamento,
 } from "./armazem";
+import { comOsEnviados } from "./saldo";
 
 export type Acao = components["schemas"]["Lote"]["acoes"][number];
 type LeituraDaHoje = components["schemas"]["Hoje"];
+type Conta = components["schemas"]["Conta"];
 export type Resultado = components["schemas"]["Resultado"];
 export type Alteracao = components["schemas"]["AlteracaoDeLancamento"];
 export type Campo = components["schemas"]["CampoEmConflito"]["campo"];
@@ -36,6 +38,8 @@ export const ETIQUETA_DO_ENVIO = "enviar-fila";
 export const LISTA = "/api/lancamentos";
 /** A leitura da Hoje guardada: o resultado do envio acerta as contas da semana dela. */
 export const HOJE = "/api/hoje";
+/** As contas guardadas: o resultado do envio acerta o saldo delas até a próxima leitura (ticket 120). */
+export const CONTAS = ["/api/contas", "/api/contas?arquivadas=true"] as const;
 /**
  * Nas respostas guardadas, o último lançamento aceito de cada mudança que saiu da fila: a tela que
  * abriu a mudança ainda "não enviada" edita sobre a versão que ela gerou (ticket 113).
@@ -307,6 +311,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
     const daHoje: Guardada<LeituraDaHoje> | undefined = await pedido(respostas.get(HOJE));
     let previstos = daHoje?.dados.contas_da_semana ?? [];
     const aceitos: Aceitos = (await pedido(respostas.get(ACEITOS))) ?? {};
+    const noSaldo: Parameters<typeof comOsEnviados>[1] = [];
     for (const [i, enviado] of enviados.entries()) {
       const { resultado, motivo, lancamento, campos, exclusao } = resultados[i];
       // Nas contas da semana, vale a versão do servidor: o confirmado ou excluído sai, e o conflito
@@ -338,6 +343,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         if (intacto && lancamento) await pedido(fila.put({ ...atual, conflito: { motivo: motivo ?? "conflito", lancamento, campos: campos ?? [] } }));
         continue;
       }
+      const antes = lista.find((l) => l.id === enviado.id);
       lista = lista.filter((l) => l.id !== enviado.id);
       if (resultado === "descartada") {
         if (atual?.lancamento && exclusao) await pedido(fila.put({ ...atual, exclusao }));
@@ -347,6 +353,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       // Excluído no aparelho enquanto subia: agora que existe no servidor, sai de lá também.
       const excluidoNoCaminho = !atual && enviado.acao === "criar";
       if (lancamento && !excluidoNoCaminho) lista.push(lancamento);
+      noSaldo.push([antes, lista.find((l) => l.id === enviado.id)]);
       if (lancamento) aceitos[enviado.id] = { base: lancamento, em: Date.now() };
       if (excluidoNoCaminho) await pedido(fila.put({ id: enviado.id, acao: "excluir", base: lancamento, desde: enviado.desde, revisao: 1 }));
       else if (intacto) await pedido(fila.delete(enviado.id));
@@ -359,6 +366,10 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
     await pedido(respostas.put(Object.fromEntries(recentes), ACEITOS));
     if (guardada) await pedido(respostas.put({ dados: ordenar(lista), em: guardada.em }, LISTA));
     if (daHoje) await pedido(respostas.put({ dados: { ...daHoje.dados, contas_da_semana: previstos }, em: daHoje.em }, HOJE));
+    for (const caminho of CONTAS) {
+      const contas: Guardada<Conta[]> | undefined = await pedido(respostas.get(caminho));
+      if (contas && noSaldo.length > 0) await pedido(respostas.put({ dados: comOsEnviados(contas.dados, noSaldo), em: contas.em }, caminho));
+    }
   });
 }
 
