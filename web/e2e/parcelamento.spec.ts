@@ -172,3 +172,84 @@ test("parcelamentos longos sobem em lotes separados, para o servidor responder a
   // As 600 parcelas passam das 420 de um lote: cada parcelamento vai num.
   expect(lotes).toEqual([1, 1]);
 });
+
+/** Um boleto automático de 6 parcelas de R$ 100,00 que começou há 3 meses: as que já venceram estão realizadas. */
+async function prepararParcelamento(page: Page) {
+  const { s, conta, eletro } = await prepararCasal(page);
+  const api = await apiDaPagina(page);
+  const categoria = (await api.ler("/api/categorias")).find((c: { nome: string }) => c.nome === eletro);
+  const contaId = (await api.ler("/api/contas")).find((c: { nome: string }) => c.nome === conta).id;
+  const inicio = new Date();
+  inicio.setUTCDate(1);
+  inicio.setUTCMonth(inicio.getUTCMonth() - 3);
+  const id = crypto.randomUUID();
+  const descricao = `TV ${s}`;
+  await api.criar("/api/parcelamentos", {
+    id,
+    parcelas: 6,
+    data: inicio.toISOString().slice(0, 10),
+    descricao,
+    conta_id: contaId,
+    categoria_ids: [categoria.id],
+    tags: [],
+    valor_total_centavos: 60000,
+    automatico: true,
+  });
+  return { api, id, descricao };
+}
+
+test("corrige o parcelamento pela tela e confirma antes de mudar as parcelas realizadas", async ({ page }) => {
+  const { api, id, descricao } = await prepararParcelamento(page);
+  // A última parcela, editada à mão: a correção preserva o valor dela.
+  const ultima = (await api.ler("/api/lancamentos")).find((l: { parcelamento_id: string; parcela: number }) => l.parcelamento_id === id && l.parcela === 6);
+  await api.mudar(`/api/lancamentos/${ultima.id}`, { versao: ultima.versao, valor_centavos: 15000 });
+  await page.reload();
+
+  await aba(page, "Histórico");
+  const parcela = (n: string) => page.getByRole("listitem").filter({ hasText: `${descricao} ${n}` });
+  await expect(parcela("06/06")).toContainText("alterada à mão");
+  await expect(parcela("05/06")).not.toContainText("alterada à mão");
+  await parcela("05/06").getByLabel(`Mais ações ${descricao}`).click();
+  await parcela("05/06").getByRole("link", { name: `Parcelamento ${descricao}` }).click();
+
+  await expect(page.getByRole("heading", { name: "Parcelamento", level: 2 })).toBeVisible();
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  await expect(page.getByLabel("parcelas", { exact: true })).toHaveValue("6");
+  await expect(page.getByLabel("Valor total")).toHaveValue("600,00");
+  await page.getByLabel("Valor total").fill("1.200,00");
+  await page.getByRole("button", { name: "Salvar correção" }).click();
+
+  // A 1ª já foi realizada: o servidor não grava nada e mostra o que muda.
+  const aviso = page.getByRole("group", { name: "Parcelas realizadas que mudam" });
+  await expect(aviso).toContainText("01/06");
+  await expect(aviso).toContainText("R$ 100,00 → R$ 200,00");
+  await page.getByRole("button", { name: "Corrigir mesmo assim" }).click();
+
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  await expect(parcela("01/06")).toContainText("R$ 200,00");
+  await expect(parcela("05/06")).toContainText("R$ 200,00");
+  await expect(parcela("06/06")).toContainText("R$ 150,00");
+  const [corrigido] = (await api.ler("/api/parcelamentos")).filter((p: { id: string }) => p.id === id);
+  expect(corrigido.valor_total_centavos).toBe(120000);
+});
+
+test("exclui o parcelamento inteiro pela tela; sem internet, corrigir e excluir esperam a rede", async ({ page, context }) => {
+  const { id, descricao } = await prepararParcelamento(page);
+  await page.reload();
+  await aba(page, "Histórico");
+  await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(6);
+
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  // A rede cai com a tela aberta.
+  await context.setOffline(true);
+  await expect(page.getByText("Sem internet: corrigir e excluir o parcelamento precisam de internet.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Salvar correção" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Excluir parcelamento" })).toBeDisabled();
+  await context.setOffline(false);
+
+  page.once("dialog", (d) => void d.accept());
+  await page.getByRole("button", { name: "Excluir parcelamento" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(0);
+});

@@ -71,6 +71,9 @@ export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type Futuro = components["schemas"]["Futuro"];
 export type Historico = components["schemas"]["Historico"];
+export type Parcelamento = components["schemas"]["Parcelamento"];
+export type AlteracaoDeParcelamento = components["schemas"]["AlteracaoDeParcelamento"];
+export type AvisoDeRealizadas = components["schemas"]["AvisoDeRealizadas"];
 export type { Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
@@ -102,6 +105,8 @@ export type LancamentoNaTela = NovoLancamento & {
   parcelamento_id?: Lancamento["parcelamento_id"];
   parcela?: Lancamento["parcela"];
   parcelas?: Lancamento["parcelas"];
+  /** A parcela que uma pessoa mudou: a correção do parcelamento preserva valor, data, conta e fatura dela. */
+  alterada_a_mao?: Lancamento["alterada_a_mao"];
   /** O lançamento da outra pessoa que este parece repetir. */
   parece_repetido_de?: string | null;
   /** A hora da última ação no aparelho, enquanto a mudança não subiu. */
@@ -128,6 +133,7 @@ const LEITURAS = {
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
   "/api/favoritos": () => api.GET("/api/favoritos"),
   "/api/filtros-salvos": () => api.GET("/api/filtros-salvos"),
+  "/api/parcelamentos": () => api.GET("/api/parcelamentos"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -875,6 +881,50 @@ function eEnvia<A extends unknown[]>(mudar: (...args: A) => Promise<void>) {
 export const decidir = eEnvia(decidirConflito);
 export const excluirApesarDoConflito = eEnvia(excluirMesmoAssim);
 export const lancarDeNovoOExcluido = eEnvia(lancarDeNovo);
+
+/** Os parcelamentos do casal, do servidor ou os guardados. */
+export function useParcelamentos() {
+  return useResposta("/api/parcelamentos");
+}
+
+/** A correção e a exclusão refazem as parcelas no servidor: o aparelho lê de novo o que elas mudam. */
+async function relerAsParcelas() {
+  const caminhos = [LISTA, "/api/contas", "/api/contas?arquivadas=true", "/api/parcelamentos"] as const;
+  await Promise.all([...caminhos.map((c) => buscarEGuardar<unknown>(c, LEITURAS[c])), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
+}
+
+/** O que o servidor disse da correção: gravou (`{}`), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`). */
+export type Correcao = { aviso?: AvisoDeRealizadas; motivo?: string };
+
+/**
+ * Corrigir o parcelamento muda uma regra e precisa de internet (ADR 0011): não entra na fila. Se
+ * uma parcela realizada mudar ou sair, nada é gravado e volta o aviso, para repetir com
+ * `confirmar_realizadas`.
+ */
+export async function corrigirParcelamento(id: string, alteracao: AlteracaoDeParcelamento): Promise<Correcao> {
+  try {
+    const { data, error, response } = await api.PATCH("/api/parcelamentos/{id}", { params: { path: { id } }, body: alteracao });
+    if (data) {
+      await relerAsParcelas();
+      return {};
+    }
+    if (response.status === 409) return { aviso: error as AvisoDeRealizadas };
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return { motivo: typeof detalhe === "string" ? detalhe : "o servidor recusou a correção" };
+  } catch {
+    return { motivo: "sem resposta do servidor" };
+  }
+}
+
+/** Exclui o parcelamento inteiro, as realizadas também; precisa de internet. Devolve o motivo da recusa, ou `null`. */
+export async function excluirParcelamento(id: string): Promise<string | null> {
+  const motivo = await recusaDe(async () => {
+    const { response, error } = await api.DELETE("/api/parcelamentos/{id}", { params: { path: { id } } });
+    return { data: response.ok || undefined, error };
+  }, "o servidor recusou excluir o parcelamento");
+  if (motivo === null) await relerAsParcelas();
+  return motivo;
+}
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */
 export async function criarConta(nome: string, tipo: Conta["tipo"]): Promise<boolean> {

@@ -14,7 +14,7 @@ import {
   type LancamentoNaTela,
   type NovoLancamento,
 } from "../dados";
-import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
+import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, numeroDaParcela, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { mesPorExtenso } from "../cartoes/apresentacao";
 import { dataPorExtenso, quando } from "./datas";
 import { divisao, rotuloDasParcelas } from "./parcelamento";
@@ -165,7 +165,10 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
           return (
             <li key={l.id}>
               <div>
-                <strong>{titulo}</strong>
+                <strong>
+                  {titulo}
+                  {l.parcela && l.parcelas ? ` ${numeroDaParcela(l.parcela, l.parcelas)}` : ""}
+                </strong>
                 <ValorComSinal l={l} />
               </div>
               <p className="vazio">
@@ -173,6 +176,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                 {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                 {ligacao && ` · ${ligacao}`}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
+                {l.alterada_a_mao && " · alterada à mão"}
                 {" · "}
                 {l.pessoa ? nomeDe(l.pessoa) : "conjunto"}
               </p>
@@ -259,6 +263,11 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                   <button type="button" className="secundario" aria-label={`Informações ${titulo}`} onClick={() => setInformacoes(informacoes === l.id ? null : l.id)}>
                     Informações
                   </button>
+                  {l.parcelamento_id && !l.naoEnviado && (
+                    <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
+                      Parcelamento
+                    </a>
+                  )}
                 </details>
               </div>
               {informacoes === l.id && (
