@@ -5,7 +5,7 @@ type Props = {
   aviso: Aviso | null;
   /** O mês em que o lançamento conta; `null` no cartão sem dia de fechamento e sem fatura escolhida. */
   mes: string | null;
-  tipo: "despesa" | "receita";
+  tipo: "despesa" | "receita" | "transferencia";
   /** No cartão, o fechamento da fatura em que a compra cai. */
   fechamento: string | null;
   noCartao: boolean;
