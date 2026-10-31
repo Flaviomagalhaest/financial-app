@@ -322,6 +322,18 @@ h2 {
   gap: 1rem;
 }
 
+.lista a.linha-da-fatura {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.lista a.linha-da-fatura > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .lista .despesa {
   color: var(--erro);
 }

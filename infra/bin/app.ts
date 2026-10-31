@@ -18,6 +18,9 @@ const app = new App();
 // A região fica em config/aws.json.
 const env = { account: exigir("AWS_CONTA"), region: aws.regiao };
 const emailDoDono = exigir("EMAIL_DO_DONO");
+// JSON `{"<sub>": "<nome>"}` das pessoas do casal em cada ambiente (ticket 84). Os `sub` não
+// ficam no repositório: vêm da variável `PESSOAS` do GitHub Environment (ou do shell, à mão).
+const pessoas = process.env.PESSOAS || undefined;
 const pacoteDaLambda = "../build/lambda"; // scripts/empacotar-lambda.sh
 const site = "../web/dist"; // npm run build em web/
 
@@ -48,6 +51,7 @@ for (const ambiente of ["prod", "dev"] as const) {
       site,
       guardar,
       emailDoDono,
+      pessoas,
       terminationProtection: guardar,
     });
   }

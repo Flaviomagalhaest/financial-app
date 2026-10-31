@@ -16,6 +16,6 @@ Dar à Lambda de `dev` e de `prod` a variável `PESSOAS` com o `sub` e o nome de
 ## Checklist
 
 - [ ] Descobrir o `sub` de cada usuário em cada ambiente (`scripts/usuarios-do-app.sh listar` mostra e-mail e status; o `sub` sai de `aws cognito-idp admin-get-user`) e decidir os nomes que aparecem no app
-- [ ] Passar `PESSOAS` para a Lambda em `infra/lib/pilha-app.ts` (`environment`), sem pôr os `sub` reais no repositório se o dono preferir (parâmetro da pilha ou variável do deploy) e documentar no README
+- [x] Passar `PESSOAS` para a Lambda em `infra/lib/pilha-app.ts` (`environment`), sem pôr os `sub` reais no repositório se o dono preferir (parâmetro da pilha ou variável do deploy) e documentar no README
 - [ ] Conferir no app de `dev`: o seletor de pessoa mostra os dois nomes, a tela de conflito diz "O de <nome>" e o menu ⋯ > Informações mostra quem criou
 - [ ] Verificações do projeto rodando e PR aberto para `main`

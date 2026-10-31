@@ -2,9 +2,10 @@ import { useMemo, useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
 import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, usePessoas, type Fatura } from "../dados";
 import { eCredito, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
-import { dataPorExtenso } from "../lancamentos/datas";
+import { mesEmQueConta } from "../dados/aviso";
+import { dataPorExtenso, mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
-import { comSinal, mesPorExtenso, SITUACAO } from "./apresentacao";
+import { comSinal, SITUACAO } from "./apresentacao";
 
 const TODAS = "";
 
@@ -94,7 +95,16 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const fatura = faturas?.find((f) => f.mes === mes);
   // As compras do adicional caem na fatura do titular.
   const doCartao = useMemo(() => new Set(cartoes.filter((c) => c.id === cartaoId || c.titular_id === cartaoId).map((c) => c.id)), [cartoes, cartaoId]);
-  const compras = useMemo(() => (lancamentos ?? []).filter((l) => l.mes === mes && doCartao.has(l.conta_id)), [lancamentos, mes, doCartao]);
+  // A compra criada só no aparelho ainda não tem `mes`: vale a fatura escolhida ou a da data (ADR 0003).
+  const compras = useMemo(
+    () =>
+      (lancamentos ?? []).filter((l) => {
+        if (!doCartao.has(l.conta_id)) return false;
+        const doMes = l.mes ?? (cartao && mesEmQueConta(l, undefined, { titular: cartao, faturas: faturas ?? [] }));
+        return doMes === mes;
+      }),
+    [lancamentos, mes, doCartao, cartao, faturas],
+  );
   const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
   const estornosCentavos = compras.filter((l) => l.estorno_de && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
