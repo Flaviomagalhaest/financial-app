@@ -1,7 +1,7 @@
 # Tela de edição descarta o dígito digitado antes de o lançamento carregar
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ Quem toca numa tecla do teclado antes de a edição carregar perde o toque sem a
 
 ## Checklist
 
-- [ ] Teste de navegador que toca a tecla assim que a tela abre (sem esperar o valor) e confere que o dígito não se perde ou que o teclado está desativado
-- [ ] Ajuste na `TelaDeLancamento.tsx`
+- [x] Teste de navegador que toca a tecla assim que a tela abre (sem esperar o valor) e confere que o dígito não se perde ou que o teclado está desativado
+- [x] Ajuste na `TelaDeLancamento.tsx`
 - [ ] Verificações do projeto rodando e PR aberto para `main`
