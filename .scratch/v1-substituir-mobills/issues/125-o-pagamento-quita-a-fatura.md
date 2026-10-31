@@ -1,7 +1,7 @@
 # O pagamento quita a fatura e passa a sobra para a seguinte
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` (ver a Hoje e a aba Cartões com uma fatura paga em parte)
 Modelo recomendado: Opus
