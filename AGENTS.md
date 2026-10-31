@@ -12,6 +12,16 @@ Papéis padrão (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-hum
 
 Layout single-context (um `GLOSSARY.md` e `docs/adr/` na raiz). Veja `docs/agents/domain.md`.
 
+## Ao começar, mova o card para DOING
+
+O card só vai para DOING quando um push muda a linha `Status:` do ticket para `claimed` (o workflow lê o arquivo, não a conversa). Sessão que só trabalha e empurra no fim deixa o card em TODO ou WAITING durante todo o trabalho. Por isso, **toda sessão que começa a trabalhar num ticket, antes de qualquer outra coisa**:
+
+1. troca o `Status:` do ticket para `claimed`, na branch em que vai trabalhar (a que o ambiente designou, `claude/...` ou `ccr-...`, ou `ticket-<NN>`), e faz um commit só com esse arquivo (`git add <ticket>`);
+2. empurra na hora com `git push -u origin <branch>`. O push em qualquer branch dispara o workflow, que move a issue para DOING (ela já está no projeto);
+3. confere que o workflow terminou verde (aba Actions) ou, sem acesso, diz na resposta que o card ficou para trás.
+
+Isso vale **mesmo quando a sessão não faz a reserva por PR** da seção abaixo: a reserva garante a exclusividade entre sessões, este passo garante o card certo no projeto. Sem o `claimed` empurrado no começo, a sessão não pode dizer que está trabalhando no ticket. No fim, o `Status:` vai para `resolved` (ou o que couber) e o card anda sozinho no push.
+
 ## Sessões em paralelo
 
 Várias sessões do agente podem trabalhar ao mesmo tempo, mas **cada uma no seu `git worktree`, com branch própria**. Na mesma pasta elas dividem os arquivos e o índice do git, e uma leva o trabalho da outra no commit. Na pasta principal não se commita: a `main` só muda por merge de PR (veja "Integração por PR").
