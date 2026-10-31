@@ -27,3 +27,5 @@ Decisões da implementação:
 - **Tarefa diária**: `_falta_conserto` e `_reajustar_do_parcelamento` passam o pendente para `_correcoes`; a edição à mão de campos que o pedido não trouxe segue intocada, e depois de concluída a correção a descrição editada numa parcela só não volta.
 - **PATCH só de valor** termina também a classificação que uma correção anterior deixou pendente.
 - **Backup**: a coluna sobe o formato para 21 (conversor 20→21 preenche vazio; esquema em `esquemas_do_formato.json`).
+- **Limite conhecido**: o zerar compara o texto da coluna. Dois PATCH quase simultâneos que trazem os mesmos campos deixam o texto igual, e o fim do refazer do primeiro pode zerar a intenção do segundo antes de ele terminar; se o segundo cair nessa janela, a tarefa diária não refaz a classificação dele e basta repetir o pedido. Exigiria dois pedidos do casal no mesmo segundo sobre os mesmos campos, então fica assim.
+- O zerar roda logo depois do refazer das parcelas e antes de gerar as que faltam (a geração já cria com a classificação inteira), para uma queda na geração não deixar a intenção presa.

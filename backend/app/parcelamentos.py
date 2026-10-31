@@ -339,8 +339,8 @@ def completar_todos(url: str | None) -> int:
         pendente = em_transacao(url, lambda conn, id=id: _classificacao_pendente(conn, id))
         while em_transacao(url, lambda conn, id=id: _reajustar_do_parcelamento(conn, id)):
             pass
-        gerar_as_parcelas(url, id)
         em_transacao(url, lambda conn, id=id, feita=pendente: _dar_por_refeita(conn, id, feita))
+        gerar_as_parcelas(url, id)
     return consertados
 
 
@@ -800,8 +800,9 @@ def alterar_parcelamento(
         return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
     while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, usuario, classificacao)):
         pass
-    gerar_as_parcelas(url, id)
+    # Antes de gerar: a geração já cria as parcelas com a classificação inteira.
     em_transacao(url, lambda conn: _dar_por_refeita(conn, id, classificacao))
+    gerar_as_parcelas(url, id)
     # A parcela automática que a data nova já alcançou se realiza agora, como na criação.
     automaticos.realizar_automaticos(url, id)
     with conectar(url) as conn:
