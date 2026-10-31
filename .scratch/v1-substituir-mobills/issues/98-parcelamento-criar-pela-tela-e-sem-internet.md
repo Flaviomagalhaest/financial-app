@@ -17,7 +17,8 @@ O casal marca "Parcelado" na folha de detalhes do novo lançamento e o parcelame
 
 - [ ] Folha de detalhes do [ticket 42](42-jornada-completa-do-lancamento-rapido.md): "Parcelado" com o número de parcelas, valor total ou da parcela, e "automático" só fora do cartão (no cartão o parcelamento já é automático e a API recusa `automatico: false`)
 - [ ] A fila do app (`web/src/dados/fila.ts`) guarda o pedido como um item só, com a ação `criar_parcelamento` de `POST /api/lancamentos/lote` (`backend/app/lote.py`), e mostra "Geladeira, 10x, não enviado" até o envio; o resultado aceito traz o `parcelamento`, e as parcelas chegam na leitura dos lançamentos
-- [ ] Reenvio do mesmo id com dados diferentes: hoje devolve o gravado sem comparar, como a recorrência; seguir a decisão do [ticket 86](86-recorrencia-criar-pela-tela-e-sem-internet.md)
+- [ ] Reenvio do mesmo id com dados diferentes: hoje devolve o gravado sem comparar, como a recorrência; seguir a decisão do [ticket 86](86-recorrencia-criar-pela-tela-e-sem-internet.md) (ficou assim: o aparelho não edita a regra não enviada, então nunca reenvia o id com outros dados)
+- [ ] Seguir o caminho da recorrência na fila (`criar_recorrencia` em `web/src/dados/fila.ts`, `useRecorrenciasNaoEnviadas` e a releitura dos lançamentos em `enviarAgora`), e tornar o `ItemDaFila` (`web/src/dados/armazem.ts`) uma união pela `acao`: com o parcelamento, são três tipos de pedido checados em `acoesDo`, `remeterLote`, `naTela` e no `AvisoDaFila` (revisão do ticket 86)
 - [ ] Tempo do lote: cada `criar_parcelamento` gera as parcelas em transações próprias (até 420 parcelas); conferir se um lote cheio (100 ações) com parcelamentos longos cabe no tempo limite da Lambda e da HTTP API, ou limitar os parcelamentos por lote
 - [ ] Testes de API, se a ação mudar, e de navegador do fluxo, online e sem internet
 - [ ] Verificações do projeto rodando e PR aberto para `main`

@@ -17,6 +17,7 @@ import {
   type Guardada,
   type ItemDaFila,
   type Lancamento,
+  type NovaRecorrencia,
   type NovoLancamento,
 } from "./armazem";
 import {
@@ -24,6 +25,7 @@ import {
   descartar,
   enfileirarConfirmar,
   enfileirarExcluir,
+  enfileirarRecorrencia,
   enfileirarSalvar,
   enviarFila,
   ETIQUETA_DO_ENVIO,
@@ -68,7 +70,7 @@ export type Historico = components["schemas"]["Historico"];
 export type { Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
-export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
+export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovaRecorrencia, NovoLancamento };
 export { identidadeDe, oferecerFavoritar, useOfertaDeFavoritar } from "./favoritos";
 export { criteriosDoEndereco, enderecoDaBusca } from "./busca";
 export type { Criterios, ParcelamentoNaTela, Transferencia } from "./busca";
@@ -273,6 +275,8 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
   const porId = new Map<string, LancamentoNaTela>(servidor.map((l) => [l.id, { ...l, naoEnviado: false }]));
   const novos: LancamentoNaTela[] = [];
   for (const item of fila) {
+    // Os previstos da recorrência são do servidor: até ela subir, o aparelho só mostra a regra.
+    if (item.acao === "criar_recorrencia") continue;
     const anterior = porId.get(item.id);
     if (item.conflito) {
       const servidor = anterior ?? { ...item.conflito.lancamento, naoEnviado: false };
@@ -372,6 +376,24 @@ export function useBusca(criterios: Criterios) {
     temMais: !noAparelho && !!atual?.temMais,
     carregarMais: () => atual && void pedir(atual.paginas),
   };
+}
+
+/**
+ * A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. `podeDescartar`
+ * só quando ela com certeza não está no servidor: nunca saiu do aparelho ou foi recusada.
+ */
+export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string; podeDescartar: boolean };
+
+/** As recorrências criadas no aparelho que ainda não subiram, da mais antiga à mais nova. */
+export function useRecorrenciasNaoEnviadas(): RecorrenciaNaoEnviada[] {
+  const fila = useFila();
+  return useMemo(
+    () =>
+      fila.flatMap((item) =>
+        item.recorrencia ? [{ ...item.recorrencia, recusa: item.recusa, podeDescartar: !!item.recusa || item.talvezNoServidor === undefined }] : [],
+      ),
+    [fila],
+  );
 }
 
 /**
@@ -677,9 +699,13 @@ export function useConexao(): boolean {
   return online && !semResposta;
 }
 
+/** Uma recorrência subiu: os previstos que o servidor gerou só vêm nas leituras dos lançamentos e da Hoje. */
+let previstosNovos = false;
+
 const remeter: Remessa = async (acoes) => {
   try {
     const { data, response } = await api.POST("/api/lancamentos/lote", { body: { acoes } });
+    if (data?.resultados.some((r) => r.recorrencia)) previstosNovos = true;
     return data ? data.resultados : response.status;
   } catch {
     return 0;
@@ -703,6 +729,10 @@ export async function enviarAgora(): Promise<boolean> {
   if (!enviou) pedirEnvioEmSegundoPlano();
   // O saldo guardado das contas não conta o que acabou de subir: sem a fila para cobrir a diferença, buscá-lo de novo (ticket 81).
   else if (pendentes > 0) void Promise.all((["/api/contas", "/api/contas?arquivadas=true"] as const).map((c) => buscarEGuardar(c, LEITURAS[c])));
+  if (previstosNovos) {
+    previstosNovos = false;
+    await Promise.all([buscarEGuardar(LISTA, LEITURAS[LISTA]), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
+  }
   return enviou;
 }
 
@@ -726,6 +756,12 @@ export async function escolherItem(mostrado: LancamentoNaTela, categoriaId: stri
   const lancamento = { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes, item_categoria_id: categoriaId };
   await enfileirarSalvar(lancamento, false, baseDe(mostrado));
   return enviarAgora();
+}
+
+/** A recorrência nova vai pela fila e vale sem internet, como um pedido só (ADR 0011). */
+export async function salvarRecorrencia(recorrencia: NovaRecorrencia): Promise<void> {
+  await enfileirarRecorrencia(recorrencia);
+  void enviarAgora();
 }
 
 export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {

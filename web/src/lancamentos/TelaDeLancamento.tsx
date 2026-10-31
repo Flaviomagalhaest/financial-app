@@ -4,6 +4,7 @@ import {
   identidadeDe,
   oferecerFavoritar,
   salvarLancamento,
+  salvarRecorrencia,
   useAvisoDePlanejamento,
   useCadastro,
   useConexao,
@@ -22,6 +23,7 @@ import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
+import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
@@ -76,6 +78,8 @@ export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", cent
   const [pessoa, setPessoa] = useState<string | null>(null);
   // Só a escolha à mão vai ao servidor; sem ela, ele decide pela data (futura nasce prevista).
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
+  // "Repete? Recorrente": salvar cria a regra, e os previstos o servidor gera ao receber.
+  const [recorrencia, setRecorrencia] = useState<RecorrenciaNaFolha | null>(null);
   // O item tocado em "Conta no planejamento em:"; sem toque, vale a escolha que o lançamento já tem
   // ou, no novo, a última para aquelas categorias.
   const [itemTocado, setItemTocado] = useState<string | null>(null);
@@ -117,16 +121,17 @@ export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", cent
   const situacao: Situacao =
     situacaoEscolhida ??
     (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
-  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null);
+  const problemaDaRecorrencia = recorrencia && problemaDa(recorrencia, data);
+  const podeSalvar = centavos > 0 && categoriaIds.length > 0 && conta !== "" && !enviando && (!id || existente !== null) && !problemaDaRecorrencia;
 
   // O que a folha de detalhes preencheu, numa linha; a data de hoje e o realizado são o normal e não aparecem.
   const resumo = [
     descricao.trim(),
     ...tags.map((t) => `#${t}`),
     pessoa ? nomeDe(pessoa) : "",
-    faturaMes ? rotuloDaFatura(faturaMes) : "",
-    data === hoje() ? "" : rotuloDaData(data),
-    situacao === "previsto" ? "previsto" : "",
+    recorrencia ? "" : faturaMes ? rotuloDaFatura(faturaMes) : "",
+    data === hoje() ? "" : recorrencia ? `desde ${rotuloDaData(data)}` : rotuloDaData(data),
+    recorrencia ? rotuloDaRecorrencia(regraDa(recorrencia, data)) : situacao === "previsto" ? "previsto" : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -240,24 +245,38 @@ export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", cent
     try {
       const eFavorito = jaEFavorito;
       // Vai para a fila, que sobe na hora se houver internet; sem ela, fica como não enviado.
-      await salvarLancamento(
-        {
-          id: existente?.id ?? novoId,
+      if (recorrencia)
+        await salvarRecorrencia({
+          id: novoId,
           tipo,
           valor_centavos: centavos,
-          data,
           descricao,
           conta_id: conta,
           categoria_ids: categoriaIds,
-          pessoa,
-          fatura_mes: noCartao ? faturaMes : null,
           item_categoria_id: itemEscolhido,
-          ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
           tags,
-        },
-        !existente,
-        existente ?? undefined,
-      );
+          pessoa,
+          ...regraDa(recorrencia, data),
+        });
+      else
+        await salvarLancamento(
+          {
+            id: existente?.id ?? novoId,
+            tipo,
+            valor_centavos: centavos,
+            data,
+            descricao,
+            conta_id: conta,
+            categoria_ids: categoriaIds,
+            pessoa,
+            fatura_mes: noCartao ? faturaMes : null,
+            item_categoria_id: itemEscolhido,
+            ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
+            tags,
+          },
+          !existente,
+          existente ?? undefined,
+        );
       if (!existente) {
         // Favoritar precisa de internet (ADR 0011): sem ela, nem a ⭐ vale nem se oferece.
         const modelo = { id: crypto.randomUUID(), descricao: descricao.trim(), tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa, valor_centavos: centavos };
@@ -266,7 +285,7 @@ export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", cent
       }
       window.location.hash = "#/historico";
     } catch {
-      setErro("Não foi possível guardar o lançamento no aparelho.");
+      setErro(recorrencia ? "Não foi possível guardar a recorrência no aparelho." : "Não foi possível guardar o lançamento no aparelho.");
     } finally {
       setEnviando(false);
     }
@@ -370,6 +389,7 @@ export function TelaDeLancamento({ id, favoritoId, tipoInicial = "despesa", cent
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
+          recorrencia={id ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, onMudar: setRecorrencia }}
           onFechar={() => setDetalhesAbertos(false)}
         />
       )}

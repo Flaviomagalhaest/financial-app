@@ -852,6 +852,20 @@ button.linha-que-abre {
   accent-color: var(--destaque);
 }
 
+/* Caixa de marcar com o texto ao lado, na folha de detalhes. */
+label.caixa {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+label.caixa > input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--destaque);
+}
+
 /* Favoritos: a grade da Hoje, a ⭐ do novo lançamento e a oferta "Favoritar" depois de salvar. */
 .grade-de-favoritos {
   display: grid;

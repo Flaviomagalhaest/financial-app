@@ -13,7 +13,16 @@ function useAgora(): number {
   return agora;
 }
 
-/** Na Hoje: quantos lançamentos não foram enviados, com "Enviar agora"; em destaque depois de 24 h. */
+/** "1 lançamento não enviado", "2 recorrências não enviadas", "1 lançamento e 1 recorrência não enviados". */
+function naoEnviados(lancamentos: number, recorrencias: number): string {
+  const lanc = lancamentos === 1 ? "1 lançamento" : `${lancamentos} lançamentos`;
+  const rec = recorrencias === 1 ? "1 recorrência" : `${recorrencias} recorrências`;
+  if (!recorrencias) return `${lanc} ${lancamentos === 1 ? "não enviado" : "não enviados"}`;
+  if (!lancamentos) return `${rec} ${recorrencias === 1 ? "não enviada" : "não enviadas"}`;
+  return `${lanc} e ${rec} não enviados`;
+}
+
+/** Na Hoje: quantos lançamentos e recorrências não foram enviados, com "Enviar agora"; em destaque depois de 24 h. */
 export function AvisoDaFila() {
   const fila = useFila();
   const { nomeDe } = usePessoas();
@@ -22,6 +31,9 @@ export function AvisoDaFila() {
   const [semInternet, setSemInternet] = useState(false);
   if (fila.length === 0) return null;
   const conflitos = fila.filter((item) => item.conflito).length;
+  const recorrencias = fila.filter((item) => item.acao === "criar_recorrencia").length;
+  // Só recorrências na fila: o motivo fala delas, no feminino.
+  const soRecorrencias = recorrencias === fila.length;
 
   const atrasado = agora - fila[0].desde > AVISO_DE_NAO_ENVIADO_MS;
   const contar = (n: number, um: string, varios: string) => (n === 0 ? null : `${n} ${n === 1 ? um : varios}`);
@@ -29,7 +41,7 @@ export function AvisoDaFila() {
   const quemExcluiu = [...new Set(exclusoes.map((e) => (e.por_voce ? "você" : nomeDe(e.excluido_por))))].join(" e ");
   const excluidos = contar(exclusoes.length, "excluído", "excluídos");
   const esperando = [
-    contar(fila.filter((item) => item.recusa).length, "recusado", "recusados"),
+    contar(fila.filter((item) => item.recusa).length, soRecorrencias ? "recusada" : "recusado", soRecorrencias ? "recusadas" : "recusados"),
     excluidos && `${excluidos} por ${quemExcluiu}`,
   ].filter(Boolean);
 
@@ -42,7 +54,7 @@ export function AvisoDaFila() {
   return (
     <div className={atrasado ? "aviso" : undefined} data-testid="nao-enviados">
       <p>
-        {fila.length === 1 ? "1 lançamento não enviado" : `${fila.length} lançamentos não enviados`}
+        {naoEnviados(fila.length - recorrencias, recorrencias)}
         {esperando.length > 0 && ` (${esperando.join(", ")}: veja no Histórico)`}
       </p>
       {conflitos > 0 && (
