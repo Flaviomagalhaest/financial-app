@@ -1,7 +1,7 @@
 # Editar o lançamento enquanto a criação sobe vira conflito falso
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
