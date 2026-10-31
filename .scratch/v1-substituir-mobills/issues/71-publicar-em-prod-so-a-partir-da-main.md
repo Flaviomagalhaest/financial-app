@@ -37,6 +37,6 @@ Pendências pós-código (requerem credencial do dono):
 ## Checklist
 
 - [x] Decisão do dono registrada em `## Answer`
-- [ ] GitHub Environment `prod` criado com branch protection `main` only (dono, UI do repositório)
+- [x] GitHub Environment `prod` criado com branch protection `main` only (dono, UI do repositório)
 - [ ] Pilha `financial-github` republicada pelo dono (credencial humana)
 - [ ] Deploy de `dev` e de `prod` conferidos pelo teste de fumaça
