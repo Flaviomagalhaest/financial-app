@@ -16,7 +16,7 @@ import {
 import { nomePorId, numeroDaParcela, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
-import { mesPorExtenso } from "../cartoes/apresentacao";
+import { mesPorExtenso } from "../lancamentos/datas";
 import { contagem, SITUACOES, TIPOS } from "./apresentacao";
 import { FiltrosSalvos } from "./FiltrosSalvos";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { api } from "../api/cliente";
 import { useCartoesComArquivados, useFaturas, type Cartao } from "../dados";
-import { mesPorExtenso } from "../cartoes/apresentacao";
+import { mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
 
 type Executar = (acao: string, chamar: () => Promise<{ data?: unknown; response: Response; error?: unknown }>) => Promise<boolean>;
