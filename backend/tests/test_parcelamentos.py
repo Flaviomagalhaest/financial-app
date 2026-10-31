@@ -1160,3 +1160,16 @@ def test_o_aviso_de_realizadas_olha_o_que_falta_refazer_e_a_tarefa_diaria_termin
     fazer_tarefa_diaria(database_url)
     assert [v[1] for v in valores(casal, novo["id"])] == [20000, 20000, 20000]
     assert mudar(casal, novo["id"], valor_total_centavos=60000).status_code == 200
+
+
+def test_a_tarefa_diaria_e_os_automaticos_com_o_parcelamento_excluido_nao_fazem_nada(
+    casal: Casal, database_url: str
+):
+    from app import automaticos
+
+    novo = criar_geladeira(casal, casal.conta(), data="2026-10-10", automatico=True)
+    assert casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}").status_code == 204
+
+    assert automaticos.realizar_automaticos(database_url, UUID(novo["id"])) == 0
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
+    assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []
