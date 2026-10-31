@@ -13,7 +13,7 @@ Origem: [ticket 65](65-restauracao-em-banco-vazio.md) (a restauração só rodou
 
 O `scripts/restaurar-backup.sh` (ticket 65) restaura um backup no banco de um ambiente. Com `--esvaziar`, só no `dev`, ele apaga antes os dados do `dev`. Depois de gravar e conferir contagens e somas contra o manifesto, ele exporta de novo e exige o mesmo zip. Esta é a primeira vez que a restauração roda no DSQL. Ainda não rodaram lá com tabelas do domínio: a consulta das chaves estrangeiras no `pg_constraint`, o `AT TIME ZONE 'UTC'` dos `timestamptz`, o `DELETE ... WHERE (chave) IN (SELECT ... LIMIT 1000)` do esvaziar e os lotes do `executemany`.
 
-Os comandos usam a credencial temporária do dono na conta 255235818791 (sa-east-1). O bucket de cada ambiente é a saída `BucketDoBackup` da pilha `financial-<ambiente>-dados`.
+Os comandos usam a credencial temporária do dono na conta <conta AWS> (sa-east-1). O bucket de cada ambiente é a saída `BucketDoBackup` da pilha `financial-<ambiente>-dados`.
 
 ```sh
 aws s3 ls s3://<bucket de prod>/diario/ | tail -1
