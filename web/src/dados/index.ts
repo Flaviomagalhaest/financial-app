@@ -52,6 +52,7 @@ import {
 import { fetchComTempoLimite, ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
 import { comValorPadrao, type DadosDoFavorito, type Favorito, type NovoFavorito, type Sugerido } from "./favoritos";
 import { fonteDoHistorico, sugestaoDe, type FonteDeSugestao } from "./sugestao";
+import { buscarNoAparelho, pedidoDaBusca, type Criterios, type LinhaNaTela, type ResultadoNaTela } from "./busca";
 
 export type Conta = components["schemas"]["Conta"];
 export type Categoria = components["schemas"]["Categoria"];
@@ -68,6 +69,8 @@ export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovoLancamento };
 export { identidadeDe, oferecerFavoritar, useOfertaDeFavoritar } from "./favoritos";
+export { criteriosDoEndereco, enderecoDaBusca } from "./busca";
+export type { Criterios, ParcelamentoNaTela, Transferencia } from "./busca";
 export type { DadosDoFavorito, Favorito, Oferta, Sugerido } from "./favoritos";
 
 /** Lançamento como o aparelho o mostra: o do servidor com as mudanças da fila por cima. */
@@ -87,6 +90,10 @@ export type LancamentoNaTela = NovoLancamento & {
   fonte?: Lancamento["fonte"];
   /** A recorrência que gerou o previsto. */
   recorrencia_id?: Lancamento["recorrencia_id"];
+  /** O parcelamento da parcela, o número dela e o total de parcelas (3 de 10). */
+  parcelamento_id?: Lancamento["parcelamento_id"];
+  parcela?: Lancamento["parcela"];
+  parcelas?: Lancamento["parcelas"];
   /** O lançamento da outra pessoa que este parece repetir. */
   parece_repetido_de?: string | null;
   /** A hora da última ação no aparelho, enquanto a mudança não subiu. */
@@ -286,6 +293,77 @@ export function useLancamentos() {
   const { itens: fila, lida } = useFilaLida();
   const lancamentos = useMemo(() => (dados ? naTela(dados, fila) : semDados ? naTela([], fila) : null), [dados, fila, semDados]);
   return { lancamentos, atualizadoEm, semDados, filaLida: lida };
+}
+
+export type LinhaDaBusca = LinhaNaTela<LancamentoNaTela>;
+
+const naTelaDoServidor = (l: Lancamento): LancamentoNaTela => ({ ...l, naoEnviado: false });
+
+function linhaDoServidor(linha: components["schemas"]["LinhaDaBusca"]): LinhaDaBusca {
+  if (linha.parcelamento) return { parcelamento: { ...linha.parcelamento, lancamentos: linha.parcelamento.lancamentos.map(naTelaDoServidor) } };
+  if (linha.transferencia) return { transferencia: linha.transferencia };
+  return { lancamento: naTelaDoServidor(linha.lancamento!) };
+}
+
+/**
+ * A busca no servidor, página a página; sem resposta dele, a do aparelho sobre o que ele guarda,
+ * com `parcial`. Os totais são sempre do resultado inteiro.
+ */
+export function useBusca(criterios: Criterios) {
+  const chave = JSON.stringify(criterios);
+  const [doServidor, setDoServidor] = useState<{ chave: string; resultado: ResultadoNaTela<LancamentoNaTela>; paginas: number; temMais: boolean } | null>(null);
+  const [parcial, setParcial] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const pedido = useRef(0);
+  const { lancamentos } = useLancamentos();
+  const { cartoes } = useCadastro();
+
+  const pedir = useCallback(
+    async (pagina: number) => {
+      const numero = ++pedido.current;
+      setCarregando(true);
+      const { data } = await api.POST("/api/busca", { body: pedidoDaBusca(JSON.parse(chave) as Criterios, pagina) }).catch(() => ({ data: undefined }));
+      // Uma busca mais nova já saiu: esta resposta não vale mais.
+      if (numero !== pedido.current) return;
+      setCarregando(false);
+      if (!data) return setParcial(true);
+      setParcial(false);
+      setDoServidor((antes) => {
+        const linhas = data.linhas.map(linhaDoServidor);
+        const anteriores = pagina > 0 && antes?.chave === chave ? antes.resultado.linhas : [];
+        return { chave, resultado: { totais: data.totais, linhas: [...anteriores, ...linhas] }, paginas: pagina + 1, temMais: data.tem_mais };
+      });
+    },
+    [chave],
+  );
+
+  useEffect(() => {
+    void pedir(0);
+    // A rede voltou: a busca completa substitui o resultado parcial.
+    const deNovo = () => void pedir(0);
+    window.addEventListener("online", deNovo);
+    return () => window.removeEventListener("online", deNovo);
+  }, [pedir]);
+
+  // A fila subiu (ou mudou): o que estava só no aparelho já está no servidor.
+  const naoEnviados = useFila().length;
+  const antes = useRef(naoEnviados);
+  useEffect(() => {
+    if (antes.current === naoEnviados) return;
+    antes.current = naoEnviados;
+    void pedir(0);
+  }, [naoEnviados, pedir]);
+
+  const noAparelho = useMemo(() => (parcial && lancamentos ? buscarNoAparelho(lancamentos, JSON.parse(chave) as Criterios, cartoes) : null), [parcial, lancamentos, chave, cartoes]);
+  const atual = doServidor?.chave === chave ? doServidor : null;
+  return {
+    resultado: noAparelho ?? atual?.resultado ?? null,
+    /** Sem internet: só o que o aparelho guarda. */
+    parcial: !!noAparelho,
+    carregando,
+    temMais: !noAparelho && !!atual?.temMais,
+    carregarMais: () => atual && void pedir(atual.paginas),
+  };
 }
 
 /**

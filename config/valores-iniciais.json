@@ -8,5 +8,6 @@
   "itensEmDestaqueNaHojePercentual": 80,
   "horizonteDaRecorrenciaMeses": 24,
   "contasDaSemanaDias": 7,
-  "maximoDeParcelas": 420
+  "maximoDeParcelas": 420,
+  "buscaPorPagina": 50
 }
