@@ -8,6 +8,7 @@ import psycopg
 import pytest
 
 from app import edicao_em_lote, lancamentos
+from app.tarefa_diaria import fazer_tarefa_diaria
 from tests.conftest import Casal
 from tests.test_busca import lancar, parcelar
 from tests.test_cartoes import novo_cartao
@@ -535,6 +536,92 @@ def test_lote_interrompido_aparece_na_lista_e_o_desfazer_volta_o_que_foi_gravado
 
     assert desfazer(casal, lote, quem="flavio").json() == {"desfeitos": 1, "pulados": []}
     assert classificacao(casal, feira) == [({mercado}, set())]
+
+
+def parar_no_meio(database_url: str, lote: dict, ha: timedelta = timedelta(minutes=10)) -> None:
+    """A Lambda caiu no meio da gravação: o lote fica em `aplicando`, criado há `ha`."""
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE edicoes_em_lote SET situacao = 'aplicando', criado_em = %s WHERE id = %s",
+            (datetime.now(UTC) - ha, lote["id"]),
+        )
+
+
+def situacao_do_lote(database_url: str, lote: dict) -> tuple[str, str | None]:
+    with psycopg.connect(database_url) as conn:
+        return conn.execute(
+            "SELECT situacao, recusa FROM edicoes_em_lote WHERE id = %s", (lote["id"],)
+        ).fetchone()
+
+
+def test_a_tarefa_diaria_desfaz_o_lote_parado_no_meio_e_deixa_o_recente(
+    casal: Casal, database_url: str
+):
+    conta, mercado, casa = casal.conta(), casal.categoria("Mercado"), casal.categoria("Casa")
+    feira, padaria = lancar(casal, conta, [mercado]), lancar(casal, conta, [mercado])
+    mudanca = {"acao": "acrescentar", "categoria_ids": [casa]}
+    parado = aplicada(casal, marcados(feira), categorias=mudanca)
+    recente = aplicada(casal, marcados(padaria), categorias=mudanca)
+    parar_no_meio(database_url, parado)
+    parar_no_meio(database_url, recente, ha=timedelta(minutes=1))
+
+    assert fazer_tarefa_diaria(database_url)["edicoes_em_lote"] == 1
+
+    assert classificacao(casal, feira, padaria) == [({mercado}, set()), ({mercado, casa}, set())]
+    assert situacao_do_lote(database_url, parado) == ("cancelada", "a gravação parou no meio")
+    assert situacao_do_lote(database_url, recente)[0] == "aplicando"
+    assert [l["id"] for l in casal.pedir("flavio", "GET", "/api/edicoes-em-lote").json()] == [
+        recente["id"]
+    ]
+    assert fazer_tarefa_diaria(database_url)["edicoes_em_lote"] == 0
+
+
+def test_reenviar_o_lote_parado_ha_tempo_desfaz_em_vez_de_devolver_pela_metade(
+    casal: Casal, database_url: str
+):
+    conta, mercado, casa = casal.conta(), casal.categoria("Mercado"), casal.categoria("Casa")
+    feira = lancar(casal, conta, [mercado])
+    mudanca = {"categorias": {"acao": "acrescentar", "categoria_ids": [casa]}}
+    lote = aplicada(casal, marcados(feira), **mudanca)
+    parar_no_meio(database_url, lote)
+
+    reenvio = aplicar(casal, marcados(feira), id=lote["id"], **mudanca)
+
+    assert reenvio.status_code == 422
+    assert reenvio.json()["detail"] == "a gravação parou no meio"
+    assert classificacao(casal, feira) == [({mercado}, set())]
+    assert situacao_do_lote(database_url, lote)[0] == "cancelada"
+    assert aplicar(casal, marcados(feira), id=lote["id"], **mudanca).status_code == 422
+    assert aplicada(casal, marcados(feira), **mudanca)["situacao"] == "aplicada"
+
+
+def test_o_lote_cancelado_avisa_quantos_lancamentos_mudados_depois_ficaram_com_a_mudanca(
+    casal: Casal, database_url: str
+):
+    conta, mercado, casa = casal.conta(), casal.categoria("Mercado"), casal.categoria("Casa")
+    feira, padaria = lancar(casal, conta, [mercado]), lancar(casal, conta, [mercado])
+    lote = aplicada(
+        casal,
+        marcados(feira, padaria),
+        categorias={"acao": "acrescentar", "categoria_ids": [casa]},
+    )
+    # Enquanto o lote ainda grava, o Flávio troca a categoria da padaria.
+    padaria_agora = todos(casal)[padaria["id"]]
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{padaria['id']}",
+        json={"versao": padaria_agora["versao"], "categoria_ids": [casa]},
+    )
+    parar_no_meio(database_url, lote)
+
+    assert fazer_tarefa_diaria(database_url)["edicoes_em_lote"] == 1
+
+    assert classificacao(casal, feira, padaria) == [({mercado}, set()), ({casa}, set())]
+    assert situacao_do_lote(database_url, lote) == (
+        "cancelada",
+        "a gravação parou no meio; 1 lançamento mudado depois ficou com a mudança do lote",
+    )
 
 
 def test_desfazer_pula_o_que_tinha_tag_juntada_depois(casal: Casal):
