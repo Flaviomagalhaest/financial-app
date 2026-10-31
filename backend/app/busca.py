@@ -308,7 +308,8 @@ def _soma(tipo: str, situacao: str) -> str:
 _SOMAS = [(t, s) for t in ("despesa", "receita") for s in ("realizado", "previsto")]
 
 
-def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
+def _linhas(criterios: CriteriosDaBusca) -> tuple[str, list]:
+    """Uma linha por lançamento, parcelamento ou transferência, com o valor dela e as somas."""
     do_lancamento, da_transferencia = _do_lancamento(criterios), _da_transferencia(criterios)
     agrupar = _agrupar(criterios)
     chave = "COALESCE(lancamentos.parcelamento_id, lancamentos.id)" if agrupar else "lancamentos.id"
@@ -324,7 +325,6 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
         )
         parametros_das_transferencias = da_transferencia.parametros
     valor, parametros_do_valor = _filtro_de_valor(criterios)
-    # Uma linha por lançamento, parcelamento ou transferência, com o valor dela e as somas.
     linhas = (
         f"(SELECT * FROM ("
         f" SELECT {chave} AS chave, {parcelado} AS parcelado, false AS transferencia,"
@@ -334,11 +334,28 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
         f"{transferencias_sql}"
         f") todas WHERE {valor}) linhas"
     )
-    parametros_das_linhas = [
+    return linhas, [
         *do_lancamento.parametros,
         *parametros_das_transferencias,
         *parametros_do_valor,
     ]
+
+
+def lancamentos_do_resultado(conn, criterios: CriteriosDaBusca) -> tuple[list[UUID], list[UUID]]:
+    """O resultado inteiro, sem página e sem as transferências: os lançamentos avulsos e os
+    parcelamentos que ele traz (a edição em lote, ticket 61)."""
+    linhas, parametros = _linhas(criterios)
+    avulsos, parcelamentos = [], []
+    for chave, parcelado in conn.execute(
+        f"SELECT chave, parcelado FROM {linhas} WHERE NOT transferencia", parametros
+    ):
+        (parcelamentos if parcelado else avulsos).append(chave)
+    return avulsos, parcelamentos
+
+
+def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
+    do_lancamento = _do_lancamento(criterios)
+    linhas, parametros_das_linhas = _linhas(criterios)
     quantidade, *centavos = conn.execute(
         f"SELECT count(*) FILTER (WHERE NOT transferencia), {', '.join(f'COALESCE(sum({t}_{s}), 0)::bigint' for t, s in _SOMAS)}"
         f" FROM {linhas}",

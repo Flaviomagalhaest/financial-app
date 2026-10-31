@@ -188,6 +188,8 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "cartoes": 0,
             "categorias": 0,
             "contas": 0,
+            "edicao_em_lote_lancamentos": 0,
+            "edicoes_em_lote": 0,
             "exportacoes": 0,
             "faturas": 0,
             "favoritos": 0,
@@ -787,3 +789,61 @@ def test_os_favoritos_e_os_dispensados_voltam_do_backup_com_a_ordem(database_url
             ("favorito", 2, '["Rotina"]', 1200),
             ("dispensado", None, '["Rotina"]', 1200),
         ]
+
+
+def test_backup_da_versao_18_sem_edicoes_em_lote_restaura_sem_nenhuma(database_url):
+    # O que `prod` gravava antes do ticket 61: nenhuma edição em lote para desfazer.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        atual = gerar_backup(conn)
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome in ("edicoes_em_lote.csv", "edicao_em_lote_lancamentos.csv"):
+                continue
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 18
+                del manifesto["tabelas"]["edicoes_em_lote"]
+                del manifesto["tabelas"]["edicao_em_lote_lancamentos"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT count(*) FROM edicoes_em_lote").fetchone() == (0,)
+
+
+def test_as_edicoes_em_lote_voltam_do_backup_com_o_de_antes(database_url):
+    aplicar_migrations(database_url)
+    lote, lancamento = (
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002",
+    )
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO edicoes_em_lote (id, resumo, situacao, lancamentos, criado_por)"
+            " VALUES (%s, 'Tags: tirar #viagem', 'aplicada', 1, 'flavio')",
+            (lote,),
+        )
+        conn.execute(
+            "INSERT INTO edicao_em_lote_lancamentos (lote_id, lancamento_id, versao,"
+            " categoria_ids_antes, tag_ids_antes) VALUES (%s, %s, 3, '[]', '[]')",
+            (lote, lancamento),
+        )
+        backup = gerar_backup(conn)
+        conn.execute("DELETE FROM edicao_em_lote_lancamentos")
+        conn.execute("DELETE FROM edicoes_em_lote")
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        restaurar_backup(conn, backup)
+
+        assert conn.execute("SELECT resumo, situacao FROM edicoes_em_lote").fetchall() == [
+            ("Tags: tirar #viagem", "aplicada")
+        ]
+        assert conn.execute(
+            "SELECT versao, desfazer FROM edicao_em_lote_lancamentos"
+        ).fetchall() == [(3, None)]

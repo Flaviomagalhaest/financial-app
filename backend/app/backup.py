@@ -16,7 +16,7 @@ from pathlib import Path
 
 import psycopg
 
-VERSAO_FORMATO = 18
+VERSAO_FORMATO = 19
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -394,6 +394,45 @@ def _da_versao_17_para_a_18(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_18_para_a_19(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 19 (ticket 61) traz as edições em lote, com o que cada lançamento tinha antes,
+    para o desfazer. Backup antigo entra sem nenhuma."""
+    novas = {
+        "edicoes_em_lote": (
+            [
+                "id",
+                "resumo",
+                "situacao",
+                "lancamentos",
+                "recusa",
+                "criado_por",
+                "criado_em",
+                "desfeita_por",
+                "desfeita_em",
+            ],
+            {"lancamentos": "0"},
+        ),
+        "edicao_em_lote_lancamentos": (
+            [
+                "lote_id",
+                "lancamento_id",
+                "versao",
+                "categoria_ids_antes",
+                "tag_ids_antes",
+                "item_categoria_id_antes",
+                "item_atual_categoria_id_antes",
+                "desfazer",
+            ],
+            {"versao": "0"},
+        ),
+    }
+    for tabela, (colunas, somas) in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -414,6 +453,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     15: _da_versao_15_para_a_16,
     16: _da_versao_16_para_a_17,
     17: _da_versao_17_para_a_18,
+    18: _da_versao_18_para_a_19,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
