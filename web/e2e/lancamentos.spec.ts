@@ -207,20 +207,22 @@ test("o teclado da edição fica desativado até o lançamento carregar (ticket 
   const editar = page.getByRole("link", { name: `Editar Feira ${s}` });
   const destino = await editar.getAttribute("href");
 
-  // A lista demora a chegar: o toque na tecla não pode se perder nem gravar o valor antigo.
+  // Aparelho sem cache e a lista demora a chegar: o toque na tecla não pode se perder nem gravar o valor antigo.
   let liberar = () => {};
   const segurada = new Promise<void>((pronto) => (liberar = pronto));
-  await page.route("**/api/lancamentos", async (rota) => {
+  const outro = await page.context().browser()!.newContext({ baseURL: "http://127.0.0.1:4173" });
+  const tela = await outro.newPage();
+  await tela.route("**/api/lancamentos", async (rota) => {
     if (rota.request().method() !== "GET") return rota.continue();
     await segurada;
     await rota.continue();
   });
-  await page.evaluate(() => indexedDB.databases().then((bs) => bs.forEach((b) => b.name && indexedDB.deleteDatabase(b.name))));
-  await page.goto(`/${destino}`);
-  await page.reload();
-  const nove = page.getByRole("button", { name: "9", exact: true });
+  await tela.goto(`/${destino}`);
+  await entrar(tela);
+  const nove = tela.getByRole("button", { name: "9", exact: true });
   await expect(nove).toBeDisabled();
   liberar();
-  await expect(page.getByTestId("valor")).toHaveText("R$ 0,19");
+  await expect(tela.getByTestId("valor")).toHaveText("R$ 0,19");
   await expect(nove).toBeEnabled();
+  await outro.close();
 });
