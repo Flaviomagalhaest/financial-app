@@ -779,6 +779,23 @@ def test_o_mes_pulado_no_trecho_que_o_fim_tirou_segue_pulado_ao_reabrir(casal: C
     ]
 
 
+def test_excluir_o_que_o_fim_ja_tirou_conta_como_pular_o_mes(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    doze = gerados(casal, nova["id"])[11]["id"]
+    mudar(casal, nova["id"], 1, vezes=10)
+
+    # A exclusão do aparelho chega depois de o fim já ter tirado a 12ª.
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{doze}")
+    mudar(casal, nova["id"], 1, vezes=None)
+
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [
+        *range(1, 12),
+        *range(13, 25),
+    ]
+
+
 def test_o_mes_pulado_que_o_horizonte_tirou_segue_pulado_quando_ele_chega(
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
