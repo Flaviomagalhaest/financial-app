@@ -1,7 +1,7 @@
 # Editar o lançamento enquanto a criação sobe vira conflito falso
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
@@ -38,8 +38,25 @@ Confira também os outros caminhos que usam `baseDe` com um guardado "não envia
 
 ## Checklist
 
-- [ ] Teste de navegador determinístico (o da reprodução acima), vermelho antes da correção
-- [ ] Teste de unidade do caminho na fila (`fila.ts`), se a correção ficar lá
-- [ ] Correção; a mudança da outra pessoa no meio continua virando conflito (teste)
-- [ ] `lancamentos.spec.ts` com `--repeat-each=10` sem falha
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Teste de navegador determinístico (o da reprodução acima), vermelho antes da correção: `conflito.spec.ts` › "editar enquanto a criação sobe não vira conflito com a própria criação". A resposta do primeiro lote fica presa (`page.context().route`) até o teste soltá-la, com a tela de edição já aberta; 3 de 3 vermelho antes, com "⚠ conflito: sua mudança espera decisão"
+- [x] Teste de unidade do caminho na fila (`fila.ts`), se a correção ficar lá: **sem seam**. A correção ficou em `fila.ts`, mas `mudar` e `aplicar` só existem sobre o IndexedDB, que o Node não tem (o projeto não usa `fake-indexeddb`); o teste de navegador é a seam que passa pela cadeia toda (tela, fila e servidor). Veja as notas
+- [x] Correção; a mudança da outra pessoa no meio continua virando conflito (teste): "editar enquanto a criação sobe ainda vira conflito se a outra pessoa mudou o mesmo campo"
+- [x] `lancamentos.spec.ts` com `--repeat-each=10` sem falha: 5 rodadas seguidas de 50 de 50. Uma rodada antes delas teve 2 falhas (um `toHaveCount` e, logo depois, `browser.newContext: Target page, context or browser has been closed`), sem o nome do teste guardado e sem se repetir nas 250 execuções seguintes
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Answer
+
+Hipótese confirmada (a 1 de 4): o lote da edição saía com uma ação só, `"versao": 0` e todos os campos, porque `baseDe` devolve `undefined` para o guardado "não enviado" e a fila já não tinha o item. O servidor não tinha culpa: o conflito é por campo (versão do campo maior que a do pedido e valor diferente).
+
+Correção em `web/src/dados/fila.ts`: o caminho do ticket "`aplicar` deixar registrado a versão com que o pedido foi aceito".
+
+- `aplicar` guarda, nas respostas (`fila/aceitos`), o último lançamento aceito de cada mudança de lançamento que sobe (no máximo 100, os mais novos).
+- `mudar` passa esse aceito ao pedido, e `enfileirarSalvar`, `enfileirarConfirmar` e `enfileirarExcluir` o usam como base só quando a tela não tinha a versão do servidor e não há item na fila. A base é a versão que a mudança deste aparelho gerou, não a mais nova da lista, então a mudança da outra pessoa entre a criação chegar e o "Salvar" continua virando conflito.
+- O registro fica no IndexedDB, e não na memória da tela, porque o envio também roda no service worker. Sair da conta o apaga com as outras respostas.
+
+O outro caminho (usar a lista guardada) foi descartado: depois do envio a lista é lida de novo, e com a mudança da outra pessoa ela teria a versão dela, que esconderia o conflito.
+
+Notas:
+
+- `excluirLancamento` (lista), `confirmarPrevisto` (Contas da semana) e `escolherItem` (Mês) chamam com o lançamento da tela no momento do toque, então só pegam um "não enviado" já aceito por atraso de render. Agora eles também vão sobre o aceito: a exclusão sobe com `versao`, e não sem ela, pulando a checagem de conflito. Não ganharam teste próprio, porque a janela é a do render, e o caminho é o mesmo `mudar` do teste acima.
+- Sem seam de unidade para a fila: testar `mudar`/`aplicar` fora do navegador pediria um IndexedDB falso (dependência nova). Fica registrado aqui; os testes de navegador cobrem a fila hoje.
