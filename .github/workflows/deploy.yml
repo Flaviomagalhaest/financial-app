@@ -26,6 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AMBIENTE: ${{ github.ref_name == 'main' && github.event_name == 'push' && 'prod' || 'dev' }}
+      # O repositório é público: conta e e-mail do dono ficam em secrets (o log os mascara).
+      AWS_CONTA: ${{ secrets.AWS_CONTA }}
+      EMAIL_DO_DONO: ${{ secrets.EMAIL_DO_DONO }}
     # Um deploy por vez em cada pilha; o dev é dividido por todas as branches.
     concurrency:
       group: deploy-${{ github.ref_name == 'main' && github.event_name == 'push' && 'prod' || 'dev' }}
@@ -41,9 +44,11 @@ jobs:
             web/package-lock.json
             infra/package-lock.json
 
-      - name: Conta e região da configuração
+      - name: Secrets e região da configuração
         run: |
-          echo "AWS_CONTA=$(jq -r .conta config/aws.json)" >> "$GITHUB_ENV"
+          for nome in AWS_CONTA EMAIL_DO_DONO; do
+            [ -n "${!nome}" ] || { echo "::error::falta o secret $nome (veja o README, seção Deploy)"; exit 1; }
+          done
           echo "AWS_REGIAO=$(jq -r .regiao config/aws.json)" >> "$GITHUB_ENV"
 
       - uses: aws-actions/configure-aws-credentials@v4

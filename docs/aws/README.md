@@ -1,4 +1,4 @@
-# Conta AWS 255235818791
+# Conta AWS
 
 ## SCP `p-q0eemrzp`
 
@@ -12,7 +12,7 @@ Ela fica fora da infraestrutura como código, porque o repositório do app não 
 
 Feito uma vez à mão, em 2026-10-28, com credencial temporária da conta:
 
-1. `npx aws-cdk bootstrap aws://255235818791/sa-east-1` (pilha `CDKToolkit`).
+1. `npx aws-cdk bootstrap aws://$AWS_CONTA/sa-east-1` (pilha `CDKToolkit`).
 2. `cd infra && npm ci && npx cdk deploy financial-github`: provedor OIDC do GitHub e a role `financial-app-deploy`. A role confia em qualquer branch deste repositório, no formato novo do `sub` (`repo:Flaviomagalhaest@14982168/financial-app@1432589902:ref:refs/heads/*`), assume as roles do bootstrap do CDK e entra no DSQL como `admin` para as migrations.
 
 Daí em diante, todo deploy sai pelo `.github/workflows/deploy.yml`. Refaça os dois passos só se a pilha `CDKToolkit` ou a `financial-github` sumirem.

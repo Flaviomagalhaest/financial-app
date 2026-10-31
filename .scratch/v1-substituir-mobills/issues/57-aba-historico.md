@@ -24,4 +24,4 @@ O casal vê a evolução de longo prazo desde 2019.
 
 - **Uma leitura por tela**: `GET /api/historico` (`backend/app/historico.py`, testes em `backend/tests/test_aba_historico.py`) serve as três visões da métrica escolhida; a tela (`web/src/historico/TelaDaEvolucao.tsx`) fica no topo da aba Histórico, acima da lista de lançamentos, e o app guarda a resposta de cada combinação para mostrar sem internet. Teste de navegador em `web/e2e/historico.spec.ts`.
 - **Desempenho**: 11 mil lançamentos de 2019 a hoje no Postgres local deram 30 a 60 ms por leitura; sem ticket de agregado mensal.
-- **Pendências**: as regras provisórias vão para o dono no [ticket 109](109-regras-provisorias-da-aba-historico.md).
+- **Pendências**: as regras provisórias vão para o dono no [ticket 115](115-regras-provisorias-da-aba-historico.md).

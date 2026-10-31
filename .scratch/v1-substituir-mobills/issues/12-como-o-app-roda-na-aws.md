@@ -46,7 +46,7 @@ Decidido com o dono em 2026-10-25. [ADR 0010](../../../docs/adr/0010-app-na-aws-
 
 **Backup e restauração:** o EventBridge Scheduler chama, uma vez por dia, uma Lambda de backup do mesmo pacote, que grava a exportação completa num S3 em sa-east-1 com versões e Object Lock em **compliance** por 90 dias (nem o root apaga antes). Um teste no CI faz exportar → importar num banco vazio → comparar; além disso, uma restauração de verdade no `dev` a partir do backup de `prod`, antes da virada e a cada mudança no formato da exportação.
 
-**Alerta de orçamento:** um orçamento mensal na conta filha, com `IncludeCredit` e `IncludeRefund` desligados (senão os créditos escondem o gasto até 12/04/2027), e alertas por e-mail para `flaviomagalhaest@gmail.com`: gasto real acima de US$ 1, previsão do mês acima de US$ 5 e gasto real acima de US$ 5. Sem ação automática.
+**Alerta de orçamento:** um orçamento mensal na conta filha, com `IncludeCredit` e `IncludeRefund` desligados (senão os créditos escondem o gasto até 12/04/2027), e alertas por e-mail para `<e-mail do dono>`: gasto real acima de US$ 1, previsão do mês acima de US$ 5 e gasto real acima de US$ 5. Sem ação automática.
 
 **Alertas de operação:** alarmes do CloudWatch, por SNS para o mesmo e-mail, quando o backup diário falha, quando nenhum backup novo aparece em 26 horas e quando a API devolve erros 5xx acima de um limite por dia. Dentro das franquias (10 alarmes, 1.000 e-mails).
 

@@ -10,6 +10,9 @@ permissions:
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_app
+  # Valores fictícios só para o synth das pilhas: o CI não tem (nem precisa de) a conta real.
+  AWS_CONTA: "000000000000"
+  EMAIL_DO_DONO: ci@example.com
 
 jobs:
   verificar:

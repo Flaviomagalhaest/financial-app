@@ -25,6 +25,7 @@ class Mes:
     # O que o importador acrescentou e o Mobills não conta no mês: (quantas, efeito no resultado).
     sem_par: list[int] = field(default_factory=list)
     provaveis_abertos: list[int] = field(default_factory=list)
+    descartados: list[int] = field(default_factory=list)
 
     @property
     def resultado(self) -> int:
@@ -43,7 +44,7 @@ class Fatura:
         return self.compras + self.ajuste
 
 
-def meses(lancamentos, ajustes, cruzamento, primeiro: str, ultimo: str) -> list[Mes]:
+def meses(lancamentos, ajustes, descartados, cruzamento, primeiro: str, ultimo: str) -> list[Mes]:
     """Uma linha por mês, do primeiro ao último, inclusive os vazios. Os meses depois do último
     (os previstos do Mobills) ficam de fora."""
     por_mes: dict[str, Mes] = {}
@@ -67,6 +68,10 @@ def meses(lancamentos, ajustes, cruzamento, primeiro: str, ultimo: str) -> list[
     for provavel in cruzamento.provaveis:
         if provavel.decisao is None and (linha := por_mes.get(provavel.fatura.mes)):
             linha.provaveis_abertos.append(-provavel.fatura.valor_centavos)
+    # O pendente avulso descartado, que o total do Mobills pode ter.
+    for lancamento in descartados:
+        if linha := por_mes.get(lancamento.mes):
+            linha.descartados.append(_custo(lancamento))
     return [por_mes[m] for m in sorted(por_mes)]
 
 

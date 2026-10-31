@@ -1,0 +1,16 @@
+{
+  "sobre": "Em que item conta o lançamento (ADR 0006, backend/app/item_em_que_conta.py e web/src/dados/aviso.ts): dadas as categorias dele com item no mês, a escolhida e a do item atual, a categoria do item (ou null) e se está a escolher.",
+  "casos": [
+    { "caso": "nenhuma categoria com item", "com_item": [], "escolhida": null, "atual": null, "conta_em": null, "a_escolher": false },
+    { "caso": "uma só com item conta sozinha", "com_item": ["mercado"], "escolhida": null, "atual": null, "conta_em": "mercado", "a_escolher": false },
+    { "caso": "duas com item e sem escolha ficam a escolher", "com_item": ["mercado", "casa"], "escolhida": null, "atual": null, "conta_em": null, "a_escolher": true },
+    { "caso": "a escolha com item vale", "com_item": ["mercado", "casa"], "escolhida": "casa", "atual": null, "conta_em": "casa", "a_escolher": false },
+    { "caso": "a escolha vale mesmo com outro item atual", "com_item": ["mercado", "casa"], "escolhida": "casa", "atual": "mercado", "conta_em": "casa", "a_escolher": false },
+    { "caso": "a escolha sem item no mês não vale: conta na única com item", "com_item": ["mercado"], "escolhida": "viagem", "atual": null, "conta_em": "mercado", "a_escolher": false },
+    { "caso": "a escolha sem item no mês e duas com item: a escolher", "com_item": ["mercado", "casa"], "escolhida": "viagem", "atual": null, "conta_em": null, "a_escolher": true },
+    { "caso": "fica no item atual enquanto está a escolher", "com_item": ["mercado", "casa"], "escolhida": null, "atual": "mercado", "conta_em": "mercado", "a_escolher": true },
+    { "caso": "o item atual sozinho não está a escolher", "com_item": ["mercado"], "escolhida": null, "atual": "mercado", "conta_em": "mercado", "a_escolher": false },
+    { "caso": "o item atual que perdeu o item não vale", "com_item": ["casa"], "escolhida": null, "atual": "mercado", "conta_em": "casa", "a_escolher": false },
+    { "caso": "o item atual sem item e duas com item: a escolher sem item", "com_item": ["casa", "lazer"], "escolhida": null, "atual": "mercado", "conta_em": null, "a_escolher": true }
+  ]
+}
