@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { chaveDaTag, type LancamentoNaTela, type Pessoa } from "../dados";
+import { useEffect, useRef } from "react";
+import { type LancamentoNaTela, type Pessoa } from "../dados";
 import { EscolhaDaData } from "./EscolhaDaData";
+import { SeletorDeTags } from "./SeletorDeTags";
 import { PARCELAMENTO_PADRAO, type ParcelamentoNaFolha } from "./parcelamento";
 import { RECORRENCIA_PADRAO, type RecorrenciaNaFolha } from "./recorrencia";
 
@@ -51,18 +52,15 @@ type Props = {
 /** O número digitado; vazio vira 0, que a validação recusa. */
 const numero = (texto: string) => (texto === "" ? 0 : Number(texto));
 
-const mesmaTag = (a: string, b: string) => chaveDaTag(a) === chaveDaTag(b);
 
 /** Folha de baixo com o que é opcional no lançamento: descrição, tags, pessoa, data e "Repete?" (uma vez, parcelado ou recorrente). */
 export function FolhaDeDetalhes(props: Props) {
   const folha = useRef<HTMLDialogElement>(null);
-  const [novaTag, setNovaTag] = useState("");
 
   useEffect(() => {
     folha.current?.showModal();
   }, []);
 
-  const marcada = (tag: string) => props.tags.some((t) => mesmaTag(t, tag));
   const recorrencia = props.recorrencia?.valor ?? null;
   const mudarRecorrencia = (mudanca: Partial<RecorrenciaNaFolha>) => recorrencia && props.recorrencia?.onMudar({ ...recorrencia, ...mudanca });
   const parcelamento = props.parcelamento?.valor ?? null;
@@ -70,22 +68,6 @@ export function FolhaDeDetalhes(props: Props) {
   // A recorrência e o parcelamento decidem a situação e a fatura de cada lançamento que geram.
   const porRegra = !!(recorrencia || parcelamento);
   const tituloDaData = recorrencia ? "Primeira vez" : parcelamento ? (props.parcelamento?.noCartao ? "Data da compra" : "Primeira parcela") : "Data";
-  // As marcadas vêm primeiro: a fileira rola de lado, e a tag recém-criada fica à vista.
-  const opcoes = [...props.tags, ...(props.tagsTravadas ? [] : props.opcoesDeTags.filter((o) => !marcada(o)))];
-
-  function alternar(tag: string) {
-    props.onTags(marcada(tag) ? props.tags.filter((t) => !mesmaTag(t, tag)) : [...props.tags, tag]);
-  }
-
-  function criarTag() {
-    const nome = novaTag.trim();
-    if (!nome) return;
-    // A tag que já existe com outra caixa é a mesma: marca a existente.
-    const existente = opcoes.find((o) => mesmaTag(o, nome)) ?? nome;
-    if (!marcada(existente)) props.onTags([...props.tags, existente]);
-    setNovaTag("");
-  }
-
   return (
     <dialog
       ref={folha}
@@ -117,36 +99,7 @@ export function FolhaDeDetalhes(props: Props) {
       )}
 
       <h4>Tags</h4>
-      {opcoes.length > 0 && (
-        <div className="fileira rolavel">
-          {opcoes.map((tag) => (
-            <button type="button" key={tag} className={`ficha${marcada(tag) ? " marcada" : ""}`} aria-pressed={marcada(tag)} disabled={props.tagsTravadas} onClick={() => alternar(tag)}>
-              #{tag}
-            </button>
-          ))}
-        </div>
-      )}
-      {!props.tagsTravadas && (
-        <div className="linha">
-          <label className="oculto" htmlFor="nova-tag">
-            Nova tag
-          </label>
-          <input
-            id="nova-tag"
-            value={novaTag}
-            placeholder="Nova tag"
-            onChange={(e) => setNovaTag(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              e.preventDefault();
-              criarTag();
-            }}
-          />
-          <button type="button" className="secundario" onClick={criarTag}>
-            Criar tag
-          </button>
-        </div>
-      )}
+      <SeletorDeTags tags={props.tags} opcoes={props.opcoesDeTags} onTags={props.onTags} travadas={props.tagsTravadas} />
 
       <h4>Pessoa</h4>
       <div className={`alternancia${props.pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
