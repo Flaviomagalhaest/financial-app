@@ -15,6 +15,7 @@ import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { mesPorExtenso } from "../cartoes/apresentacao";
 import { SITUACOES, TIPOS } from "./apresentacao";
+import { FiltrosSalvos } from "./FiltrosSalvos";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";
 
 type Cadastro = ReturnType<typeof useCadastro>;
@@ -176,6 +177,13 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
           Filtros{fichas.length ? ` (${fichas.length})` : ""}
         </button>
       </div>
+      <FiltrosSalvos
+        criterios={criterios}
+        onAplicar={(c) => {
+          setCriterios(c);
+          setTexto(c.texto ?? "");
+        }}
+      />
       {fichas.length > 0 && (
         <ul className="fileira fichas-da-busca" aria-label="Filtros escolhidos">
           {fichas.map((f) => (

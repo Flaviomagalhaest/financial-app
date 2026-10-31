@@ -11,7 +11,7 @@ export function lerReais(texto: string): number | null {
 
 type Linha = { categoria_id: string; reais: string };
 
-const comoReais = (centavos: number) => formatarCentavos(centavos).replace(/^R\$ /, "");
+export const comoReais = (centavos: number) => formatarCentavos(centavos).replace(/^R\$ /, "");
 
 /**
  * O modelo padrão do planejamento: categoria e valor de cada item, que "Aplicar modelo padrão"

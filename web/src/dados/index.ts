@@ -127,6 +127,7 @@ const LEITURAS = {
   "/api/cartoes?arquivados=true": () => api.GET("/api/cartoes", { params: { query: { arquivados: true } } }),
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
   "/api/favoritos": () => api.GET("/api/favoritos"),
+  "/api/filtros-salvos": () => api.GET("/api/filtros-salvos"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -682,6 +683,38 @@ export function useFavoritos() {
   return { favoritos, sugeridos: dados?.sugeridos ?? [], carregado: !!dados && lancamentos !== null && filaLida, atualizadoEm, semDados, recarregar: buscar };
 }
 
+/** Os filtros salvos do casal (ticket 60): a lista que o servidor mandou por último, legível sem internet. */
+export function useFiltrosSalvos() {
+  const { dados, buscar } = useResposta("/api/filtros-salvos");
+  return { filtros: dados ?? [], recarregar: buscar };
+}
+
+/** Filtros salvos mudam só com internet (ADR 0011): devolvem o motivo da recusa, ou `null` quando o servidor aceitou. */
+async function mudarFiltrosSalvos(pedir: () => Promise<{ data?: unknown; error?: unknown; response: Response }>, padrao: string): Promise<string | null> {
+  const motivo = await recusaDe(pedir, padrao);
+  if (motivo === null) await buscarEGuardar("/api/filtros-salvos", LEITURAS["/api/filtros-salvos"]);
+  return motivo;
+}
+
+export function salvarFiltro(novo: NovoFiltroSalvo): Promise<string | null> {
+  return mudarFiltrosSalvos(() => api.POST("/api/filtros-salvos", { body: novo }), "o servidor recusou salvar o filtro");
+}
+
+export function renomearFiltro(id: string, nome: string): Promise<string | null> {
+  return mudarFiltrosSalvos(() => api.PUT("/api/filtros-salvos/{id}", { params: { path: { id } }, body: { nome } }), "o servidor recusou renomear o filtro");
+}
+
+export function excluirFiltro(id: string): Promise<string | null> {
+  // O 204 vem sem corpo, então o sucesso é o `response.ok`, não o `data`.
+  return mudarFiltrosSalvos(
+    () => api.DELETE("/api/filtros-salvos/{id}", { params: { path: { id } } }).then((r) => ({ ...r, data: r.response.ok ? true : undefined })),
+    "o servidor recusou excluir o filtro",
+  );
+}
+
+export type FiltroSalvo = components["schemas"]["FiltroSalvo"];
+export type NovoFiltroSalvo = components["schemas"]["NovoFiltroSalvo"];
+
 /** Todas as contas, arquivadas inclusive, para a tela que as configura. */
 export function useContasComArquivadas() {
   const { dados, atualizadoEm, buscar } = useResposta("/api/contas?arquivadas=true");
@@ -910,6 +943,26 @@ export function copiarPlanejamento(mes: string, de: string): Promise<string | nu
 
 export function aplicarModeloPadrao(mes: string): Promise<string | null> {
   return recusaDe(() => api.POST("/api/planejamento/{mes}/aplicar-modelo", { params: { path: { mes } } }), "o servidor recusou o modelo padrão");
+}
+
+/** Cria um item avulso no mês; o id vem do aparelho e reenviar devolve o gravado (409 se a categoria já tem item). */
+export function criarItemDoPlanejamento(mes: string, categoria_id: string, valor_centavos: number): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/planejamento/{mes}/itens", { params: { path: { mes } }, body: { id: crypto.randomUUID(), categoria_id, valor_centavos } }), "o servidor recusou o item");
+}
+
+export function mudarItemDoPlanejamento(id: string, valor_centavos: number): Promise<string | null> {
+  return recusaDe(() => api.PATCH("/api/planejamento/itens/{id}", { params: { path: { id } }, body: { valor_centavos } }), "o servidor recusou o novo valor");
+}
+
+/** Os lançamentos ficam como estão: só deixam de contar no item. O 204 não tem corpo, então `recusaDe` (que exige `data`) não serve. */
+export async function excluirItemDoPlanejamento(id: string): Promise<string | null> {
+  try {
+    const { error } = await api.DELETE("/api/planejamento/itens/{id}", { params: { path: { id } } });
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return error ? (typeof detalhe === "string" ? detalhe : "o servidor recusou excluir o item") : null;
+  } catch {
+    return "sem resposta do servidor";
+  }
 }
 
 /** Troca o modelo padrão inteiro pelos itens enviados. */
