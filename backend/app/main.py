@@ -12,6 +12,7 @@ from app.banco import conectar
 from app.busca import router as busca
 from app.cartoes import router as cartoes
 from app.classificacao import router as classificacao
+from app.correcao_de_fatura import router as correcao_de_fatura
 from app.edicao_em_lote import router as edicao_em_lote
 from app.exportacao import Formato, exportar
 from app.favoritos import router as favoritos
@@ -98,6 +99,7 @@ def create_app(
     app.include_router(classificacao)
     app.include_router(transferencias)
     app.include_router(cartoes)
+    app.include_router(correcao_de_fatura)
     app.include_router(limite)
     app.include_router(planejamento)
     app.include_router(meses)

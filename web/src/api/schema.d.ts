@@ -469,11 +469,33 @@ export interface paths {
         head?: never;
         /**
          * Editar Fatura
-         * @description Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e
-         *     redistribui as compras dela e das abertas e futuras, ou grava o ajuste dela (ADR 0008); o mês
-         *     da fatura não muda.
+         * @description Acerta o fechamento ou o vencimento de uma fatura e redistribui as compras dela e das
+         *     abertas e futuras, ou grava o ajuste dela (ADR 0008); o mês da fatura não muda. A fatura paga
+         *     só muda pela correção de fatura (ADR 0021).
          */
         patch: operations["editar_fatura"];
+        trace?: never;
+    };
+    "/api/cartoes/{id}/faturas/{mes}/correcao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Corrigir Fatura
+         * @description Corrige a fatura paga de uma vez: datas e ajuste, compras novas, editadas e excluídas, e
+         *     os pagamentos. Tudo ou nada: a correção que deixaria o pago acima do total, mexeria em outra
+         *     fatura paga ou cairia num conflito não grava nada.
+         */
+        post: operations["corrigir_fatura"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/cartoes/{id}/limite": {
@@ -1517,6 +1539,50 @@ export interface components {
             linhas: components["schemas"]["LinhaDaComparacao"][];
             total: components["schemas"]["ValoresDaComparacao"];
         };
+        /** CompraEditada */
+        CompraEditada: {
+            /** Versao */
+            versao: number;
+            /** Tipo */
+            tipo?: ("despesa" | "receita") | null;
+            /** Valor Centavos */
+            valor_centavos?: number | null;
+            /** Data */
+            data?: string | null;
+            /** Descricao */
+            descricao?: string | null;
+            /** Conta Id */
+            conta_id?: string | null;
+            /** Categoria Ids */
+            categoria_ids?: string[] | null;
+            /** Situacao */
+            situacao?: ("previsto" | "realizado") | null;
+            /** Tags */
+            tags?: string[] | null;
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Fatura Mes */
+            fatura_mes?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** CompraExcluida */
+        CompraExcluida: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Versao */
+            versao?: number | null;
+        };
         /**
          * Confirmacao
          * @description O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o
@@ -1586,6 +1652,23 @@ export interface components {
              * @example 2026-09
              */
             de: string;
+        };
+        /** CorrecaoDeFatura */
+        CorrecaoDeFatura: {
+            /** Fechamento */
+            fechamento?: string | null;
+            /** Vencimento */
+            vencimento?: string | null;
+            /** Ajuste Centavos */
+            ajuste_centavos?: number | null;
+            /** Pagamentos */
+            pagamentos?: components["schemas"]["PagamentoDaCorrecao"][] | null;
+            /** Compras Novas */
+            compras_novas?: components["schemas"]["NovoLancamento"][];
+            /** Compras Editadas */
+            compras_editadas?: components["schemas"]["CompraEditada"][];
+            /** Compras Excluidas */
+            compras_excluidas?: components["schemas"]["CompraExcluida"][];
         };
         /**
          * CriteriosDaBusca
@@ -2668,6 +2751,34 @@ export interface components {
             valor_da_parcela_centavos?: number | null;
             /** Automatico */
             automatico?: boolean | null;
+        };
+        /**
+         * PagamentoDaCorrecao
+         * @description Um pagamento realizado da fatura: o id que já existe é editado, o novo é criado.
+         */
+        PagamentoDaCorrecao: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Conta Origem Id
+             * Format: uuid
+             */
+            conta_origem_id: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
         };
         /**
          * ParcelaQueMuda
@@ -4422,6 +4533,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Fatura"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    corrigir_fatura: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                mes: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrecaoDeFatura"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fatura"];
+                };
+            };
+            /** @description Uma compra mudou depois */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conflito"];
                 };
             };
             /** @description Validation Error */

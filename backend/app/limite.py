@@ -45,7 +45,8 @@ class LimiteDoCartao(BaseModel):
     limite_centavos: int | None
     # As compras realizadas das faturas ainda não fechadas, com o ajuste delas.
     fatura_aberta_centavos: int
-    # O que falta pagar das faturas fechadas, com o saldo anterior.
+    # O que falta pagar das faturas fechadas: as sem pagamento e o saldo anterior que a paga
+    # passou para a aberta.
     faturas_fechadas_centavos: int
     # As parcelas previstas dos parcelamentos; a recorrência prevista não conta.
     parcelas_futuras_centavos: int
@@ -120,10 +121,16 @@ def ler_limite(id: UUID, usuario: UsuarioLogado, request: Request) -> LimiteDoCa
             if (n := _indice_do_mes(hoje, vencimento)) < MESES_DA_LISTA:
                 lista[n] += valor
 
-        # O que sobra de uma fatura fechada passa para a seguinte: a última leva tudo.
-        fechadas_centavos = fechadas[-1].a_pagar_centavos if fechadas else 0
-        if fechadas:
-            somar_no_mes(fatura_do_mes, vencimentos[fechadas[-1].mes], fechadas_centavos)
+        # Cada fechada sem pagamento deve o dela; a sobra da paga é saldo anterior da seguinte,
+        # que conta aqui também quando a seguinte ainda está aberta (ADR 0021).
+        fechadas_centavos = 0
+        for f in fechadas:
+            fechadas_centavos += f.a_pagar_centavos
+            somar_no_mes(fatura_do_mes, vencimentos[f.mes], f.a_pagar_centavos)
+        for f in todas:
+            if f.situacao == "aberta" and f.saldo_anterior_centavos:
+                fechadas_centavos += f.saldo_anterior_centavos
+                somar_no_mes(fatura_do_mes, vencimentos[f.mes], f.saldo_anterior_centavos)
         for mes in abertas:
             aberta = realizado.get(mes, 0) + ajuste[mes]
             somar_no_mes(fatura_do_mes, vencimentos[mes], aberta)
