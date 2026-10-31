@@ -891,7 +891,7 @@ export function mudarItemDoPlanejamento(id: string, valor_centavos: number): Pro
   return recusaDe(() => api.PATCH("/api/planejamento/itens/{id}", { params: { path: { id } }, body: { valor_centavos } }), "o servidor recusou o novo valor");
 }
 
-/** Os lançamentos ficam como estão: só deixam de contar no item. */
+/** Os lançamentos ficam como estão: só deixam de contar no item. O 204 não tem corpo, então `recusaDe` (que exige `data`) não serve. */
 export async function excluirItemDoPlanejamento(id: string): Promise<string | null> {
   try {
     const { error } = await api.DELETE("/api/planejamento/itens/{id}", { params: { path: { id } } });

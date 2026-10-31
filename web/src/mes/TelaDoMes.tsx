@@ -19,7 +19,7 @@ import {
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso, hoje } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
-import { lerReais } from "./TelaDoModelo";
+import { comoReais, lerReais } from "./TelaDoModelo";
 import { mesCurto, mesVizinho, nomeDoMes, textoDoFechamento, variacao } from "./apresentacao";
 
 type Categorias = ReturnType<typeof useCadastro>["categorias"];
@@ -192,7 +192,7 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
                         </div>
                       ) : (
                         <div className="acoes-em-linha">
-                          <button className="secundario" disabled={!online || enviando} aria-label={`Mudar valor de ${nomePorId(categorias, i.categoria_id)}`} onClick={() => setEditando({ id: i.id, reais: (i.planejado_centavos / 100).toFixed(2).replace(".", ",") })}>
+                          <button className="secundario" disabled={!online || enviando} aria-label={`Mudar valor de ${nomePorId(categorias, i.categoria_id)}`} onClick={() => setEditando({ id: i.id, reais: comoReais(i.planejado_centavos) })}>
                             Mudar valor
                           </button>
                           <button className="secundario" disabled={!online || enviando} aria-label={`Excluir ${nomePorId(categorias, i.categoria_id)}`} onClick={() => void pedir(() => excluirItemDoPlanejamento(i.id))}>
@@ -210,7 +210,6 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
       ) : (
         <>
           <p className="vazio">Nenhum item planejado neste mês.</p>
-          {!online && <p className="vazio">Sem internet: copiar e aplicar o modelo esperam a conexão.</p>}
           <div className="acoes-em-linha">
             <button className="secundario" disabled={!online || enviando} onClick={() => void pedir(() => copiarPlanejamento(leitura.mes, anterior))}>
               Copiar do mês anterior
@@ -244,7 +243,7 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
           </button>
         </div>
       )}
-      {!online && itens.length > 0 && <p className="vazio">Sem internet: mudar os itens espera a conexão.</p>}
+      {!online && <p className="vazio">Sem internet: criar, mudar e excluir itens esperam a conexão.</p>}
       {recusa && (
         <p role="alert" className="erro">
           Não deu: {recusa}.
