@@ -49,3 +49,10 @@ def test_backup_entra_no_dsql_com_o_papel_proprio_e_token_comum(dsql):
 
     assert dsql.chamadas == ["api"]
     assert dsql.conexoes[0]["user"] == "backup"
+
+
+def test_postgres_le_tudo_do_mesmo_instante_como_o_dsql():
+    # Em READ COMMITTED, duas leituras da mesma transação enxergam estados diferentes (a exclusão
+    # da outra pessoa chegava entre o lançamento e as categorias). O DSQL lê de um instante só.
+    with banco.conectar() as conn:
+        assert conn.execute("SHOW transaction_isolation").fetchone()[0] == "repeatable read"

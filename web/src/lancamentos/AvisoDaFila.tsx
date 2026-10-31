@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { config } from "../config";
-import { enviarAgora, useFila } from "../dados";
+import { enviarAgora, useFila, usePessoas } from "../dados";
 
 const AVISO_DE_NAO_ENVIADO_MS = config.avisoDeNaoEnviadoHoras * 3_600_000;
 
@@ -16,6 +16,7 @@ function useAgora(): number {
 /** Na Hoje: quantos lançamentos não foram enviados, com "Enviar agora"; em destaque depois de 24 h. */
 export function AvisoDaFila() {
   const fila = useFila();
+  const { nomeDe } = usePessoas();
   const agora = useAgora();
   const [enviando, setEnviando] = useState(false);
   const [semInternet, setSemInternet] = useState(false);
@@ -24,9 +25,12 @@ export function AvisoDaFila() {
 
   const atrasado = agora - fila[0].desde > AVISO_DE_NAO_ENVIADO_MS;
   const contar = (n: number, um: string, varios: string) => (n === 0 ? null : `${n} ${n === 1 ? um : varios}`);
+  const exclusoes = fila.flatMap((item) => (item.exclusao ? [item.exclusao] : []));
+  const quemExcluiu = [...new Set(exclusoes.map((e) => (e.por_voce ? "você" : nomeDe(e.excluido_por))))].join(" e ");
+  const excluidos = contar(exclusoes.length, "excluído", "excluídos");
   const esperando = [
     contar(fila.filter((item) => item.recusa).length, "recusado", "recusados"),
-    contar(fila.filter((item) => item.exclusao).length, "excluído pela outra pessoa", "excluídos pela outra pessoa"),
+    excluidos && `${excluidos} por ${quemExcluiu}`,
   ].filter(Boolean);
 
   async function enviar() {

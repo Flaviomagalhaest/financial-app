@@ -1,7 +1,7 @@
 # Testes de navegador que falham às vezes na suíte completa
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -13,7 +13,7 @@ Origem: [ticket 37](37-cartoes-e-faturas.md): nas rodadas completas de `npx play
 - `e2e/sem-internet.spec.ts` › "criado com a resposta perdida e depois editado ou excluído sem internet...": numa rodada, "Salvar" ficou desativado depois do toque no "9"; em outra, o Histórico abriu sem internet com "não foi possível carregar os lançamentos" (sem a última resposta guardada) e o link "Editar" nunca apareceu. O arquivo `sem-internet.spec.ts` sozinho passou 16 de 16 (`--repeat-each=2`).
 - `e2e/conflito.spec.ts` › "mudança no mesmo campo vira conflito..." (na `main`, numa worktree limpa).
 - `e2e/conflito.spec.ts` › "descartar a minha mudança deixa a versão da outra pessoa", numa rodada em que o log da API não teve nenhum erro.
-- `e2e/lancamentos.spec.ts` › "cria, edita e exclui um lançamento simples e o vê na lista": no CI da `main` (run 70, merge do ticket 44), depois do `page.reload()` a edição ainda não tinha subido e a linha mostrava "⚠ conflito: sua mudança espera decisão"; no PR do ticket 46 (run 80), a linha excluída voltou depois do reload. Passou 3 de 3 sozinho (`--repeat-each=3`) e na suíte local inteira. Falhou de novo na `main` (run 84, merge do 42) e no PR do 46 (run do head 2642fe8).
+- `e2e/lancamentos.spec.ts` › "cria, edita e exclui um lançamento simples e o vê na lista": no CI da `main` (run 70, merge do ticket 44), depois do `page.reload()` a edição ainda não tinha subido e a linha mostrava "⚠ conflito: sua mudança espera decisão"; no PR do ticket 46 (run 80), a linha excluída voltou depois do reload. Passou 3 de 3 sozinho (`--repeat-each=3`) e na suíte local inteira. Falhou de novo na `main` (run 84, merge do 42) e no PR do 46 (run do head 2642fe8). No PR do 52 (run 125, head ed45c64), a edição mostrou "⚠ conflito" antes mesmo do reload; passou 30 de 30 localmente (`--repeat-each=6`) e passou ao rodar o job de novo.
 - `e2e/conflito.spec.ts` › "confirmar com ajuste o que a outra pessoa já confirmou leva à tela de conflito": no CI do PR do 46 (head 2642fe8), depois de `dela.goto("/#/historico")` a linha ainda mostrava o valor de antes (R$ 1,00 no lugar de R$ 10,07). Passou 24 de 24 localmente (`--repeat-each=4` no arquivo).
 - Na rodada completa local do [ticket 63](63-sugestao-pelo-historico.md), depois do merge com o 46 e o 55, "cria, edita e exclui" (`lancamentos.spec.ts`) e "descartar a minha mudança" (`conflito.spec.ts`) falharam na mesma rodada. Repetidos (`--repeat-each=4`), passaram 8 de 8. O 63 também tirou uma corrida de `login.spec.ts` › "sessões desconectadas pelo dono": um pedido que saía depois do `clock.fastForward` descobria a sessão encerrada antes do "Verificar de novo", e agora o teste espera a rede parar antes de desconectar.
 
@@ -25,9 +25,9 @@ Achar a corrida de cada um (provável: o teste desliga a rede ou recarrega antes
 
 ## Checklist
 
-- [ ] Reproduzir na suíte inteira, com `--repeat-each` (`workers: 1`)
-- [ ] Corrigir a causa de cada um no teste (ou no app, se for dele) e rodar a suíte completa algumas vezes sem falha
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Reproduzir na suíte inteira, com `--repeat-each` (`workers: 1`)
+- [x] Corrigir a causa de cada um no teste (ou no app, se for dele) e rodar a suíte completa algumas vezes sem falha
+- [x] Verificações do projeto rodando e PR aberto para `main`
 
 ## Notas
 
@@ -35,3 +35,15 @@ Achar a corrida de cada um (provável: o teste desliga a rede ou recarrega antes
 - Ainda falha às vezes: "criado com a resposta perdida e depois editado ou excluído sem internet". O Histórico abre sem a lista guardada. Hipótese: o `sync` do service worker reenvia a fila, que o `page.route` da página não intercepta, e a esvazia antes de a lista do servidor ser guardada.
 - Na repetição local do [ticket 83](83-confirmar-previsto-sem-internet-pela-fila.md) (`--repeat-each=4`), `e2e/conflito.spec.ts` › "a exclusão vence a edição, com aviso e 'Lançar de novo'" falhou uma vez: a edição dele voltou como recusada, "⏳ não enviado: erro no servidor", e não como descartada. Sozinho, passou 8 de 8. Hipótese: a exclusão dela ainda estava subindo pela fila quando o aparelho dele voltou à rede, e as duas chegaram juntas ao servidor. O teste não espera a exclusão subir (`toHaveCount(0)` só olha a tela dela), e a exceção do lote não ficou no log.
 - No CI do PR do [ticket 59](59-busca.md) (head 30075c7), `e2e/conflito.spec.ts` › "confirmar com ajuste o que a outra pessoa já confirmou leva à tela de conflito" falhou de outro jeito: depois de "Confirmar com ajuste", a tela de conflito não mostrou o botão "O de Fulana, às HH:MM: R$ 1,00" no grupo "Valor" (elemento não encontrado em 5 s). Hipótese: a confirmação dela ainda não tinha subido quando a dele chegou, e a dele foi aceita sem conflito; o teste só espera a linha sumir da tela dela (`toHaveCount(0)`), não o envio. Localmente, na mesma branch, passou 4 de 4 (`--repeat-each=4` no arquivo), e na mesma rodada "descartar a minha mudança" falhou 1 de 4.
+
+## Resolução
+
+Reproduzido com laços de CPU e `--repeat-each`. Causas achadas:
+
+- **Backend (`app/banco.py`)**: no Postgres em READ COMMITTED, `_todos` lia o lançamento e depois as categorias em instantes diferentes; a exclusão da outra pessoa entre as duas leituras devolvia o lançamento sem categorias e dava "erro no servidor" (a família do `IndexError` do ticket 37). Agora a conexão é REPEATABLE READ, como o DSQL lê. Teste: `test_postgres_le_tudo_do_mesmo_instante_como_o_dsql`.
+- **App (`dados/index.ts`)**: o envio da fila só atualiza a lista guardada se ela existir; sem ela, o lançamento enviado sumia do aparelho ("não foi possível carregar os lançamentos", "Editar" que não aparece). `enviarAgora` busca e guarda a lista antes de subir a fila. Teste: "lançado sem internet antes de a lista ser guardada..." (vermelho 3/3 antes, verde depois).
+- **Testes**: "a pessoa se troca na edição", "confirmar com ajuste" e "excluir o que a outra pessoa mudou depois" recarregavam a outra tela sem esperar a mudança subir (`nao-enviados` a 0 passa antes de a fila ser lida); agora esperam o "não enviado" sumir ou recarregam até a exclusão chegar.
+
+A falha do ticket 83 ("a exclusão vence a edição" com "erro no servidor") é a primeira causa acima: reproduzida sob carga e sumida com o REPEATABLE READ.
+
+Sobra o que só aparece com a CPU saturada: ticket [109](109-testes-de-navegador-sob-cpu-saturada.md).

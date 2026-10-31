@@ -41,3 +41,10 @@ export function rotuloDaData(iso: string): string {
   if (iso === diaAnterior(dia)) return "ontem";
   return dataPorExtenso(iso);
 }
+
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** `2026-10-01` (ou `2026-10`) vira "out/26". */
+export function rotuloDoMes(mes: string): string {
+  return `${MESES[Number(mes.slice(5, 7)) - 1]}/${mes.slice(2, 4)}`;
+}

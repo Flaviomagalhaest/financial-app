@@ -77,7 +77,7 @@ Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem f
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 
 **Ocorrência**:
-Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a excluída não volta.
+Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a que o casal pulou (excluída) não volta. A que o fim ou o horizonte tirou volta quando o fim sai ou o horizonte chega a ela: `geradas` recua até antes dela, e só o excluído com número acima de `geradas` é trazido de volta.
 _Avoid_: instância, repetição
 
 **Daqui para frente**:
@@ -89,7 +89,7 @@ Previsto de uma recorrência que uma pessoa editou (qualquer campo): uma mudanç
 _Avoid_: customizado, manual
 
 **Horizonte**:
-Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária.
+Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido todo dia pela tarefa diária. Reagendar para menos frequente tira os previstos que passam dele, e a tarefa diária os traz quando ele chega.
 _Avoid_: janela, limite
 
 **Tarefa diária**:
@@ -159,6 +159,10 @@ _Avoid_: item principal, categoria principal
 **A escolher**:
 A lista dos lançamentos do mês com duas ou mais categorias com item e sem escolha do item que valha. O lançamento que já contava sozinho num item quando a ambiguidade surgiu (item criado no meio do mês, categorias editadas, outro mês) continua nele até o casal escolher.
 _Avoid_: pendentes, sem item
+
+**Aviso de planejamento**:
+O que a tela de lançar mostra a cada toque: o item em que o lançamento conta, com a porcentagem do planejado antes e depois dele e quanto ainda dá para gastar ou quanto passa; "conta só no total do mês" quando nenhuma categoria tem item; no cartão, a fatura em que a compra cai. Roda no aparelho, também sem internet, e já conta os lançamentos não enviados.
+_Avoid_: alerta de orçamento, previsão do item
 
 **Modelo padrão do planejamento**:
 Conjunto de itens (categoria e valor) que o casal mantém nas configurações e aplica a um mês vazio para não começar o planejamento do zero; vale para qualquer mês e não é um mês. Não é um **Favorito**, que é um lançamento-modelo.
@@ -291,6 +295,14 @@ _Avoid_: migração, corte, go-live
 **Planilha de revisão**:
 A planilha que o importador do Mobills escreve a cada rodada com o que ele não decide sozinho (a conta e os cartões, o de-para, os pares prováveis, as parcelas) e as abas Conferência e Faturas; o dono a edita e roda de novo, e o que ele editou vale na rodada seguinte.
 _Avoid_: relatório, planilha de importação
+
+**Fatura importada**:
+Fatura que veio do export de faturas do Mobills: nasce com o mês da fatura do rótulo do arquivo, sem fechamento nem vencimento, e conta como fechada e paga sem pagamento de fatura. Dar as datas a ela (na virada, à que ainda está aberta) a faz seguir as regras das outras faturas.
+_Avoid_: fatura antiga, fatura do histórico
+
+**Pendente avulso**:
+Pendente do Mobills que não é parcela: a ocorrência de uma recorrência de lá, sem a regra. Os do mês do export (o último mês com lançamento pago no geral) e de antes ficam fora da importação; os de depois entram como previstos avulsos, que o casal apaga quando cadastrar a recorrência no app. O pendente que casou com uma linha de fatura não é avulso: a fatura prova que a compra existiu.
+_Avoid_: recorrência importada
 
 **Par provável**:
 Uma linha de fatura e uma do geral que sobraram do cruzamento no mesmo mês e são as únicas com aquele valor; viram uma compra só quando o dono as junta na planilha de revisão, e até lá cada uma entra sozinha.
