@@ -642,6 +642,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/historico": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler Historico */
+        get: operations["ler_historico"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/hoje": {
         parameters: {
             query?: never;
@@ -1178,6 +1195,22 @@ export interface components {
             /** Vezes */
             vezes?: number | null;
         };
+        /** AnoDaSerie */
+        AnoDaSerie: {
+            /** Ano */
+            ano: number;
+            /** Centavos */
+            centavos: number;
+            /** Parcial */
+            parcial: boolean;
+        };
+        /** AnoDoMesmoMes */
+        AnoDoMesmoMes: {
+            /** Ano */
+            ano: number;
+            /** Centavos */
+            centavos: number;
+        };
         /**
          * Antecipacao
          * @description O pagamento adiantado das últimas parcelas que ainda não foram pagas.
@@ -1585,6 +1618,30 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * Historico
+         * @description Tudo o que a aba Histórico mostra de uma métrica, numa leitura só. A despesa leva os
+         *     ajustes de fatura e o estorno diminui; a categoria conta o lançamento inteiro e não leva o
+         *     ajuste (ADR 0008); a sobra são as receitas menos as despesas.
+         */
+        Historico: {
+            /**
+             * Metrica
+             * @enum {string}
+             */
+            metrica: "despesas" | "receitas" | "sobra" | "categoria";
+            /** Categoria Id */
+            categoria_id: string | null;
+            /** Doze Meses */
+            doze_meses: components["schemas"]["MesDaSerie"][];
+            /** Total Centavos */
+            total_centavos: number;
+            /** Total Anterior Centavos */
+            total_anterior_centavos: number;
+            /** Por Ano */
+            por_ano: components["schemas"]["AnoDaSerie"][];
+            mesmo_mes: components["schemas"]["MesmoMesEmCadaAno"];
+        };
         /** Hoje */
         Hoje: {
             /**
@@ -1869,6 +1926,15 @@ export interface components {
             /** Com Planejamento Centavos */
             com_planejamento_centavos: number;
         };
+        /** MesDaSerie */
+        MesDaSerie: {
+            /** Mes */
+            mes: string;
+            /** Centavos */
+            centavos: number;
+            /** Anterior Centavos */
+            anterior_centavos: number;
+        };
         /**
          * MesDoLimite
          * @description Quanto do comprometido se libera quando as faturas que vencem no mês forem pagas.
@@ -1895,6 +1961,13 @@ export interface components {
             mes: string;
             /** Saldo Centavos */
             saldo_centavos: number | null;
+        };
+        /** MesmoMesEmCadaAno */
+        MesmoMesEmCadaAno: {
+            /** Mes Do Ano */
+            mes_do_ano: number;
+            /** Anos */
+            anos: components["schemas"]["AnoDoMesmoMes"][];
         };
         /** ModeloPadrao */
         ModeloPadrao: {
@@ -4213,6 +4286,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeituraDoMes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_historico: {
+        parameters: {
+            query: {
+                metrica: "despesas" | "receitas" | "sobra" | "categoria";
+                categoria_id?: string | null;
+                mes_do_ano?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Historico"];
                 };
             };
             /** @description Validation Error */

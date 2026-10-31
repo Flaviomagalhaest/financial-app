@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   atualizadoAs,
   descartarNaoEnviado,
@@ -14,7 +14,7 @@ import { nomePorId as nome, tituloDoLancamento, ValorComSinal } from "./apresent
 import { dataPorExtenso, quando } from "./datas";
 
 /** Lançamentos do casal, do mais recente ao mais antigo, com editar e excluir em cada linha. */
-export function ListaDeLancamentos() {
+export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   const { contasECartoes, categorias } = useCadastro();
   const { lancamentos, atualizadoEm, semDados } = useLancamentos();
   const { euId, nomeDe } = usePessoas();
@@ -48,6 +48,7 @@ export function ListaDeLancamentos() {
   return (
     <section>
       <h2>Histórico</h2>
+      {topo}
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {semDados && lancamentos?.length === 0 && (
         <p role="alert" className="erro">
