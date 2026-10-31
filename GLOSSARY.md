@@ -219,7 +219,7 @@ Dia em que a compra no cartão foi feita; numa parcela, é o dia da compra do pa
 _Avoid_: data da fatura, data do lançamento
 
 **Mês da fatura**:
-Mês em que a fatura e cada compra dela contam no planejamento, nas categorias, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim. Cada cartão tem uma fatura por mês.
+Mês em que a fatura e cada compra dela contam no planejamento, nas categorias, nas tags e no resumo: o mês do fechamento, ou o anterior se o cartão for configurado assim, nunca o do vencimento (a fatura que fecha em 25/04 e vence em 05/05 é de abril). Cada cartão tem uma fatura por mês.
 _Avoid_: competência, mês de referência
 
 **Fatura aberta**:
@@ -234,8 +234,16 @@ _Avoid_: mover a compra, transferir a compra
 Cartão ligado a um titular, para outra pessoa usar; não tem dias padrão, regra do mês nem limite próprios, e as compras dele caem na fatura do titular.
 _Avoid_: cartão dependente, segunda via
 
+**Fatura paga**:
+Fatura fechada que recebeu um pagamento, de qualquer valor. O que faltou pagar passa para a fatura seguinte como saldo anterior. Daí em diante ela não recebe mais pagamento, compra, troca de fatura nem estorno; só muda pela correção de fatura ([ADR 0021](docs/adr/0021-o-pagamento-quita-a-fatura.md)).
+_Avoid_: fatura quitada, paga em parte
+
+**Correção de fatura**:
+Edição de uma fatura paga para consertar um erro (pagamentos, compras, datas, ajuste), que vale toda de uma vez ao salvar; a fatura continua paga e o saldo anterior que passou para a seguinte é refeito.
+_Avoid_: reabrir a fatura, fatura reaberta
+
 **Saldo anterior**:
-Parte de uma fatura que não foi paga e passa para a fatura seguinte; não é compra nova e não conta de novo.
+O que faltou pagar de uma fatura paga (o total menos o pago), que passa para a fatura seguinte quando o pagamento é lançado, em qualquer dia; não é compra nova e não conta de novo. Fatura fechada sem pagamento não passa nada: continua devendo.
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
 
 **Estorno**:
