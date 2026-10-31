@@ -37,6 +37,8 @@ export interface PilhaAppProps extends StackProps {
   guardar: boolean;
   /** Recebe o alarme de erros 5xx da API. */
   emailDoDono: string;
+  /** JSON `{"<sub>": "<nome>"}` que vira a variável `PESSOAS` da API (app/pessoas.py). */
+  pessoas?: string;
 }
 
 /**
@@ -64,6 +66,7 @@ export class PilhaApp extends Stack {
         JWT_EMISSOR: emissor,
         JWT_AUDIENCIA: clienteDoApp.userPoolClientId,
         EXPORTACOES_BUCKET: exportacoes.bucketName,
+        ...(props.pessoas ? { PESSOAS: props.pessoas } : {}),
       },
       logGroup: new logs.LogGroup(this, "LogsDaApi", {
         retention: logs.RetentionDays.ONE_MONTH,

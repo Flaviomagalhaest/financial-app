@@ -1,7 +1,7 @@
 # Histórico com o volume real: medir a lista inteira na tela
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs` (ramo de desempenho: medir antes); apoio: `run`
 Modelo recomendado: Opus

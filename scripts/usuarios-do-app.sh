@@ -17,7 +17,7 @@ AMBIENTE=$2
 case "$AMBIENTE" in prod | dev) ;; *) uso ;; esac
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-REGIAO=$(jq -r .regiao "$RAIZ/config/aws.json")
+REGIAO=$(sed -n 's/.*"regiao"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$RAIZ/config/aws.json")
 POOL=$(aws cloudformation describe-stacks --region "$REGIAO" --stack-name "financial-$AMBIENTE-dados" \
   --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
 cognito() { aws cognito-idp --region "$REGIAO" "$@" --user-pool-id "$POOL"; }
