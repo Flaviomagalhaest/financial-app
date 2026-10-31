@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { chaveDaTag, type LancamentoNaTela, type Pessoa } from "../dados";
 import { EscolhaDaData } from "./EscolhaDaData";
+import { RECORRENCIA_PADRAO, type RecorrenciaNaFolha } from "./recorrencia";
 
 type Situacao = LancamentoNaTela["situacao"];
 
@@ -27,8 +28,16 @@ type Props = {
   onSituacao: (situacao: Situacao) => void;
   /** Só na compra no cartão: a fatura escolhida à mão (`null` é a da data) e as que se pode escolher. */
   fatura?: { mes: string | null; opcoes: string[]; onMudar: (mes: string | null) => void };
+  /**
+   * Só no lançamento novo: "Repete?". Sem repetição (`null`) é uma vez só; com ela, salvar cria a
+   * recorrência que começa na data, e situação e fatura ficam por conta da regra.
+   */
+  recorrencia?: { valor: RecorrenciaNaFolha | null; problema: string | null; onMudar: (recorrencia: RecorrenciaNaFolha | null) => void };
   onFechar: () => void;
 };
+
+/** O número digitado; vazio vira 0, que a validação recusa. */
+const numero = (texto: string) => (texto === "" ? 0 : Number(texto));
 
 const mesmaTag = (a: string, b: string) => chaveDaTag(a) === chaveDaTag(b);
 
@@ -42,6 +51,8 @@ export function FolhaDeDetalhes(props: Props) {
   }, []);
 
   const marcada = (tag: string) => props.tags.some((t) => mesmaTag(t, tag));
+  const recorrencia = props.recorrencia?.valor ?? null;
+  const mudarRecorrencia = (mudanca: Partial<RecorrenciaNaFolha>) => recorrencia && props.recorrencia?.onMudar({ ...recorrencia, ...mudanca });
   // As marcadas vêm primeiro: a fileira rola de lado, e a tag recém-criada fica à vista.
   const opcoes = [...props.tags, ...(props.tagsTravadas ? [] : props.opcoesDeTags.filter((o) => !marcada(o)))];
 
@@ -129,17 +140,19 @@ export function FolhaDeDetalhes(props: Props) {
         ))}
       </div>
 
-      <h4>Data</h4>
+      <h4>{recorrencia ? "Primeira vez" : "Data"}</h4>
       <EscolhaDaData data={props.data} onMudar={props.onData} />
-      <div className="alternancia" role="group" aria-label="Situação">
-        {(["realizado", "previsto"] as const).map((s) => (
-          <button type="button" key={s} className={props.situacao === s ? "" : "secundario"} aria-pressed={props.situacao === s} onClick={() => props.onSituacao(s)}>
-            {s === "realizado" ? "Realizado" : "Previsto"}
-          </button>
-        ))}
-      </div>
+      {!recorrencia && (
+        <div className="alternancia" role="group" aria-label="Situação">
+          {(["realizado", "previsto"] as const).map((s) => (
+            <button type="button" key={s} className={props.situacao === s ? "" : "secundario"} aria-pressed={props.situacao === s} onClick={() => props.onSituacao(s)}>
+              {s === "realizado" ? "Realizado" : "Previsto"}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {props.fatura && (
+      {props.fatura && !recorrencia && (
         <>
           <h4>Fatura</h4>
           <div className="alternancia quatro" role="group" aria-label="Fatura">
@@ -158,19 +171,84 @@ export function FolhaDeDetalhes(props: Props) {
         </>
       )}
 
-      <h4>Repete?</h4>
-      <div className="alternancia tres" role="group" aria-label="Repete?">
-        <button type="button" aria-pressed="true">
-          Uma vez
-        </button>
-        <button type="button" className="secundario" aria-pressed="false" disabled>
-          Parcelado
-        </button>
-        <button type="button" className="secundario" aria-pressed="false" disabled>
-          Recorrente
-        </button>
-      </div>
-      <p className="vazio">Parcelado e recorrente ainda não estão disponíveis.</p>
+      {props.recorrencia && (
+        <>
+          <h4>Repete?</h4>
+          <div className="alternancia tres" role="group" aria-label="Repete?">
+            <button type="button" className={recorrencia ? "secundario" : ""} aria-pressed={!recorrencia} onClick={() => props.recorrencia?.onMudar(null)}>
+              Uma vez
+            </button>
+            <button type="button" className="secundario" aria-pressed="false" disabled>
+              Parcelado
+            </button>
+            <button type="button" className={recorrencia ? "" : "secundario"} aria-pressed={!!recorrencia} onClick={() => props.recorrencia?.onMudar(recorrencia ?? RECORRENCIA_PADRAO)}>
+              Recorrente
+            </button>
+          </div>
+          {!recorrencia && <p className="vazio">Parcelado ainda não está disponível.</p>}
+        </>
+      )}
+      {recorrencia && (
+        <>
+          <div className="linha">
+            <label htmlFor="a-cada">A cada</label>
+            <input id="a-cada" type="number" inputMode="numeric" min={1} value={recorrencia.aCada || ""} onChange={(e) => mudarRecorrencia({ aCada: numero(e.target.value) })} />
+          </div>
+          <div className="alternancia" role="group" aria-label="Unidade">
+            {(["semanas", "meses"] as const).map((u) => (
+              <button type="button" key={u} className={recorrencia.unidade === u ? "" : "secundario"} aria-pressed={recorrencia.unidade === u} onClick={() => mudarRecorrencia({ unidade: u })}>
+                {u === "semanas" ? "Semanas" : "Meses"}
+              </button>
+            ))}
+          </div>
+          <p className="vazio">Anual é a cada 12 meses.</p>
+
+          <h4>Termina</h4>
+          <div className="alternancia tres" role="group" aria-label="Termina">
+            {(
+              [
+                ["nunca", "Nunca"],
+                ["data", "Numa data"],
+                ["vezes", "Depois de"],
+              ] as const
+            ).map(([fim, nome]) => (
+              <button type="button" key={fim} className={recorrencia.fim === fim ? "" : "secundario"} aria-pressed={recorrencia.fim === fim} onClick={() => mudarRecorrencia({ fim })}>
+                {nome}
+              </button>
+            ))}
+          </div>
+          {recorrencia.fim === "data" && (
+            <div className="linha">
+              <label htmlFor="ate">Última data</label>
+              <input id="ate" type="date" min={props.data} value={recorrencia.ate} onChange={(e) => mudarRecorrencia({ ate: e.target.value })} />
+            </div>
+          )}
+          {recorrencia.fim === "vezes" && (
+            <div className="linha">
+              <input id="vezes" type="number" inputMode="numeric" min={1} value={recorrencia.vezes || ""} onChange={(e) => mudarRecorrencia({ vezes: numero(e.target.value) })} />
+              <label htmlFor="vezes">vezes</label>
+            </div>
+          )}
+
+          <h4>Valor</h4>
+          <div className="alternancia" role="group" aria-label="Valor">
+            {(["fixo", "estimado"] as const).map((t) => (
+              <button type="button" key={t} className={recorrencia.tipoDoValor === t ? "" : "secundario"} aria-pressed={recorrencia.tipoDoValor === t} onClick={() => mudarRecorrencia({ tipoDoValor: t })}>
+                {t === "fixo" ? "Fixo" : "Estimado"}
+              </button>
+            ))}
+          </div>
+          {recorrencia.tipoDoValor === "fixo" ? (
+            <label className="caixa" htmlFor="automatico">
+              <input id="automatico" type="checkbox" checked={recorrencia.automatico} onChange={(e) => mudarRecorrencia({ automatico: e.target.checked })} />
+              Automático: vira realizado sozinho na data, sem confirmar
+            </label>
+          ) : (
+            <p className="vazio">O estimado (a luz, o salário) sempre pede confirmação.</p>
+          )}
+          {props.recorrencia?.problema && <p className="erro">{props.recorrencia.problema}</p>}
+        </>
+      )}
 
       <button type="button" onClick={() => folha.current?.close()}>
         Pronto

@@ -1,5 +1,6 @@
-// A fila dos lançamentos não enviados: o que se faz no aparelho entra aqui e sobe em lote, na
-// ordem (ADR 0011). Sem React nem cliente da API, porque o service worker também envia.
+// A fila dos lançamentos e das recorrências não enviados: o que se faz no aparelho entra aqui e
+// sobe em lote, na ordem (ADR 0011). Sem React nem cliente da API, porque o service worker também
+// envia.
 import type { components } from "../api/schema";
 import { config } from "../config";
 import { hoje } from "../lancamentos/datas";
@@ -12,6 +13,7 @@ import {
   type Guardada,
   type ItemDaFila,
   type Lancamento,
+  type NovaRecorrencia,
   type NovoLancamento,
 } from "./armazem";
 
@@ -114,6 +116,11 @@ export function enfileirarConfirmar(mostrado: NovoLancamento, ajustes: Ajustes, 
   });
 }
 
+/** A recorrência sobe como um pedido só; os previstos o servidor gera ao receber. */
+export function enfileirarRecorrencia(recorrencia: NovaRecorrencia): Promise<void> {
+  return mudar(recorrencia.id, () => ({ acao: "criar_recorrencia", recorrencia }));
+}
+
 /** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
 export function enfileirarExcluir(id: string, base?: Base): Promise<void> {
   return mudar(id, (atual) =>
@@ -178,6 +185,7 @@ export const esperaAPessoa = (item: ItemDaFila) => !!(item.recusa || item.confli
 function acoesDo(item: ItemDaFila): Acao[] {
   // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
   const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
+  if (item.acao === "criar_recorrencia") return [{ acao: "criar_recorrencia", recorrencia: item.recorrencia! }];
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
   if (item.acao === "confirmar") {
     // Só os ajustes que a pessoa fez, sobre a versão que a tela mostrava, como na rota de confirmar.
@@ -261,6 +269,10 @@ async function marcarSemResposta(enviados: ItemDaFila[]) {
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       if (enviado.acao === "criar" && atual?.acao === "criar" && atual.talvezNoServidor === undefined)
         await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, base: { ...enviado.lancamento!, versao: 1 } }));
+      // A recorrência talvez gravada não se descarta mais no aparelho: os previstos viriam mesmo assim.
+      // Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
+      if (atual?.acao === "criar_recorrencia" && atual.talvezNoServidor === undefined && navigator.onLine)
+        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao }));
     }
   });
 }
@@ -280,7 +292,8 @@ async function remeterLote(remeter: Remessa, itens: ItemDaFila[]): Promise<Resul
   const resposta = await remeter(acoes);
   if (typeof resposta !== "number") return resposta.length === acoes.length ? porItem(itens, resposta) : null;
   if (resposta !== 422) return null;
-  if (itens.length === 1) return [{ resultado: "recusada", motivo: "o servidor não aceitou este lançamento" }];
+  if (itens.length === 1)
+    return [{ resultado: "recusada", motivo: itens[0].acao === "criar_recorrencia" ? "o servidor não aceitou esta recorrência" : "o servidor não aceitou este lançamento" }];
   const resultados: Resultado[] = [];
   for (const item of itens) {
     const um = await remeterLote(remeter, [item]);

@@ -48,9 +48,9 @@ test("a folha de detalhes completa o lançamento e o resumo fica numa linha emba
   await folha.getByRole("button", { name: "Ontem" }).click();
   await expect(folha.getByLabel("Outra data")).toHaveValue(dia(-1));
   await expect(folha.getByRole("group", { name: "Situação" }).getByRole("button", { name: "Realizado" })).toHaveAttribute("aria-pressed", "true");
-  // Parcelado e recorrente chegam com os tickets 46 e 86.
+  // Parcelado chega com o ticket 98; o recorrente tem o próprio teste (recorrencia.spec.ts).
   await expect(folha.getByRole("button", { name: "Parcelado" })).toBeDisabled();
-  await expect(folha.getByRole("button", { name: "Recorrente" })).toBeDisabled();
+  await expect(folha.getByRole("button", { name: "Recorrente" })).toBeEnabled();
   await folha.getByRole("button", { name: "Pronto" }).click();
   await expect(folha).toHaveCount(0);
   await expect(resumo).toHaveText(`Detalhes: Jantar em Paraty ${s} · #paraty ${s} · Flávio · ontem`);

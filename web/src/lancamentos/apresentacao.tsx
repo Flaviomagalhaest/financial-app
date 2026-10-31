@@ -14,7 +14,7 @@ export function tituloDoLancamento(l: Pick<NovoLancamento, "descricao" | "catego
 /** O estorno é uma despesa que devolve dinheiro: aparece como crédito (ADR 0016). */
 export const eCredito = (l: Pick<NovoLancamento, "tipo" | "estorno_de">) => l.tipo !== "despesa" || !!l.estorno_de;
 
-export function ValorComSinal({ l }: { l: NovoLancamento }) {
+export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_centavos" | "estorno_de"> }) {
   return (
     <span className={eCredito(l) ? "receita" : "despesa"}>
       {eCredito(l) ? "+" : "−"} {formatarCentavos(l.valor_centavos)}

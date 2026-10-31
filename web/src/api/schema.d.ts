@@ -1017,6 +1017,15 @@ export interface components {
             acao: "criar_parcelamento";
             parcelamento: components["schemas"]["NovoParcelamento"];
         };
+        /** AcaoCriarRecorrencia */
+        AcaoCriarRecorrencia: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "criar_recorrencia";
+            recorrencia: components["schemas"]["NovaRecorrencia"];
+        };
         /** AcaoEditar */
         AcaoEditar: {
             /**
@@ -1906,7 +1915,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"])[];
         };
         /** MesDaProjecao */
         MesDaProjecao: {
@@ -2649,7 +2658,8 @@ export interface components {
          * Resultado
          * @description `recusada` traz o motivo para mostrar; `conflito` traz o lançamento do servidor e os
          *     campos em conflito; `descartada` é a edição de algo já excluído, com quem excluiu. O
-         *     parcelamento aceito volta gravado, e as parcelas vêm na leitura dos lançamentos.
+         *     parcelamento e a recorrência aceitos voltam gravados, e as parcelas e os previstos vêm na
+         *     leitura dos lançamentos.
          */
         Resultado: {
             /**
@@ -2661,6 +2671,7 @@ export interface components {
             motivo?: string | null;
             lancamento?: components["schemas"]["Lancamento"] | null;
             parcelamento?: components["schemas"]["Parcelamento"] | null;
+            recorrencia?: components["schemas"]["Recorrencia"] | null;
             /** Campos */
             campos?: components["schemas"]["CampoEmConflito"][] | null;
             exclusao?: components["schemas"]["Exclusao"] | null;
