@@ -16,5 +16,7 @@ Uma compra no cartão de crédito conta no mês da fatura em que cai (o mês do 
 - Cada cartão tem exatamente uma fatura por mês, e o mês da fatura é definido quando ela nasce. Mudar as datas de uma fatura ou o dia padrão do cartão não tira a fatura do mês dela.
 - O saldo da conta é a única visão que segue o dia do pagamento real, para bater com o extrato.
 - Uma compra feita no fim do mês, depois do fechamento, entra no planejamento do mês seguinte, e o aviso na hora de lançar já mostra esse mês.
-- Estorno conta na fatura em que aparece, e fatura fechada nunca muda. Uma tag pode ficar negativa num mês.
+- Estorno conta na fatura em que aparece. Uma tag pode ficar negativa num mês.
+- Mudar o dia padrão do cartão nunca mexe em fatura fechada. A compra lançada com atraso ainda cai na fatura fechada da data dela, porque o banco já a cobrou ali, desde que essa fatura não esteja paga ([ADR 0021](0021-o-pagamento-quita-a-fatura.md)).
+- O vencimento não decide o mês: a fatura que fecha em 25/04 e vence em 05/05 é de abril.
 - A importação do Mobills tem que dar uma fatura com mês da fatura a cada compra antiga no cartão.
