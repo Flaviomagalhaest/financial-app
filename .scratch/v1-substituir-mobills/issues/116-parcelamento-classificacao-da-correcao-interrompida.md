@@ -29,3 +29,4 @@ Decisões da implementação:
 - **Backup**: a coluna sobe o formato para 22 (conversor 21→22 preenche vazio; esquema em `esquemas_do_formato.json`).
 - **Limite conhecido**: o zerar compara o texto da coluna. Dois PATCH quase simultâneos que trazem os mesmos campos deixam o texto igual, e o fim do refazer do primeiro pode zerar a intenção do segundo antes de ele terminar; se o segundo cair nessa janela, a tarefa diária não refaz a classificação dele e basta repetir o pedido. Exigiria dois pedidos do casal no mesmo segundo sobre os mesmos campos, então fica assim.
 - O zerar roda logo depois do refazer das parcelas e antes de gerar as que faltam (a geração já cria com a classificação inteira), para uma queda na geração não deixar a intenção presa.
+- **DSQL**: a coluna é `text` anulável, sem `NOT NULL DEFAULT` (o DSQL recusa `ADD COLUMN` com restrição; o deploy em `dev` pegou); `NULL` conta como vazio no código.

@@ -349,7 +349,7 @@ def _classificacao_pendente(conn, id: UUID) -> frozenset[str]:
     linha = conn.execute(
         "SELECT classificacao_pendente FROM parcelamentos WHERE id = %s", (id,)
     ).fetchone()
-    return frozenset(filter(None, linha[0].split(","))) if linha else frozenset()
+    return frozenset(filter(None, (linha[0] or "").split(","))) if linha else frozenset()
 
 
 def _dar_por_refeita(conn, id: UUID, feita: frozenset[str]) -> None:
@@ -357,7 +357,7 @@ def _dar_por_refeita(conn, id: UUID, feita: frozenset[str]) -> None:
     meio, o pendente mudou e fica para ela."""
     conn.execute(
         "UPDATE parcelamentos SET classificacao_pendente = '' WHERE id = %s"
-        " AND classificacao_pendente = %s",
+        " AND coalesce(classificacao_pendente, '') = %s",
         (id, ",".join(sorted(feita))),
     )
 
