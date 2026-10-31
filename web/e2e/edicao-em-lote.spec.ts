@@ -34,7 +34,7 @@ test("marca no resultado, vê a prévia, aplica tudo de uma vez e desfaz", async
   const { conta, mercado, lancar } = await preparar(api, s);
   await lancar(`Feira ${s}`);
   await lancar(`Padaria ${s}`);
-  await api.criar("/api/parcelamentos", { id: randomUUID(), valor_total_centavos: 90000, parcelas: 3, descricao: `Geladeira ${s}`, conta_id: conta.id, categoria_ids: [mercado.id], data: "2026-01-04" });
+  await api.criar("/api/parcelamentos", { id: randomUUID(), valor_total_centavos: 90000, parcelas: 3, descricao: `Geladeira ${s}`, conta_id: conta.id, categoria_ids: [mercado.id], data: new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }) });
 
   await buscar(page, s);
   const linhas = page.getByRole("list", { name: "Resultado da busca" }).locator(":scope > li");

@@ -177,21 +177,20 @@ test("parcelamentos longos sobem em lotes separados, para o servidor responder a
   expect(lotes).toEqual([1, 1]);
 });
 
-/** Um boleto automático de 6 parcelas (R$ 600,00) que começou há 3 meses: as que já venceram estão realizadas. */
+/** Um boleto automático de 6 parcelas (R$ 600,00) com a 1ª hoje: ela nasce realizada, as outras previstas. */
 async function prepararParcelamento(page: Page, total = 60000) {
   const { s, conta, eletro } = await prepararCasal(page);
   const api = await apiDaPagina(page);
   const categoria = (await api.ler("/api/categorias")).find((c: { nome: string }) => c.nome === eletro);
   const contaId = (await api.ler("/api/contas")).find((c: { nome: string }) => c.nome === conta).id;
-  const inicio = new Date();
-  inicio.setUTCDate(1);
-  inicio.setUTCMonth(inicio.getUTCMonth() - 3);
+  // A parcela de antes de hoje não vira lançamento (ticket 125): o boleto começa hoje, em São Paulo.
+  const hoje = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
   const id = crypto.randomUUID();
   const descricao = `TV ${s}`;
   await api.criar("/api/parcelamentos", {
     id,
     parcelas: 6,
-    data: inicio.toISOString().slice(0, 10),
+    data: hoje,
     descricao,
     conta_id: contaId,
     categoria_ids: [categoria.id],
@@ -277,7 +276,7 @@ test("com duas categorias com item no mês, a correção pergunta o item e grava
   const { api, id, descricao } = await prepararParcelamento(page);
   const eletro = (await api.ler("/api/parcelamentos")).find((p: { id: string }) => p.id === id).categoria_ids[0];
   const lazer = await api.criar("/api/categorias", { nome: `Lazer ${Date.now()}`, tipo: "despesa" });
-  // As parcelas são de meses passados e futuros: o item vale no mês da 1ª.
+  // As parcelas são de vários meses: o item vale no mês da 1ª.
   const primeira = (await api.ler("/api/lancamentos")).find((l: { parcelamento_id: string; parcela: number }) => l.parcelamento_id === id && l.parcela === 1);
   const mes = (primeira.mes ?? primeira.data).slice(0, 7);
   for (const categoria_id of [eletro, lazer.id]) await api.criar(`/api/planejamento/${mes}/itens`, { id: crypto.randomUUID(), categoria_id, valor_centavos: 100000 });

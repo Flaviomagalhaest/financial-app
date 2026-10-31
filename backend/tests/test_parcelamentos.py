@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app import lancamentos
+from app import automaticos, lancamentos
 from app.tarefa_diaria import fazer_tarefa_diaria
 from tests.conftest import Casal
 
@@ -93,6 +93,7 @@ def test_compra_com_juros_pelo_valor_da_parcela_e_reenvio_devolve_o_gravado(casa
         "criado_em": None,
         "alterado_por": "flavio",
         "alterado_em": None,
+        "parcelas_puladas": 0,
     }
     assert casal.pedir("esposa", "GET", "/api/parcelamentos").json() == [primeira.json()]
     geradas = parcelas(casal, novo["id"])
@@ -146,25 +147,60 @@ def test_no_cartao_o_parcelamento_nao_pode_pedir_confirmacao(casal: Casal):
     assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []
 
 
-def test_boleto_pede_confirmacao_de_cada_parcela_e_o_automatico_nao(casal: Casal):
+def test_boleto_com_data_no_passado_pula_as_parcelas_que_passaram_e_avisa_quantas(casal: Casal):
     conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
-    acordo = parcelamento(conta, [emprestimo], descricao="Acordo", data="2026-10-27")
+    novo = parcelamento(conta, [emprestimo], data="2026-08-28", parcelas=5)
+
+    primeira = casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    segunda = casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+
+    # Agosto e setembro passaram: a 1ª lançada é a 3/5, a de hoje, já realizada.
+    assert [
+        (l["parcela"], l["parcelas"], l["valor_centavos"], l["data"], l["situacao"])
+        for l in parcelas(casal, novo["id"])
+    ] == [
+        (3, 5, 20000, "2026-10-28", "realizado"),
+        (4, 5, 20000, "2026-11-28", "previsto"),
+        (5, 5, 20000, "2026-12-28", "previsto"),
+    ]
+    assert (primeira.status_code, segunda.status_code) == (201, 200)
+    assert segunda.json() == primeira.json()
+    assert (primeira.json()["valor_total_centavos"], primeira.json()["parcelas_puladas"]) == (
+        100000,
+        2,
+    )
+    semana = casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"]
+    assert not any(l["atrasado"] for l in semana)
+    [saldo] = [c["saldo_centavos"] for c in casal.pedir("flavio", "GET", "/api/contas").json()]
+    assert saldo == -20000
+
+
+def test_boleto_com_todas_as_parcelas_antes_de_hoje_e_recusado_sem_gravar(casal: Casal):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], data="2026-07-27", parcelas=3)
+
+    resposta = casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "o parcelamento termina antes de hoje"
+    assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
+
+
+def test_boleto_automatico_com_data_no_passado_nao_realiza_o_que_passou(casal: Casal):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
     consorcio = parcelamento(
         conta, [emprestimo], descricao="Consórcio", data="2026-10-20", automatico=True
     )
-    casal.pedir("flavio", "POST", "/api/parcelamentos", json=acordo)
-    casal.pedir("flavio", "POST", "/api/parcelamentos", json=consorcio)
 
-    # A parcela de ontem do acordo fica atrasada; a do consórcio já nasce realizada.
-    semana = casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"]
-    assert [(l["descricao"], l["parcela"], l["atrasado"]) for l in semana] == [("Acordo", 1, True)]
-    assert [l["situacao"] for l in parcelas(casal, consorcio["id"])] == [
-        "realizado",
-        "previsto",
-        "previsto",
+    resposta = casal.pedir("flavio", "POST", "/api/parcelamentos", json=consorcio)
+
+    assert resposta.json()["parcelas_puladas"] == 1
+    assert [(l["parcela"], l["situacao"]) for l in parcelas(casal, consorcio["id"])] == [
+        (2, "previsto"),
+        (3, "previsto"),
     ]
     [saldo] = [c["saldo_centavos"] for c in casal.pedir("flavio", "GET", "/api/contas").json()]
-    assert saldo == -33334
+    assert saldo == 0
 
 
 @pytest.mark.parametrize(
@@ -559,11 +595,19 @@ def mudar(casal: Casal, id: str, quem: str = "flavio", **campos):
     return casal.pedir(quem, "PATCH", f"/api/parcelamentos/{id}", json=campos)
 
 
-def criar_geladeira(casal: Casal, conta: str, **campos) -> dict:
+def criar_geladeira(casal: Casal, conta: str, lancada_em: str | None = None, **campos) -> dict:
+    """Com `lancada_em`, o casal lançou a geladeira naquele dia: as parcelas de antes de hoje
+    existem, e as automáticas que chegaram desde então estão realizadas, como a tarefa diária
+    as deixaria."""
     novo = parcelamento(
         conta, [casal.categoria("Eletrodomésticos")], descricao="Geladeria", **campos
     )
-    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    with pytest.MonkeyPatch.context() as naquele_dia:
+        if lancada_em:
+            naquele_dia.setattr(lancamentos, "hoje", lambda: date.fromisoformat(lancada_em))
+        assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    if lancada_em:
+        automaticos.realizar_automaticos(casal.client.app.state.url, UUID(novo["id"]))
     return novo
 
 
@@ -571,7 +615,9 @@ def test_corrigir_descricao_tags_e_pessoa_vale_para_todas_as_parcelas_inclusive_
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
     conta, casa = casal.conta(), casal.categoria("Casa")
-    novo = criar_geladeira(casal, conta, data="2026-10-10", automatico=True, tags=["velha"])
+    novo = criar_geladeira(
+        casal, conta, lancada_em="2026-10-10", data="2026-10-10", automatico=True, tags=["velha"]
+    )
     # Hoje é 28/10: a 1ª parcela (10/10) já é realizada, as outras são previstas.
     assert [l["situacao"] for l in parcelas(casal, novo["id"])] == [
         "realizado",
@@ -639,7 +685,12 @@ def valores(casal: Casal, id: str) -> list[tuple]:
 def test_corrigir_o_valor_refaz_as_parcelas_e_so_avisa_quando_uma_realizada_muda(casal: Casal):
     # 10/10 já passou: a 1ª parcela, automática, é realizada; as outras, previstas.
     novo = criar_geladeira(
-        casal, casal.conta(), data="2026-10-10", automatico=True, valor_total_centavos=100000
+        casal,
+        casal.conta(),
+        lancada_em="2026-10-10",
+        data="2026-10-10",
+        automatico=True,
+        valor_total_centavos=100000,
     )
     assert valores(casal, novo["id"]) == [
         (1, 33334, "2026-10-10", "realizado"),
@@ -759,7 +810,12 @@ def test_corrigir_o_numero_de_parcelas_mantem_o_total_gera_as_que_faltam_e_tira_
 
 def test_tirar_uma_parcela_realizada_pede_confirmacao_e_diz_que_ela_sai(casal: Casal):
     novo = criar_geladeira(
-        casal, casal.conta(), data="2026-08-10", automatico=True, valor_total_centavos=90000
+        casal,
+        casal.conta(),
+        lancada_em="2026-08-10",
+        data="2026-08-10",
+        automatico=True,
+        valor_total_centavos=90000,
     )
     assert [l["situacao"] for l in parcelas(casal, novo["id"])] == ["realizado"] * 3
 
@@ -949,7 +1005,9 @@ def test_excluir_o_parcelamento_exclui_todas_as_parcelas_e_nao_volta(
     casal: Casal, database_url: str
 ):
     conta = casal.conta()
-    novo = criar_geladeira(casal, conta, data="2026-10-10", automatico=True, parcelas=4)
+    novo = criar_geladeira(
+        casal, conta, lancada_em="2026-10-10", data="2026-10-10", automatico=True, parcelas=4
+    )
     avulso = {
         "id": str(uuid4()),
         "tipo": "despesa",
@@ -1211,7 +1269,12 @@ def test_o_aviso_de_realizadas_olha_o_que_falta_refazer_e_a_tarefa_diaria_termin
 ):
     # 10/10 já passou: a 1ª parcela, automática, é realizada; as outras, previstas.
     novo = criar_geladeira(
-        casal, casal.conta(), data="2026-10-10", automatico=True, valor_total_centavos=90000
+        casal,
+        casal.conta(),
+        lancada_em="2026-10-10",
+        data="2026-10-10",
+        automatico=True,
+        valor_total_centavos=90000,
     )
     with monkeypatch.context() as queda:
         interromper_o_refazer(queda)
@@ -1238,7 +1301,9 @@ def test_a_tarefa_diaria_e_os_automaticos_com_o_parcelamento_excluido_nao_fazem_
 ):
     from app import automaticos
 
-    novo = criar_geladeira(casal, casal.conta(), data="2026-10-10", automatico=True)
+    novo = criar_geladeira(
+        casal, casal.conta(), lancada_em="2026-10-10", data="2026-10-10", automatico=True
+    )
     assert casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}").status_code == 204
 
     assert automaticos.realizar_automaticos(database_url, UUID(novo["id"])) == 0

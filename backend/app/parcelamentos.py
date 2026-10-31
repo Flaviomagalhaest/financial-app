@@ -97,6 +97,9 @@ class Parcelamento(DadosDoParcelamento):
     criado_em: datetime
     alterado_por: str
     alterado_em: datetime
+    # As parcelas do boleto que já tinham passado quando ele foi lançado (ticket 87): não viram
+    # lançamento, mas contam na numeração e no total.
+    parcelas_puladas: int = 0
 
 
 class AlteracaoDeParcelamento(BaseModel):
@@ -189,8 +192,12 @@ def realiza_em(conn, conta_id: UUID, parcela: int, mes: date, data: date) -> dat
 
 
 def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
+    # Cada parcela gerada tem um lançamento só (o id vem do número), excluída ou não: a que
+    # falta foi pulada.
     linhas = conn.execute(
-        f"SELECT {_COLUNAS} FROM parcelamentos {'WHERE ' + filtro if filtro else ''}"
+        f"SELECT {_COLUNAS}, LEAST(geradas, parcelas) - (SELECT count(*) FROM lancamentos l"
+        " WHERE l.parcelamento_id = parcelamentos.id AND l.parcela <= parcelamentos.parcelas)"
+        f" FROM parcelamentos {'WHERE ' + filtro if filtro else ''}"
         " ORDER BY data DESC, descricao, id",
         parametros,
     ).fetchall()
@@ -211,7 +218,7 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
         tags.setdefault(parcelamento_id, []).append(nome)
     return [
         Parcelamento(
-            **dict(zip(_NOMES_DAS_COLUNAS, linha)),
+            **dict(zip([*_NOMES_DAS_COLUNAS, "parcelas_puladas"], linha)),
             categoria_ids=categorias.get(linha[0], []),
             tags=tags.get(linha[0], []),
         )
@@ -219,10 +226,11 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
     ]
 
 
-def _gerar_um_lote(conn, id: UUID) -> bool:
+def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     """Grava as próximas parcelas, quantas cabem numa transação, e devolve se pode faltar
     alguma. O id de cada parcela vem do parcelamento e do número dela: gerar de novo não
-    duplica."""
+    duplica. No boleto, a parcela de antes de hoje não vira lançamento (ticket 87) e a de hoje
+    nasce realizada `na_criacao`; o cartão segue o ticket 99."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False  # excluído no meio da geração
     [regra] = lidos
@@ -245,11 +253,14 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     for n in proximas:
         lancamento_id = uuid5(id, str(n))
         dia = regra.data if no_cartao else mais_meses(regra.data, n - 1)
+        if not no_cartao and dia < dia_de_hoje:
+            continue
         mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia, n)
         # A parcela automática que já chegou nasce realizada; o resto, prevista.
+        chegou = realiza_em(conn, regra.conta_id, n, mes, dia) <= dia_de_hoje
         situacao = (
             "realizado"
-            if regra.automatico and realiza_em(conn, regra.conta_id, n, mes, dia) <= dia_de_hoje
+            if chegou and (regra.automatico or (na_criacao and not no_cartao))
             else "previsto"
         )
         gravado = conn.execute(
@@ -317,10 +328,10 @@ def _reviver_as_que_a_correcao_tirou(
             _aplicar(conn, regra, correcao, tags, regra.alterado_por, agora)
 
 
-def gerar_as_parcelas(url: str | None, id: UUID) -> None:
+def gerar_as_parcelas(url: str | None, id: UUID, na_criacao: bool = False) -> None:
     """Gera, em lotes de uma transação cada, as parcelas que faltam. Se parar no meio, o reenvio
     ou a tarefa diária continuam de onde parou."""
-    while em_transacao(url, lambda conn: _gerar_um_lote(conn, id)):
+    while em_transacao(url, lambda conn: _gerar_um_lote(conn, id, na_criacao)):
         pass
 
 
@@ -396,6 +407,9 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
     no_cartao = faturas.ler_cartao(conn, novo.conta_id) is not None
     if no_cartao and novo.automatico is False:
         raise recusar("o parcelamento no cartão é automático")
+    # Como a recorrência (ticket 87): o boleto que já venceu inteiro não teria parcela nenhuma.
+    if not no_cartao and mais_meses(novo.data, novo.parcelas - 1) < lancamentos.hoje():
+        raise recusar("o parcelamento termina antes de hoje")
     # A fatura da 1ª parcela (no cartão sem dia de fechamento, não há como escolher) é
     # conferida antes de gravar: senão a regra ficaria sem parcelas, e a tarefa diária
     # tentaria gerá-las todo dia.
@@ -438,8 +452,12 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
 def criar(url: str | None, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bool]:
     """Grava o parcelamento e gera as parcelas; serve à rota e ao lote da fila."""
     criado, gravado = em_transacao(url, lambda conn: gravar(conn, novo, usuario))
-    gerar_as_parcelas(url, novo.id)
-    return criado, gravado
+    gerar_as_parcelas(url, novo.id, na_criacao=True)
+    # Lido de novo depois da geração: as parcelas puladas só se sabem com ela. Excluído por
+    # outra sessão no meio, fica o que foi gravado.
+    with conectar(url) as conn:
+        lidos = _ler(conn, "id = %s", (novo.id,))
+    return (lidos[0] if lidos else criado), gravado
 
 
 @router.post(
