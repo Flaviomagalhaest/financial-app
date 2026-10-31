@@ -1,7 +1,7 @@
 # Recorrência: o mês pulado dentro do trecho que o fim tirou reaparece ao reabrir
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -23,6 +23,11 @@ A mesma coisa pelo horizonte, sem fim nenhum e mais fácil de acontecer: o casal
 
 ## Checklist
 
-- [ ] Testes de API dos dois exemplos (pular a 12, encerrar na 10, reabrir; pular a 15, reagendar, esperar o horizonte): o pulado segue excluído
-- [ ] Marcar na exclusão quem a fez, a regra ou uma pessoa: coluna nova em `lancamentos` (migration, conversor do backup e sua versão) ou outro jeito que não use o número; a geração só reviva a que a regra tirou
-- [ ] O que o casal excluiu depois de realizado já fica de fora (a geração só revive `situacao = 'previsto'`); conferir que continua
+- [x] Testes de API dos dois exemplos (pular a 12, encerrar na 10, reabrir; pular a 15, reagendar, esperar o horizonte): o pulado segue excluído
+- [x] Marcar na exclusão quem a fez, a regra ou uma pessoa: coluna nova em `lancamentos` (migration, conversor do backup e sua versão) ou outro jeito que não use o número; a geração só reviva a que a regra tirou
+- [x] O que o casal excluiu depois de realizado já fica de fora (a geração só revive `situacao = 'previsto'`); conferir que continua
+
+## Notas
+
+- Coluna `lancamentos.excluido_pela_regra` (migration 0051, `boolean` anulável: o DSQL não aceita `ADD COLUMN` com restrição, backup na versão 20 com o conversor da 19). `_reajustar_um_lote` marca a exclusão que o fim ou o horizonte faz; a geração só revive `excluido_pela_regra`, e o revive limpa a marca. O número de `geradas` deixa de distinguir o pulado. O realizado excluído por uma pessoa segue de fora (`situacao = 'previsto'`), com teste existente.
+- Recorrência já encerrada antes desta mudança tem a exclusão sem a marca e não volta ao reabrir (o app ainda não tem dados reais).

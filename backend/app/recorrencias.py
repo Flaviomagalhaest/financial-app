@@ -85,13 +85,9 @@ class Recorrencia(NovaRecorrencia):
     alterado_em: datetime
 
 
-class AlteracaoDeRecorrencia(BaseModel):
-    """Os campos da regra que mudam "daqui para frente", a partir da ocorrência dada: a regra
-    passa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,
-    são refeitos. O que já foi realizado e os previstos de antes ficam como estão. Campo
-    ausente fica como está; `pessoa` vazia passa a regra para o conjunto."""
+class CamposDaRecorrencia(BaseModel):
+    """Os campos da regra que uma mudança pode trazer; o que não vem fica como está."""
 
-    a_partir_da_ocorrencia: int = Field(ge=1)
     # Sem `None` no tipo: mandar null num campo obrigatório da regra é erro, não "limpar".
     tipo: Literal["despesa", "receita"] = Field(default=None)
     valor_centavos: int = Field(default=None, gt=0)
@@ -116,6 +112,70 @@ class AlteracaoDeRecorrencia(BaseModel):
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
+
+
+class AlteracaoDeRecorrencia(CamposDaRecorrencia):
+    """Os campos da regra que mudam "daqui para frente", a partir da ocorrência dada: a regra
+    passa a valer assim e os previstos dessa ocorrência em diante, que ninguém alterou à mão,
+    são refeitos. O que já foi realizado e os previstos de antes ficam como estão. Campo
+    ausente fica como está; `pessoa` vazia passa a regra para o conjunto."""
+
+    a_partir_da_ocorrencia: int = Field(ge=1)
+
+
+# Como o motivo da recusa chama cada campo da regra.
+_NOMES_DOS_CAMPOS = {
+    "tipo": "tipo",
+    "valor_centavos": "valor",
+    "tipo_do_valor": "fixo ou estimado",
+    "automatico": "automático",
+    "descricao": "descrição",
+    "conta_id": "conta",
+    "categoria_ids": "categorias",
+    "tags": "tags",
+    "pessoa": "pessoa",
+    "item_categoria_id": "item do planejamento",
+    "a_cada": "calendário",
+    "unidade": "calendário",
+    "inicio": "calendário",
+    "ate": "fim",
+    "vezes": "fim",
+}
+
+
+def _comparavel(campo: str, valor):
+    """Como `_iguais` dos lançamentos: categorias e tags sem ordem, tags sem distinguir
+    maiúsculas, pessoa vazia é o conjunto."""
+    if campo == "categoria_ids":
+        return frozenset(valor or ())
+    if campo == "tags":
+        return frozenset(t.casefold() for t in valor or ())
+    if campo == "pessoa":
+        return valor or None
+    return valor
+
+
+def _mudou_depois(
+    atual: Recorrencia, alteracao: AlteracaoDeRecorrencia, antes: CamposDaRecorrencia
+) -> list[str]:
+    """Os campos que a mudança traz e que a regra já não tem como o aparelho os viu (`antes`),
+    nem com o valor novo: outra mudança chegou antes e mexeu neles. A regra não tem versão; isto
+    faz o papel do conflito da ADR 0011 sem precisar de uma."""
+    novos = alteracao.model_dump(include=alteracao.model_fields_set)
+    # O fim é um campo só: encerrar numa data tira o fim por vezes, e vice-versa (como em `_mudar`).
+    if novos.get("ate") is not None:
+        novos.setdefault("vezes", None)
+    if novos.get("vezes") is not None:
+        novos.setdefault("ate", None)
+    mudados = [
+        campo
+        for campo in _NOMES_DOS_CAMPOS
+        if campo in novos.keys() & antes.model_fields_set
+        and _comparavel(campo, getattr(atual, campo))
+        not in (_comparavel(campo, getattr(antes, campo)), _comparavel(campo, novos[campo]))
+    ]
+    # O calendário e o fim têm mais de um campo e entram uma vez só.
+    return list(dict.fromkeys(_NOMES_DOS_CAMPOS[campo] for campo in mudados))
 
 
 _GRAVADAS = (
@@ -186,8 +246,9 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Recorrencia]:
 def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas ocorrências até o horizonte, quantas cabem numa transação, e devolve se
     pode faltar alguma. O id de cada previsto vem da regra e do número da ocorrência: gerar de
-    novo não duplica, e o previsto excluído de um número já gerado (o mês pulado) não volta. O que
-    o fim ou o horizonte tirou volta quando a regra chega a ele: `geradas` recua até lá."""
+    novo não duplica, e o previsto que o casal excluiu (o mês pulado) não volta. O que o fim ou o
+    horizonte tirou (`excluido_pela_regra`) volta quando a regra chega a ele: `geradas` recua até
+    lá."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -203,14 +264,14 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         proximas.append((n, dia))
     if not proximas:
         return False
-    # O que está excluído com número acima de `geradas` saiu do fim ou do horizonte, nunca de um
-    # mês pulado (esse tem número já gerado): volta, com a regra de hoje. Quem uma pessoa excluiu
-    # depois de realizado também fica de fora.
+    # Volta, com a regra de hoje, o que o fim ou o horizonte excluiu, nunca o mês que uma pessoa
+    # pulou. Quem uma pessoa excluiu depois de realizado também fica de fora.
     excluidos = {
         n: versao
         for n, versao in conn.execute(
             f"SELECT ocorrencia, {lancamentos.VERSAO} FROM lancamentos WHERE recorrencia_id = %s"
-            " AND ocorrencia = ANY(%s) AND situacao = 'previsto' AND excluido_em IS NOT NULL",
+            " AND ocorrencia = ANY(%s) AND situacao = 'previsto' AND excluido_em IS NOT NULL"
+            " AND excluido_pela_regra",
             (id, [n for n, _ in proximas]),
         )
     }
@@ -227,7 +288,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 "tipo = %s, situacao = %s, valor_centavos = %s, data = %s, descricao = %s,"
                 " conta_id = %s, pessoa = %s, automatico = %s, mes = %s, fatura_a_mao = NULL,"
                 " item_categoria_id = %s, item_atual_categoria_id = NULL, excluido_em = NULL,"
-                " excluido_por = NULL, alterado_por = %s, alterado_em = now()",
+                " excluido_por = NULL, excluido_pela_regra = false, alterado_por = %s,"
+                " alterado_em = now()",
                 (
                     regra.tipo,
                     situacao,
@@ -522,6 +584,10 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     for item in trabalho[:por_lote]:
         if isinstance(item, _Retirada):
             excluir(conn, item.id, None, usuario)
+            # A marca de quem excluiu: só o que a regra tirou volta, não o que o casal pulou.
+            conn.execute(
+                "UPDATE lancamentos SET excluido_pela_regra = true WHERE id = %s", (item.id,)
+            )
             conn.execute(
                 "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
                 (item.ocorrencia - 1, id),
@@ -567,13 +633,21 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     return len(trabalho) > por_lote
 
 
-def _mudar(conn, id: UUID, alteracao: AlteracaoDeRecorrencia, usuario: str) -> Recorrencia:
+def _mudar(
+    conn,
+    id: UUID,
+    alteracao: AlteracaoDeRecorrencia,
+    usuario: str,
+    antes: CamposDaRecorrencia | None,
+) -> Recorrencia:
     """Valida e grava a regra nova (a ocorrência precisa existir; `ate` e `vezes` não valem juntos;
     mudar o calendário remarca o `inicio` na ocorrência dada); o reajuste dos previstos vem
-    depois, em lotes."""
+    depois, em lotes. Com `antes`, recusa se outra mudança mexeu depois nos mesmos campos."""
     if not (lidas := _ler(conn, "id = %s", (id,))):
         raise HTTPException(status_code=404, detail="recorrência não encontrada")
     [atual] = lidas
+    if antes and (campos := _mudou_depois(atual, alteracao, antes)):
+        raise recusar(f"a regra mudou depois ({', '.join(campos)}): confira e mude de novo")
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     # `geradas` recua quando o fim ou o horizonte tira previstos: o que saiu ainda existe.
     (maior_numero,) = conn.execute(
@@ -585,6 +659,8 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeRecorrencia, usuario: str) -> R
     pedidas = alteracao.model_dump(
         exclude={"a_partir_da_ocorrencia"}, include=alteracao.model_fields_set
     )
+    if "pessoa" in pedidas:
+        pedidas["pessoa"] = pedidas["pessoa"] or None
     if pedidas.get("ate") is not None:
         pedidas.setdefault("vezes", None)
     if pedidas.get("vezes") is not None:
@@ -653,8 +729,19 @@ def alterar_recorrencia(
     """Muda a regra "daqui para frente" (a partir de uma ocorrência), tira os previstos que
     passaram do fim e refaz os que ninguém alterou à mão. Mudar só um mês é editar o previsto, e
     pular um mês é excluí-lo: a geração não o traz de volta."""
-    url = url_do_banco(request)
-    em_transacao(url, lambda conn: _mudar(conn, id, alteracao, usuario))
+    return alterar(url_do_banco(request), id, alteracao, usuario)
+
+
+def alterar(
+    url: str | None,
+    id: UUID,
+    alteracao: AlteracaoDeRecorrencia,
+    usuario: str,
+    antes: CamposDaRecorrencia | None = None,
+) -> Recorrencia:
+    """Grava a regra numa transação e reajusta os previstos em outras; repetir continua de onde
+    parou. A rota e o lote da fila, que manda em `antes` a regra como o aparelho a viu."""
+    em_transacao(url, lambda conn: _mudar(conn, id, alteracao, usuario, antes))
     desde = alteracao.a_partir_da_ocorrencia
     while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, desde, usuario)):
         pass
@@ -687,12 +774,18 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
 def excluir_recorrencia(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente. Tira a regra e os previstos de hoje em diante; o realizado e o atrasado
     ficam, como lançamentos que a regra gerou."""
-    url = url_do_banco(request)
+    excluir_regra(url_do_banco(request), id, usuario)
+    return Response(status_code=204)
+
+
+def excluir_regra(url: str | None, id: UUID, usuario: str) -> None:
+    """A exclusão da rota e do lote da fila, em várias transações; repetir continua."""
 
     def fechar(conn) -> None:
-        # Sem fim ontem, a tarefa diária geraria previstos novos enquanto os de hoje saem.
+        # Sem fim ontem, a tarefa diária geraria previstos novos enquanto os de hoje saem. A que
+        # ainda não começou termina no início, que já está gerado: o fim não vem antes dele.
         conn.execute(
-            "UPDATE recorrencias SET ate = %s, vezes = NULL WHERE id = %s",
+            "UPDATE recorrencias SET ate = GREATEST(%s, inicio), vezes = NULL WHERE id = %s",
             (lancamentos.hoje() - timedelta(days=1), id),
         )
 
@@ -706,4 +799,3 @@ def excluir_recorrencia(id: UUID, usuario: UsuarioLogado, request: Request) -> R
         conn.execute("DELETE FROM recorrencias WHERE id = %s", (id,))
 
     em_transacao(url, tirar)
-    return Response(status_code=204)

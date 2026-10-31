@@ -1,7 +1,7 @@
 // O cálculo puro do aviso de planejamento (ticket 52), por tabela e sem navegador: o mesmo que a
 // tela de lançar roda sobre o planejamento guardado e a fila.
 import { expect, test } from "@playwright/test";
-import { avisoDePlanejamento, comAFila, mesEmQueConta, ultimaEscolha, type Contagem, type Planejamento } from "../src/dados/aviso";
+import { avisoDePlanejamento, comAFila, mesEmQueConta, oQueSobra, semContarDeNovo, ultimaEscolha, type Contagem, type Planejamento } from "../src/dados/aviso";
 
 const OUT = "2026-10-01";
 const NOV = "2026-11-01";
@@ -182,6 +182,42 @@ test.describe("mês em que o lançamento conta", () => {
   for (const c of casos) {
     test(c.caso, () => {
       expect(mesEmQueConta(c.l, c.anterior, c.cartao)).toBe(c.mes);
+    });
+  }
+});
+
+test.describe("criar enviado sem resposta", () => {
+  const enviado = lancamento({ valor_centavos: 5000 });
+  const depois = lancamento({ valor_centavos: 8000 });
+  const mercado = (p: Planejamento) => p.itens.find((i) => i.categoria_id === "mercado")!.realizado_centavos;
+  const mudanca = { depois, talvez: { tentadoEm: 1000, jaNoServidor: enviado } };
+
+  test("planejamento lido antes do envio: o criar conta inteiro", () => {
+    expect(mercado(comAFila(outubro, semContarDeNovo([mudanca], 999)))).toBe(82000 + 8000);
+  });
+
+  test("planejamento lido depois do envio: já traz o enviado, e a fila só troca pela versão do aparelho", () => {
+    const lido = { ...outubro, itens: outubro.itens.map((i) => (i.categoria_id === "mercado" ? { ...i, realizado_centavos: 87000 } : i)) };
+    expect(mercado(comAFila(lido, semContarDeNovo([mudanca], 1000)))).toBe(87000 - 5000 + 8000);
+  });
+
+  test("criar comum, sem talvez, não muda", () => {
+    expect(mercado(comAFila(outubro, semContarDeNovo([{ depois }], 5000)))).toBe(90000);
+  });
+});
+
+test.describe("o que sobra, na despesa e na receita", () => {
+  const casos: { tipo: "despesa" | "receita"; centavos: number; texto: string }[] = [
+    { tipo: "despesa", centavos: 18000, texto: "Ainda dá para gastar R$ 180,00" },
+    { tipo: "despesa", centavos: 0, texto: "Chega ao limite do planejado" },
+    { tipo: "despesa", centavos: -5000, texto: "Passa R$ 50,00 do planejado" },
+    { tipo: "receita", centavos: 18000, texto: "Faltam R$ 180,00 para o planejado" },
+    { tipo: "receita", centavos: 0, texto: "Chega ao planejado" },
+    { tipo: "receita", centavos: -5000, texto: "R$ 50,00 acima do planejado" },
+  ];
+  for (const c of casos) {
+    test(`${c.tipo} com ${c.centavos} centavos: ${c.texto}`, () => {
+      expect(oQueSobra(c.tipo, c.centavos)).toBe(c.texto);
     });
   }
 });

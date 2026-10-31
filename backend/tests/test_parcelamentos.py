@@ -131,7 +131,7 @@ def test_no_cartao_cada_parcela_cai_na_fatura_seguinte_com_a_data_da_compra(casa
     # O cartão já nasce automático: nada dele pede confirmação.
     assert casal.pedir("flavio", "GET", "/api/parcelamentos").json()[0]["automatico"] is True
     assert all(l["automatico"] and not l["atrasado"] for l in parcelas(casal, novo["id"]))
-    assert casal.pedir("esposa", "GET", "/api/contas-da-semana").json()["lancamentos"] == []
+    assert casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"] == []
     faturas = casal.pedir("flavio", "GET", f"/api/cartoes/{nubank}/faturas").json()
     assert [f["mes"] for f in faturas] == ["2026-11-01", "2026-12-01", "2027-01-01", "2027-02-01"]
 
@@ -156,7 +156,7 @@ def test_boleto_pede_confirmacao_de_cada_parcela_e_o_automatico_nao(casal: Casal
     casal.pedir("flavio", "POST", "/api/parcelamentos", json=consorcio)
 
     # A parcela de ontem do acordo fica atrasada; a do consórcio já nasce realizada.
-    semana = casal.pedir("esposa", "GET", "/api/contas-da-semana").json()["lancamentos"]
+    semana = casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"]
     assert [(l["descricao"], l["parcela"], l["atrasado"]) for l in semana] == [("Acordo", 1, True)]
     assert [l["situacao"] for l in parcelas(casal, consorcio["id"])] == [
         "realizado",

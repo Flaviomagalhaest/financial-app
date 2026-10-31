@@ -181,10 +181,12 @@ def test_contas_da_semana_traz_atrasados_e_previstos_dos_proximos_7_dias_em_orde
             ),
         )
 
-    resposta = casal.pedir("esposa", "GET", "/api/contas-da-semana")
+    resposta = casal.pedir("esposa", "GET", "/api/hoje")
 
     assert resposta.status_code == 200
-    assert [(l["descricao"], l["data"], l["atrasado"]) for l in resposta.json()["lancamentos"]] == [
+    assert [
+        (l["descricao"], l["data"], l["atrasado"]) for l in resposta.json()["contas_da_semana"]
+    ] == [
         ("Luz de setembro", "2026-09-10", True),
         ("Luz", "2026-10-27", True),
         ("Água", "2026-10-28", False),
@@ -196,12 +198,12 @@ def test_confirmado_sai_das_contas_da_semana(casal: Casal):
     conta, luz = casal.conta(), casal.categoria("Luz")
     previsto = lancamento(conta, [luz], data="2026-10-27", situacao="previsto")
     casal.pedir("flavio", "POST", "/api/lancamentos", json=previsto)
-    antes = casal.pedir("flavio", "GET", "/api/contas-da-semana").json()["lancamentos"]
+    antes = casal.pedir("flavio", "GET", "/api/hoje").json()["contas_da_semana"]
 
     casal.pedir("flavio", "POST", f"/api/lancamentos/{previsto['id']}/confirmar", json={})
 
     assert [l["id"] for l in antes] == [previsto["id"]]
-    assert casal.pedir("flavio", "GET", "/api/contas-da-semana").json()["lancamentos"] == []
+    assert casal.pedir("flavio", "GET", "/api/hoje").json()["contas_da_semana"] == []
 
 
 def test_so_o_realizado_mexe_no_saldo_e_a_confirmacao_o_traz_para_dentro(casal: Casal):

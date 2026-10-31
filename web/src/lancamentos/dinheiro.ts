@@ -18,6 +18,16 @@ export function apagar(centavos: number): number {
   return Math.floor(centavos / 10);
 }
 
+/**
+ * O total dividido por igual em parcelas, com os centavos que sobram na 1ª, como o servidor divide
+ * (`valor_da_parcela`). Só para mostrar e para o aviso de planejamento; a tabela
+ * `tabelas-de-teste/divisao-das-parcelas.json` prende as duas contas juntas (ADR 0018).
+ */
+export function dividirEmParcelas(total: number, parcelas: number): { primeira: number; outras: number } {
+  const outras = Math.floor(total / parcelas);
+  return { primeira: outras + (total % parcelas), outras };
+}
+
 /** "1.234,56" ou "1234.56" em centavos; vazio é `null` e o que não for número é `undefined`. */
 export function emCentavos(texto: string): number | null | undefined {
   const limpo = texto.trim().replace(/\./g, texto.includes(",") ? "" : ".").replace(",", ".");
@@ -25,3 +35,6 @@ export function emCentavos(texto: string): number | null | undefined {
   const reais = Number(limpo);
   return Number.isFinite(reais) ? Math.round(reais * 100) : undefined;
 }
+
+/** "1.200,00": o valor como se digita no campo, sem o "R$". */
+export const comoDigitado = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

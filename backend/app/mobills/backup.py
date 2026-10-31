@@ -197,7 +197,11 @@ class _Linhas:
     def incluir(self, tabela: str, **valores) -> None:
         colunas = self.esquema[tabela]
         # Os padrões das colunas que o banco preencheria.
-        for coluna, padrao in (("criado_por", CRIADO_POR), ("criado_em", self.agora)):
+        for coluna, padrao in (
+            ("criado_por", CRIADO_POR),
+            ("criado_em", self.agora),
+            ("excluido_pela_regra", False),
+        ):
             if coluna in colunas:
                 valores.setdefault(coluna, padrao)
         if fora := set(valores) - set(colunas):

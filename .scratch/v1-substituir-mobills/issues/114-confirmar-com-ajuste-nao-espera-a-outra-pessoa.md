@@ -26,7 +26,7 @@ Com um atraso de 1,5 s **antes** do `route.fetch()` em `contextoDela.route("**/a
 
 ## Checklist
 
-- [ ] O teste com o atraso acima passa (fica como teste ou como verificação local, a decidir)
-- [ ] Os outros testes de duas pessoas com o mesmo padrão corrigidos
+- [ ] O teste com o atraso acima passa (fica como teste ou como verificação local, a decidir). O PR do [ticket 98](98-parcelamento-criar-pela-tela-e-sem-internet.md) trouxe a correção, porque o teste derrubava o CI dele: depois de ela confirmar, o teste pergunta ao servidor (`apiDaPagina(dela)`, `expect.poll`) até o lançamento estar realizado. Com o atraso de 1,5 s, falhou sem a correção e passou 2 de 2 com ela, como verificação local; o atraso não ficou no teste
+- [ ] Os outros testes de duas pessoas com o mesmo padrão corrigidos. O PR do [ticket 98](98-parcelamento-criar-pela-tela-e-sem-internet.md) já corrigiu os dois de `pessoa-e-repetido.spec.ts` ("'Parece repetido' aparece só para quem recebeu..." e "'Excluir este' tira..."), que falhavam no CI da `main`: eles recarregam a outra tela até a fila de quem mudou chegar ao servidor (`toPass`)
 - [ ] `conflito.spec.ts` e `pessoa-e-repetido.spec.ts` com `--repeat-each=5` sem falha
 - [ ] Verificações do projeto rodando e PR aberto para `main`

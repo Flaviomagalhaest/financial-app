@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { config } from "../config";
-import { enviarAgora, useFila, usePessoas } from "../dados";
+import { deLancamento, enviarAgora, useFila, usePessoas } from "../dados";
 
 const AVISO_DE_NAO_ENVIADO_MS = config.avisoDeNaoEnviadoHoras * 3_600_000;
 
@@ -13,16 +13,28 @@ function useAgora(): number {
   return agora;
 }
 
-/** "1 lançamento não enviado", "2 recorrências não enviadas", "1 lançamento e 1 recorrência não enviados". */
-function naoEnviados(lancamentos: number, recorrencias: number): string {
-  const lanc = lancamentos === 1 ? "1 lançamento" : `${lancamentos} lançamentos`;
-  const rec = recorrencias === 1 ? "1 recorrência" : `${recorrencias} recorrências`;
-  if (!recorrencias) return `${lanc} ${lancamentos === 1 ? "não enviado" : "não enviados"}`;
-  if (!lancamentos) return `${rec} ${recorrencias === 1 ? "não enviada" : "não enviadas"}`;
-  return `${lanc} e ${rec} não enviados`;
+const contar = (n: number, um: string, varios: string) => (n === 0 ? null : `${n} ${n === 1 ? um : varios}`);
+
+/** "a", "a e b", "a, b e c". */
+const juntar = (partes: string[]) => (partes.length > 1 ? `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}` : partes[0]);
+
+/**
+ * "1 lançamento não enviado", "2 recorrências não enviadas", "1 lançamento, 1 recorrência e 1
+ * parcelamento não enviados": no feminino só quando são só recorrências e mudanças de recorrência.
+ */
+function naoEnviados(lancamentos: number, recorrencias: number, mudancas: number, parcelamentos: number): string {
+  const partes = [
+    contar(lancamentos, "lançamento", "lançamentos"),
+    contar(recorrencias, "recorrência", "recorrências"),
+    contar(mudancas, "mudança de recorrência", "mudanças de recorrência"),
+    contar(parcelamentos, "parcelamento", "parcelamentos"),
+  ];
+  const total = lancamentos + recorrencias + mudancas + parcelamentos;
+  const enviado = recorrencias + mudancas === total ? "enviada" : "enviado";
+  return `${juntar(partes.filter((p) => p !== null))} não ${enviado}${total === 1 ? "" : "s"}`;
 }
 
-/** Na Hoje: quantos lançamentos e recorrências não foram enviados, com "Enviar agora"; em destaque depois de 24 h. */
+/** Na Hoje: quantos lançamentos, recorrências e parcelamentos não foram enviados, com "Enviar agora"; em destaque depois de 24 h. */
 export function AvisoDaFila() {
   const fila = useFila();
   const { nomeDe } = usePessoas();
@@ -30,14 +42,16 @@ export function AvisoDaFila() {
   const [enviando, setEnviando] = useState(false);
   const [semInternet, setSemInternet] = useState(false);
   if (fila.length === 0) return null;
-  const conflitos = fila.filter((item) => item.conflito).length;
+  const mudancas = fila.filter(deLancamento);
+  const conflitos = mudancas.filter((item) => item.conflito).length;
   const recorrencias = fila.filter((item) => item.acao === "criar_recorrencia").length;
+  const mudancasDeRecorrencia = fila.filter((item) => item.acao === "alterar_recorrencia" || item.acao === "excluir_recorrencia").length;
+  const parcelamentos = fila.filter((item) => item.acao === "criar_parcelamento").length;
   // Só recorrências na fila: o motivo fala delas, no feminino.
-  const soRecorrencias = recorrencias === fila.length;
+  const soRecorrencias = recorrencias + mudancasDeRecorrencia === fila.length;
 
   const atrasado = agora - fila[0].desde > AVISO_DE_NAO_ENVIADO_MS;
-  const contar = (n: number, um: string, varios: string) => (n === 0 ? null : `${n} ${n === 1 ? um : varios}`);
-  const exclusoes = fila.flatMap((item) => (item.exclusao ? [item.exclusao] : []));
+  const exclusoes = mudancas.flatMap((item) => (item.exclusao ? [item.exclusao] : []));
   const quemExcluiu = [...new Set(exclusoes.map((e) => (e.por_voce ? "você" : nomeDe(e.excluido_por))))].join(" e ");
   const excluidos = contar(exclusoes.length, "excluído", "excluídos");
   const esperando = [
@@ -54,7 +68,7 @@ export function AvisoDaFila() {
   return (
     <div className={atrasado ? "aviso" : undefined} data-testid="nao-enviados">
       <p>
-        {naoEnviados(fila.length - recorrencias, recorrencias)}
+        {naoEnviados(mudancas.length, recorrencias, mudancasDeRecorrencia, parcelamentos)}
         {esperando.length > 0 && ` (${esperando.join(", ")}: veja no Histórico)`}
       </p>
       {conflitos > 0 && (

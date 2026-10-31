@@ -185,23 +185,6 @@ export interface paths {
         patch: operations["editar_lancamento"];
         trace?: never;
     };
-    "/api/contas-da-semana": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Contas Da Semana */
-        get: operations["contas_da_semana"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/lancamentos/{id}/confirmar": {
         parameters: {
             query?: never;
@@ -932,6 +915,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/filtros-salvos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Filtros Salvos */
+        get: operations["listar_filtros_salvos"];
+        put?: never;
+        /**
+         * Salvar Filtro
+         * @description Reenviar o mesmo id devolve o que já está gravado, com 200.
+         */
+        post: operations["salvar_filtro"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filtros-salvos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Renomear Filtro */
+        put: operations["renomear_filtro"];
+        post?: never;
+        /**
+         * Excluir Filtro
+         * @description Idempotente.
+         */
+        delete: operations["excluir_filtro"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/futuro": {
         parameters: {
             query?: never;
@@ -984,6 +1009,21 @@ export interface components {
             item_categoria_id: string | null;
             /** Categorias Com Item */
             categorias_com_item: string[];
+        };
+        /** AcaoAlterarRecorrencia */
+        AcaoAlterarRecorrencia: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "alterar_recorrencia";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            alteracao: components["schemas"]["AlteracaoDeRecorrencia"];
+            antes?: components["schemas"]["CamposDaRecorrencia"] | null;
         };
         /** AcaoConfirmar */
         AcaoConfirmar: {
@@ -1056,6 +1096,19 @@ export interface components {
             versao?: number | null;
             /** Acao Em */
             acao_em?: string | null;
+        };
+        /** AcaoExcluirRecorrencia */
+        AcaoExcluirRecorrencia: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "excluir_recorrencia";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /**
          * AlteracaoDeCategoria
@@ -1156,8 +1209,6 @@ export interface components {
          *     ausente fica como está; `pessoa` vazia passa a regra para o conjunto.
          */
         AlteracaoDeRecorrencia: {
-            /** A Partir Da Ocorrencia */
-            a_partir_da_ocorrencia: number;
             /**
              * Tipo
              * @enum {string}
@@ -1203,6 +1254,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** A Partir Da Ocorrencia */
+            a_partir_da_ocorrencia: number;
         };
         /** AnoDaSerie */
         AnoDaSerie: {
@@ -1265,6 +1318,57 @@ export interface components {
             por_voce: boolean;
             /** Origem */
             origem?: string | null;
+        };
+        /**
+         * CamposDaRecorrencia
+         * @description Os campos da regra que uma mudança pode trazer; o que não vem fica como está.
+         */
+        CamposDaRecorrencia: {
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo?: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos?: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor?: "fixo" | "estimado";
+            /** Automatico */
+            automatico?: boolean;
+            /** Descricao */
+            descricao?: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id?: string;
+            /** Categoria Ids */
+            categoria_ids?: string[];
+            /** Tags */
+            tags?: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** A Cada */
+            a_cada?: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade?: "semanas" | "meses";
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio?: string;
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
         };
         /** Cartao */
         Cartao: {
@@ -1378,15 +1482,6 @@ export interface components {
             /** Arquivada */
             arquivada: boolean;
         };
-        /**
-         * ContasDaSemana
-         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
-         *     automático fica de fora: não pede confirmação.
-         */
-        ContasDaSemana: {
-            /** Lancamentos */
-            lancamentos: components["schemas"]["Lancamento"][];
-        };
         /** CopiaDeMes */
         CopiaDeMes: {
             /**
@@ -1394,6 +1489,71 @@ export interface components {
              * @example 2026-09
              */
             de: string;
+        };
+        /**
+         * CriteriosDaBusca
+         * @description Sem um filtro, ele não restringe; um filtro vazio também não.
+         */
+        CriteriosDaBusca: {
+            /**
+             * Texto
+             * @default
+             */
+            texto: string;
+            /** Valor Minimo Centavos */
+            valor_minimo_centavos?: number | null;
+            /** Valor Maximo Centavos */
+            valor_maximo_centavos?: number | null;
+            /**
+             * Categoria Ids
+             * @default []
+             */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /**
+             * Sem Categoria
+             * @default false
+             */
+            sem_categoria: boolean;
+            /**
+             * Sem Tag
+             * @default false
+             */
+            sem_tag: boolean;
+            /**
+             * Conta Ids
+             * @default []
+             */
+            conta_ids: string[];
+            /**
+             * Pessoas
+             * @default []
+             */
+            pessoas: string[];
+            /**
+             * Conjunto
+             * @default false
+             */
+            conjunto: boolean;
+            /** Periodo De */
+            periodo_de?: string | null;
+            /** Periodo Ate */
+            periodo_ate?: string | null;
+            fatura?: components["schemas"]["FiltroDeFatura"] | null;
+            /**
+             * Situacoes
+             * @default []
+             */
+            situacoes: ("previsto" | "realizado")[];
+            /**
+             * Tipos
+             * @default []
+             */
+            tipos: ("despesa" | "receita" | "transferencia")[];
         };
         /**
          * Despesas
@@ -1607,6 +1767,26 @@ export interface components {
             mes: string;
             /** Cartao Id */
             cartao_id?: string | null;
+        };
+        /** FiltroSalvo */
+        FiltroSalvo: {
+            /** Nome */
+            nome: string;
+            criterios: components["schemas"]["CriteriosDaBusca"];
+            /**
+             * Ordem
+             * @default recentes
+             * @enum {string}
+             */
+            ordem: "recentes" | "valor";
+            /** Periodo Relativo */
+            periodo_relativo?: ("este_mes" | "mes_passado" | "este_ano" | "ultimos_30_dias") | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            pedido: components["schemas"]["PedidoDeBusca"];
         };
         /** Futuro */
         Futuro: {
@@ -1915,7 +2095,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"] | components["schemas"]["AcaoAlterarRecorrencia"] | components["schemas"]["AcaoExcluirRecorrencia"])[];
         };
         /** MesDaProjecao */
         MesDaProjecao: {
@@ -2183,6 +2363,25 @@ export interface components {
              */
             id: string;
         };
+        /** NovoFiltroSalvo */
+        NovoFiltroSalvo: {
+            /** Nome */
+            nome: string;
+            criterios: components["schemas"]["CriteriosDaBusca"];
+            /**
+             * Ordem
+             * @default recentes
+             * @enum {string}
+             */
+            ordem: "recentes" | "valor";
+            /** Periodo Relativo */
+            periodo_relativo?: ("este_mes" | "mes_passado" | "este_ano" | "ultimos_30_dias") | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /** NovoItem */
         NovoItem: {
             /**
@@ -2246,6 +2445,11 @@ export interface components {
             item_categoria_id?: string | null;
             /** Acao Em */
             acao_em?: string | null;
+        };
+        /** NovoNome */
+        NovoNome: {
+            /** Nome */
+            nome: string;
         };
         /** NovoParcelamento */
         NovoParcelamento: {
@@ -3348,26 +3552,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    contas_da_semana: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContasDaSemana"];
                 };
             };
         };
@@ -4843,6 +5027,123 @@ export interface operations {
                 "application/json": components["schemas"]["Dispensa"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_filtros_salvos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiltroSalvo"][];
+                };
+            };
+        };
+    };
+    salvar_filtro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoFiltroSalvo"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiltroSalvo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renomear_filtro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoNome"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiltroSalvo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_filtro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             204: {

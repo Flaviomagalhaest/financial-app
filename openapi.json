@@ -632,29 +632,6 @@
         }
       }
     },
-    "/api/contas-da-semana": {
-      "get": {
-        "summary": "Contas Da Semana",
-        "operationId": "contas_da_semana",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContasDaSemana"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/lancamentos/{id}/confirmar": {
       "post": {
         "summary": "Confirmar Lancamento",
@@ -2837,6 +2814,167 @@
         ]
       }
     },
+    "/api/filtros-salvos": {
+      "get": {
+        "summary": "Listar Filtros Salvos",
+        "operationId": "listar_filtros_salvos",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FiltroSalvo"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Filtros Salvos"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Salvar Filtro",
+        "description": "Reenviar o mesmo id devolve o que já está gravado, com 200.",
+        "operationId": "salvar_filtro",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoFiltroSalvo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiltroSalvo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/filtros-salvos/{id}": {
+      "put": {
+        "summary": "Renomear Filtro",
+        "operationId": "renomear_filtro",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoNome"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiltroSalvo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Excluir Filtro",
+        "description": "Idempotente.",
+        "operationId": "excluir_filtro",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/futuro": {
       "get": {
         "summary": "Ler Futuro",
@@ -2942,6 +3080,40 @@
         ],
         "title": "AEscolher",
         "description": "Lançamento com duas ou mais categorias com item no mês e sem escolha explícita."
+      },
+      "AcaoAlterarRecorrencia": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "alterar_recorrencia",
+            "title": "Acao"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "alteracao": {
+            "$ref": "#/components/schemas/AlteracaoDeRecorrencia"
+          },
+          "antes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CamposDaRecorrencia"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "id",
+          "alteracao"
+        ],
+        "title": "AcaoAlterarRecorrencia"
       },
       "AcaoConfirmar": {
         "properties": {
@@ -3087,6 +3259,26 @@
           "id"
         ],
         "title": "AcaoExcluir"
+      },
+      "AcaoExcluirRecorrencia": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "excluir_recorrencia",
+            "title": "Acao"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "id"
+        ],
+        "title": "AcaoExcluirRecorrencia"
       },
       "AlteracaoDeCategoria": {
         "properties": {
@@ -3424,11 +3616,6 @@
       },
       "AlteracaoDeRecorrencia": {
         "properties": {
-          "a_partir_da_ocorrencia": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "A Partir Da Ocorrencia"
-          },
           "tipo": {
             "type": "string",
             "enum": [
@@ -3543,6 +3730,11 @@
               }
             ],
             "title": "Vezes"
+          },
+          "a_partir_da_ocorrencia": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Partir Da Ocorrencia"
           }
         },
         "type": "object",
@@ -3707,6 +3899,128 @@
         ],
         "title": "CampoEmConflito",
         "description": "Um campo que o outro lado mudou depois da versão do pedido; o valor dele está no\nlançamento que acompanha o conflito."
+      },
+      "CamposDaRecorrencia": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "tipo_do_valor": {
+            "type": "string",
+            "enum": [
+              "fixo",
+              "estimado"
+            ],
+            "title": "Tipo Do Valor"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
+          "a_cada": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Cada"
+          },
+          "unidade": {
+            "type": "string",
+            "enum": [
+              "semanas",
+              "meses"
+            ],
+            "title": "Unidade"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "title": "Inicio"
+          },
+          "ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "vezes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vezes"
+          }
+        },
+        "type": "object",
+        "title": "CamposDaRecorrencia",
+        "description": "Os campos da regra que uma mudança pode trazer; o que não vem fica como está."
       },
       "Cartao": {
         "properties": {
@@ -4010,23 +4324,6 @@
         ],
         "title": "Conta"
       },
-      "ContasDaSemana": {
-        "properties": {
-          "lancamentos": {
-            "items": {
-              "$ref": "#/components/schemas/Lancamento"
-            },
-            "type": "array",
-            "title": "Lancamentos"
-          }
-        },
-        "type": "object",
-        "required": [
-          "lancamentos"
-        ],
-        "title": "ContasDaSemana",
-        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O\nautomático fica de fora: não pede confirmação."
-      },
       "CopiaDeMes": {
         "properties": {
           "de": {
@@ -4043,6 +4340,151 @@
           "de"
         ],
         "title": "CopiaDeMes"
+      },
+      "CriteriosDaBusca": {
+        "properties": {
+          "texto": {
+            "type": "string",
+            "title": "Texto",
+            "default": ""
+          },
+          "valor_minimo_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Minimo Centavos"
+          },
+          "valor_maximo_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Maximo Centavos"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Categoria Ids",
+            "default": []
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "sem_categoria": {
+            "type": "boolean",
+            "title": "Sem Categoria",
+            "default": false
+          },
+          "sem_tag": {
+            "type": "boolean",
+            "title": "Sem Tag",
+            "default": false
+          },
+          "conta_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Conta Ids",
+            "default": []
+          },
+          "pessoas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pessoas",
+            "default": []
+          },
+          "conjunto": {
+            "type": "boolean",
+            "title": "Conjunto",
+            "default": false
+          },
+          "periodo_de": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo De"
+          },
+          "periodo_ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo Ate"
+          },
+          "fatura": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FiltroDeFatura"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "situacoes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "previsto",
+                "realizado"
+              ]
+            },
+            "type": "array",
+            "title": "Situacoes",
+            "default": []
+          },
+          "tipos": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "despesa",
+                "receita",
+                "transferencia"
+              ]
+            },
+            "type": "array",
+            "title": "Tipos",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CriteriosDaBusca",
+        "description": "Sem um filtro, ele não restringe; um filtro vazio também não."
       },
       "Despesas": {
         "properties": {
@@ -4590,6 +5032,60 @@
         ],
         "title": "FiltroDeFatura",
         "description": "O mês da fatura de um cartão (com as compras dos adicionais dele). Sem cartão, o mês em que\ncada lançamento conta, como na aba Mês: o da fatura no cartão, o da data no resto (ADR 0003)."
+      },
+      "FiltroSalvo": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "criterios": {
+            "$ref": "#/components/schemas/CriteriosDaBusca"
+          },
+          "ordem": {
+            "type": "string",
+            "enum": [
+              "recentes",
+              "valor"
+            ],
+            "title": "Ordem",
+            "default": "recentes"
+          },
+          "periodo_relativo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "este_mes",
+                  "mes_passado",
+                  "este_ano",
+                  "ultimos_30_dias"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo Relativo"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "pedido": {
+            "$ref": "#/components/schemas/PedidoDeBusca"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome",
+          "criterios",
+          "id",
+          "pedido"
+        ],
+        "title": "FiltroSalvo"
       },
       "Futuro": {
         "properties": {
@@ -5388,17 +5884,25 @@
                 },
                 {
                   "$ref": "#/components/schemas/AcaoCriarRecorrencia"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoAlterarRecorrencia"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoExcluirRecorrencia"
                 }
               ],
               "discriminator": {
                 "propertyName": "acao",
                 "mapping": {
+                  "alterar_recorrencia": "#/components/schemas/AcaoAlterarRecorrencia",
                   "confirmar": "#/components/schemas/AcaoConfirmar",
                   "criar": "#/components/schemas/AcaoCriar",
                   "criar_parcelamento": "#/components/schemas/AcaoCriarParcelamento",
                   "criar_recorrencia": "#/components/schemas/AcaoCriarRecorrencia",
                   "editar": "#/components/schemas/AcaoEditar",
-                  "excluir": "#/components/schemas/AcaoExcluir"
+                  "excluir": "#/components/schemas/AcaoExcluir",
+                  "excluir_recorrencia": "#/components/schemas/AcaoExcluirRecorrencia"
                 }
               }
             },
@@ -6075,6 +6579,56 @@
         ],
         "title": "NovoFavorito"
       },
+      "NovoFiltroSalvo": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "criterios": {
+            "$ref": "#/components/schemas/CriteriosDaBusca"
+          },
+          "ordem": {
+            "type": "string",
+            "enum": [
+              "recentes",
+              "valor"
+            ],
+            "title": "Ordem",
+            "default": "recentes"
+          },
+          "periodo_relativo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "este_mes",
+                  "mes_passado",
+                  "este_ano",
+                  "ultimos_30_dias"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo Relativo"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome",
+          "criterios",
+          "id"
+        ],
+        "title": "NovoFiltroSalvo"
+      },
       "NovoItem": {
         "properties": {
           "id": {
@@ -6238,6 +6792,20 @@
           "categoria_ids"
         ],
         "title": "NovoLancamento"
+      },
+      "NovoNome": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome"
+        ],
+        "title": "NovoNome"
       },
       "NovoParcelamento": {
         "properties": {

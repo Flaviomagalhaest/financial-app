@@ -964,7 +964,12 @@ def excluir(
     linha = conn.execute(
         f"SELECT {VERSAO}, excluido_em FROM lancamentos WHERE id = %s", (id,)
     ).fetchone()
-    if not linha or linha[1]:
+    if not linha:
+        return
+    if linha[1]:
+        # A pessoa que exclui o que a regra da recorrência já tirou (a exclusão que estava
+        # offline) pulou o mês: a geração não o traz de volta.
+        conn.execute("UPDATE lancamentos SET excluido_pela_regra = false WHERE id = %s", (id,))
         return
     if versao is not None and linha[0] > versao:
         atual = _um(conn, id)
@@ -1110,13 +1115,6 @@ def editar_lancamento(
     return _na_rota(request, lambda conn: editar(conn, id, alteracao, usuario))
 
 
-class ContasDaSemana(BaseModel):
-    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
-    automático fica de fora: não pede confirmação."""
-
-    lancamentos: list[Lancamento]
-
-
 def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
     """Os atrasados e os previstos até `contasDaSemanaDias` dias a partir de hoje."""
     ate = hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
@@ -1126,12 +1124,6 @@ def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
         (ate,),
         ordem="data, criado_em, id",
     )
-
-
-@router.get("/contas-da-semana", response_model=ContasDaSemana, operation_id="contas_da_semana")
-def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana:
-    with conectar(url_do_banco(request)) as conn:
-        return ContasDaSemana(lancamentos=contas_da_semana_de_hoje(conn))
 
 
 class Confirmacao(BaseModel):

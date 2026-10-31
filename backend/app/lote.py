@@ -31,7 +31,12 @@ from app.lancamentos import (
 )
 from app.login import UsuarioLogado
 from app.parcelamentos import NovoParcelamento, Parcelamento
-from app.recorrencias import NovaRecorrencia, Recorrencia
+from app.recorrencias import (
+    AlteracaoDeRecorrencia,
+    CamposDaRecorrencia,
+    NovaRecorrencia,
+    Recorrencia,
+)
 
 router = APIRouter(prefix="/api")
 log = logging.getLogger(__name__)
@@ -75,6 +80,20 @@ class AcaoCriarRecorrencia(BaseModel):
     recorrencia: NovaRecorrencia
 
 
+class AcaoAlterarRecorrencia(BaseModel):
+    acao: Literal["alterar_recorrencia"]
+    id: UUID
+    alteracao: AlteracaoDeRecorrencia
+    # A regra como a tela a mostrava, nos campos que a mudança traz: o que a outra pessoa mudou
+    # depois nesses campos recusa a mudança, em vez de ser sobrescrito em silêncio.
+    antes: CamposDaRecorrencia | None = None
+
+
+class AcaoExcluirRecorrencia(BaseModel):
+    acao: Literal["excluir_recorrencia"]
+    id: UUID
+
+
 Acao = (
     AcaoCriar
     | AcaoEditar
@@ -82,6 +101,8 @@ Acao = (
     | AcaoConfirmar
     | AcaoCriarParcelamento
     | AcaoCriarRecorrencia
+    | AcaoAlterarRecorrencia
+    | AcaoExcluirRecorrencia
 )
 
 
@@ -131,6 +152,9 @@ def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
             campos=conflito.campos,
         )
     except HTTPException as erro:
+        # A regra que o aparelho mudou já não existe: a outra pessoa a excluiu.
+        if erro.status_code == 404 and isinstance(acao, AcaoAlterarRecorrencia):
+            return Resultado(resultado="recusada", motivo="a recorrência foi excluída")
         if erro.status_code == 422:
             return Resultado(resultado="recusada", motivo=erro.detail)
         raise
@@ -165,6 +189,13 @@ def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
             # Grava numa transação e gera os previstos em outras, como o parcelamento.
             criada, _ = recorrencias.criar(url, nova, usuario)
             return Resultado(resultado="aceita", recorrencia=criada)
+        case AcaoAlterarRecorrencia(id=id, alteracao=alteracao, antes=antes):
+            # A regra numa transação e o reajuste dos previstos em outras, como na rota.
+            alterada = recorrencias.alterar(url, id, alteracao, usuario, antes)
+            return Resultado(resultado="aceita", recorrencia=alterada)
+        case AcaoExcluirRecorrencia(id=id):
+            recorrencias.excluir_regra(url, id, usuario)
+            return Resultado(resultado="aceita")
 
 
 @router.post("/lancamentos/lote", response_model=ResultadoDoLote, operation_id="enviar_lote")
