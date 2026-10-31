@@ -33,6 +33,8 @@ jobs:
       # O repositório é público: conta e e-mail do dono ficam em secrets (o log os mascara).
       AWS_CONTA: ${{ secrets.AWS_CONTA }}
       EMAIL_DO_DONO: ${{ secrets.EMAIL_DO_DONO }}
+      # Variável (não secret) de cada GitHub Environment, dev e prod: {"<sub>": "<nome>"}.
+      PESSOAS: ${{ vars.PESSOAS }}
     # Um deploy por vez em cada pilha; o dev é dividido por todas as branches.
     concurrency:
       group: deploy-${{ github.ref_name == 'main' && github.event_name == 'push' && 'prod' || 'dev' }}
