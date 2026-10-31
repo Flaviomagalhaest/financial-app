@@ -932,6 +932,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/filtros-salvos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Filtros Salvos */
+        get: operations["listar_filtros_salvos"];
+        put?: never;
+        /**
+         * Salvar Filtro
+         * @description Reenviar o mesmo id devolve o que já está gravado, com 200.
+         */
+        post: operations["salvar_filtro"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filtros-salvos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Renomear Filtro */
+        put: operations["renomear_filtro"];
+        post?: never;
+        /**
+         * Excluir Filtro
+         * @description Idempotente.
+         */
+        delete: operations["excluir_filtro"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/futuro": {
         parameters: {
             query?: never;
@@ -1775,6 +1817,26 @@ export interface components {
             /** Cartao Id */
             cartao_id?: string | null;
         };
+        /** FiltroSalvo */
+        FiltroSalvo: {
+            /** Nome */
+            nome: string;
+            criterios: components["schemas"]["CriteriosDaBusca"];
+            /**
+             * Ordem
+             * @default recentes
+             * @enum {string}
+             */
+            ordem: "recentes" | "valor";
+            /** Periodo Relativo */
+            periodo_relativo?: ("este_mes" | "mes_passado" | "este_ano" | "ultimos_30_dias") | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            pedido: components["schemas"]["PedidoDeBusca"];
+        };
         /** Futuro */
         Futuro: {
             /**
@@ -2385,6 +2447,25 @@ export interface components {
              */
             id: string;
         };
+        /** NovoFiltroSalvo */
+        NovoFiltroSalvo: {
+            /** Nome */
+            nome: string;
+            criterios: components["schemas"]["CriteriosDaBusca"];
+            /**
+             * Ordem
+             * @default recentes
+             * @enum {string}
+             */
+            ordem: "recentes" | "valor";
+            /** Periodo Relativo */
+            periodo_relativo?: ("este_mes" | "mes_passado" | "este_ano" | "ultimos_30_dias") | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /** NovoItem */
         NovoItem: {
             /**
@@ -2448,6 +2529,11 @@ export interface components {
             item_categoria_id?: string | null;
             /** Acao Em */
             acao_em?: string | null;
+        };
+        /** NovoNome */
+        NovoNome: {
+            /** Nome */
+            nome: string;
         };
         /** NovoParcelamento */
         NovoParcelamento: {
@@ -5111,6 +5197,123 @@ export interface operations {
                 "application/json": components["schemas"]["Dispensa"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_filtros_salvos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiltroSalvo"][];
+                };
+            };
+        };
+    };
+    salvar_filtro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoFiltroSalvo"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiltroSalvo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renomear_filtro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovoNome"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiltroSalvo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excluir_filtro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             204: {

@@ -15,6 +15,7 @@ from app.classificacao import router as classificacao
 from app.edicao_em_lote import router as edicao_em_lote
 from app.exportacao import Formato, exportar
 from app.favoritos import router as favoritos
+from app.filtros_salvos import router as filtros_salvos
 from app.historico import router as historico
 from app.hoje import router as hoje
 from app.lancamentos import router as lancamentos
@@ -107,6 +108,7 @@ def create_app(
     app.include_router(parcelamentos)
     app.include_router(sugestao)
     app.include_router(favoritos)
+    app.include_router(filtros_salvos)
     app.include_router(projecao)
     app.include_router(busca)
     app.include_router(edicao_em_lote)

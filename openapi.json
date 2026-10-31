@@ -2837,6 +2837,167 @@
         ]
       }
     },
+    "/api/filtros-salvos": {
+      "get": {
+        "summary": "Listar Filtros Salvos",
+        "operationId": "listar_filtros_salvos",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FiltroSalvo"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Filtros Salvos"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Salvar Filtro",
+        "description": "Reenviar o mesmo id devolve o que já está gravado, com 200.",
+        "operationId": "salvar_filtro",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoFiltroSalvo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiltroSalvo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/filtros-salvos/{id}": {
+      "put": {
+        "summary": "Renomear Filtro",
+        "operationId": "renomear_filtro",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoNome"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiltroSalvo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Excluir Filtro",
+        "description": "Idempotente.",
+        "operationId": "excluir_filtro",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/futuro": {
       "get": {
         "summary": "Ler Futuro",
@@ -4995,6 +5156,60 @@
         "title": "FiltroDeFatura",
         "description": "O mês da fatura de um cartão (com as compras dos adicionais dele). Sem cartão, o mês em que\ncada lançamento conta, como na aba Mês: o da fatura no cartão, o da data no resto (ADR 0003)."
       },
+      "FiltroSalvo": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "criterios": {
+            "$ref": "#/components/schemas/CriteriosDaBusca"
+          },
+          "ordem": {
+            "type": "string",
+            "enum": [
+              "recentes",
+              "valor"
+            ],
+            "title": "Ordem",
+            "default": "recentes"
+          },
+          "periodo_relativo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "este_mes",
+                  "mes_passado",
+                  "este_ano",
+                  "ultimos_30_dias"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo Relativo"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "pedido": {
+            "$ref": "#/components/schemas/PedidoDeBusca"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome",
+          "criterios",
+          "id",
+          "pedido"
+        ],
+        "title": "FiltroSalvo"
+      },
       "Futuro": {
         "properties": {
           "hoje": {
@@ -6596,6 +6811,56 @@
         ],
         "title": "NovoFavorito"
       },
+      "NovoFiltroSalvo": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          },
+          "criterios": {
+            "$ref": "#/components/schemas/CriteriosDaBusca"
+          },
+          "ordem": {
+            "type": "string",
+            "enum": [
+              "recentes",
+              "valor"
+            ],
+            "title": "Ordem",
+            "default": "recentes"
+          },
+          "periodo_relativo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "este_mes",
+                  "mes_passado",
+                  "este_ano",
+                  "ultimos_30_dias"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo Relativo"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome",
+          "criterios",
+          "id"
+        ],
+        "title": "NovoFiltroSalvo"
+      },
       "NovoItem": {
         "properties": {
           "id": {
@@ -6759,6 +7024,20 @@
           "categoria_ids"
         ],
         "title": "NovoLancamento"
+      },
+      "NovoNome": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nome"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nome"
+        ],
+        "title": "NovoNome"
       },
       "NovoParcelamento": {
         "properties": {
