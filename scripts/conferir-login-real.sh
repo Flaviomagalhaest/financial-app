@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Assistente do ticket 72: o dono cria os usuários e confere o login de verdade (Cognito real,
 # token real passando pelo CloudFront até a API). Gerado pela skill wizard.
-# Uso: scripts/conferir-login-real.sh [dev|prod]   (padrão: dev; precisa de aws, jq e a credencial do dono)
+# Uso: scripts/conferir-login-real.sh [dev|prod]   (padrão: dev; precisa de aws e a credencial do dono)
 #
 # A biblioteca acima do marcador STAGES é a do template: não editar à mão.
 
@@ -200,7 +200,7 @@ AMBIENTE="${1:-dev}"
 case "$AMBIENTE" in dev | prod) ;; *) echo "uso: $0 [dev|prod]" >&2; exit 2 ;; esac
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 USUARIOS="$RAIZ/scripts/usuarios-do-app.sh"
-REGIAO=$(jq -r .regiao "$RAIZ/config/aws.json")
+REGIAO=$(sed -n 's/.*"regiao"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$RAIZ/config/aws.json")
 
 TOTAL_STAGES=5
 [ "$AMBIENTE" = dev ] || TOTAL_STAGES=3
