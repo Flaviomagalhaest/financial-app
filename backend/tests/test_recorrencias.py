@@ -122,7 +122,7 @@ def test_automatico_de_valor_fixo_ja_realiza_o_que_passou_e_nao_pede_confirmacao
         ("2026-11-05", "previsto", True),
     ]
     # Só o estimado pede confirmação: a luz de ontem fica atrasada, o Spotify nunca.
-    semana = casal.pedir("esposa", "GET", "/api/contas-da-semana").json()["lancamentos"]
+    semana = casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"]
     assert [(l["descricao"], l["data"], l["atrasado"]) for l in semana] == [
         ("Luz", "2026-10-27", True)
     ]

@@ -632,29 +632,6 @@
         }
       }
     },
-    "/api/contas-da-semana": {
-      "get": {
-        "summary": "Contas Da Semana",
-        "operationId": "contas_da_semana",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContasDaSemana"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/lancamentos/{id}/confirmar": {
       "post": {
         "summary": "Confirmar Lancamento",
@@ -4009,23 +3986,6 @@
           "arquivada"
         ],
         "title": "Conta"
-      },
-      "ContasDaSemana": {
-        "properties": {
-          "lancamentos": {
-            "items": {
-              "$ref": "#/components/schemas/Lancamento"
-            },
-            "type": "array",
-            "title": "Lancamentos"
-          }
-        },
-        "type": "object",
-        "required": [
-          "lancamentos"
-        ],
-        "title": "ContasDaSemana",
-        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O\nautomático fica de fora: não pede confirmação."
       },
       "CopiaDeMes": {
         "properties": {
