@@ -3,8 +3,11 @@ import {
   aplicarModeloPadrao,
   atualizadoAs,
   copiarPlanejamento,
+  criarItemDoPlanejamento,
   enderecoDaBusca,
   escolherItem,
+  excluirItemDoPlanejamento,
+  mudarItemDoPlanejamento,
   useCadastro,
   useConexao,
   useLancamentos,
@@ -16,6 +19,7 @@ import {
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso, hoje } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
+import { lerReais } from "./TelaDoModelo";
 import { mesCurto, mesVizinho, nomeDoMes, textoDoFechamento, variacao } from "./apresentacao";
 
 type Categorias = ReturnType<typeof useCadastro>["categorias"];
@@ -109,6 +113,8 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
   const online = useConexao();
   const [recusa, setRecusa] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [editando, setEditando] = useState<{ id: string; reais: string } | null>(null);
+  const [novo, setNovo] = useState({ categoria_id: "", reais: "" });
   const { itens, ainda_da_para_gastar_centavos } = leitura.planejamento;
   const anterior = mesVizinho(leitura.mes, -1);
 
@@ -119,7 +125,21 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
     setEnviando(false);
     setRecusa(motivo);
     if (!motivo) aoMudar();
+    return motivo;
   }
+
+  /** Um valor em reais inválido não sai do aparelho. */
+  function comValor(reais: string, fazer: (centavos: number) => Promise<string | null>) {
+    const centavos = lerReais(reais);
+    if (centavos === null) {
+      setRecusa("o valor precisa ser maior que zero");
+      return Promise.resolve("valor inválido");
+    }
+    return pedir(() => fazer(centavos));
+  }
+
+  const usadas = new Set(itens.map((i) => i.categoria_id));
+  const disponiveis = categorias.filter((c) => c.tipo === "despesa" && !c.arquivada && !usadas.has(c.id));
 
   return (
     <section aria-label="Itens do planejamento">
@@ -136,6 +156,9 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
                   <th>Previsto</th>
                   <th>Planejado</th>
                   <th>%</th>
+                  <th>
+                    <span className="oculto">Ações</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -148,6 +171,35 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
                     <td className={i.percentual > 100 ? "acima" : undefined}>
                       {i.percentual > 100 && "⚠ "}
                       {i.percentual}%
+                    </td>
+                    <td>
+                      {editando?.id === i.id ? (
+                        <div className="linha">
+                          <input aria-label={`Novo valor de ${nomePorId(categorias, i.categoria_id)}`} inputMode="decimal" autoComplete="off" placeholder="0,00" value={editando.reais} onChange={(e) => setEditando({ id: i.id, reais: e.target.value })} />
+                          <button
+                            disabled={!online || enviando}
+                            onClick={() =>
+                              void comValor(editando.reais, (c) => mudarItemDoPlanejamento(i.id, c)).then((motivo) => {
+                                if (!motivo) setEditando(null);
+                              })
+                            }
+                          >
+                            Salvar valor
+                          </button>
+                          <button className="secundario" onClick={() => setEditando(null)}>
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="acoes-em-linha">
+                          <button className="secundario" disabled={!online || enviando} aria-label={`Mudar valor de ${nomePorId(categorias, i.categoria_id)}`} onClick={() => setEditando({ id: i.id, reais: (i.planejado_centavos / 100).toFixed(2).replace(".", ",") })}>
+                            Mudar valor
+                          </button>
+                          <button className="secundario" disabled={!online || enviando} aria-label={`Excluir ${nomePorId(categorias, i.categoria_id)}`} onClick={() => void pedir(() => excluirItemDoPlanejamento(i.id))}>
+                            Excluir
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -169,6 +221,30 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
           </div>
         </>
       )}
+      {disponiveis.length > 0 && (
+        <div className="linha">
+          <select aria-label="Categoria do novo item" value={novo.categoria_id} onChange={(e) => setNovo({ ...novo, categoria_id: e.target.value })}>
+            <option value="">Escolha a categoria</option>
+            {disponiveis.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+          <input aria-label="Valor do novo item" inputMode="decimal" autoComplete="off" placeholder="0,00" value={novo.reais} onChange={(e) => setNovo({ ...novo, reais: e.target.value })} />
+          <button
+            disabled={!online || enviando || !novo.categoria_id}
+            onClick={() =>
+              void comValor(novo.reais, (c) => criarItemDoPlanejamento(leitura.mes, novo.categoria_id, c)).then((motivo) => {
+                if (!motivo) setNovo({ categoria_id: "", reais: "" });
+              })
+            }
+          >
+            Adicionar item
+          </button>
+        </div>
+      )}
+      {!online && itens.length > 0 && <p className="vazio">Sem internet: mudar os itens espera a conexão.</p>}
       {recusa && (
         <p role="alert" className="erro">
           Não deu: {recusa}.
