@@ -214,5 +214,99 @@ test("a transferência com categoria mostra o efeito no item de transferência d
   await page.getByRole("group", { name: "De" }).getByRole("button", { name: conta, exact: true }).click();
   await page.getByRole("group", { name: "Categoria (opcional)" }).getByRole("button", { name: `Guardar ${s}` }).click();
   await expect(aviso(page)).toContainText(`Guardar ${s}: 0% → 30% do planejado de ${rotulo(hoje())}`);
-  await expect(aviso(page)).toContainText("Ainda dá para gastar R$ 700,00");
+  await expect(aviso(page)).toContainText("Faltam R$ 700,00 para o planejado");
+});
+
+test("a compra não enviada num cartão arquivado conta pela fatura, não pelo mês da data", async ({ page, context }) => {
+  const { s, headers, criar, categoria } = await prepararCasal(page);
+  // Fecha hoje: a compra de hoje cai na fatura seguinte, que conta no mês seguinte.
+  const fechamento = Number(hoje().slice(8, 10));
+  const cartao = await criar("/api/cartoes", { nome: `Visa ${s}`, dia_fechamento: fechamento, dia_vencimento: 5 });
+  const sonda = await categoria("Sonda");
+  const compra = await criar("/api/lancamentos", { id: randomUUID(), tipo: "despesa", valor_centavos: 100, data: hoje(), conta_id: cartao.id, categoria_ids: [sonda.id] });
+  await page.request.delete(`/api/lancamentos/${compra.id}?versao=${compra.versao}`, { headers });
+  expect(compra.mes > hoje()).toBe(true);
+  const farmacia = await categoria("Farmácia", 40000, compra.mes.slice(0, 7));
+  const arquivado = await page.request.put(`/api/cartoes/${cartao.id}`, { headers, data: { nome: `Visa ${s}`, dia_fechamento: fechamento, dia_vencimento: 5, arquivado: true } });
+  expect(arquivado.ok(), await arquivado.text()).toBe(true);
+  // O cartão arquivado não sai em `GET /api/cartoes`, e a tela de lançar já não o oferece.
+  const ativos: { id: string }[] = await (await page.request.get("/api/cartoes", { headers })).json();
+  expect(ativos.map((c) => c.id)).not.toContain(cartao.id);
+
+  // A compra que ficou na fila antes do arquivamento, posta direto no aparelho: sem tentativa de envio.
+  await page.reload();
+  await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
+  const id = randomUUID();
+  await page.evaluate(
+    ([id, contaId, categoriaId, descricao, data]) =>
+      new Promise<void>((resolve) => {
+        const abertura = indexedDB.open("financial-app-dados");
+        abertura.onsuccess = () => {
+          const transacao = abertura.result.transaction("fila", "readwrite");
+          const lancamento = { id, tipo: "despesa", valor_centavos: 10000, data, descricao, conta_id: contaId, categoria_ids: [categoriaId], pessoa: null, fatura_mes: null, item_categoria_id: null, tags: [] };
+          transacao.objectStore("fila").put({ id, acao: "criar", lancamento, desde: Date.now(), feitoEm: Date.now(), revisao: 1 });
+          transacao.oncomplete = () => {
+            abertura.result.close();
+            resolve();
+          };
+        };
+      }),
+    [id, cartao.id, farmacia.id, `Remédio ${s}`, hoje()],
+  );
+  await expect.poll(() => planejamentoGuardado(page, compra.mes.slice(0, 7), farmacia.id)).toBe(0);
+
+  // Sem internet, o envio não sai e nada recarrega do servidor: o aviso lê o que o aparelho guardou.
+  await context.setOffline(true);
+  await page.reload();
+  await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Histórico" }).click();
+  const linha = page.getByRole("listitem").filter({ hasText: `Remédio ${s}` });
+  await expect(linha).toContainText("⏳ não enviado");
+  await linha.getByRole("link", { name: new RegExp(`^(Editar|Corrigir) Remédio ${s}$`) }).click();
+  await expect(aviso(page)).toContainText(`Cai na fatura de ${compra.mes.slice(5, 7)}/${compra.mes.slice(0, 4)}`);
+  await expect(aviso(page)).toContainText(`${farmacia.nome}: 25% do planejado de ${rotulo(compra.mes)}`);
+  await context.setOffline(false);
+});
+
+test("o criar enviado sem resposta e já lido pelo planejamento conta uma vez só no aviso", async ({ page }) => {
+  const { s, headers, conta, categoria } = await prepararCasal(page);
+  const mercado = await categoria("Mercado", 100000);
+  // O servidor grava o lançamento, mas a resposta não chega; depois nenhum envio passa.
+  let perdidas = 0;
+  await page.route("**/api/lancamentos/lote", async (rota) => {
+    if (perdidas++ === 0) await rota.fetch();
+    await rota.abort("connectionreset");
+  });
+  await lancar(page, { teclas: ["1", "0", "0", "0", "0"], conta, categoria: mercado.nome, descricao: `Feira ${s}` });
+  await expect.poll(() => perdidas).toBeGreaterThan(0);
+  // O servidor gravou: o planejamento dele já conta os R$ 100,00.
+  const plano = await (await page.request.get(`/api/planejamento/${hoje().slice(0, 7)}`, { headers })).json();
+  expect(plano.itens.find((i: { categoria_id: string }) => i.categoria_id === mercado.id).realizado_centavos).toBe(10000);
+  // A fila guarda a hora do envio e a versão enviada (`tentadoEm`, `base`).
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          new Promise<boolean>((resolve) => {
+            const abertura = indexedDB.open("financial-app-dados");
+            abertura.onsuccess = () => {
+              const todos = abertura.result.transaction("fila").objectStore("fila").getAll();
+              todos.onsuccess = () => {
+                abertura.result.close();
+                resolve((todos.result as { tentadoEm?: number; talvezNoServidor?: number }[]).some((i) => i.tentadoEm && i.talvezNoServidor !== undefined));
+              };
+            };
+          }),
+      ),
+    )
+    .toBe(true);
+
+  // O planejamento lido agora, depois do envio, já traz os R$ 100,00, mas a lista de lançamentos
+  // ainda é a de antes dele (as duas leituras não chegam juntas): a fila não soma de novo.
+  await page.route("**/api/lancamentos", (rota) => (rota.request().method() === "GET" ? rota.fulfill({ json: [] }) : rota.continue()));
+  await page.reload();
+  await novoLancamento(page);
+  await page.getByRole("button", { name: conta, exact: true }).click();
+  await page.getByRole("button", { name: mercado.nome, exact: true }).click();
+  await digitar(page, "5", "0", "0", "0");
+  await expect(aviso(page)).toContainText(`${mercado.nome}: 10% → 15% do planejado`);
 });

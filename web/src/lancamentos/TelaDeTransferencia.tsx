@@ -96,7 +96,8 @@ export function TelaDeTransferencia({ centavosIniciais, onTipo }: Props) {
           onMarcar={(c) => setCategoria(categoria === c ? null : c)}
         />
       )}
-      {categoria && <AvisoDePlanejamento {...planejamento} tipo="despesa" nomeDaCategoria={(c) => nomePorId(categorias, c)} onEscolher={() => {}} />}
+      {/* Uma categoria só: nunca há item a escolher, então `onEscolher` não tem o que fazer. */}
+      {categoria && <AvisoDePlanejamento {...planejamento} tipo="transferencia" nomeDaCategoria={(c) => nomePorId(categorias, c)} onEscolher={() => {}} />}
       <label htmlFor="descricao">Descrição</label>
       <input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} autoComplete="off" />
       <h3>Data</h3>
