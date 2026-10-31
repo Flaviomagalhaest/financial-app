@@ -92,7 +92,9 @@ def novo(cartao, categoria) -> NovoLancamento:
 
 def lancar(cartao, categoria) -> float:
     inicio = time.perf_counter()
-    em_transacao(URL, cartoes.protegida(lambda c: lancamentos.criar(c, novo(cartao, categoria), "flavio")))
+    em_transacao(
+        URL, cartoes.protegida(lambda c: lancamentos.criar(c, novo(cartao, categoria), "flavio"))
+    )
     return (time.perf_counter() - inicio) * 1000
 
 
@@ -128,7 +130,9 @@ def main() -> None:
         with_ = mediana(medida, vezes, cartao, categoria)
         with mock.patch.object(cartoes, "protegida", lambda trabalho, corrigida=None: trabalho):
             sem = mediana(medida, vezes, cartao, categoria)
-        print(f"{rotulo:18} com proteção {with_:8.0f} ms | sem {sem:8.0f} ms | custo {with_ - sem:8.0f} ms")
+        print(
+            f"{rotulo:18} com proteção {with_:8.0f} ms | sem {sem:8.0f} ms | custo {with_ - sem:8.0f} ms"
+        )
 
 
 if __name__ == "__main__":
