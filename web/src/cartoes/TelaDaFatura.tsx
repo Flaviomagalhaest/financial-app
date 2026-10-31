@@ -5,7 +5,7 @@ import { eCredito, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, 
 import { mesEmQueConta } from "../dados/aviso";
 import { dataPorExtenso, mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
-import { comSinal, pagaPeloPagamento, SITUACAO, sobraDaPaga } from "./apresentacao";
+import { comSinal, pagaPeloPagamento, SITUACAO, saldoQuePassou } from "./apresentacao";
 import { FormularioDeCorrecao } from "./FormularioDeCorrecao";
 
 const TODAS = "";
@@ -159,7 +159,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
           {pagaPeloPagamento(fatura) ? (
             <>
               <dt>Passou para a seguinte</dt>
-              <dd>{formatarCentavos(sobraDaPaga(fatura))}</dd>
+              <dd>{formatarCentavos(saldoQuePassou(fatura))}</dd>
             </>
           ) : (
             <>

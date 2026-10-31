@@ -1,7 +1,7 @@
 import { atualizadoAs, useCadastro, useFaturas, useLimite, type Cartao, type LimiteDoCartao } from "../dados";
 import { mesPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
-import { faturasDaLinha, SITUACAO, sobraDaPaga } from "./apresentacao";
+import { faturasDaLinha, SITUACAO, saldoQuePassou } from "./apresentacao";
 
 /** A barra do comprometido e, ao tocar, as três partes, os parcelamentos e os próximos 12 meses. */
 function LimiteDoCartaoNaLinha({ limite }: { limite: LimiteDoCartao }) {
@@ -102,7 +102,7 @@ function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
                 {SITUACAO[fatura.situacao]}
                 {fatura.situacao === "fechada" && ` · a pagar ${formatarCentavos(fatura.a_pagar_centavos)}`}
                 {fatura.saldo_anterior_centavos > 0 && ` · ${formatarCentavos(fatura.saldo_anterior_centavos)} de saldo anterior`}
-                {sobraDaPaga(fatura) > 0 && ` · ${formatarCentavos(sobraDaPaga(fatura))} passou para a seguinte`}
+                {saldoQuePassou(fatura) > 0 && ` · ${formatarCentavos(saldoQuePassou(fatura))} passou para a seguinte`}
               </p>
             </a>
           </li>

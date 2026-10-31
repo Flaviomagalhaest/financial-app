@@ -266,7 +266,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   // O titular das faturas da compra no cartão, para avisar da fatura paga.
   const cartaoDaCompra = cartoes.find((c) => c.id === conta);
   const titularDaCompra = cartaoDaCompra ? (cartaoDaCompra.titular_id ?? cartaoDaCompra.id) : "";
-  const cartaoDoEstorno = estornando ? (cartoes.find((c) => c.id === conta)?.titular_id ?? conta) : "";
+  const cartaoDoEstorno = estornando ? titularDaCompra || conta : "";
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
 

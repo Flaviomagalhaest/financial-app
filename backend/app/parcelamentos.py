@@ -965,13 +965,15 @@ def antecipar_parcelas(
     url = url_do_banco(request)
     antecipadas = em_transacao(
         url,
-        lambda conn: _antecipar(
-            conn,
-            id,
-            antecipacao.parcelas,
-            antecipacao.data,
-            antecipacao.valor_total_centavos,
-            usuario,
+        cartoes.protegida(
+            lambda conn: _antecipar(
+                conn,
+                id,
+                antecipacao.parcelas,
+                antecipacao.data,
+                antecipacao.valor_total_centavos,
+                usuario,
+            )
         ),
     )
     return _responder(url, antecipadas)
@@ -989,8 +991,10 @@ def quitar_parcelamento(
     url = url_do_banco(request)
     quitadas = em_transacao(
         url,
-        lambda conn: _antecipar(
-            conn, id, None, quitacao.data, quitacao.valor_total_centavos, usuario
+        cartoes.protegida(
+            lambda conn: _antecipar(
+                conn, id, None, quitacao.data, quitacao.valor_total_centavos, usuario
+            )
         ),
     )
     return _responder(url, quitadas)

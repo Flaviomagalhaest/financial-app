@@ -124,7 +124,6 @@ def corrigir_fatura(
             lancamentos.criar(conn, nova, usuario)
         if correcao.pagamentos is not None:
             _trocar_pagamentos(conn, titular, mes, correcao.pagamentos, usuario)
-        cartoes.garantir_a_seguinte_da_paga(conn, titular.id)
         return cartoes.faturas_do_titular(conn, titular.id, mes)[0]
 
     return lancamentos.na_rota(request, gravar, corrigida=(titular.id, mes))

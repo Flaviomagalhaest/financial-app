@@ -37,5 +37,5 @@ export function pagaPeloPagamento(f: Pick<Fatura, "situacao" | "fechamento" | "v
   return f.situacao === "paga" && !!(f.fechamento || f.vencimento);
 }
 
-/** O que faltou pagar da fatura paga, que passou para a seguinte como saldo anterior. */
-export const sobraDaPaga = (f: Fatura) => (pagaPeloPagamento(f) ? Math.max(f.saldo_anterior_centavos + f.total_centavos - f.pago_centavos, 0) : 0);
+/** O saldo anterior que a fatura paga passou para a seguinte: o que faltou pagar dela. */
+export const saldoQuePassou = (f: Fatura) => (pagaPeloPagamento(f) ? Math.max(f.saldo_anterior_centavos + f.total_centavos - f.pago_centavos, 0) : 0);

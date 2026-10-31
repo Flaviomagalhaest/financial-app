@@ -404,3 +404,14 @@ def test_correcao_de_uma_fatura_nao_muda_outra_paga(casal: Casal, monkeypatch):
     assert resposta.json()["detail"] == (
         "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
     )
+
+
+def test_correcao_nao_reabre_a_fatura(casal: Casal, abril_paga):
+    comprar(casal, abril_paga.cartao, "2026-05-08", valor_centavos=5000)
+
+    # Um fechamento depois de hoje (10/05) faria abril voltar a ser aberta.
+    resposta = corrigir(casal, abril_paga, fechamento="2026-05-12", vencimento="2026-05-20")
+
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "a correção não reabre a fatura: ela continua paga"
+    assert abril(casal, abril_paga) == ABRIL_PAGA

@@ -170,7 +170,6 @@ def criar_transferencia(
         ).rowcount
         # O 200 vale para a tentativa que terminou: refeita, `gravadas` é lido de novo.
         response.status_code = 201 if gravadas else 200
-        cartoes.garantir_a_seguinte_da_paga(conn, nova.conta_destino_id)
         return _ler_transferencias(conn, nova.id)[0]
 
     return em_transacao(url_do_banco(request), cartoes.protegida(gravar))
@@ -227,7 +226,6 @@ def editar_transferencia(
                 id,
             ),
         )
-        cartoes.garantir_a_seguinte_da_paga(conn, editada.conta_destino_id)
         return _ler_transferencias(conn, id)[0]
 
     return em_transacao(url_do_banco(request), cartoes.protegida(gravar))
@@ -274,7 +272,6 @@ def confirmar_transferencia(
             " alterado_por = %s, alterado_em = now() WHERE id = %s",
             (confirmacao.valor_centavos, confirmacao.data, usuario, id),
         )
-        cartoes.garantir_a_seguinte_da_paga(conn, atual.conta_destino_id)
         return _ler_transferencias(conn, id)[0]
 
     return em_transacao(url_do_banco(request), cartoes.protegida(gravar))

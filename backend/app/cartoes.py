@@ -280,26 +280,13 @@ def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[
     return resultado
 
 
-def garantir_a_seguinte_da_paga(conn, cartao_id: UUID) -> None:
-    """A sobra da fatura paga precisa de uma seguinte: sem nenhuma depois dela, a do mês seguinte
-    nasce aqui. Havendo uma mais adiante, a sobra pula os meses sem fatura até ela."""
-    cartao = faturas.ler_cartao(conn, cartao_id)
-    if cartao is None:
-        return
-    lista = faturas_do_titular(conn, cartao.titular.id)
-    if not lista or not paga_pelo_pagamento(ultima := lista[-1]):
-        return
-    if ultima.saldo_anterior_centavos + ultima.total_centavos > ultima.pago_centavos:
-        faturas.garantir_fatura(conn, cartao.titular, faturas.somar_meses(ultima.mes, 1))
-
-
 def _todas(conn) -> dict[tuple[UUID, date], Fatura]:
     return {(f.cartao_id, f.mes): f for t in titulares(conn) for f in faturas_do_titular(conn, t)}
 
 
-def _eventos(f: Fatura) -> tuple:
-    """O que só um evento muda numa fatura: as datas, as compras, o ajuste e os pagamentos. O
-    saldo anterior vem da fatura anterior."""
+def _o_que_so_um_evento_muda(f: Fatura) -> tuple[date | None, date | None, int, int, int]:
+    """As datas, as compras, o ajuste e os pagamentos da fatura; o saldo anterior vem da
+    anterior."""
     return f.fechamento, f.vencimento, f.compras_centavos, f.ajuste_centavos, f.pago_centavos
 
 
@@ -316,21 +303,49 @@ def recusa_da_paga(conn, cartao_id: UUID, mes: date) -> HTTPException:
     )
 
 
+def _passa_adiante(f: Fatura) -> int:
+    """O que faltou pagar da fatura paga, que vira saldo anterior da seguinte."""
+    if not paga_pelo_pagamento(f):
+        return 0
+    return max(f.saldo_anterior_centavos + f.total_centavos - f.pago_centavos, 0)
+
+
+def _garantir_a_seguinte(conn, todas: dict[tuple[UUID, date], Fatura]) -> bool:
+    """O saldo anterior precisa de uma fatura seguinte: se a última fatura de um titular é paga e
+    passa algo adiante, a do mês seguinte nasce aqui. Havendo uma mais adiante, o saldo pula os
+    meses sem fatura até ela. Devolve se alguma nasceu."""
+    ultimas: dict[UUID, Fatura] = {}
+    for (titular_id, _), f in sorted(todas.items()):
+        ultimas[titular_id] = f
+    nasceu = False
+    for titular_id, ultima in ultimas.items():
+        if _passa_adiante(ultima):
+            titular = faturas.ler_cartao(conn, titular_id).titular
+            faturas.garantir_fatura(conn, titular, faturas.somar_meses(ultima.mes, 1))
+            nasceu = True
+    return nasceu
+
+
 def _conferir_faturas(
     conn,
     antes: dict[tuple[UUID, date], Fatura],
     corrigida: tuple[UUID, date] | None,
 ) -> None:
-    for chave, depois in _todas(conn).items():
+    depois_de_tudo = _todas(conn)
+    if _garantir_a_seguinte(conn, depois_de_tudo):
+        depois_de_tudo = _todas(conn)
+    for chave, depois in depois_de_tudo.items():
         anterior = antes.get(chave)
         if (
             anterior
             and chave != corrigida
             and paga_pelo_pagamento(anterior)
-            and _eventos(anterior) != _eventos(depois)
+            and _o_que_so_um_evento_muda(anterior) != _o_que_so_um_evento_muda(depois)
         ):
             raise recusa_da_paga(conn, *chave)
         # Só a fatura que mudou: a gravada antes da regra (ticket 125) não trava o resto.
+        if chave == corrigida and not paga_pelo_pagamento(depois):
+            raise recusar("a correção não reabre a fatura: ela continua paga")
         mudou = not anterior or anterior != depois
         devido = depois.saldo_anterior_centavos + depois.total_centavos
         if mudou and depois.pago_centavos > max(devido, 0):
@@ -343,7 +358,8 @@ def protegida[T](
     """`trabalho(conn)` com as regras da fatura paga (ADR 0021) conferidas no resultado: a paga
     não recebe mais pagamento, compra, troca de fatura, estorno nem acerto de datas, e nenhum
     pagamento passa do valor da fatura (saldo anterior mais o total). Só a `corrigida` (titular e
-    mês, na correção de fatura) muda sendo paga."""
+    mês, na correção de fatura) muda sendo paga, e ela continua paga. A fatura paga que é a
+    última e passa saldo anterior adiante ganha a seguinte."""
 
     def com_as_regras(conn) -> T:
         antes = _todas(conn)
