@@ -375,6 +375,8 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
   await page.getByRole("link", { name: `Editar Padaria ${s}` }).click();
   await page.getByRole("button", { name: "7", exact: true }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
+  // O salvar guarda na fila e só então abre o Histórico: ir à Hoje antes seria desfeito por ele.
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await verSaldo();
   await expect(saldo()).toContainText("-R$ 450,07");
 
@@ -493,6 +495,25 @@ test("no Android, lançado sem internet antes de a lista ser guardada: o service
   await expect(linha).not.toContainText("não enviado");
 });
 
+/** Se a lista guardada no aparelho tem um lançamento com esta descrição. */
+function listaGuardadaTem(page: Page, descricao: string) {
+  return page.evaluate(
+    (descricao) =>
+      new Promise<boolean>((resolve, reject) => {
+        const abrir = indexedDB.open("financial-app-dados");
+        abrir.onsuccess = () => {
+          const ler = abrir.result.transaction("respostas").objectStore("respostas").get("/api/lancamentos");
+          ler.onsuccess = () => {
+            abrir.result.close();
+            resolve(!!ler.result?.dados.some((l: { descricao: string }) => l.descricao === descricao));
+          };
+        };
+        abrir.onerror = reject;
+      }),
+    descricao,
+  );
+}
+
 test("a leitura da lista que a tela pediu antes da do service worker, se chega depois, não troca a guardada", async ({ page, context }) => {
   const { s, conta, mercado } = await prepararCasal(page);
   const api = await apiDaPagina(page);
@@ -502,15 +523,19 @@ test("a leitura da lista que a tela pediu antes da do service worker, se chega d
   await context.setOffline(true);
   await lancar(page, { teclas: ["4", "00"], conta, categoria: mercado, descricao: `Na fila ${s}` });
   const disparar = await syncDoServiceWorker(page);
+  // Na Hoje, a tela não relê a lista quando a rede volta: a única leitura dela é a do envio.
+  await aba(page, "Hoje");
 
-  // A rede volta e a tela lê a lista: o servidor responde, mas a resposta demora a chegar.
+  // A rede volta e a tela lê a lista antes de enviar: o servidor responde, mas a resposta demora a chegar.
   const daLista = (url: URL) => url.pathname === "/api/lancamentos";
   let soltar = () => {};
   const solta = new Promise<void>((resolve) => (soltar = resolve));
   let respondida = () => {};
   const daTela = new Promise<void>((resolve) => (respondida = resolve));
+  // As leituras da tela que saíram antes do lançamento do outro aparelho; as de depois passam.
+  let antesDoOutro = true;
   await context.route(daLista, async (rota) => {
-    if (rota.request().serviceWorker()) return rota.continue();
+    if (rota.request().serviceWorker() || !antesDoOutro) return rota.continue();
     const resposta = await rota.fetch();
     respondida();
     await solta;
@@ -520,10 +545,10 @@ test("a leitura da lista que a tela pediu antes da do service worker, se chega d
   await daTela;
 
   // Noutro aparelho, a outra pessoa lança; depois o service worker lê a lista, já com esse lançamento.
+  antesDoOutro = false;
   await api.criar("/api/lancamentos", { id: randomUUID(), tipo: "despesa", valor_centavos: 900, data: new Date().toISOString().slice(0, 10), descricao: `Do outro aparelho ${s}`, conta_id: contaId, categoria_ids: [categoriaId] });
-  const doServiceWorker = context.waitForEvent("requestfinished", (pedido) => daLista(new URL(pedido.url())) && !!pedido.serviceWorker());
   await disparar();
-  await doServiceWorker;
+  await expect.poll(() => listaGuardadaTem(page, `Do outro aparelho ${s}`)).toBe(true);
 
   // A resposta da tela, mais velha, chega por último (ticket 122).
   const lote = context.waitForEvent("request", (pedido) => pedido.url().endsWith("/api/lancamentos/lote"));

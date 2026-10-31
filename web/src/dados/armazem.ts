@@ -100,8 +100,6 @@ const BANCO = "financial-app-dados";
 const FILA = "fila";
 const RESPOSTAS = "respostas";
 const CANAL = "financial-app-dados";
-/** Nas respostas, quantas leituras do servidor já saíram, contando a tela, as abas e o service worker. */
-const LEITURAS_FEITAS = "leituras/feitas";
 
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -137,11 +135,10 @@ export function ouvirMudancas(ouvinte: () => void): () => void {
  * Roda `trabalho` numa transação sobre a fila e as respostas; só pode esperar pedidos do próprio
  * IndexedDB, senão a transação fecha no meio. Uma escrita confirmada avisa os ouvintes.
  */
-export function emTransacao<T>(modo: IDBTransactionMode, trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore) => Promise<T>): Promise<T> {
-  return transacao(modo, trabalho, modo === "readwrite");
-}
-
-async function transacao<T>(modo: IDBTransactionMode, trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore) => Promise<T>, avisar: boolean): Promise<T> {
+export async function emTransacao<T>(
+  modo: IDBTransactionMode,
+  trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore) => Promise<T>,
+): Promise<T> {
   const banco = await abrir();
   try {
     const transacao = banco.transaction([FILA, RESPOSTAS], modo);
@@ -157,7 +154,7 @@ async function transacao<T>(modo: IDBTransactionMode, trabalho: (fila: IDBObject
       throw erro;
     }
     await fim;
-    if (avisar) {
+    if (modo === "readwrite") {
       ouvintes.forEach((ouvinte) => ouvinte());
       canal?.postMessage("mudou");
     }
@@ -170,31 +167,34 @@ async function transacao<T>(modo: IDBTransactionMode, trabalho: (fila: IDBObject
 export const lerResposta = <T>(caminho: string) =>
   emTransacao("readonly", (_, respostas) => pedido(respostas.get(caminho)) as Promise<Guardada<T> | undefined>);
 
-/** O número da próxima leitura; contar não muda nada que se mostre, então não avisa os ouvintes. */
-const numerarLeitura = () =>
-  transacao(
-    "readwrite",
-    async (_, respostas) => {
-      const numero = (((await pedido(respostas.get(LEITURAS_FEITAS))) as number | undefined) ?? 0) + 1;
-      await pedido(respostas.put(numero, LEITURAS_FEITAS));
-      return numero;
-    },
-    false,
-  );
+const agora = () => performance.timeOrigin + performance.now();
+let ultimaLeitura = 0;
+/**
+ * O número da leitura é a hora em que ela sai (ms, com fração): a tela, as abas e o service worker
+ * do aparelho contam pelo mesmo relógio, sem uma transação a mais no IndexedDB a cada leitura.
+ * Neste contexto, cada uma tem número maior que o da anterior.
+ */
+function numerarLeitura(): number {
+  ultimaLeitura = Math.max(agora(), ultimaLeitura + 0.001);
+  return ultimaLeitura;
+}
+
+/** A guardada é de uma leitura que saiu depois. Uma que saiu "depois de agora" é de antes de o relógio do aparelho voltar: não vale. */
+const maisNova = (guardada: Guardada<unknown> | undefined, numero: number) => !!guardada?.leitura && guardada.leitura > numero && guardada.leitura <= agora();
 
 /**
  * Busca no servidor (`ler`, `undefined` quando ele não respondeu) e guarda a resposta. As leituras
  * de uma resposta correm juntas, na tela, noutra aba ou no service worker, e a que saiu antes pode
- * chegar depois: numeradas na saída, no IndexedDB, a mais velha não troca a guardada (tickets 120 e 122).
+ * chegar depois: numeradas na saída, a mais velha não troca a guardada (tickets 120 e 122).
  */
 export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined>): Promise<D | undefined> {
   return comTrava("shared", async () => {
-    const numero = await numerarLeitura();
+    const numero = numerarLeitura();
     const dados = await ler().catch(() => undefined);
     if (dados === undefined) return undefined;
     await emTransacao("readwrite", async (_, respostas) => {
       const guardada = (await pedido(respostas.get(caminho))) as Guardada<D> | undefined;
-      if ((guardada?.leitura ?? 0) < numero) await pedido(respostas.put({ dados, em: Date.now(), leitura: numero } satisfies Guardada<D>, caminho));
+      if (!maisNova(guardada, numero)) await pedido(respostas.put({ dados, em: Date.now(), leitura: numero } satisfies Guardada<D>, caminho));
     });
     return dados;
   });
