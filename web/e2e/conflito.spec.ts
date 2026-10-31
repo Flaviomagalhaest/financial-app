@@ -29,6 +29,20 @@ async function prepararCasal(page: Page, browser: Browser) {
   return { s, descricao, dela, contextoDela };
 }
 
+/**
+ * Espera a mudança que a outra pessoa fez chegar ao servidor. O "não enviado" sumir da tela dela não basta:
+ * ele passa antes de a fila ser lida (tickets 90 e 114). `valor` é o esperado em centavos; sem ele, espera a exclusão.
+ */
+async function esperarNoServidor(pagina: Page, descricao: string, valor?: number) {
+  const api = await apiDaPagina(pagina);
+  await expect
+    .poll(async () => {
+      const achado = (await api.ler("/api/lancamentos")).find((l: { descricao: string }) => l.descricao === descricao);
+      return valor === undefined ? achado === undefined : achado?.valor_centavos === valor;
+    })
+    .toBe(true);
+}
+
 /** Abre a edição pela lista e acrescenta uma tecla ao valor (R$ 1,00 + "7" = R$ 10,07). */
 async function editarValor(page: Page, descricao: string, tecla: string) {
   await linha(page, descricao).getByRole("link", { name: `Editar ${descricao}` }).click();
@@ -71,6 +85,7 @@ test("mudança no mesmo campo vira conflito: o aparelho mostra a versão do serv
   await expect(linha(dela, descricao)).toContainText("− R$ 10,05");
   // A dela sobe antes: senão a minha pode chegar primeiro e o conflito fica com ela.
   await expect(linha(dela, descricao)).not.toContainText("não enviado");
+  await esperarNoServidor(dela, descricao, 1005);
   await context.setOffline(false);
 
   const minha = linha(page, descricao);
@@ -104,6 +119,7 @@ test("descartar a minha mudança deixa a versão da outra pessoa", async ({ page
   await editarValor(page, descricao, "7");
   await editarValor(dela, descricao, "5");
   await expect(linha(dela, descricao)).not.toContainText("não enviado");
+  await esperarNoServidor(dela, descricao, 1005);
   await context.setOffline(false);
   await linha(page, descricao).getByRole("link", { name: `Decidir ${descricao}` }).click();
   await page.getByRole("button", { name: "Descartar a minha mudança" }).click();
@@ -123,6 +139,7 @@ test("a exclusão vence a edição, com aviso e 'Lançar de novo'", async ({ pag
   dela.once("dialog", (dialogo) => void dialogo.accept());
   await linha(dela, descricao).getByRole("button", { name: `Excluir ${descricao}` }).click();
   await expect(linha(dela, descricao)).toHaveCount(0);
+  await esperarNoServidor(dela, descricao);
   await context.setOffline(false);
 
   const minha = linha(page, descricao);
@@ -146,6 +163,7 @@ test("excluir o que a outra pessoa mudou depois pergunta antes", async ({ page, 
   await context.setOffline(true);
   await editarValor(dela, descricao, "5");
   await expect(linha(dela, descricao)).not.toContainText("não enviado");
+  await esperarNoServidor(dela, descricao, 1005);
   page.once("dialog", (dialogo) => void dialogo.accept());
   await linha(page, descricao).getByRole("button", { name: `Excluir ${descricao}` }).click();
   await expect(linha(page, descricao)).toHaveCount(0);
@@ -289,6 +307,7 @@ test("editar enquanto a criação sobe ainda vira conflito se a outra pessoa mud
   await editarValor(dela, descricao, "5");
   await expect(linha(dela, descricao)).toContainText("− R$ 10,05");
   await expect(linha(dela, descricao)).not.toContainText("não enviado");
+  await esperarNoServidor(dela, descricao, 1005);
 
   await page.getByRole("button", { name: "7", exact: true }).click();
   await page.getByRole("button", { name: "Salvar" }).click();

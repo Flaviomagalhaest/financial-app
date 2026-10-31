@@ -16,3 +16,4 @@ O aviso de planejamento ao lançar precisa funcionar sem internet e contar os la
 - A ADR 0011 continua valendo para gravar: sem internet o aparelho só mexe em lançamentos, e a fatura e o mês que valem são os do servidor. O que esta ADR abre é repetir as regras no aparelho para mostrar, não para decidir.
 - Com o fechamento de uma fatura acertado à mão e ainda não guardado no aparelho, o aviso sem internet pode mostrar outra fatura. O app guarda as faturas dos cartões e o planejamento do mês anterior, deste e do próximo ao abrir, para isso ser raro.
 - A porcentagem arredonda o meio para o par, como o `round` do Python, e o app repete isso para mostrar o mesmo número que o servidor.
+- Para achar a fatura de uma compra não enviada, o aparelho lê também os cartões arquivados (`/api/cartoes?arquivados=true`): a compra feita antes do arquivamento segue contando pela fatura, não pelo mês da data.

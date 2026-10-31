@@ -327,9 +327,8 @@ def gerar_as_parcelas(url: str | None, id: UUID) -> None:
 def completar_todos(url: str | None) -> int:
     """Conserta os parcelamentos que um pedido deixou pela metade: gera as parcelas que faltam
     (a geração parou no meio) e refaz as que destoam do parcelamento (a correção parou no
-    meio). Só o cronograma (valor, data, fatura, as que saem e as que voltam) se refaz: a
-    classificação que o pedido trouxe se perde com ele, e repetir o pedido a refaz. Devolve
-    quantos consertou."""
+    meio), inclusive a classificação (descrição, categorias, tags, pessoa, item) que o pedido
+    trouxe, gravada no parcelamento até o refazer terminar. Devolve quantos consertou."""
     with conectar(url) as conn:
         ids = [id for (id,) in conn.execute("SELECT id FROM parcelamentos")]
     consertados = 0
@@ -337,10 +336,30 @@ def completar_todos(url: str | None) -> int:
         if not em_transacao(url, lambda conn, id=id: _falta_conserto(conn, id)):
             continue
         consertados += 1
+        pendente = em_transacao(url, lambda conn, id=id: _classificacao_pendente(conn, id))
         while em_transacao(url, lambda conn, id=id: _reajustar_do_parcelamento(conn, id)):
             pass
+        em_transacao(url, lambda conn, id=id, feita=pendente: _dar_por_refeita(conn, id, feita))
         gerar_as_parcelas(url, id)
     return consertados
+
+
+def _classificacao_pendente(conn, id: UUID) -> frozenset[str]:
+    """Os campos de classificação que correções já gravadas ainda não levaram às parcelas."""
+    linha = conn.execute(
+        "SELECT classificacao_pendente FROM parcelamentos WHERE id = %s", (id,)
+    ).fetchone()
+    return frozenset(filter(None, (linha[0] or "").split(","))) if linha else frozenset()
+
+
+def _dar_por_refeita(conn, id: UUID, feita: frozenset[str]) -> None:
+    """Tira do pendente o que acabou de ser refeito; se outra correção gravou campos novos no
+    meio, o pendente mudou e fica para ela."""
+    conn.execute(
+        "UPDATE parcelamentos SET classificacao_pendente = '' WHERE id = %s"
+        " AND coalesce(classificacao_pendente, '') = %s",
+        (id, ",".join(sorted(feita))),
+    )
 
 
 def _falta_conserto(conn, id: UUID) -> bool:
@@ -348,14 +367,19 @@ def _falta_conserto(conn, id: UUID) -> bool:
         return False
     [regra] = lidos
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
-    return geradas < regra.parcelas or bool(_correcoes(conn, regra, geradas, frozenset()))
+    pendente = _classificacao_pendente(conn, id)
+    return (
+        geradas < regra.parcelas
+        or bool(pendente)
+        or bool(_correcoes(conn, regra, geradas, pendente))
+    )
 
 
 def _reajustar_do_parcelamento(conn, id: UUID) -> bool:
     """Um lote do conserto da tarefa diária, em nome de quem alterou o parcelamento por último."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False
-    return _reajustar_um_lote(conn, id, lidos[0].alterado_por, frozenset())
+    return _reajustar_um_lote(conn, id, lidos[0].alterado_por, _classificacao_pendente(conn, id))
 
 
 def origem(descricao: str) -> str:
@@ -640,7 +664,8 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
             f"a parcela {a_mao} foi editada à mão: exclua-a antes de tirá-la do parcelamento"
         )
     geradas_depois = min(geradas, nova.parcelas)
-    classificacao = frozenset(CLASSIFICACAO & pedidas.keys())
+    # Junto com o que correções anteriores deixaram pendente: o refazer deste pedido leva tudo.
+    classificacao = frozenset(CLASSIFICACAO & pedidas.keys()) | _classificacao_pendente(conn, id)
     realizadas = [
         t.aviso
         for t in _correcoes(conn, nova, geradas_depois, classificacao)
@@ -657,7 +682,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
     if not conn.execute(
         "UPDATE parcelamentos SET valor_total_centavos = %s, parcelas = %s, data = %s,"
         " descricao = %s, pessoa = %s, item_categoria_id = %s, geradas = %s, alterado_por = %s,"
-        " alterado_em = now() WHERE id = %s AND geradas = %s",
+        " classificacao_pendente = %s, alterado_em = now() WHERE id = %s AND geradas = %s",
         (
             nova.valor_total_centavos,
             nova.parcelas,
@@ -667,6 +692,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
             nova.item_categoria_id,
             geradas_depois,
             usuario,
+            ",".join(sorted(classificacao)),
             id,
             geradas,
         ),
@@ -774,6 +800,8 @@ def alterar_parcelamento(
         return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
     while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, usuario, classificacao)):
         pass
+    # Antes de gerar: a geração já cria as parcelas com a classificação inteira.
+    em_transacao(url, lambda conn: _dar_por_refeita(conn, id, classificacao))
     gerar_as_parcelas(url, id)
     # A parcela automática que a data nova já alcançou se realiza agora, como na criação.
     automaticos.realizar_automaticos(url, id)

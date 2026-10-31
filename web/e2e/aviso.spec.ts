@@ -206,14 +206,18 @@ test.describe("criar enviado sem resposta", () => {
   });
 });
 
-test.describe("o que sobra, na despesa e na receita", () => {
-  const casos: { tipo: "despesa" | "receita"; centavos: number; texto: string }[] = [
+test.describe("o que sobra, na despesa, na receita e na transferência", () => {
+  const casos: { tipo: "despesa" | "receita" | "transferencia"; centavos: number; texto: string }[] = [
     { tipo: "despesa", centavos: 18000, texto: "Ainda dá para gastar R$ 180,00" },
     { tipo: "despesa", centavos: 0, texto: "Chega ao limite do planejado" },
     { tipo: "despesa", centavos: -5000, texto: "Passa R$ 50,00 do planejado" },
     { tipo: "receita", centavos: 18000, texto: "Faltam R$ 180,00 para o planejado" },
     { tipo: "receita", centavos: 0, texto: "Chega ao planejado" },
     { tipo: "receita", centavos: -5000, texto: "R$ 50,00 acima do planejado" },
+    // A transferência com categoria guarda dinheiro: o texto é o da receita (o que falta para o planejado).
+    { tipo: "transferencia", centavos: 70000, texto: "Faltam R$ 700,00 para o planejado" },
+    { tipo: "transferencia", centavos: 0, texto: "Chega ao planejado" },
+    { tipo: "transferencia", centavos: -5000, texto: "R$ 50,00 acima do planejado" },
   ];
   for (const c of casos) {
     test(`${c.tipo} com ${c.centavos} centavos: ${c.texto}`, () => {

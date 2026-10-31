@@ -1224,3 +1224,29 @@ label.caixa > input {
     transition: width 0.15s ease-out;
   }
 }
+
+/* Edição em lote (ticket 61): a caixa de marcar na linha da busca, a barra da seleção e a prévia. */
+.lista li > div:first-child .titulo-da-linha {
+  flex: 1;
+  min-width: 0;
+}
+.selecao-do-lote,
+.previa-do-lote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--borda);
+  border-radius: 0.5rem;
+  background: var(--superficie);
+  font-variant-numeric: tabular-nums;
+}
+.selecao-do-lote p,
+.previa-do-lote p {
+  margin: 0;
+}
+.edicoes-em-lote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}

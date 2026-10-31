@@ -28,4 +28,5 @@ Fecha a etapa 1 com o teste de verdade nos aparelhos do casal (HITL, do dono). S
 - [ ] Resultado e decisão sobre seguir ou acionar o plano B em `## Answer`
 - [ ] Conferir no DSQL se `itens_do_planejamento` aceita um índice único em (`mes`, `categoria_id`) (ticket 49: hoje a unicidade é só da rota)
 - [ ] No DSQL, criar um item do planejamento num mês cheio e juntar uma categoria com muito histórico: as duas gravam, numa transação só, o item atual de cada lançamento afetado (`guardar_item_atual`, ticket 51), e a junção já movia todas as ligações da categoria de uma vez; conferir que cabem nas 3.000 linhas, senão gravar em lotes
+- [ ] No DSQL, aplicar e desfazer uma edição em lote grande (ticket 61): cada parte grava até `POR_TRANSACAO` (50) lançamentos numa transação, com as ligações de categoria e tag, a versão dos campos e o registro do desfazer; conferir que cabem nas 3.000 linhas e o tempo de um lote de mil lançamentos, que precisa caber nos 30 s da HTTP API
 - [ ] Verificações do projeto rodando e PR aberto para `main`

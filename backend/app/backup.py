@@ -16,7 +16,7 @@ from pathlib import Path
 
 import psycopg
 
-VERSAO_FORMATO = 20
+VERSAO_FORMATO = 22
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -427,6 +427,70 @@ def _da_versao_19_para_a_20(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_20_para_a_21(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 21 (ticket 61) traz as edições em lote, com o que cada lançamento e cada
+    parcelamento tinha antes, para o desfazer. Backup antigo entra sem nenhuma."""
+    novas = {
+        "edicoes_em_lote": (
+            [
+                "id",
+                "resumo",
+                "situacao",
+                "lancamentos",
+                "recusa",
+                "criado_por",
+                "criado_em",
+                "desfeita_por",
+                "desfeita_em",
+            ],
+            {"lancamentos": "0"},
+        ),
+        "edicao_em_lote_lancamentos": (
+            [
+                "lote_id",
+                "lancamento_id",
+                "versao",
+                "categoria_ids_antes",
+                "tag_ids_antes",
+                "item_categoria_id_antes",
+                "item_atual_categoria_id_antes",
+                "resultado_do_desfazer",
+            ],
+            {"versao": "0"},
+        ),
+        "edicao_em_lote_parcelamentos": (
+            [
+                "lote_id",
+                "parcelamento_id",
+                "categoria_ids_antes",
+                "tag_ids_antes",
+                "item_categoria_id_antes",
+                "categoria_ids_depois",
+                "tag_ids_depois",
+                "resultado_do_desfazer",
+            ],
+            {},
+        ),
+    }
+    for tabela, (colunas, somas) in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
+def _da_versao_21_para_a_22(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 22 (ticket 116) guarda no parcelamento a classificação que uma correção trouxe e
+    as parcelas ainda não receberam. Antes dela não havia pendência."""
+    colunas, linhas = tabelas["parcelamentos"]
+    if "classificacao_pendente" not in colunas:
+        tabelas["parcelamentos"] = (
+            [*colunas, "classificacao_pendente"],
+            [[*linha, ""] for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -449,6 +513,8 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     17: _da_versao_17_para_a_18,
     18: _da_versao_18_para_a_19,
     19: _da_versao_19_para_a_20,
+    20: _da_versao_20_para_a_21,
+    21: _da_versao_21_para_a_22,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

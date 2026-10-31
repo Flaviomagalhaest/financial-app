@@ -1,13 +1,18 @@
-/** Hoje em São Paulo, como `AAAA-MM-DD`: o dia do casal é o mesmo da API, qualquer que seja o fuso do aparelho. */
+/** O dia de um instante em São Paulo, como `AAAA-MM-DD`: o dia do casal é o mesmo da API, qualquer que seja o fuso do aparelho. */
+export function diaEmSaoPaulo(em: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(em);
+}
+
+/** Hoje em São Paulo, como `AAAA-MM-DD`. */
 export function hoje(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  return diaEmSaoPaulo(new Date());
 }
 
 /** "às 14:32", ou "em 13/10 às 14:32" se não foi hoje. */
 export function quando(iso: string): string {
   const em = new Date(iso);
   const hora = em.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
-  const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(em);
+  const dia = diaEmSaoPaulo(em);
   return dia === hoje() ? `às ${hora}` : `em ${dataPorExtenso(dia).slice(0, 5)} às ${hora}`;
 }
 
