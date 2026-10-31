@@ -315,3 +315,40 @@ test("a recorrência descartada no meio de um envio que fica sem resposta sai do
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
+
+test("com duas categorias com item no planejamento, a tela da recorrência pergunta o item e a mudança leva a escolha", async ({ page }) => {
+  const { s, descricao, regra, api } = await prepararRegra(page, 2);
+  const previstos = linha(page, descricao);
+  const mercado = await api.criar("/api/categorias", { nome: `Mercado ${s}`, tipo: "despesa" });
+  const mes = daquiA(5).slice(0, 7);
+  for (const categoriaId of [regra.categoria_ids[0], mercado.id]) {
+    await api.criar(`/api/planejamento/${mes}/itens`, { id: crypto.randomUUID(), categoria_id: categoriaId, valor_centavos: 50000 });
+  }
+  await page.reload();
+  await expect(previstos).toHaveCount(2);
+
+  await abrirRecorrencia(page, previstos.nth(1), descricao);
+  await page.getByRole("button", { name: `Mercado ${s}` }).click();
+  const ondeConta = page.getByRole("region", { name: "Aviso de planejamento" }).getByRole("group", { name: "Conta no planejamento em:" });
+  await expect(ondeConta).toBeVisible();
+  await ondeConta.getByRole("button", { name: `Mercado ${s}` }).click();
+  await expect(ondeConta.getByRole("button", { name: `Mercado ${s}` })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Salvar daqui para frente" }).click();
+  await historico(page);
+
+  await expect.poll(async () => (await api.ler("/api/recorrencias")).find((r: { id: string }) => r.id === regra.id)?.item_categoria_id).toBe(mercado.id);
+});
+
+test("cria tag nova na mudança daqui para frente, e ela vale na regra", async ({ page }) => {
+  const { s, descricao, regra, api } = await prepararRegra(page, 2);
+  const previstos = linha(page, descricao);
+
+  await abrirRecorrencia(page, previstos.nth(1), descricao);
+  await page.getByRole("textbox", { name: "Nova tag" }).fill(`viagem${s}`);
+  await page.getByRole("button", { name: "Criar tag" }).click();
+  await expect(page.getByRole("button", { name: `#viagem${s}` })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Salvar daqui para frente" }).click();
+  await historico(page);
+
+  await expect.poll(async () => (await api.ler("/api/recorrencias")).find((r: { id: string }) => r.id === regra.id)?.tags).toEqual([`viagem${s}`]);
+});
