@@ -122,7 +122,10 @@ test("parcelamento recusado fica 'não enviado: <motivo>' até ser descartado", 
   await comecarParcelado(page, { teclas: ["6", "00"], conta: sumida, categoria: eletro, descricao: `Sofá ${s}` });
   await page.getByLabel("Parcelas").fill("6");
   await page.getByRole("button", { name: "Pronto" }).click();
+  // O salvar guarda na fila e só então abre o Histórico: ir à Hoje antes seria desfeito por ele.
+  const salvo = () => expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await page.getByRole("button", { name: "Salvar" }).click();
+  await salvo();
   // Um lançamento junto: o aviso conta os dois tipos de pedido.
   await aba(page, "Hoje");
   await page.getByRole("link", { name: "+ Novo lançamento" }).click();
@@ -130,6 +133,7 @@ test("parcelamento recusado fica 'não enviado: <motivo>' até ser descartado", 
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: eletro }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
+  await salvo();
   await aba(page, "Hoje");
   await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento e 1 parcelamento não enviados");
   await context.setOffline(false);

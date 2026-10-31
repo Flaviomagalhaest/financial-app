@@ -138,6 +138,8 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await page.getByLabel("Data").fill(dia(1));
   await page.getByRole("button", { name: "Pronto" }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
+  // O salvar guarda na fila e só então abre o Histórico: ir à Hoje antes seria desfeito por ele.
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await aba(page, "Hoje");
   await expect(minhas).toHaveCount(3);
   await bloco.getByRole("button", { name: `Confirmar ${gas}` }).click();

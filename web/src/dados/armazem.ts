@@ -92,6 +92,8 @@ export interface Guardada<T> {
   dados: T;
   /** Quando o servidor respondeu (ms): "atualizado às 14:32". */
   em: number;
+  /** O número da leitura que a trouxe (`lerEGuardar`); a guardada antes dele não o tem. */
+  leitura?: number;
 }
 
 const BANCO = "financial-app-dados";
@@ -165,8 +167,38 @@ export async function emTransacao<T>(
 export const lerResposta = <T>(caminho: string) =>
   emTransacao("readonly", (_, respostas) => pedido(respostas.get(caminho)) as Promise<Guardada<T> | undefined>);
 
-export const guardarResposta = <T>(caminho: string, dados: T) =>
-  emTransacao("readwrite", async (_, respostas) => void (await pedido(respostas.put({ dados, em: Date.now() }, caminho))));
+const agora = () => performance.timeOrigin + performance.now();
+let ultimaLeitura = 0;
+/**
+ * O número da leitura é a hora em que ela sai (ms, com fração): a tela, as abas e o service worker
+ * do aparelho contam pelo mesmo relógio, sem uma transação a mais no IndexedDB a cada leitura.
+ * Neste contexto, cada uma tem número maior que o da anterior.
+ */
+function numerarLeitura(): number {
+  ultimaLeitura = Math.max(agora(), ultimaLeitura + 0.001);
+  return ultimaLeitura;
+}
+
+/** A guardada é de uma leitura que saiu depois. Uma que saiu "depois de agora" é de antes de o relógio do aparelho voltar: não vale. */
+const maisNova = (guardada: Guardada<unknown> | undefined, numero: number) => !!guardada?.leitura && guardada.leitura > numero && guardada.leitura <= agora();
+
+/**
+ * Busca no servidor (`ler`, `undefined` quando ele não respondeu) e guarda a resposta. As leituras
+ * de uma resposta correm juntas, na tela, noutra aba ou no service worker, e a que saiu antes pode
+ * chegar depois: numeradas na saída, a mais velha não troca a guardada (tickets 120 e 122).
+ */
+export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined>): Promise<D | undefined> {
+  return comTrava("shared", async () => {
+    const numero = numerarLeitura();
+    const dados = await ler().catch(() => undefined);
+    if (dados === undefined) return undefined;
+    await emTransacao("readwrite", async (_, respostas) => {
+      const guardada = (await pedido(respostas.get(caminho))) as Guardada<D> | undefined;
+      if (!maisNova(guardada, numero)) await pedido(respostas.put({ dados, em: Date.now(), leitura: numero } satisfies Guardada<D>, caminho));
+    });
+    return dados;
+  });
+}
 
 export async function lerFila(): Promise<ItemDaFila[]> {
   const itens = await emTransacao("readonly", (fila) => pedido(fila.getAll()) as Promise<ItemDaFila[]>);

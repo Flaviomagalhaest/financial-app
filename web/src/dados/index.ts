@@ -8,7 +8,7 @@ import {
   apagarTudo,
   comTrava,
   deLancamento,
-  guardarResposta,
+  lerEGuardar,
   lerFila,
   lerResposta,
   ouvirMudancas,
@@ -149,26 +149,9 @@ const LEITURAS = {
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
 
-/** As leituras deste aparelho, numeradas na ordem em que saem. */
-let leiturasFeitas = 0;
-/** Por caminho, o número da leitura que guardou a resposta por último. */
-const guardadaPelaLeitura = new Map<string, number>();
-
-/**
- * Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. As leituras de uma
- * resposta correm juntas, e a que saiu antes de uma mudança pode chegar depois da que saiu depois
- * dela: a mais velha não troca a guardada (ticket 120).
- */
+/** Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. */
 function buscarEGuardar<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
-  return comTrava("shared", async () => {
-    const numero = ++leiturasFeitas;
-    const { data } = await ler().catch(() => ({ data: undefined }));
-    if (data && numero > (guardadaPelaLeitura.get(caminho) ?? 0)) {
-      guardadaPelaLeitura.set(caminho, numero);
-      await guardarResposta(caminho, data);
-    }
-    return data;
-  });
+  return lerEGuardar(caminho, async () => (await ler()).data);
 }
 
 /** A resposta do servidor, ou a última guardada; `aoVivo` diz se a última busca deu certo. */
