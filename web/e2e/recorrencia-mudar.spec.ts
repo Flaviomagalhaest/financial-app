@@ -182,8 +182,23 @@ async function prepararCasal(page: Page) {
   return { conta, casa, descricao };
 }
 
-test("a recorrência criada que talvez já esteja no servidor se exclui em vez de se descartar", async ({ page, context }) => {
+/**
+ * Se a recorrência ainda está no servidor, perguntado fora da página (sem recarregá-la). Toca
+ * "Enviar agora" quando o aviso aparece, para a fila que ficou sem resposta subir de novo.
+ */
+function regraNoServidor(page: Page, request: APIRequestContext, token: string, descricao: string) {
+  return async () => {
+    const enviar = page.getByRole("button", { name: "Enviar agora" });
+    // O aviso some assim que a fila sobe: o clique não espera o botão voltar.
+    if (await enviar.isVisible()) await enviar.click({ timeout: 1_000 }).catch(() => undefined);
+    const resposta = await request.get("/api/recorrencias", { headers: { authorization: token } });
+    return (await resposta.json()).some((r: { descricao: string }) => r.descricao === descricao);
+  };
+}
+
+test("a recorrência criada que talvez já esteja no servidor se exclui em vez de se descartar", async ({ page, context, request }) => {
   const { conta, casa, descricao } = await prepararCasal(page);
+  const token = await tokenDaPagina(page);
   await context.setOffline(true);
   await lancarRecorrente(page, { conta, casa, descricao });
 
@@ -206,18 +221,18 @@ test("a recorrência criada que talvez já esteja no servidor se exclui em vez d
   await criadas.getByRole("button", { name: `Excluir ${descricao}` }).click();
   await expect(criadas).toHaveCount(0);
 
-  // Com internet, a exclusão sobe na hora.
+  // Com internet, a exclusão sobe logo; o aviso vazio logo ao abrir a Hoje não prova isso.
   await aba(page, "Hoje");
+  await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
   await aba(page, "Histórico");
   await expect(linha(page, descricao)).toHaveCount(0);
-  const api = await apiDaPagina(page);
-  expect((await api.ler("/api/recorrencias")).filter((r: { descricao: string }) => r.descricao === descricao)).toEqual([]);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
-test("a recorrência descartada no meio do envio chega ao servidor e sai de lá também", async ({ page }) => {
+test("a recorrência descartada no meio do envio chega ao servidor e sai de lá também", async ({ page, request }) => {
   const { conta, casa, descricao } = await prepararCasal(page);
+  const token = await tokenDaPagina(page);
   // O envio sai e fica parado no caminho enquanto a pessoa descarta.
   let soltar = () => {};
   const solto = new Promise<void>((resolve) => (soltar = resolve));
@@ -236,9 +251,8 @@ test("a recorrência descartada no meio do envio chega ao servidor e sai de lá 
   // O aparelho manda a exclusão logo depois: os previstos não ficam no servidor.
   await expect.poll(() => parados).toBe(2);
   await aba(page, "Hoje");
+  await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
-  const api = await apiDaPagina(page);
-  expect((await api.ler("/api/recorrencias")).filter((r: { descricao: string }) => r.descricao === descricao)).toEqual([]);
   await aba(page, "Histórico");
   await expect(linha(page, descricao)).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -297,14 +311,7 @@ test("a recorrência descartada no meio de um envio que fica sem resposta sai do
 
   // Talvez tenha chegado: o aparelho guarda a exclusão, que sobe no envio seguinte.
   await aba(page, "Hoje");
-  const noServidor = async () => {
-    const enviar = page.getByRole("button", { name: "Enviar agora" });
-    // O aviso some assim que a fila sobe: o clique não espera o botão voltar.
-    if (await enviar.isVisible()) await enviar.click({ timeout: 1_000 }).catch(() => undefined);
-    const resposta = await request.get("/api/recorrencias", { headers: { authorization: token } });
-    return (await resposta.json()).some((r: { descricao: string }) => r.descricao === descricao);
-  };
-  await expect.poll(noServidor).toBe(false);
+  await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
