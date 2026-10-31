@@ -942,3 +942,150 @@ def test_previsto_alterado_a_mao_que_o_fim_tirou_volta_com_a_regra_e_a_mudanca_s
     mudar(casal, nova["id"], 1, valor_centavos=21000)
 
     assert [l["valor_centavos"] for l in gerados(casal, nova["id"])] == [21000] * 3
+
+
+def lote(casal: Casal, quem: str, *acoes: dict) -> list[dict]:
+    resposta = casal.pedir(quem, "POST", "/api/lancamentos/lote", json={"acoes": list(acoes)})
+    assert resposta.status_code == 200
+    return resposta.json()["resultados"]
+
+
+def test_sem_internet_mudar_daqui_para_frente_e_excluir_sobem_no_lote_e_o_reenvio_nao_muda_nada(
+    casal: Casal,
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=3)
+    agua = recorrencia(conta, [luz], descricao="Água", inicio="2026-11-15")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=agua)
+    acoes = (
+        {
+            "acao": "alterar_recorrencia",
+            "id": nova["id"],
+            "alteracao": {"a_partir_da_ocorrencia": 2, "valor_centavos": 21000},
+        },
+        {"acao": "excluir_recorrencia", "id": agua["id"]},
+    )
+
+    primeiro = lote(casal, "esposa", *acoes)
+    # A fila repete o lote que ficou sem resposta.
+    segundo = lote(casal, "esposa", *acoes)
+
+    assert [r["resultado"] for r in primeiro + segundo] == ["aceita"] * 4
+    assert primeiro[0]["recorrencia"]["valor_centavos"] == 21000
+    sem_hora = {"alterado_em": None}
+    assert segundo[0]["recorrencia"] | sem_hora == primeiro[0]["recorrencia"] | sem_hora
+    assert [l["valor_centavos"] for l in gerados(casal, nova["id"])] == [18990, 21000, 21000]
+    assert [l["versao"] for l in gerados(casal, nova["id"])] == [1, 2, 2]
+    assert gerados(casal, agua["id"]) == []
+    assert [r["id"] for r in casal.pedir("flavio", "GET", "/api/recorrencias").json()] == [
+        nova["id"]
+    ]
+
+
+def test_excluir_a_recorrencia_que_ainda_nao_comecou_tira_todos_os_previstos(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    assert casal.pedir("esposa", "DELETE", f"/api/recorrencias/{nova['id']}").status_code == 204
+
+    assert casal.pedir("flavio", "GET", "/api/recorrencias").json() == []
+    assert gerados(casal, nova["id"]) == []
+    no_dia(monkeypatch, "2026-12-01")
+    fazer_tarefa_diaria(database_url)
+    assert gerados(casal, nova["id"]) == []
+
+
+def test_mudar_pelo_lote_a_recorrencia_que_a_outra_pessoa_excluiu_e_recusado_e_o_resto_segue(
+    casal: Casal,
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=2)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    casal.pedir("flavio", "DELETE", f"/api/recorrencias/{nova['id']}")
+    agua = recorrencia(conta, [luz], descricao="Água", vezes=2)
+
+    resultados = lote(
+        casal,
+        "esposa",
+        {
+            "acao": "alterar_recorrencia",
+            "id": nova["id"],
+            "alteracao": {"a_partir_da_ocorrencia": 1, "valor_centavos": 21000},
+        },
+        {"acao": "criar_recorrencia", "recorrencia": agua},
+    )
+
+    assert [(r["resultado"], r["motivo"]) for r in resultados] == [
+        ("recusada", "a recorrência foi excluída"),
+        ("aceita", None),
+    ]
+
+
+def test_a_mudanca_da_fila_sobre_um_campo_que_a_outra_pessoa_mudou_depois_e_recusada(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=3)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    # A esposa viu a regra a R$ 189,90 e mudou sem internet; o Flávio reajustou antes de ela subir.
+    mudar(casal, nova["id"], 1, valor_centavos=21000)
+
+    def alterar(alteracao: dict, antes: dict) -> dict:
+        return {
+            "acao": "alterar_recorrencia",
+            "id": nova["id"],
+            "alteracao": {"a_partir_da_ocorrencia": 2} | alteracao,
+            "antes": antes,
+        }
+
+    resultados = lote(
+        casal,
+        "esposa",
+        alterar({"valor_centavos": 19500}, {"valor_centavos": 18990}),
+        # A mesma mudança que o outro lado já fez passa, e campos diferentes se mesclam.
+        alterar(
+            {"valor_centavos": 21000, "descricao": "Luz da casa"},
+            {"valor_centavos": 18990, "descricao": "Luz"},
+        ),
+        alterar({"pessoa": "esposa"}, {"pessoa": None}),
+    )
+
+    assert [(r["resultado"], r["motivo"]) for r in resultados] == [
+        ("recusada", "a regra mudou depois (valor): confira e mude de novo"),
+        ("aceita", None),
+        ("aceita", None),
+    ]
+    assert [
+        (l["valor_centavos"], l["descricao"], l["pessoa"]) for l in gerados(casal, nova["id"])
+    ] == [
+        (21000, "Luz", None),
+        (21000, "Luz da casa", "esposa"),
+        (21000, "Luz da casa", "esposa"),
+    ]
+
+
+def test_encerrar_pela_fila_numa_data_e_recusado_se_a_outra_pessoa_encerrou_por_vezes(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    # O fim é um campo só: encerrar por data tiraria em silêncio as 5 vezes que o Flávio pôs.
+    mudar(casal, nova["id"], 1, vezes=5)
+
+    [resultado] = lote(
+        casal,
+        "esposa",
+        {
+            "acao": "alterar_recorrencia",
+            "id": nova["id"],
+            "alteracao": {"a_partir_da_ocorrencia": 1, "ate": "2027-02-28"},
+            "antes": {"ate": None, "vezes": None},
+        },
+    )
+
+    assert (resultado["resultado"], resultado["motivo"]) == (
+        "recusada",
+        "a regra mudou depois (fim): confira e mude de novo",
+    )
+    assert len(gerados(casal, nova["id"])) == 5
