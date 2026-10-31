@@ -8,8 +8,14 @@ export interface PilhaGithubProps extends StackProps {
 }
 
 /**
- * Provedor OIDC do GitHub e a role que o workflow de deploy assume.
+ * Provedor OIDC do GitHub e as roles que o workflow de deploy assume.
  * Publicada uma vez à mão (com credencial humana); depois disso o deploy sai só pelo Actions.
+ *
+ * Duas roles separadas por ambiente:
+ *   - financial-app-deploy-prod: confia só no token gerado pelo GitHub Environment "prod"
+ *     (protegido por regra de branch main-only no repositório), impedindo que qualquer
+ *     branch acione um deploy de produção mesmo que altere o workflow.
+ *   - financial-app-deploy-dev: confia em qualquer branch, para o dev contínuo.
  */
 export class PilhaGithub extends Stack {
   constructor(scope: Construct, id: string, props: PilhaGithubProps) {
@@ -20,37 +26,53 @@ export class PilhaGithub extends Stack {
       clientIds: ["sts.amazonaws.com"],
     });
 
-    const role = new iam.Role(this, "RoleDeploy", {
-      roleName: "financial-app-deploy",
-      description: "Deploy do Financial App pelo GitHub Actions (OIDC)",
+    const politicasComuns = (role: iam.Role) => {
+      role.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ["sts:AssumeRole"],
+          resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*-${this.account}-${this.region}`],
+        }),
+      );
+      role.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ["dsql:DbConnectAdmin"],
+          resources: [`arn:aws:dsql:${this.region}:${this.account}:cluster/*`],
+        }),
+      );
+      role.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ["cloudformation:DescribeStacks", "cloudformation:SetStackPolicy"],
+          resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/financial-*/*`],
+        }),
+      );
+    };
+
+    // Role de prod: só aceita token gerado pelo GitHub Environment "prod" (sub termina em :environment:prod).
+    // O GitHub só emite esse token para jobs que declaram `environment: prod` em branches autorizadas.
+    const roleProd = new iam.Role(this, "RoleDeployProd", {
+      roleName: "financial-app-deploy-prod",
+      description: "Deploy de prod do Financial App pelo GitHub Actions (OIDC, environment prod)",
+      assumedBy: new iam.WebIdentityPrincipal(provedor.openIdConnectProviderArn, {
+        StringEquals: {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": `${props.subPrefixo}:environment:prod`,
+        },
+      }),
+    });
+    politicasComuns(roleProd);
+
+    // Role de dev: aceita qualquer branch; nunca usada por jobs com environment: prod.
+    const roleDev = new iam.Role(this, "RoleDeployDev", {
+      roleName: "financial-app-deploy-dev",
+      description: "Deploy de dev do Financial App pelo GitHub Actions (OIDC, qualquer branch)",
       assumedBy: new iam.WebIdentityPrincipal(provedor.openIdConnectProviderArn, {
         StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
         StringLike: { "token.actions.githubusercontent.com:sub": `${props.subPrefixo}:ref:refs/heads/*` },
       }),
     });
+    politicasComuns(roleDev);
 
-    // O CDK publica pelas roles do bootstrap; a role do Actions só as assume.
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ["sts:AssumeRole"],
-        resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*-${this.account}-${this.region}`],
-      }),
-    );
-    // Migrations: o job de deploy entra no DSQL por IAM antes da Lambda nova.
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ["dsql:DbConnectAdmin"],
-        resources: [`arn:aws:dsql:${this.region}:${this.account}:cluster/*`],
-      }),
-    );
-    // Saídas das pilhas e a política que protege a distribuição do CloudFront.
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ["cloudformation:DescribeStacks", "cloudformation:SetStackPolicy"],
-        resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/financial-*/*`],
-      }),
-    );
-
-    new CfnOutput(this, "RoleDeployArn", { value: role.roleArn });
+    new CfnOutput(this, "RoleDeployProdArn", { value: roleProd.roleArn });
+    new CfnOutput(this, "RoleDeployDevArn", { value: roleDev.roleArn });
   }
 }

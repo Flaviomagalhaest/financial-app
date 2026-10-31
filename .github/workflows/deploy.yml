@@ -24,6 +24,10 @@ jobs:
   deploy:
     if: ${{ !github.event.deleted }}
     runs-on: ubuntu-latest
+    # O GitHub Environment "prod" está protegido por regra de branch main-only.
+    # Declarar o environment aqui faz o sub do token OIDC terminar em :environment:prod,
+    # que é a única condição aceita pela role financial-app-deploy-prod.
+    environment: ${{ github.ref_name == 'main' && github.event_name == 'push' && 'prod' || '' }}
     env:
       AMBIENTE: ${{ github.ref_name == 'main' && github.event_name == 'push' && 'prod' || 'dev' }}
       # O repositório é público: conta e e-mail do dono ficam em secrets (o log os mascara).
@@ -53,7 +57,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_CONTA }}:role/financial-app-deploy
+          role-to-assume: arn:aws:iam::${{ env.AWS_CONTA }}:role/financial-app-deploy-${{ env.AMBIENTE }}
           aws-region: ${{ env.AWS_REGIAO }}
 
       - name: Pacote da Lambda e CDK
