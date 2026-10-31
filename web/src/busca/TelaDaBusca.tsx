@@ -145,6 +145,7 @@ function LinhaDaTransferencia({ t, cadastro }: { t: Transferencia; cadastro: Cad
         <span>⇄ {formatarCentavos(t.valor_centavos)}</span>
       </div>
       <p className="vazio">
+        {t.atrasado && <span className="selo-atrasado">atrasado</span>}
         {dataPorExtenso(t.data)} · {nomePorId(cadastro.contasECartoes, t.conta_origem_id)} → {nomePorId(cadastro.contasECartoes, t.conta_destino_id)}
         {t.fatura_mes && ` · fatura de ${mesPorExtenso(t.fatura_mes)}`}
         {t.categoria_id && ` · ${nomePorId(cadastro.categorias, t.categoria_id)}`}

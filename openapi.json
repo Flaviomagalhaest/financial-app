@@ -1241,6 +1241,65 @@
         }
       }
     },
+    "/api/transferencias/{id}/confirmar": {
+      "post": {
+        "summary": "Confirmar Transferencia",
+        "description": "Como no lançamento: confirmar de novo sem ajuste diferente devolve o gravado; com ajuste\ndiferente de uma já realizada é 409, para nada se perder em silêncio.",
+        "operationId": "confirmar_transferencia",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmacaoDeTransferencia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transferencia"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Já confirmada com outros valores"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cartoes": {
       "post": {
         "summary": "Criar Cartao",
@@ -4422,6 +4481,37 @@
         "title": "Confirmacao",
         "description": "O que de fato aconteceu; campo ausente fica como estava no previsto. Com `versao`, o\najuste num campo que o outro lado mudou depois dela é conflito, como na edição."
       },
+      "ConfirmacaoDeTransferencia": {
+        "properties": {
+          "valor_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "title": "ConfirmacaoDeTransferencia",
+        "description": "O que de fato aconteceu; campo ausente fica como estava no previsto."
+      },
       "Conflito": {
         "properties": {
           "motivo": {
@@ -5501,6 +5591,13 @@
             "type": "array",
             "title": "Contas Da Semana"
           },
+          "transferencias_da_semana": {
+            "items": {
+              "$ref": "#/components/schemas/Transferencia"
+            },
+            "type": "array",
+            "title": "Transferencias Da Semana"
+          },
           "faturas_que_vencem": {
             "items": {
               "$ref": "#/components/schemas/Fatura"
@@ -5526,6 +5623,7 @@
           "a_escolher",
           "lancamentos_a_escolher",
           "contas_da_semana",
+          "transferencias_da_semana",
           "faturas_que_vencem",
           "itens_em_destaque"
         ],
@@ -8759,6 +8857,11 @@
             "type": "string",
             "format": "date-time",
             "title": "Alterado Em"
+          },
+          "atrasado": {
+            "type": "boolean",
+            "title": "Atrasado",
+            "default": false
           }
         },
         "type": "object",

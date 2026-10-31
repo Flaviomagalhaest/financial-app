@@ -1080,6 +1080,16 @@ export function criarTransferencia(transferencia: NovaTransferencia): Promise<st
   return recusaDe(() => api.POST("/api/transferencias", { body: transferencia }), "o servidor recusou a transferência");
 }
 
+/**
+ * Confirma uma transferência prevista, com valor e data do que de fato aconteceu. Precisa de
+ * internet, como criar (ADR 0011). Devolve o motivo da recusa, ou `null` quando confirmou; a Hoje é relida.
+ */
+export async function confirmarTransferencia(id: string, ajustes: { valor_centavos?: number; data?: string } = {}): Promise<string | null> {
+  const motivo = await recusaDe(() => api.POST("/api/transferencias/{id}/confirmar", { params: { path: { id } }, body: ajustes }), "o servidor recusou a confirmação");
+  if (motivo === null) await buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"));
+  return motivo;
+}
+
 /** A resposta do servidor, ou o motivo da recusa. */
 async function respostaOuRecusa<D>(pedir: () => Promise<{ data?: D; error?: unknown }>, padrao: string): Promise<D | string> {
   try {

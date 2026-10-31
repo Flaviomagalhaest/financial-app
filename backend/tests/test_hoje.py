@@ -42,6 +42,7 @@ def test_hoje_vazio_no_primeiro_dia_do_app(casal: Casal):
         "a_escolher": [],
         "lancamentos_a_escolher": [],
         "contas_da_semana": [],
+        "transferencias_da_semana": [],
         "faturas_que_vencem": [],
         "itens_em_destaque": [],
     }
@@ -125,3 +126,95 @@ def test_fatura_fechada_que_vence_na_semana_ou_ja_venceu_aparece_ate_ser_paga(ca
         (ja_venceu, "2026-10-27", 5000),
         (vence_na_semana, "2026-10-30", 5000),
     ]
+
+
+def prever_transferencia(casal: Casal, **campos) -> dict:
+    from tests.test_contas import transferencia
+
+    origem, destino = casal.conta("Corrente"), casal.conta("Poupança")
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/transferencias",
+        json=transferencia(origem, destino, situacao="previsto", **campos),
+    )
+    assert resposta.status_code == 201, resposta.text
+    return resposta.json()
+
+
+def test_transferencia_prevista_entra_nas_contas_da_semana_com_o_atrasado_marcado(casal: Casal):
+    atrasada = prever_transferencia(casal, data="2026-10-27")
+    da_semana = prever_transferencia(casal, data="2026-11-04")
+    prever_transferencia(casal, data="2026-11-05")  # fora da janela de 7 dias
+    realizada = prever_transferencia(casal, data="2026-10-20")
+    casal.pedir("flavio", "POST", f"/api/transferencias/{realizada['id']}/confirmar", json={})
+
+    semana = ler(casal)["transferencias_da_semana"]
+
+    assert [(t["id"], t["atrasado"]) for t in semana] == [
+        (atrasada["id"], True),
+        (da_semana["id"], False),
+    ]
+
+
+def test_transferencia_atrasada_so_se_prevista_e_com_data_antes_de_hoje(casal: Casal):
+    prevista = prever_transferencia(casal, data="2026-10-28")
+    passada = prever_transferencia(casal, data="2026-10-01")
+
+    lista = {
+        t["id"]: t["atrasado"] for t in casal.pedir("esposa", "GET", "/api/transferencias").json()
+    }
+
+    assert lista == {prevista["id"]: False, passada["id"]: True}
+
+
+def confirmar(casal: Casal, id: str, **corpo):
+    return casal.pedir("esposa", "POST", f"/api/transferencias/{id}/confirmar", json=corpo)
+
+
+def test_confirmar_transferencia_prevista_ajusta_valor_e_data(casal: Casal):
+    t = prever_transferencia(casal, data="2026-10-27")
+
+    resposta = confirmar(casal, t["id"], valor_centavos=25000, data="2026-10-28")
+
+    assert resposta.status_code == 200, resposta.text
+    gravada = resposta.json()
+    assert (gravada["situacao"], gravada["valor_centavos"], gravada["data"]) == (
+        "realizado",
+        25000,
+        "2026-10-28",
+    )
+    assert gravada["atrasado"] is False
+    assert gravada["alterado_por"] == "esposa"
+    assert ler(casal)["transferencias_da_semana"] == []
+
+
+def test_confirmar_sem_ajuste_mantem_o_previsto(casal: Casal):
+    t = prever_transferencia(casal, data="2026-10-27")
+
+    gravada = confirmar(casal, t["id"]).json()
+
+    assert (gravada["situacao"], gravada["valor_centavos"], gravada["data"]) == (
+        "realizado",
+        t["valor_centavos"],
+        "2026-10-27",
+    )
+
+
+def test_reenvio_igual_devolve_o_gravado_e_ajuste_diferente_da_409(casal: Casal):
+    t = prever_transferencia(casal, data="2026-10-27")
+    primeira = confirmar(casal, t["id"], valor_centavos=25000)
+
+    igual = confirmar(casal, t["id"], valor_centavos=25000)
+    sem_ajuste = confirmar(casal, t["id"])
+    diferente = confirmar(casal, t["id"], valor_centavos=10000)
+
+    assert igual.status_code == sem_ajuste.status_code == 200
+    assert igual.json() == sem_ajuste.json() == primeira.json()
+    assert diferente.status_code == 409
+    assert "valor_centavos" in diferente.json()["detail"]
+    assert casal.pedir("esposa", "GET", "/api/transferencias").json()[0]["valor_centavos"] == 25000
+
+
+def test_confirmar_transferencia_que_nao_existe_da_404(casal: Casal):
+    assert confirmar(casal, "00000000-0000-0000-0000-000000000000").status_code == 404

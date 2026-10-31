@@ -44,13 +44,16 @@ export function TelaDeTransferencia({ centavosIniciais, onTipo }: Props) {
   const [categoria, setCategoria] = useState<string | null>(null);
   const [descricao, setDescricao] = useState("");
   const [data, setData] = useState(hoje);
+  // Sem escolha à mão, só a data decide (futura nasce prevista), como no lançamento.
+  const [situacaoEscolhida, setSituacaoEscolhida] = useState<"previsto" | "realizado" | null>(null);
+  const situacao = situacaoEscolhida ?? (data > hoje() ? "previsto" : "realizado");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
   const categoriasDeTransferencia = categorias.filter((c) => c.tipo === "transferencia" && !c.arquivada);
   // A transferência com categoria conta no item dela (história 67); a futura nasce prevista.
   const planejamento = useAvisoDePlanejamento(
-    { id, valor_centavos: centavos, categoria_ids: categoria ? [categoria] : [], conta_id: origem ?? "", data, fatura_mes: null, situacao: data > hoje() ? "previsto" : "realizado" },
+    { id, valor_centavos: centavos, categoria_ids: categoria ? [categoria] : [], conta_id: origem ?? "", data, fatura_mes: null, situacao },
     null,
   );
   const podeSalvar = online && centavos > 0 && !!origem && !!destino && origem !== destino && !enviando;
@@ -72,6 +75,7 @@ export function TelaDeTransferencia({ centavosIniciais, onTipo }: Props) {
       data,
       descricao,
       categoria_id: categoria,
+      ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
     });
     setEnviando(false);
     if (recusa) setErro(`Não foi possível salvar a transferência: ${recusa}.`);
@@ -101,8 +105,21 @@ export function TelaDeTransferencia({ centavosIniciais, onTipo }: Props) {
       <label htmlFor="descricao">Descrição</label>
       <input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} autoComplete="off" />
       <h3>Data</h3>
-      <EscolhaDaData data={data} onMudar={setData} />
-      {data > hoje() && <p className="vazio">Data futura: a transferência nasce prevista.</p>}
+      <EscolhaDaData
+        data={data}
+        onMudar={(d) => {
+          setData(d);
+          setSituacaoEscolhida(null);
+        }}
+      />
+      <div className="alternancia" role="group" aria-label="Situação">
+        {(["realizado", "previsto"] as const).map((s) => (
+          <button type="button" key={s} className={situacao === s ? "" : "secundario"} aria-pressed={situacao === s} onClick={() => setSituacaoEscolhida(s)}>
+            {s === "realizado" ? "Realizado" : "Previsto"}
+          </button>
+        ))}
+      </div>
+      {!situacaoEscolhida && data > hoje() && <p className="vazio">Data futura: a transferência nasce prevista.</p>}
       <Teclado centavos={centavos} onMudar={setCentavos} />
       {erro && (
         <p role="alert" className="erro">

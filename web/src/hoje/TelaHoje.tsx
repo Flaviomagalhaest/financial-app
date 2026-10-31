@@ -134,7 +134,7 @@ export function TelaHoje() {
   }, [naFila, buscar]);
   // O que se confirmou aqui e ainda não subiu já não é conta da semana.
   const contasDaSemana = useContasDaSemana(dados?.contas_da_semana ?? null);
-  const atrasados = contasDaSemana?.filter((l) => l.atrasado).length ?? 0;
+  const atrasados = (contasDaSemana?.filter((l) => l.atrasado).length ?? 0) + (dados?.transferencias_da_semana.filter((t) => t.atrasado).length ?? 0);
 
   return (
     <>
@@ -173,7 +173,7 @@ export function TelaHoje() {
         </>
       )}
       <GradeDeFavoritos />
-      <ContasDaSemana lancamentos={contasDaSemana} />
+      <ContasDaSemana lancamentos={contasDaSemana} transferencias={dados ? dados.transferencias_da_semana : null} />
     </>
   );
 }

@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from app import cartoes, lancamentos, planejamento
+from app import cartoes, lancamentos, planejamento, transferencias
 from app.banco import conectar
 from app.config import valores_iniciais
 from app.lancamentos import Lancamento, url_do_banco
@@ -28,6 +28,8 @@ class Hoje(BaseModel):
     lancamentos_a_escolher: list[Lancamento]
     # Os previstos atrasados (`atrasado`) e os da semana, do mais antigo ao mais novo.
     contas_da_semana: list[Lancamento]
+    # As transferências previstas, atrasadas ou da semana, do mais antigo ao mais novo.
+    transferencias_da_semana: list[transferencias.Transferencia]
     # As faturas fechadas, não pagas, com vencimento vencido ou dentro da semana.
     faturas_que_vencem: list[cartoes.Fatura]
     # Os itens do planejamento a partir de `itensEmDestaqueNaHojePercentual`, do mais cheio ao menos.
@@ -53,6 +55,7 @@ def ler_hoje(usuario: UsuarioLogado, request: Request) -> Hoje:
             if a_escolher_ids
             else [],
             contas_da_semana=lancamentos.contas_da_semana_de_hoje(conn),
+            transferencias_da_semana=transferencias.contas_da_semana_de_hoje(conn),
             faturas_que_vencem=cartoes.faturas_que_vencem_ate(
                 conn, dia + timedelta(days=config["contasDaSemanaDias"])
             ),
