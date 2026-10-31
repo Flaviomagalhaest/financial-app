@@ -116,3 +116,43 @@ test("acerta o fechamento e o vencimento de uma fatura existente e de outra esco
   await expect(form).toHaveCount(0);
   expect((await faturas()).find((f) => f.mes === `${futuro}-01`)).toMatchObject({ fechamento: `${futuro}-12`, vencimento: `${futuro}-22` });
 });
+
+test("o acerto da fatura abre na fatura que nasceu, mesmo com as faturas guardadas de antes da primeira compra", async ({ page }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const nome = `Inter ${s}`;
+  await page.goto("/#/contas-e-categorias");
+  await entrar(page);
+  const headers = { authorization: await tokenDaPagina(page) };
+  const criar = async (caminho: string, data: object) => {
+    const resposta = await page.request.post(caminho, { headers, data });
+    expect(resposta.ok(), await resposta.text()).toBe(true);
+    return resposta.json();
+  };
+  const cartao = await criar("/api/cartoes", { nome, dia_fechamento: 10, dia_vencimento: 20 });
+  const caminho = `/api/cartoes/${cartao.id}/faturas`;
+  // Ao abrir, o app guarda as faturas do cartão, ainda nenhuma (ticket 120).
+  const vazias = page.waitForResponse((r) => new URL(r.url()).pathname === caminho);
+  await page.reload();
+  expect(await (await vazias).json()).toEqual([]);
+
+  const categoria = await criar("/api/categorias", { nome: `Mercado ${s}`, tipo: "despesa" });
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  await criar("/api/lancamentos", {
+    id: crypto.randomUUID(), tipo: "despesa", valor_centavos: 2500, data: hoje, descricao: `Padaria ${s}`,
+    conta_id: cartao.id, categoria_ids: [categoria.id], tags: [],
+  });
+  const [nascida] = (await (await page.request.get(caminho, { headers })).json()) as { mes: string; fechamento: string }[];
+
+  // A leitura nova das faturas chega depois de o formulário abrir com as guardadas.
+  await page.route((url) => url.pathname === caminho, async (rota) => {
+    const resposta = await rota.fetch();
+    await new Promise((pronto) => setTimeout(pronto, 1500));
+    await rota.fulfill({ response: resposta });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: `Acertar fatura de ${nome}` }).click();
+  const form = page.getByRole("form", { name: `Acertar fatura de ${nome}` });
+  await expect(form.getByLabel("Fatura", { exact: true })).toHaveValue(nascida.mes);
+  await expect(form.getByLabel("Fechamento")).toHaveValue(nascida.fechamento);
+  await expect(form.getByLabel("Mês da fatura")).toHaveCount(0);
+});

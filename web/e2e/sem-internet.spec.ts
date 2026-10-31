@@ -421,13 +421,16 @@ test("a rede volta, mas a lista não chega antes do envio: o lançamento não so
   await aba(page, "Histórico");
   await expect(linha).toContainText("− R$ 3,00");
 
+  // Agora o envio espera a lista inteira chegar e ser guardada: no CI, com os dados da suíte toda, isso
+  // passa de 5 s, e o Histórico sem internet espera as gravações dela no IndexedDB (ticket 123).
+  const lerAListaInteira = { timeout: 15_000 };
   await context.setOffline(false);
   await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0, lerAListaInteira);
   await context.setOffline(true);
   await aba(page, "Histórico");
-  await expect(linha).toContainText("− R$ 3,00");
+  await expect(linha).toContainText("− R$ 3,00", lerAListaInteira);
   await expect(linha).not.toContainText("não enviado");
 });
 

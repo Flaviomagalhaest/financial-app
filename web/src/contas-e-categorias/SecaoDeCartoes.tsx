@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { api } from "../api/cliente";
 import { useCartoesComArquivados, useFaturas, type Cartao } from "../dados";
 import { mesPorExtenso } from "../cartoes/apresentacao";
@@ -227,6 +227,12 @@ const AVISO_DA_FATURA =
 function FormularioDeFatura({ cartao, aoFechar }: { cartao: Cartao; aoFechar: () => void }) {
   const { dados: faturas, buscar } = useFaturas(cartao.id);
   const [escolha, setEscolha] = useState("");
+  // A pessoa já mexeu no formulário: daí em diante, a lista que chegar não muda o que está nele.
+  const [escolheu, setEscolheu] = useState(false);
+  const mexeu = (mudar: (valor: string) => void) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setEscolheu(true);
+    mudar(e.target.value);
+  };
   const [outroMes, setOutroMes] = useState("");
   const [fechamento, setFechamento] = useState("");
   const [vencimento, setVencimento] = useState("");
@@ -242,11 +248,11 @@ function FormularioDeFatura({ cartao, aoFechar }: { cartao: Cartao; aoFechar: ()
     setVencimento(fatura?.vencimento ?? "");
   }
 
-  // Abre já na fatura atual, com as datas dela.
+  // Abre já na fatura atual, com as datas dela. Até a pessoa mexer, segue a lista mais nova: a
+  // guardada pode ser de antes da primeira compra, sem fatura nenhuma (ticket 120).
   const mesAtual = atual?.mes;
   useEffect(() => {
-    // Só se a pessoa ainda não escolheu: a lista pode chegar depois do primeiro toque.
-    if (escolha !== "") return;
+    if (escolheu) return;
     if (mesAtual) escolher(mesAtual);
     else if (faturas) setEscolha("outro"); // cartão sem fatura ainda: só dá para escolher o mês
 
@@ -275,7 +281,7 @@ function FormularioDeFatura({ cartao, aoFechar }: { cartao: Cartao; aoFechar: ()
   return (
     <form aria-label={`Acertar fatura de ${cartao.nome}`} onSubmit={(e) => void salvar(e)}>
       <label htmlFor={`fatura-${cartao.id}`}>Fatura</label>
-      <select id={`fatura-${cartao.id}`} value={escolha} onChange={(e) => escolher(e.target.value)}>
+      <select id={`fatura-${cartao.id}`} value={escolha} onChange={mexeu(escolher)}>
         {existentes.map((f) => (
           <option key={f.mes} value={f.mes}>
             {mesPorExtenso(f.mes)}
@@ -286,13 +292,13 @@ function FormularioDeFatura({ cartao, aoFechar }: { cartao: Cartao; aoFechar: ()
       {escolha === "outro" && (
         <>
           <label htmlFor={`mes-fatura-${cartao.id}`}>Mês da fatura</label>
-          <input id={`mes-fatura-${cartao.id}`} type="month" value={outroMes} onChange={(e) => setOutroMes(e.target.value)} required />
+          <input id={`mes-fatura-${cartao.id}`} type="month" value={outroMes} onChange={mexeu(setOutroMes)} required />
         </>
       )}
       <label htmlFor={`fechamento-fatura-${cartao.id}`}>Fechamento</label>
-      <input id={`fechamento-fatura-${cartao.id}`} type="date" value={fechamento} onChange={(e) => setFechamento(e.target.value)} />
+      <input id={`fechamento-fatura-${cartao.id}`} type="date" value={fechamento} onChange={mexeu(setFechamento)} />
       <label htmlFor={`vencimento-fatura-${cartao.id}`}>Vencimento</label>
-      <input id={`vencimento-fatura-${cartao.id}`} type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
+      <input id={`vencimento-fatura-${cartao.id}`} type="date" value={vencimento} onChange={mexeu(setVencimento)} />
       <p className="aviso">{AVISO_DA_FATURA}</p>
       {erro && (
         <p role="alert" className="erro">

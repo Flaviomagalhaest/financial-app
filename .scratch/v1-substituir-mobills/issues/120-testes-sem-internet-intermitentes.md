@@ -34,7 +34,7 @@ Só local, com o Postgres de `scripts/postgres-local.sh` já cheio de execuçõe
 
 ## Answer
 
-São três bugs do app e duas corridas dos testes. O volume do banco local só alargava a janela do `lancamentos.spec.ts:134`. Cada correção tem teste vermelho antes, determinístico, com `page.route`.
+São três bugs do app e duas corridas dos testes (e um quarto bug, do acerto da fatura, apareceu no CI do PR). O volume do banco local só alargava a janela do `lancamentos.spec.ts:134`. Cada correção tem teste vermelho antes, determinístico, com `page.route`.
 
 ### `sem-internet.spec.ts:336` (saldo da conta): bug do app
 
@@ -60,6 +60,11 @@ Falhou também num banco novo. O resultado online vem do `POST /api/busca` do se
 ### O banco local cheio
 
 Numa segunda suíte no mesmo banco novo, `pessoa-e-repetido.spec.ts` e `favoritos.spec.ts` falharam também com o código da `main`: com uns 1.600 lançamentos do usuário de teste, o Histórico levou 6,1 s para mostrar o lançamento novo, e os testes esperam 5 s. Isso ficou no README ("Como testar": recriar o banco local antes de conferir uma falha intermitente), e a medida com o volume real foi para o [ticket 123](123-historico-com-o-volume-real.md).
+
+### No CI do PR
+
+- O teste novo "a rede volta, mas a lista não chega antes do envio" passou de 5 s no CI. Com os dados da suíte inteira, o envio espera a lista inteira chegar e ser gravada; cada leitura dela grava a lista toda no IndexedDB, uma de cada vez, e o Histórico sem internet lê atrás dessas gravações. No banco local cheio falhou 5 de 25, sempre com a fila e a lista guardadas certas, e com 15 s nas duas checagens passou 15 de 15. A medida disso está no [ticket 123](123-historico-com-o-volume-real.md).
+- `cartoes-cadastro.spec.ts:73` falhou uma vez, com o seletor da fatura em "Outro mês…". É um bug do formulário de acerto da fatura (`SecaoDeCartoes.tsx`), que já estava na `main`. Logo depois do login, o app guarda as faturas do cartão recém-criado, ainda vazias. O formulário abria com elas, escolhia "Outro mês…" e não voltava atrás quando a leitura nova trazia a fatura. Agora a escolha automática segue a lista mais nova até a pessoa mexer no formulário. Teste: "o acerto da fatura abre na fatura que nasceu, mesmo com as faturas guardadas de antes da primeira compra" (vermelho 3 de 3 antes).
 
 ### Verificação
 
