@@ -14,6 +14,7 @@ from app.cartoes import router as cartoes
 from app.classificacao import router as classificacao
 from app.exportacao import Formato, exportar
 from app.favoritos import router as favoritos
+from app.historico import router as historico
 from app.hoje import router as hoje
 from app.lancamentos import router as lancamentos
 from app.limite import router as limite
@@ -98,6 +99,7 @@ def create_app(
     app.include_router(limite)
     app.include_router(planejamento)
     app.include_router(meses)
+    app.include_router(historico)
     app.include_router(hoje)
     app.include_router(pessoas)
     app.include_router(recorrencias)

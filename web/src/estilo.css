@@ -1048,6 +1048,26 @@ button.linha-que-abre {
   letter-spacing: 0.02em;
 }
 
+/* Aba Histórico: a evolução de uma métrica, em barras (o período de comparação, mais clara). */
+.evolucao-da-aba {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.campos-da-evolucao,
+.abas-internas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.abas-internas button[aria-pressed="true"] {
+  background: var(--destaque);
+  color: var(--sobre-destaque);
+}
+.evolucao {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 /* Busca: os filtros escolhidos em fichas, os totais em quatro colunas e as parcelas recuadas. */
 .busca {
   display: flex;
@@ -1061,6 +1081,44 @@ button.linha-que-abre {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.evolucao li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 0.75rem;
+}
+.evolucao .nome {
+  overflow-wrap: anywhere;
+}
+.evolucao .valor-da-linha {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.evolucao .contra {
+  font-weight: 400;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+.evolucao .trilho {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.evolucao .barra {
+  display: block;
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  background: var(--destaque);
+}
+.evolucao .barra.anterior {
+  background: var(--borda);
+}
+.evolucao .barra.negativa {
+  background: var(--erro);
 }
 .fichas-da-busca .ficha {
   padding: 0.375rem 0.75rem;

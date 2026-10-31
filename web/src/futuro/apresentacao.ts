@@ -1,7 +1,7 @@
 import type { Futuro } from "../dados";
 
 const NOMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-const POR_EXTENSO = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+export const POR_EXTENSO = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 /** `2026-04-01` vira `abr`; em janeiro, com o ano (`jan/27`), para a virada se ler no eixo. */
 export function mesCurto(mes: string): string {

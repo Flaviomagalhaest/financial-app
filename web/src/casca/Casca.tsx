@@ -10,6 +10,7 @@ import { TelaDeConflito } from "../lancamentos/TelaDeConflito";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
 import { TelaDeCartoes } from "../cartoes/TelaDeCartoes";
 import { TelaDaFatura } from "../cartoes/TelaDaFatura";
+import { TelaDaEvolucao } from "../historico/TelaDaEvolucao";
 import { TelaDoFuturo } from "../futuro/TelaDoFuturo";
 import { TelaDoMes } from "../mes/TelaDoMes";
 import { TelaDoModelo } from "../mes/TelaDoModelo";
@@ -64,7 +65,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "conflito" && id && <TelaDeConflito key={id} id={id} />}
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}
-        {rota === "historico" && <ListaDeLancamentos />}
+        {rota === "historico" && <ListaDeLancamentos topo={<TelaDaEvolucao />} />}
         {rota === "busca" && <TelaDaBusca key={consulta} consulta={consulta ?? ""} />}
         {rota === "mes" && <TelaDoMes key={mes ?? "atual"} mes={mes} />}
         {rota === "modelo-do-planejamento" && <TelaDoModelo />}

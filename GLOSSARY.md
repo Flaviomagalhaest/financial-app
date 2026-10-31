@@ -186,6 +186,10 @@ _Avoid_: busca salva, visão
 Mudança de categorias e tags de vários lançamentos de uma vez, a partir do resultado de uma busca; mostra uma prévia, aplica tudo ou nada e pode ser desfeita por 30 dias. Uma compra parcelada conta como uma só.
 _Avoid_: edição em massa, ação em massa
 
+**Evolução**:
+O que a aba Histórico mostra: uma métrica por vez (despesas, receitas, sobra ou uma categoria) em 12 meses contra os 12 meses anteriores, por ano desde o primeiro lançamento ou no mesmo mês de cada ano. Conta só o realizado.
+_Avoid_: tendência, série histórica
+
 **Fechamento do mês**:
 Resumo de um mês que já passou: receitas, despesas, sobra, o que foi guardado, os itens do planejamento que passaram do planejado e a comparação com o mês anterior e com o mesmo mês do ano anterior. Não confundir com o **fechamento** da fatura.
 _Avoid_: balanço, extrato do mês
