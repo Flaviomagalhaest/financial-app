@@ -1,7 +1,7 @@
 # Criar os usuários e conferir o login de verdade
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: 30
 Skills: `wizard` para guiar os passos do dono; apoio: `run` para ver funcionando; HITL (credencial AWS e senhas do dono, celular de verdade)
 Modelo recomendado: Sonnet
@@ -17,9 +17,13 @@ Assistente pronto: `scripts/conferir-login-real.sh dev` guia os passos do dono (
 
 ## Checklist
 
-- [ ] Dono cria os dois usuários no `dev` com `scripts/usuarios-do-app.sh criar dev <email>` e confere com `listar dev` que só eles existem
-- [ ] Login pelo formulário no endereço do `dev`, com a senha certa (entra) e com uma errada ("E-mail ou senha incorretos."): confirma o SRP contra o Cognito
-- [ ] Com o login feito, a tela mostra "API no ar": o CloudFront passa o `Authorization` à HTTP API (`/api/*` com `AllViewerExceptHostHeader`) e a Lambda confere o JWT pelo JWKS do user pool
-- [ ] `scripts/usuarios-do-app.sh desconectar dev <email>` e, depois de até 15 minutos, o app pede o login de novo com "Sua sessão foi encerrada. Entre de novo."
-- [ ] Repetir a criação dos dois usuários no `prod` depois do merge do ticket 30
-- [ ] Se algo falhar, abrir ticket com o que foi visto
+- [x] Dono cria os dois usuários no `dev` com `scripts/usuarios-do-app.sh criar dev <email>` e confere com `listar dev` que só eles existem
+- [x] Login pelo formulário no endereço do `dev`, com a senha certa (entra) e com uma errada ("E-mail ou senha incorretos."): confirma o SRP contra o Cognito
+- [x] Com o login feito, a tela mostra "API no ar": o CloudFront passa o `Authorization` à HTTP API (`/api/*` com `AllViewerExceptHostHeader`) e a Lambda confere o JWT pelo JWKS do user pool
+- [x] `scripts/usuarios-do-app.sh desconectar dev <email>` e, depois de até 15 minutos, o app pede o login de novo com "Sua sessão foi encerrada. Entre de novo."
+- [x] Repetir a criação dos dois usuários no `prod` depois do merge do ticket 30
+- [x] Se algo falhar, abrir ticket com o que foi visto
+
+## Resultado
+
+O dono rodou `scripts/conferir-login-real.sh` no `dev` e no `prod` e informou que terminaram com sucesso (criação dos usuários, login com senha certa, "API no ar" e desconectar). Nenhuma falha a registrar.
