@@ -1078,6 +1078,77 @@ def test_a_tarefa_diaria_refaz_as_parcelas_de_uma_correcao_que_parou_no_meio(
     assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
 
 
+def test_a_tarefa_diaria_refaz_a_classificacao_de_uma_correcao_que_parou_no_meio(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    segunda = parcelas(casal, novo["id"])[1]
+    assert (
+        casal.pedir(
+            "flavio",
+            "PATCH",
+            f"/api/lancamentos/{segunda['id']}",
+            json={"versao": 1, "tags": ["extra"]},
+        ).status_code
+        == 200
+    )
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], descricao="Geladeira")
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == ["Geladeria"] * 3
+
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 1
+
+    # Todas ganham a descrição que o pedido trouxe; a tag que uma pessoa pôs numa só fica.
+    assert [(l["descricao"], l["tags"]) for l in parcelas(casal, novo["id"])] == [
+        ("Geladeira", []),
+        ("Geladeira", ["extra"]),
+        ("Geladeira", []),
+    ]
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
+
+
+def test_depois_de_concluida_a_correcao_a_tarefa_diaria_nao_desfaz_a_descricao_de_uma_parcela(
+    casal: Casal, database_url: str
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    assert mudar(casal, novo["id"], descricao="Geladeira").status_code == 200
+    segunda = parcelas(casal, novo["id"])[1]
+    assert (
+        casal.pedir(
+            "flavio",
+            "PATCH",
+            f"/api/lancamentos/{segunda['id']}",
+            json={"versao": segunda["versao"], "descricao": "Geladeira, entrada"},
+        ).status_code
+        == 200
+    )
+
+    fazer_tarefa_diaria(database_url)
+
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == [
+        "Geladeira",
+        "Geladeira, entrada",
+        "Geladeira",
+    ]
+
+
+def test_o_valor_corrigido_depois_de_uma_correcao_de_classificacao_interrompida_nao_perde_a_classificacao(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], descricao="Geladeira")
+
+    # Um PATCH só de valor termina o que ficou pendente.
+    assert mudar(casal, novo["id"], valor_total_centavos=60000).status_code == 200
+
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == ["Geladeira"] * 3
+
+
 def test_gerar_as_parcelas_entre_o_crescer_e_o_refazer_revive_as_que_a_correcao_tirou(
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
