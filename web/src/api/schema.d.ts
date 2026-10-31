@@ -185,23 +185,6 @@ export interface paths {
         patch: operations["editar_lancamento"];
         trace?: never;
     };
-    "/api/contas-da-semana": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Contas Da Semana */
-        get: operations["contas_da_semana"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/lancamentos/{id}/confirmar": {
         parameters: {
             query?: never;
@@ -1498,15 +1481,6 @@ export interface components {
             saldo_centavos: number;
             /** Arquivada */
             arquivada: boolean;
-        };
-        /**
-         * ContasDaSemana
-         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
-         *     automático fica de fora: não pede confirmação.
-         */
-        ContasDaSemana: {
-            /** Lancamentos */
-            lancamentos: components["schemas"]["Lancamento"][];
         };
         /** CopiaDeMes */
         CopiaDeMes: {
@@ -3578,26 +3552,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    contas_da_semana: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContasDaSemana"];
                 };
             };
         };
