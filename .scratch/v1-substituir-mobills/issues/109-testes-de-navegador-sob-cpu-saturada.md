@@ -1,7 +1,7 @@
 # Testes de navegador que ainda falham sob CPU saturada
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -16,9 +16,15 @@ Origem: [ticket 90](90-teste-do-recusado-intermitente.md): com 2 a 4 laços de C
 
 ## Checklist
 
-- [ ] Reproduzir com laços de CPU (`sh -c 'while :; do :; done'` x4) e `--repeat-each`
-- [ ] Esperar no teste o sinal real (fila vazia, cadastro carregado) antes do próximo passo
-- [ ] Suíte completa sem falha sob carga; PR aberto para `main`
+- [x] Reproduzir com laços de CPU e `--repeat-each`: 4 laços em 4 núcleos e até 8 laços não reproduziram (54 de 54 passaram). Reproduz com tudo preso a um núcleo: `taskset -c 0` na suíte e em 4 laços `sh -c 'while :; do :; done'`
+- [x] Esperar no teste o sinal real antes do próximo passo: a edição espera o `valor` da tela (`sem-internet.spec.ts`, "resposta perdida" e "saldo da conta")
+- [x] Suíte sob carga sem falha (`sem-internet.spec.ts` 13 de 13 com um núcleo e 4 laços); PR aberto para `main`
+
+## Diagnóstico
+
+- "resposta perdida e depois editado": falhava 3 de 6. O teste clicava "9" antes de `TelaDeLancamento` hidratar da lista guardada; a hidratação apagava o dígito e "Salvar" gravava R$ 0,01. Não era disputa com o `sync` (`marcarSemResposta` relê o item na transação). O mesmo padrão estava no teste do saldo. Pendência de produto: [ticket 124](124-edicao-descarta-digito-antes-de-carregar.md).
+- "edita e exclui sem internet" (esperar `nao-enviados` zerar) e os outros: não eram lógica quebrada; sob um núcleo disputado cada teste levava 30 a 37 s contra 5 s livre, e os limites padrão (5 s por espera, 30 s por teste) estouravam. `playwright.config.ts` agora tem `timeout: 90_000` e `expect.timeout: 20_000`.
+- "Salvar desativado dentro de `lancar`" e o `toContainText` do saldo não reapareceram nas rodadas; ficam cobertos pelos limites maiores e pelo sinal do `valor`. Reabra se voltarem.
 
 ## Notas
 

@@ -329,6 +329,8 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   const editado = page.getByRole("listitem").filter({ hasText: `Editado ${s}` });
   const excluido = page.getByRole("listitem").filter({ hasText: `Excluído ${s}` });
   await editado.getByRole("link", { name: `Editar Editado ${s}` }).click();
+  // A tela só preenche o valor quando a lista chega do aparelho; antes disso o dígito se perderia.
+  await expect(page.getByTestId("valor")).toHaveText("R$ 0,01");
   await page.getByRole("button", { name: "9", exact: true }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(editado).toContainText("− R$ 0,19");
@@ -373,6 +375,7 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
   // Editar vale a diferença: 45,00 vira 450,07.
   await aba(page, "Histórico");
   await page.getByRole("link", { name: `Editar Padaria ${s}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 45,00");
   await page.getByRole("button", { name: "7", exact: true }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   // O salvar guarda na fila e só então abre o Histórico: ir à Hoje antes seria desfeito por ele.

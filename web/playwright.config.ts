@@ -5,6 +5,11 @@ const urlDoBanco = process.env.DATABASE_URL;
 
 export default defineConfig({
   testDir: "e2e",
+  // Com a CPU saturada (4 núcleos ocupados, ou um só dividido com outros processos) o envio da fila
+  // leva 6 a 7 vezes mais e passa dos 5 s e 30 s padrão. As esperas só demoram quando o sinal demora
+  // (ticket 109).
+  timeout: 90_000,
+  expect: { timeout: 20_000 },
   // Um teste por vez: os testes dividem os usuários do Cognito falso e um deles derruba as
   // sessões de um usuário.
   workers: 1,
