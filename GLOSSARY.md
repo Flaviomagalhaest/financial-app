@@ -81,7 +81,7 @@ Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...
 _Avoid_: instância, repetição
 
 **Daqui para frente**:
-Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número.
+Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número. Nada vira lançamento antes de hoje: o previsto que a data nova leva de hoje ou depois para antes sai, marcado como da regra, e volta se outra mudança o trouxer para hoje ou depois.
 _Avoid_: a partir de agora, mudar tudo
 
 **Encerrar**:
@@ -112,7 +112,7 @@ _Avoid_: prestação
 O "alterado à mão" da parcela: valor, data, conta ou fatura que uma pessoa mudou, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento a preserva nessas quatro coisas; a descrição, as categorias, as tags, a pessoa e o item valem para todas as parcelas.
 
 **Correção do parcelamento**:
-Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo.
+Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje (ticket 87): a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_puladas`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova.
 _Avoid_: regerar, recalcular o parcelamento
 
 **Antecipação**:

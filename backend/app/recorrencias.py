@@ -522,6 +522,27 @@ def _por_lote(regra: Recorrencia) -> int:
 class _Retirada(NamedTuple):
     id: UUID
     ocorrencia: int
+    # A que a data nova levou para antes de hoje sai pulada: a geração não a traz de volta.
+    pulada: bool = False
+
+
+def _trazer_de_volta_as_puladas(conn, regra: Recorrencia, desde: int) -> None:
+    """O previsto que a regra tirou e que a data de hoje da regra põe entre hoje e o horizonte,
+    dentro do fim: `geradas` recua até antes dele, e a geração o traz de volta."""
+    dia_de_hoje, ultimo_dia = lancamentos.hoje(), horizonte()
+    for (n,) in conn.execute(
+        "SELECT ocorrencia FROM lancamentos WHERE recorrencia_id = %s AND ocorrencia >= %s"
+        " AND ocorrencia >= %s AND situacao = 'previsto' AND excluido_em IS NOT NULL"
+        " AND excluido_pela_regra ORDER BY ocorrencia",
+        (regra.id, desde, regra.ocorrencia_do_inicio),
+    ).fetchall():
+        dia = data_da_ocorrencia(regra, n)
+        if dia_de_hoje <= dia <= ultimo_dia and not _fora_do_fim(regra, n, dia):
+            conn.execute(
+                "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
+                (n - 1, regra.id),
+            )
+            return
 
 
 def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
@@ -530,9 +551,13 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     frequente, pode cair além dele) e refaz, da ocorrência `desde` em diante, os que ninguém
     alterou à mão (previsto com algum campo de `origem` vazia, mexido por uma pessoa, fica como
     está por inteiro). O que sai faz `geradas` recuar até antes dele, para a geração trazê-lo de
-    volta quando o fim sair ou o horizonte chegar. Não toca no realizado. O que já está como a
-    regra manda não conta, por isso o lote seguinte sempre anda."""
+    volta quando o fim sair ou o horizonte chegar. Não toca no realizado. Nada vira lançamento
+    antes de hoje (ticket 87): o previsto que a data nova leva de hoje ou depois para antes sai
+    pulado (como a ocorrência que já tinha passado quando a regra nasceu), e o que saiu assim
+    volta se a data nova o trouxer para hoje ou depois. O que já está como a regra manda não
+    conta, por isso o lote seguinte sempre anda."""
     [regra] = _ler(conn, "id = %s", (id,))
+    _trazer_de_volta_as_puladas(conn, regra, desde)
     previstos = conn.execute(
         f"SELECT l.id, l.ocorrencia, l.data, l.tipo, l.valor_centavos, l.descricao, l.conta_id,"
         f" l.pessoa, COALESCE(l.automatico, false), {lancamentos.VERSAO}, l.item_categoria_id,"
@@ -558,7 +583,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     ):
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
     regras = _campos_da_regra(regra)
-    ultimo_dia = horizonte()
+    ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     trabalho: list[tuple[UUID, int, list[str], date] | _Retirada] = []
     for (
         lancamento_id,
@@ -595,6 +620,9 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         if dia_novo > ultimo_dia:
             trabalho.append(_Retirada(lancamento_id, n))
             continue
+        if dia_novo < dia_de_hoje <= dia:
+            trabalho.append(_Retirada(lancamento_id, n, pulada=True))
+            continue
         quer = regras | {"data": dia_novo}
         mudou = [campo for campo in quer if quer[campo] != tem[campo]]
         if mudou or automatico != regra.automatico:
@@ -609,10 +637,11 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             conn.execute(
                 "UPDATE lancamentos SET excluido_pela_regra = true WHERE id = %s", (item.id,)
             )
-            conn.execute(
-                "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
-                (item.ocorrencia - 1, id),
-            )
+            if not item.pulada:
+                conn.execute(
+                    "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
+                    (item.ocorrencia - 1, id),
+                )
             continue
         lancamento_id, versao, mudou, dia = item
         nova = subir_versao(

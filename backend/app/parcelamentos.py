@@ -4,6 +4,7 @@ para o valor inteiro nunca contar de uma vez num mês só. No cartão, todas as 
 da compra e a parcela n cai n - 1 faturas depois da fatura da compra; fora dele (o boleto), a
 parcela n vence n - 1 meses depois da primeira."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Literal
@@ -193,10 +194,12 @@ def realiza_em(conn, conta_id: UUID, parcela: int, mes: date, data: date) -> dat
 
 def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
     # Cada parcela gerada tem um lançamento só (o id vem do número), excluída ou não: a que
-    # falta foi pulada.
+    # falta foi pulada na geração, e a que a correção levou para antes de hoje saiu pulada
+    # (`excluido_pela_regra`).
     linhas = conn.execute(
         f"SELECT {_COLUNAS}, LEAST(geradas, parcelas) - (SELECT count(*) FROM lancamentos l"
-        " WHERE l.parcelamento_id = parcelamentos.id AND l.parcela <= parcelamentos.parcelas)"
+        " WHERE l.parcelamento_id = parcelamentos.id AND l.parcela <= parcelamentos.parcelas"
+        " AND l.excluido_pela_regra IS NOT TRUE)"
         f" FROM parcelamentos {'WHERE ' + filtro if filtro else ''}"
         " ORDER BY data DESC, descricao, id",
         parametros,
@@ -230,7 +233,8 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     """Grava as próximas parcelas, quantas cabem numa transação, e devolve se pode faltar
     alguma. O id de cada parcela vem do parcelamento e do número dela: gerar de novo não
     duplica. No boleto, a parcela de antes de hoje não vira lançamento (ticket 87) e a de hoje
-    nasce realizada `na_criacao`; o cartão segue o ticket 99."""
+    nasce realizada `na_criacao`; o cartão segue o ticket 99. Antes das próximas, nascem as
+    puladas que uma correção trouxe para hoje ou depois (ticket 126)."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False  # excluído no meio da geração
     [regra] = lidos
@@ -246,11 +250,16 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     # O DSQL aceita até 3.000 linhas por transação; no cartão, cada parcela pode criar a fatura.
     por_lote = max(1, LINHAS_POR_LOTE // (2 + len(categorias) + len(tags)))
     proximas = range(geradas + 1, min(regra.parcelas, geradas + por_lote) + 1)
-    if not proximas:
+    puladas = [] if no_cartao else _puladas_que_chegaram(conn, regra, geradas)
+    if puladas:
+        numeros: Sequence[int] = puladas[:por_lote]
+    elif proximas:
+        _reviver_as_que_a_correcao_tirou(conn, regra, geradas, proximas)
+        numeros = proximas
+    else:
         return False
-    _reviver_as_que_a_correcao_tirou(conn, regra, geradas, proximas)
     dia_de_hoje = lancamentos.hoje()
-    for n in proximas:
+    for n in numeros:
         lancamento_id = uuid5(id, str(n))
         dia = regra.data if no_cartao else mais_meses(regra.data, n - 1)
         if not no_cartao and dia < dia_de_hoje:
@@ -299,6 +308,8 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
                 "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
                 (lancamento_id, tag),
             )
+    if puladas:
+        return True  # as próximas vêm no lote seguinte
     if not conn.execute(
         "UPDATE parcelamentos SET geradas = %s WHERE id = %s AND geradas = %s",
         (proximas[-1], id, geradas),
@@ -306,6 +317,23 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
         # Outra geração andou junto: a transação recomeça e parte do que ela gravou.
         raise psycopg.errors.SerializationFailure("o parcelamento mudou durante a geração")
     return proximas[-1] < regra.parcelas
+
+
+def _puladas_que_chegaram(conn, regra: Parcelamento, geradas: int) -> list[int]:
+    """As parcelas do boleto que a geração pulou por estarem antes de hoje (não têm lançamento,
+    nem excluído) e que a data corrigida pôs em hoje ou depois."""
+    existem = {
+        n
+        for (n,) in conn.execute(
+            "SELECT parcela FROM lancamentos WHERE parcelamento_id = %s", (regra.id,)
+        )
+    }
+    dia_de_hoje = lancamentos.hoje()
+    return [
+        n
+        for n in range(1, min(geradas, regra.parcelas) + 1)
+        if n not in existem and mais_meses(regra.data, n - 1) >= dia_de_hoje
+    ]
 
 
 def _reviver_as_que_a_correcao_tirou(
@@ -324,7 +352,7 @@ def _reviver_as_que_a_correcao_tirou(
     tags = _tags_do_parcelamento(conn, regra.id)
     agora = datetime.now(UTC)
     for correcao in _correcoes(conn, regra, geradas, frozenset()):
-        if correcao.acao == "reviver" and correcao.parcela in proximas:
+        if correcao.acao in ("reviver", "pular") and correcao.parcela in proximas:
             _aplicar(conn, regra, correcao, tags, regra.alterado_por, agora)
 
 
@@ -379,9 +407,11 @@ def _falta_conserto(conn, id: UUID) -> bool:
     [regra] = lidos
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
     pendente = _classificacao_pendente(conn, id)
+    no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     return (
         geradas < regra.parcelas
         or bool(pendente)
+        or (not no_cartao and bool(_puladas_que_chegaram(conn, regra, geradas)))
         or bool(_correcoes(conn, regra, geradas, pendente))
     )
 
@@ -515,12 +545,13 @@ def _por_lote(regra: Parcelamento) -> int:
 @dataclass
 class _Correcao:
     """O que falta fazer numa parcela para ela ficar como o parcelamento manda: sair, voltar
-    (uma que a correção tirou antes) ou mudar. `valor`, `dia` e `mes` são os de depois."""
+    (uma que a correção tirou antes), mudar ou sair como pulada (a data nova, no boleto, caiu
+    antes de hoje). `valor`, `dia` e `mes` são os de depois."""
 
     id: UUID
     versao: int
     parcela: int
-    acao: Literal["excluir", "reviver", "atualizar"]
+    acao: Literal["excluir", "reviver", "atualizar", "pular"]
     mudou: list[str]
     valor: int
     dia: date
@@ -531,7 +562,7 @@ class _Correcao:
 
     @property
     def muda_o_cronograma(self) -> bool:
-        return self.acao == "excluir" or (self.valor, self.dia) != (
+        return self.acao in ("excluir", "pular") or (self.valor, self.dia) != (
             self.valor_antes,
             self.dia_antes,
         )
@@ -561,11 +592,16 @@ def _correcoes(
     editou à mão (valor, data, conta ou fatura) fica como está nessas coisas. A classificação só
     se refaz no que o pedido trouxe (`classificacao`), para a descrição que uma pessoa corrigiu
     numa parcela só não voltar a cada correção de valor. A parcela que saiu antes, quando o
-    parcelamento encolheu, volta se ele crescer de novo (as de depois de `geradas`), com tudo."""
+    parcelamento encolheu, volta se ele crescer de novo (as de depois de `geradas`), com tudo.
+    No boleto, nada da correção vira lançamento antes de hoje (ticket 87): a prevista que a data
+    nova leva de hoje ou depois para antes sai como pulada (`excluido_pela_regra`), e volta se
+    outra correção a trouxer de novo para hoje ou depois. A atrasada (já antes de hoje) segue
+    prevista com a data nova; a realizada muda, com a confirmação."""
     parcelas = conn.execute(
         f"SELECT id, parcela, data, valor_centavos, descricao, pessoa, situacao,"
         f" excluido_em IS NOT NULL, {lancamentos.VERSAO}, item_categoria_id, mes,"
-        f" {lancamentos.ALTERADA_A_MAO} FROM lancamentos WHERE parcelamento_id = %s"
+        f" {lancamentos.ALTERADA_A_MAO}, COALESCE(excluido_pela_regra, false)"
+        " FROM lancamentos WHERE parcelamento_id = %s"
         " ORDER BY parcela",
         (regra.id,),
     ).fetchall()
@@ -585,6 +621,7 @@ def _correcoes(
     ):
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
+    dia_de_hoje = lancamentos.hoje()
     quer = {
         "descricao": regra.descricao,
         "pessoa": regra.pessoa,
@@ -606,10 +643,11 @@ def _correcoes(
         item_categoria_id,
         mes_antes,
         a_mao,
+        pulada,
     ) in parcelas:
-        acao: Literal["excluir", "reviver", "atualizar"] = "atualizar"
+        acao: Literal["excluir", "reviver", "atualizar", "pular"] = "atualizar"
         if excluida:
-            if not geradas < n <= regra.parcelas:
+            if n > regra.parcelas or not (pulada or geradas < n):
                 continue
             acao = "reviver"
         elif n > regra.parcelas:
@@ -638,6 +676,13 @@ def _correcoes(
             # A fatura que o app escolheu de novo conta como mudança do parcelamento (ADR 0011).
             if no_cartao and mes != mes_antes:
                 mudou.append("fatura_mes")
+        if not no_cartao and dia < dia_de_hoje:
+            if acao == "reviver":
+                if pulada:
+                    continue
+                acao = "pular"  # a que o encolher tirou volta, mas já passou
+            elif acao == "atualizar" and situacao == "previsto" and dia_antes >= dia_de_hoje:
+                acao = "pular"
         if acao != "atualizar" or mudou:
             feitas.append(
                 _Correcao(
@@ -755,9 +800,13 @@ def _aplicar(
     usuario: str,
     agora: datetime,
 ) -> None:
-    """Põe uma parcela como o parcelamento manda: sai, volta ou muda."""
-    if correcao.acao == "excluir":
+    """Põe uma parcela como o parcelamento manda: sai, volta, muda ou sai como pulada."""
+    if correcao.acao in ("excluir", "pular"):
         excluir(conn, correcao.id, None, usuario)
+        if correcao.acao == "pular":
+            conn.execute(
+                "UPDATE lancamentos SET excluido_pela_regra = true WHERE id = %s", (correcao.id,)
+            )
         return
     atribuicoes = "valor_centavos = %s, data = %s, mes = %s, alterado_por = %s, alterado_em = %s"
     parametros: tuple = (correcao.valor, correcao.dia, correcao.mes, usuario, agora)
@@ -766,7 +815,7 @@ def _aplicar(
             atribuicoes += f", {campo} = %s"
             parametros += (getattr(regra, campo),)
     if correcao.acao == "reviver":
-        atribuicoes += ", excluido_em = NULL, excluido_por = NULL"
+        atribuicoes += ", excluido_em = NULL, excluido_por = NULL, excluido_pela_regra = false"
     if {"categoria_ids", "fatura_mes"} & set(correcao.mudou) or correcao.acao == "reviver":
         # No mês novo ou com a categoria nova, a parcela fica no item em que estava.
         lancamentos.guardar_item_atual_do_lancamento(conn, correcao.id)

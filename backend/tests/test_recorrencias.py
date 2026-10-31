@@ -659,6 +659,42 @@ def test_mudar_o_calendario_daqui_para_frente_renumera_sem_mexer_no_passado(
     ]
 
 
+def test_mudar_o_inicio_para_o_passado_pula_o_que_passou_sem_realizar(casal: Casal):
+    conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
+    nova = recorrencia(
+        conta,
+        [assinatura],
+        descricao="Spotify",
+        valor_centavos=2190,
+        tipo_do_valor="fixo",
+        automatico=True,
+        inicio="2026-11-10",
+        vezes=4,
+    )
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    resposta = mudar(casal, nova["id"], 1, inicio="2026-09-10")
+    fazer_tarefa_diaria(casal.client.app.state.url)
+
+    # Setembro e outubro passaram: não viram lançamento, nem realizado (ticket 87).
+    assert resposta.status_code == 200
+    assert [(l["ocorrencia"], l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        (3, "2026-11-10", "previsto"),
+        (4, "2026-12-10", "previsto"),
+    ]
+    [saldo] = [c["saldo_centavos"] for c in casal.pedir("flavio", "GET", "/api/contas").json()]
+    assert saldo == 0
+
+    mudar(casal, nova["id"], 1, inicio="2026-11-10")
+
+    assert [(l["ocorrencia"], l["data"]) for l in gerados(casal, nova["id"])] == [
+        (1, "2026-11-10"),
+        (2, "2026-12-10"),
+        (3, "2027-01-10"),
+        (4, "2027-02-10"),
+    ]
+
+
 def test_mudar_o_calendario_sem_informar_o_inicio_continua_da_data_que_a_ocorrencia_tinha(
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
