@@ -5,6 +5,7 @@
   "avisoDeNaoEnviadoHoras": 24,
   "pareceRepetidoDias": 1,
   "desfazerEdicaoEmLoteDias": 30,
+  "amostraDaEdicaoEmLote": 5,
   "itensEmDestaqueNaHojePercentual": 80,
   "horizonteDaRecorrenciaMeses": 24,
   "contasDaSemanaDias": 7,

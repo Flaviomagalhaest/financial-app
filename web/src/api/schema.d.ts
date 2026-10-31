@@ -991,6 +991,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/edicoes-em-lote/previa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ver Previa */
+        post: operations["previa_da_edicao_em_lote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/edicoes-em-lote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar
+         * @description As que ainda se desfazem, da mais recente à mais antiga.
+         */
+        get: operations["listar_edicoes_em_lote"];
+        put?: never;
+        /**
+         * Aplicar Edicao Em Lote
+         * @description Tudo ou nada; o mesmo id reenviado devolve o lote gravado, com 200.
+         */
+        post: operations["aplicar_edicao_em_lote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/edicoes-em-lote/{id}/desfazer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desfazer Edicao Em Lote */
+        post: operations["desfazer_edicao_em_lote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1285,6 +1343,14 @@ export interface components {
             /** Valor Total Centavos */
             valor_total_centavos?: number | null;
         };
+        /** AntesEDepois */
+        AntesEDepois: {
+            lancamento: components["schemas"]["Lancamento"];
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /** Tags */
+            tags: string[];
+        };
         /**
          * AvisoDeRealizadas
          * @description A correção mudaria parcelas já realizadas; nada foi gravado. Repetir o pedido com
@@ -1555,6 +1621,13 @@ export interface components {
              */
             tipos: ("despesa" | "receita" | "transferencia")[];
         };
+        /** DesfazerDaEdicaoEmLote */
+        DesfazerDaEdicaoEmLote: {
+            /** Desfeitos */
+            desfeitos: number;
+            /** Pulados */
+            pulados: components["schemas"]["PuladoNoDesfazer"][];
+        };
         /**
          * Despesas
          * @description As despesas do mês (compras menos estornos), com os ajustes de fatura no realizado.
@@ -1609,6 +1682,35 @@ export interface components {
             data_abertura?: string | null;
             /** Arquivada */
             arquivada?: boolean | null;
+        };
+        /** EdicaoEmLote */
+        EdicaoEmLote: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Resumo */
+            resumo: string;
+            /**
+             * Situacao
+             * @enum {string}
+             */
+            situacao: "aplicando" | "aplicada" | "desfeita";
+            /** Lancamentos */
+            lancamentos: number;
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /**
+             * Desfazer Ate
+             * Format: date-time
+             */
+            desfazer_ate: string;
         };
         /** Eu */
         Eu: {
@@ -2163,6 +2265,18 @@ export interface components {
             /** Itens */
             itens: components["schemas"]["ItemDoModelo"][];
         };
+        /** MudancaDeCategorias */
+        MudancaDeCategorias: {
+            /**
+             * Acao
+             * @enum {string}
+             */
+            acao: "acrescentar" | "remover" | "trocar" | "substituir";
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /** Por */
+            por?: string | null;
+        };
         /** MudancaDeItem */
         MudancaDeItem: {
             /** Valor Centavos */
@@ -2174,6 +2288,18 @@ export interface components {
             nome?: string | null;
             /** Arquivada */
             arquivada?: boolean | null;
+        };
+        /** MudancaDeTags */
+        MudancaDeTags: {
+            /**
+             * Acao
+             * @enum {string}
+             */
+            acao: "acrescentar" | "remover" | "trocar" | "substituir";
+            /** Tags */
+            tags: string[];
+            /** Por */
+            por?: string | null;
         };
         /** NovaCategoria */
         NovaCategoria: {
@@ -2198,6 +2324,17 @@ export interface components {
             saldo_abertura_centavos?: number | null;
             /** Data Abertura */
             data_abertura?: string | null;
+        };
+        /** NovaEdicaoEmLote */
+        NovaEdicaoEmLote: {
+            selecao: components["schemas"]["SelecaoDoLote"];
+            categorias?: components["schemas"]["MudancaDeCategorias"] | null;
+            tags?: components["schemas"]["MudancaDeTags"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** NovaOrdem */
         NovaOrdem: {
@@ -2703,6 +2840,12 @@ export interface components {
              */
             pagina: number;
         };
+        /** PedidoDeEdicaoEmLote */
+        PedidoDeEdicaoEmLote: {
+            selecao: components["schemas"]["SelecaoDoLote"];
+            categorias?: components["schemas"]["MudancaDeCategorias"] | null;
+            tags?: components["schemas"]["MudancaDeTags"] | null;
+        };
         /** PedidoDeExportacao */
         PedidoDeExportacao: {
             /**
@@ -2745,6 +2888,48 @@ export interface components {
             realizado_centavos: number;
             /** Previsto Centavos */
             previsto_centavos: number;
+        };
+        /** PreviaDaEdicaoEmLote */
+        PreviaDaEdicaoEmLote: {
+            /** Compras */
+            compras: number;
+            /** Lancamentos */
+            lancamentos: number;
+            /** Mudam */
+            mudam: number;
+            /** Ja Estao Como Pedido */
+            ja_estao_como_pedido: number;
+            /** De Outro Tipo */
+            de_outro_tipo: number;
+            /** Trocam De Item */
+            trocam_de_item: number;
+            /** Estornos Fora */
+            estornos_fora: number;
+            /** Amostra */
+            amostra: components["schemas"]["AntesEDepois"][];
+            /** Recusa */
+            recusa: string | null;
+        };
+        /** PuladoNoDesfazer */
+        PuladoNoDesfazer: {
+            /**
+             * Lancamento Id
+             * Format: uuid
+             */
+            lancamento_id: string;
+            /** Descricao */
+            descricao: string;
+            /**
+             * Motivo
+             * @enum {string}
+             */
+            motivo: "mudou_depois" | "excluido" | "saiu";
+            /** Alterado Por */
+            alterado_por: string | null;
+            /** Alterado Em */
+            alterado_em: string | null;
+            /** Por Voce */
+            por_voce: boolean;
         };
         /**
          * Quitacao
@@ -2899,6 +3084,24 @@ export interface components {
             status: string;
             /** Migrations */
             migrations: number;
+        };
+        /**
+         * SelecaoDoLote
+         * @description Os marcados no resultado e, com `busca`, todos do resultado com esses critérios. A parcela
+         *     marcada leva o parcelamento todo, e a compra leva os estornos dela (ADR 0016).
+         */
+        SelecaoDoLote: {
+            /**
+             * Lancamento Ids
+             * @default []
+             */
+            lancamento_ids: string[];
+            /**
+             * Parcelamento Ids
+             * @default []
+             */
+            parcelamento_ids: string[];
+            busca?: components["schemas"]["CriteriosDaBusca"] | null;
         };
         /** Sugerido */
         Sugerido: {
@@ -5203,6 +5406,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultadoDaBusca"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    previa_da_edicao_em_lote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PedidoDeEdicaoEmLote"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviaDaEdicaoEmLote"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_edicoes_em_lote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdicaoEmLote"][];
+                };
+            };
+        };
+    };
+    aplicar_edicao_em_lote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NovaEdicaoEmLote"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdicaoEmLote"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desfazer_edicao_em_lote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesfazerDaEdicaoEmLote"];
                 };
             };
             /** @description Validation Error */
