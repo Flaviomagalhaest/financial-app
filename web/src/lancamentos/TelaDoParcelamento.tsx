@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
+  chaveDaTag,
   corrigirParcelamento,
   excluirParcelamento,
   useCadastro,
   useConexao,
+  useAvisoDePlanejamento,
   useLancamentos,
   useParcelamentos,
   usePessoas,
@@ -12,14 +14,16 @@ import {
   type AvisoDeRealizadas,
   type Parcelamento,
 } from "../dados";
+import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, rotuloDaFatura } from "./datas";
 import { emCentavos, formatarCentavos } from "./dinheiro";
-import type { ValorDigitado } from "./parcelamento";
+import { divisao, type ValorDigitado } from "./parcelamento";
 
 /** "1.200,00": o valor como se digita no campo, sem o "R$". */
 const comoDigitado = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const mesmaTag = (a: string, b: string) => chaveDaTag(a) === chaveDaTag(b);
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /** O formulário da correção, que começa com o que o parcelamento tem. */
@@ -51,7 +55,7 @@ function formularioDo(p: Parcelamento): Formulario {
 }
 
 /** Só o que mudou: o servidor deixa como está o campo que não vem. `null` quando o valor não é número. */
-function alteracaoDo(f: Formulario, p: Parcelamento): Omit<AlteracaoDeParcelamento, "confirmar_realizadas"> | null {
+function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<AlteracaoDeParcelamento, "confirmar_realizadas"> | null {
   const centavos = emCentavos(f.valor);
   const parcelas = Number(f.parcelas);
   if (!centavos || !Number.isInteger(parcelas)) return null;
@@ -60,6 +64,7 @@ function alteracaoDo(f: Formulario, p: Parcelamento): Omit<AlteracaoDeParcelamen
   if (!mesmos(f.categoriaIds, p.categoria_ids)) mudou.categoria_ids = f.categoriaIds;
   if (!mesmos(f.tags, p.tags)) mudou.tags = f.tags;
   if (f.pessoa !== (p.pessoa ?? null)) mudou.pessoa = f.pessoa;
+  if (item !== (p.item_categoria_id ?? null)) mudou.item_categoria_id = item;
   if (parcelas !== p.parcelas) mudou.parcelas = parcelas;
   if (f.data !== p.data) mudou.data = f.data;
   // O valor vai só se a pessoa o mudou: sem ele, o total fica (mesmo com outro número de parcelas).
@@ -77,44 +82,78 @@ function comoMuda(m: AvisoDeRealizadas["parcelas"][number], parcelas: number): s
 /** Corrige ou exclui o parcelamento; as duas mudam a regra e precisam de internet (ADR 0011). */
 export function TelaDoParcelamento({ id }: { id: string }) {
   const { dados: parcelamentos, semDados } = useParcelamentos();
+  const parcelamento = parcelamentos?.find((p) => p.id === id);
+  if (parcelamento) return <Correcao parcelamento={parcelamento} />;
+  return (
+    <section>
+      <h2>Parcelamento</h2>
+      {(parcelamentos || semDados) && <p className="vazio">{semDados ? "Sem internet: este parcelamento não está no aparelho." : "Parcelamento não encontrado."}</p>}
+      <a href="#/historico">Voltar ao Histórico</a>
+    </section>
+  );
+}
+
+/** O formulário nasce com o parcelamento que a primeira leitura trouxe; a releitura não apaga o que se digita. */
+function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
+  const id = parcelamento.id;
   const { lancamentos } = useLancamentos();
   const { contasECartoes, categorias } = useCadastro();
   const { pessoas } = usePessoas();
   const opcoesDeTags = useTags();
   const online = useConexao();
-  const parcelamento = parcelamentos?.find((p) => p.id === id);
-  const [form, setForm] = useState<Formulario | null>(null);
+  const [form, setForm] = useState<Formulario>(() => formularioDo(parcelamento));
   const [aviso, setAviso] = useState<AvisoDeRealizadas | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
-
-  // Preenche uma vez só, quando o parcelamento chega; a releitura não apaga o que se digita.
-  useEffect(() => {
-    if (parcelamento && !form) setForm(formularioDo(parcelamento));
-  }, [parcelamento, form]);
-
-  if (!parcelamento || !form) {
-    return (
-      <section>
-        <h2>Parcelamento</h2>
-        {(parcelamentos || semDados) && <p className="vazio">{semDados ? "Sem internet: este parcelamento não está no aparelho." : "Parcelamento não encontrado."}</p>}
-        <a href="#/historico">Voltar ao Histórico</a>
-      </section>
-    );
-  }
+  const [novaTag, setNovaTag] = useState("");
+  const [itemTocado, setItemTocado] = useState<string | null>(null);
+  const doParcelamento = (lancamentos ?? []).filter((l) => l.parcelamento_id === id).sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
+  const primeira = doParcelamento[0];
+  const noCartao = !!primeira?.fatura_mes;
+  // O aviso mostra a 1ª parcela com o que o formulário tem; sem ela no aparelho, fica sem aviso.
+  const centavosDoForm = emCentavos(form.valor) ?? 0;
+  const parcelasDoForm = Number(form.parcelas);
+  const valorDaPrimeira =
+    parcelasDoForm >= 2 && Number.isInteger(parcelasDoForm) && centavosDoForm > 0
+      ? divisao(form.valorDigitado === "total" ? { parcelas: parcelasDoForm, valor_total_centavos: centavosDoForm } : { parcelas: parcelasDoForm, valor_da_parcela_centavos: centavosDoForm }).primeira
+      : (primeira?.valor_centavos ?? 0);
+  const planejamento = useAvisoDePlanejamento(
+    {
+      id: primeira?.id ?? id,
+      valor_centavos: valorDaPrimeira,
+      categoria_ids: form.categoriaIds,
+      conta_id: parcelamento.conta_id,
+      // No cartão a data é a da compra e a fatura é a da parcela; fora dele, a da 1ª parcela.
+      data: noCartao ? (primeira?.data ?? form.data) : form.data,
+      fatura_mes: noCartao ? (primeira?.fatura_mes ?? null) : null,
+      situacao: primeira?.situacao ?? "previsto",
+    },
+    itemTocado,
+  );
+  // Sem duas categorias com item, a escolha que o parcelamento já tem fica, se a categoria dela ficou.
+  const itemEscolhido = planejamento.escolha ?? (parcelamento.item_categoria_id && form.categoriaIds.includes(parcelamento.item_categoria_id) ? parcelamento.item_categoria_id : null);
 
   const mudar = (mudanca: Partial<Formulario>) => {
     setForm({ ...form, ...mudanca });
     setAviso(null);
   };
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
-  const doParcelamento = (lancamentos ?? []).filter((l) => l.parcelamento_id === id).sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
-  const noCartao = !!doParcelamento[0]?.fatura_mes;
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
-  const tags = [...form.tags, ...opcoesDeTags.filter((t) => !form.tags.includes(t))];
+  const marcada = (tag: string) => form.tags.some((t) => mesmaTag(t, tag));
+  const tags = [...form.tags, ...opcoesDeTags.filter((t) => !marcada(t))];
+  const alternarTag = (tag: string) => mudar({ tags: marcada(tag) ? form.tags.filter((t) => !mesmaTag(t, tag)) : [...form.tags, tag] });
+
+  function criarTag() {
+    const nome = novaTag.trim();
+    if (!nome) return;
+    // A tag que já existe com outra caixa é a mesma: marca a existente.
+    const existente = tags.find((t) => mesmaTag(t, nome)) ?? nome;
+    if (!marcada(existente)) mudar({ tags: [...form.tags, existente] });
+    setNovaTag("");
+  }
 
   async function salvar(confirmarRealizadas: boolean) {
-    const alteracao = alteracaoDo(form!, parcelamento!);
+    const alteracao = alteracaoDo(form, parcelamento, itemEscolhido);
     if (!alteracao) return setErro("Digite o valor e o número de parcelas.");
     if (Object.keys(alteracao).length === 0) return setErro("Nada mudou.");
     setErro("");
@@ -127,7 +166,7 @@ export function TelaDoParcelamento({ id }: { id: string }) {
   }
 
   async function excluir() {
-    if (!window.confirm(`Excluir "${parcelamento!.descricao || "este parcelamento"}" inteiro? As ${parcelamento!.parcelas} parcelas saem, também as realizadas.`)) return;
+    if (!window.confirm(`Excluir "${parcelamento.descricao || "este parcelamento"}" inteiro? As ${parcelamento.parcelas} parcelas saem, também as realizadas.`)) return;
     setErro("");
     setEnviando(true);
     const motivo = await excluirParcelamento(id);
@@ -188,18 +227,38 @@ export function TelaDoParcelamento({ id }: { id: string }) {
           </button>
         ))}
       </div>
-      {tags.length > 0 && (
-        <>
-          <h3>Tags</h3>
-          <div className="fileira rolavel">
-            {tags.map((t) => (
-              <button type="button" key={t} className={`ficha${form.tags.includes(t) ? " marcada" : ""}`} aria-pressed={form.tags.includes(t)} onClick={() => mudar({ tags: alternar(form.tags, t) })}>
-                #{t}
-              </button>
-            ))}
-          </div>
-        </>
+      {form.categoriaIds.length > 0 && primeira && (
+        <AvisoDePlanejamento {...planejamento} tipo="despesa" nomeDaCategoria={(c) => nomePorId(categorias, c)} onEscolher={setItemTocado} />
       )}
+      <h3>Tags</h3>
+      {tags.length > 0 && (
+        <div className="fileira rolavel">
+          {tags.map((t) => (
+            <button type="button" key={t} className={`ficha${marcada(t) ? " marcada" : ""}`} aria-pressed={marcada(t)} onClick={() => alternarTag(t)}>
+              #{t}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="linha">
+        <label className="oculto" htmlFor="nova-tag">
+          Nova tag
+        </label>
+        <input
+          id="nova-tag"
+          value={novaTag}
+          placeholder="Nova tag"
+          onChange={(e) => setNovaTag(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            criarTag();
+          }}
+        />
+        <button type="button" className="secundario" onClick={criarTag}>
+          Criar tag
+        </button>
+      </div>
       <h3>Pessoa</h3>
       <div className={`alternancia${pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
         {[{ id: null, nome: "Conjunto" }, ...pessoas].map((p) => (

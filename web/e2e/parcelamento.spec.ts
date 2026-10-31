@@ -268,3 +268,69 @@ test("no modo do valor da parcela, corrigir só a descrição não mexe no total
   const [corrigido] = (await api.ler("/api/parcelamentos")).filter((p: { id: string }) => p.id === id);
   expect(corrigido).toMatchObject({ descricao: `${descricao} da sala`, valor_total_centavos: 10000 });
 });
+
+test("com duas categorias com item no mês, a correção pergunta o item e grava a escolha nas parcelas", async ({ page }) => {
+  const { api, id, descricao } = await prepararParcelamento(page);
+  const eletro = (await api.ler("/api/parcelamentos")).find((p: { id: string }) => p.id === id).categoria_ids[0];
+  const lazer = await api.criar("/api/categorias", { nome: `Lazer ${Date.now()}`, tipo: "despesa" });
+  // As parcelas são de meses passados e futuros: o item vale no mês da 1ª.
+  const primeira = (await api.ler("/api/lancamentos")).find((l: { parcelamento_id: string; parcela: number }) => l.parcelamento_id === id && l.parcela === 1);
+  const mes = (primeira.mes ?? primeira.data).slice(0, 7);
+  for (const categoria_id of [eletro, lazer.id]) await api.criar(`/api/planejamento/${mes}/itens`, { id: crypto.randomUUID(), categoria_id, valor_centavos: 100000 });
+  await page.reload();
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+
+  // Com a 2ª categoria marcada, as duas têm item no mês e a tela pergunta.
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  await page.getByRole("button", { name: lazer.nome }).click();
+  const aviso = page.getByRole("region", { name: "Aviso de planejamento" });
+  await expect(aviso).toContainText("Conta no planejamento em:");
+  await aviso.getByRole("button", { name: lazer.nome }).click();
+  await page.getByRole("button", { name: "Salvar correção" }).click();
+
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  const parcelas = (await api.ler("/api/lancamentos")).filter((l: { parcelamento_id: string }) => l.parcelamento_id === id);
+  expect(parcelas.map((l: { item_categoria_id: string }) => l.item_categoria_id)).toEqual(Array(6).fill(lazer.id));
+  const [corrigido] = (await api.ler("/api/parcelamentos")).filter((p: { id: string }) => p.id === id);
+  expect(corrigido.item_categoria_id).toBe(lazer.id);
+});
+
+test("cria uma tag nova na correção e a grava em todas as parcelas", async ({ page }) => {
+  const { api, id, descricao } = await prepararParcelamento(page);
+  await page.reload();
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+
+  await page.getByLabel("Nova tag").fill("Reforma");
+  await page.getByRole("button", { name: "Criar tag" }).click();
+  await expect(page.getByRole("button", { name: "#Reforma" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Salvar correção" }).click();
+
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  const parcelas = (await api.ler("/api/lancamentos")).filter((l: { parcelamento_id: string }) => l.parcelamento_id === id);
+  expect(parcelas).toHaveLength(6);
+  for (const l of parcelas) expect(l.tags).toEqual(["Reforma"]);
+});
+
+test("sem internet, abre a tela de um parcelamento que o aparelho nunca abriu", async ({ page, context }) => {
+  const { id, descricao } = await prepararParcelamento(page);
+  // A leitura dos parcelamentos vem com o app aberto, sem abrir a tela do parcelamento.
+  await page.reload();
+  await aba(page, "Hoje");
+  await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => new Promise<boolean>((resolve) => {
+    const abertura = indexedDB.open("financial-app-dados");
+    abertura.onsuccess = () => {
+      const pedido = abertura.result.transaction("respostas").objectStore("respostas").get("/api/parcelamentos");
+      pedido.onsuccess = () => {
+        abertura.result.close();
+        resolve(!!pedido.result);
+      };
+    };
+  }))).toBe(true);
+
+  await context.setOffline(true);
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  await expect(page.getByText("Sem internet: este parcelamento não está no aparelho.")).toHaveCount(0);
+});
