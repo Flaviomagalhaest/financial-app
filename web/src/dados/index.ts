@@ -1219,6 +1219,8 @@ export function iniciarEnvioAutomatico(): () => void {
       Promise.all([
         buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]),
         buscarEGuardar("/api/favoritos", LEITURAS["/api/favoritos"]),
+        // A tela do parcelamento abre sem internet também num parcelamento que o aparelho nunca abriu.
+        buscarEGuardar("/api/parcelamentos", LEITURAS["/api/parcelamentos"]),
         // Para o aviso de planejamento sem internet: o planejamento do mês anterior ao próximo (a
         // compra no cartão conta no mês da fatura) e as faturas dos cartões.
         ...[-1, 0, 1].map((n) => {

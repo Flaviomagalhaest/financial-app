@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  chaveDaTag,
   descartarNaoEnviado,
   excluirLancamento,
   excluirRecorrencia,
@@ -20,8 +19,8 @@ import { nomePorId, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, hoje } from "./datas";
 import { comoDigitado, emCentavos } from "./dinheiro";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
+import { SeletorDeTags } from "./SeletorDeTags";
 
-const mesmaTag = (a: string, b: string) => chaveDaTag(a) === chaveDaTag(b);
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /** O formulário do "daqui para frente", que começa com o que a regra tem e a data deste previsto. */
@@ -103,7 +102,6 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const [form, setForm] = useState<Formulario | null>(null);
   const [erro, setErro] = useState("");
   const [itemTocado, setItemTocado] = useState<string | null>(null);
-  const [novaTag, setNovaTag] = useState("");
   // O aviso é do previsto desta vez, como ele ficaria com o que o formulário tem.
   const planejamento = useAvisoDePlanejamento(
     {
@@ -141,20 +139,8 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const mudar = (mudanca: Partial<Formulario>) => setForm({ ...form, ...mudanca });
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   const categoriasDoTipo = categorias.filter((c) => c.tipo === regra.tipo && (!c.arquivada || form.categoriaIds.includes(c.id)));
-  const tags = [...form.tags, ...opcoesDeTags.filter((t) => !form.tags.includes(t))];
   // A conta arquivada não está entre as do cadastro, mas segue sendo a da regra até alguém trocar.
   const contas = contasECartoes.some((c) => c.id === regra.conta_id) ? contasECartoes : [{ id: regra.conta_id, nome: "conta arquivada" }, ...contasECartoes];
-
-  const marcada = (tag: string) => form!.tags.some((t) => mesmaTag(t, tag));
-
-  function criarTag() {
-    const nome = novaTag.trim();
-    if (!nome) return;
-    // A tag que já existe com outra caixa é a mesma: marca a existente.
-    const existente = tags.find((t) => mesmaTag(t, nome)) ?? nome;
-    if (!marcada(existente)) mudar({ tags: [...form!.tags, existente] });
-    setNovaTag("");
-  }
 
   async function enviar(alteracao: AlteracaoDeRecorrencia) {
     setErro("");
@@ -271,34 +257,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
       </div>
       {form.categoriaIds.length > 0 && <AvisoDePlanejamento {...planejamento} tipo={regra.tipo} nomeDaCategoria={(c) => nomePorId(categorias, c)} onEscolher={setItemTocado} />}
       <h4>Tags</h4>
-      {tags.length > 0 && (
-        <div className="fileira rolavel">
-          {tags.map((t) => (
-            <button type="button" key={t} className={`ficha${marcada(t) ? " marcada" : ""}`} aria-pressed={marcada(t)} onClick={() => mudar({ tags: marcada(t) ? form.tags.filter((x) => !mesmaTag(x, t)) : [...form.tags, t] })}>
-              #{t}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="linha">
-        <label className="oculto" htmlFor="nova-tag-da-recorrencia">
-          Nova tag
-        </label>
-        <input
-          id="nova-tag-da-recorrencia"
-          value={novaTag}
-          placeholder="Nova tag"
-          onChange={(e) => setNovaTag(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            criarTag();
-          }}
-        />
-        <button type="button" className="secundario" onClick={criarTag}>
-          Criar tag
-        </button>
-      </div>
+      <SeletorDeTags tags={form.tags} opcoes={opcoesDeTags} onTags={(t) => mudar({ tags: t })} />
       <h4>Pessoa</h4>
       <div className={`alternancia${pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
         {[{ id: null, nome: "Conjunto" }, ...pessoas].map((p) => (
