@@ -165,7 +165,7 @@ export function semContarDeNovo(mudancas: MudancaTalvezJaContada[], lidoEm: numb
   return mudancas.map(({ talvez, ...m }) => (talvez && lidoEm >= talvez.tentadoEm ? { ...m, antes: talvez.jaNoServidor } : m));
 }
 
-/** "Ainda dá para gastar R$ 180,00" ou "Passa R$ 50,00 do planejado"; na receita e na transferência, o que falta para a meta. */
+/** "Ainda dá para gastar R$ 180,00" ou "Passa R$ 50,00 do planejado"; na receita e na transferência, o que falta para o planejado. */
 export function oQueSobra(tipo: "despesa" | "receita" | "transferencia", centavos: number): string {
   if (tipo !== "despesa") {
     if (centavos > 0) return `Faltam ${formatarCentavos(centavos)} para o planejado`;

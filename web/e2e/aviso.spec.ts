@@ -214,7 +214,7 @@ test.describe("o que sobra, na despesa, na receita e na transferência", () => {
     { tipo: "receita", centavos: 18000, texto: "Faltam R$ 180,00 para o planejado" },
     { tipo: "receita", centavos: 0, texto: "Chega ao planejado" },
     { tipo: "receita", centavos: -5000, texto: "R$ 50,00 acima do planejado" },
-    // A transferência com categoria guarda dinheiro: o item é uma meta, não um limite.
+    // A transferência com categoria guarda dinheiro: o texto é o da receita (o que falta para o planejado).
     { tipo: "transferencia", centavos: 70000, texto: "Faltam R$ 700,00 para o planejado" },
     { tipo: "transferencia", centavos: 0, texto: "Chega ao planejado" },
     { tipo: "transferencia", centavos: -5000, texto: "R$ 50,00 acima do planejado" },
