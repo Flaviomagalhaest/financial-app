@@ -2754,6 +2754,11 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+            /**
+             * Parcelas Puladas
+             * @default 0
+             */
+            parcelas_puladas: number;
         };
         /** ParcelamentoEmAndamento */
         ParcelamentoEmAndamento: {

@@ -73,7 +73,7 @@ _Avoid_: motor de sugestão
 ### Futuro
 
 **Recorrência**:
-Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz).
+Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz). Só gera de hoje em diante: com o início no passado, as ocorrências de antes de hoje não viram lançamento (nem atrasado, nem realizado), mas o calendário e as `vezes` seguem contados desde o início; a de hoje, lançada junto com a regra, nasce realizada. A tarefa diária e a mudança da regra também não lançam ocorrência que já passou. A regra que termina antes de hoje é recusada.
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 
 **Ocorrência**:
@@ -101,7 +101,7 @@ Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o h
 _Avoid_: job, cron, rotina noturna
 
 **Parcelamento**:
-Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela.
+Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela. No boleto com a data no passado, as parcelas de antes de hoje são puladas (`parcelas_puladas` na resposta; não é a parcela que o casal excluiu, que existe excluída): não viram lançamento, mas contam na numeração e no total, e a de hoje nasce realizada; o boleto que já venceu inteiro é recusado. O cartão gera todas.
 _Avoid_: compra parcelada, financiamento
 
 **Parcela**:

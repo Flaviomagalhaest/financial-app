@@ -101,7 +101,32 @@ def test_recorrencia_por_tres_vezes_para_na_terceira_mesmo_com_horizonte_sobrand
     ]
 
 
-def test_automatico_de_valor_fixo_ja_realiza_o_que_passou_e_nao_pede_confirmacao(casal: Casal):
+def test_inicio_no_passado_so_lanca_de_hoje_em_diante_e_a_de_hoje_nasce_realizada(
+    casal: Casal,
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-08-28", vezes=5)
+
+    resposta = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    assert resposta.status_code == 201
+    # Agosto e setembro já passaram: não viram lançamento, mas contam nas 5 vezes.
+    assert [(l["ocorrencia"], l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        (3, "2026-10-28", "realizado"),
+        (4, "2026-11-28", "previsto"),
+        (5, "2026-12-28", "previsto"),
+    ]
+    assert (resposta.json()["inicio"], resposta.json()["ocorrencia_do_inicio"]) == (
+        "2026-08-28",
+        1,
+    )
+    semana = casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"]
+    assert not any(l["atrasado"] for l in semana)
+    [saldo] = [c["saldo_centavos"] for c in casal.pedir("flavio", "GET", "/api/contas").json()]
+    assert saldo == -18990
+
+
+def test_automatico_com_inicio_no_passado_nao_realiza_o_que_passou(casal: Casal):
     conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
     nova = recorrencia(
         conta,
@@ -112,23 +137,29 @@ def test_automatico_de_valor_fixo_ja_realiza_o_que_passou_e_nao_pede_confirmacao
         automatico=True,
         inicio="2026-10-05",
     )
-    luz = recorrencia(conta, [assinatura], inicio="2026-10-27")
     casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
-    casal.pedir("flavio", "POST", "/api/recorrencias", json=luz)
 
     spotify = gerados(casal, nova["id"])
-    assert [(l["data"], l["situacao"], l["automatico"]) for l in spotify[:2]] == [
-        ("2026-10-05", "realizado", True),
-        ("2026-11-05", "previsto", True),
+    assert [(l["ocorrencia"], l["data"], l["situacao"], l["automatico"]) for l in spotify[:2]] == [
+        (2, "2026-11-05", "previsto", True),
+        (3, "2026-12-05", "previsto", True),
     ]
-    # Só o estimado pede confirmação: a luz de ontem fica atrasada, o Spotify nunca.
-    semana = casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"]
-    assert [(l["descricao"], l["data"], l["atrasado"]) for l in semana] == [
-        ("Luz", "2026-10-27", True)
-    ]
-    assert not any(l["atrasado"] for l in spotify)
     [saldo] = [c["saldo_centavos"] for c in casal.pedir("flavio", "GET", "/api/contas").json()]
-    assert saldo == -2190
+    assert saldo == 0
+
+
+@pytest.mark.parametrize(
+    "fim", [{"ate": "2026-10-27"}, {"inicio": "2026-08-28", "vezes": 2}], ids=["ate", "vezes"]
+)
+def test_recorrencia_que_termina_antes_de_hoje_e_recusada_sem_gravar(casal: Casal, fim):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-08-28") | fim
+
+    resposta = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "a recorrência termina antes de hoje"
+    assert casal.pedir("flavio", "GET", "/api/recorrencias").json() == []
 
 
 def test_recorrencia_de_valor_estimado_nao_pode_ser_automatica(casal: Casal):
@@ -405,10 +436,14 @@ def mudar(casal: Casal, id: str, a_partir_da_ocorrencia: int, **campos):
     )
 
 
-def test_mudar_daqui_para_frente_reajusta_os_previstos_e_deixa_o_passado_como_esta(casal: Casal):
+def test_mudar_daqui_para_frente_reajusta_os_previstos_e_deixa_o_passado_como_esta(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
     conta, luz = casal.conta(), casal.categoria("Luz")
     nova = recorrencia(conta, [luz], inicio="2026-09-10", vezes=6)
+    no_dia(monkeypatch, "2026-09-01")
     casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    no_dia(monkeypatch, HOJE.isoformat())
     # Setembro e outubro já passaram: o casal confirmou setembro e outubro segue atrasado.
     setembro = gerados(casal, nova["id"])[0]
     casal.pedir(
@@ -538,7 +573,9 @@ def test_excluir_a_recorrencia_tira_a_regra_e_os_previstos_de_hoje_em_diante(
 ):
     conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
     nova = recorrencia(conta, [assinatura], tags=["streaming"], inicio="2026-08-28")
+    no_dia(monkeypatch, "2026-08-01")
     casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    no_dia(monkeypatch, HOJE.isoformat())
     agosto = gerados(casal, nova["id"])[0]
     casal.pedir("flavio", "POST", f"/api/lancamentos/{agosto['id']}/confirmar", json={})
 
@@ -642,11 +679,12 @@ def test_mudar_o_calendario_sem_informar_o_inicio_continua_da_data_que_a_ocorren
         "2027-01-07",
     ]
     assert previstos[-1]["data"] == "2028-10-26"
-    # Dois anos depois, a tarefa diária segue a numeração e o calendário novos até 28/11/2030.
+    # Dois anos depois, a tarefa diária segue a numeração e o calendário novos até 28/11/2030,
+    # sem lançar as que já passaram (a 52ª em 09/11/2028 e a 53ª em 23/11/2028).
     no_dia(monkeypatch, "2028-11-28")
     fazer_tarefa_diaria(database_url)
     previstos = gerados(casal, nova["id"])
-    assert [l["ocorrencia"] for l in previstos] == list(range(1, 106))
+    assert [l["ocorrencia"] for l in previstos] == [*range(1, 52), *range(54, 106)]
     assert previstos[-1]["data"] == "2030-11-21"
 
 
@@ -804,12 +842,31 @@ def test_o_mes_pulado_que_o_horizonte_tirou_segue_pulado_quando_ele_chega(
     casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
     casal.pedir("esposa", "DELETE", f"/api/lancamentos/{gerados(casal, nova['id'])[14]['id']}")
 
-    # De 3 em 3 meses a 15ª (10/11/2029) passa do horizonte e a 8ª é a última dentro dele.
+    # De 3 em 3 meses a 15ª (10/05/2030) passa do horizonte e a 8ª é a última dentro dele.
     mudar(casal, nova["id"], 1, a_cada=3)
-    no_dia(monkeypatch, "2028-12-01")
+    no_dia(monkeypatch, "2028-11-01")
     fazer_tarefa_diaria(database_url)
 
-    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [*range(1, 15), *range(16, 18)]
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [*range(1, 15), 16]
+
+
+def test_reabrir_o_fim_meses_depois_nao_lanca_as_ocorrencias_que_ja_passaram(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", ate="2026-12-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    no_dia(monkeypatch, "2027-03-01")
+    mudar(casal, nova["id"], 1, ate=None)
+
+    # Janeiro e fevereiro de 2027 passaram com a regra encerrada: a correção não os lança.
+    assert [(l["ocorrencia"], l["data"]) for l in gerados(casal, nova["id"])[:4]] == [
+        (1, "2026-11-10"),
+        (2, "2026-12-10"),
+        (5, "2027-03-10"),
+        (6, "2027-04-10"),
+    ]
 
 
 def test_adiar_o_fim_para_uma_data_mais_tarde_gera_as_ocorrencias_do_meio(casal: Casal):
