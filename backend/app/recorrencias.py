@@ -127,7 +127,7 @@ class AlteracaoDeRecorrencia(CamposDaRecorrencia):
 _NOMES_DOS_CAMPOS = {
     "tipo": "tipo",
     "valor_centavos": "valor",
-    "tipo_do_valor": "valor fixo ou estimado",
+    "tipo_do_valor": "fixo ou estimado",
     "automatico": "automático",
     "descricao": "descrição",
     "conta_id": "conta",
@@ -150,7 +150,9 @@ def _comparavel(campo: str, valor):
         return frozenset(valor or ())
     if campo == "tags":
         return frozenset(t.casefold() for t in valor or ())
-    return valor or None if campo == "pessoa" else valor
+    if campo == "pessoa":
+        return valor or None
+    return valor
 
 
 def _mudou_depois(
@@ -159,15 +161,18 @@ def _mudou_depois(
     """Os campos que a mudança traz e que a regra já não tem como o aparelho os viu (`antes`),
     nem com o valor novo: outra mudança chegou antes e mexeu neles. A regra não tem versão; isto
     faz o papel do conflito da ADR 0011 sem precisar de uma."""
+    novos = alteracao.model_dump(include=alteracao.model_fields_set)
+    # O fim é um campo só: encerrar numa data tira o fim por vezes, e vice-versa (como em `_mudar`).
+    if novos.get("ate") is not None:
+        novos.setdefault("vezes", None)
+    if novos.get("vezes") is not None:
+        novos.setdefault("ate", None)
     mudados = [
         campo
         for campo in _NOMES_DOS_CAMPOS
-        if campo in alteracao.model_fields_set & antes.model_fields_set
+        if campo in novos.keys() & antes.model_fields_set
         and _comparavel(campo, getattr(atual, campo))
-        not in (
-            _comparavel(campo, getattr(antes, campo)),
-            _comparavel(campo, getattr(alteracao, campo)),
-        )
+        not in (_comparavel(campo, getattr(antes, campo)), _comparavel(campo, novos[campo]))
     ]
     # O calendário e o fim têm mais de um campo e entram uma vez só.
     return list(dict.fromkeys(_NOMES_DOS_CAMPOS[campo] for campo in mudados))

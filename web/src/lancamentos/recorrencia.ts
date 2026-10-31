@@ -53,6 +53,7 @@ export function rotuloDaRecorrencia(regra: Pick<NovaRecorrencia, "a_cada" | "uni
   return [calendario(regra.a_cada, regra.unidade), fim, regra.automatico ? "automático" : ""].filter(Boolean).join(", ");
 }
 
+/** Os mesmos nomes do motivo da recusa do servidor (`_NOMES_DOS_CAMPOS` em `recorrencias.py`). */
 const NOMES_DOS_CAMPOS: Partial<Record<keyof AlteracaoDeRecorrencia, string>> = {
   descricao: "descrição",
   valor_centavos: "valor",
@@ -64,7 +65,7 @@ const NOMES_DOS_CAMPOS: Partial<Record<keyof AlteracaoDeRecorrencia, string>> = 
   pessoa: "pessoa",
   a_cada: "calendário",
   unidade: "calendário",
-  inicio: "data",
+  inicio: "calendário",
 };
 
 /** "valor, descrição", "termina na 3ª vez", "termina em 10/12/2026": o que a mudança não enviada faz. */

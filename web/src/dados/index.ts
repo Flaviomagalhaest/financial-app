@@ -309,7 +309,8 @@ function situacaoNoAparelho(lancamento: NovoLancamento, anterior?: Pick<Lancamen
  */
 function saemPelaFila(fila: ItemDaFila[]): (l: LancamentoNaTela) => boolean {
   const fins = new Map<string, { desde?: string; ate?: string | null; vezes?: number | null }>();
-  for (const item of fila) {
+  // A recusada não vale: a tela mostra o que o servidor tem até ela ser descartada.
+  for (const item of fila.filter((i) => !i.recusa)) {
     if (item.acao === "excluir_recorrencia") fins.set(item.id, { desde: hoje() });
     if (item.acao === "alterar_recorrencia" && ("ate" in item.alteracao || "vezes" in item.alteracao))
       fins.set(item.recorrencia_id, { ...fins.get(item.recorrencia_id), ate: item.alteracao.ate, vezes: item.alteracao.vezes });
@@ -489,9 +490,13 @@ export function useMudancasDaRecorrenciaNaoEnviadas(): MudancaDaRecorrenciaNaoEn
   );
 }
 
-/** A regra com uma mudança por cima, como o servidor a gravaria: o fim por data tira o por vezes e vice-versa. */
-export function comAMudanca(regra: Recorrencia, { a_partir_da_ocorrencia: _, ...mudou }: AlteracaoDeRecorrencia): Recorrencia {
+/**
+ * A regra com uma mudança por cima, como o servidor a gravaria: o fim por data tira o por vezes e
+ * vice-versa, e o calendário novo (que a tela sempre manda com o `inicio`) começa na ocorrência dada.
+ */
+export function comAMudanca(regra: Recorrencia, { a_partir_da_ocorrencia, ...mudou }: AlteracaoDeRecorrencia): Recorrencia {
   const nova = { ...regra, ...mudou } as Recorrencia;
+  if (mudou.inicio) nova.ocorrencia_do_inicio = a_partir_da_ocorrencia;
   if (mudou.ate) nova.vezes = null;
   if (mudou.vezes) nova.ate = null;
   if ("pessoa" in mudou) nova.pessoa = mudou.pessoa || null;
@@ -503,7 +508,7 @@ export type RecorrenciaNaTela = Recorrencia & { mudancasNaoEnviadas: number };
 
 /**
  * As recorrências do servidor (ou as guardadas) com a fila por cima: a mudança não enviada já vale
- * na regra que a tela mostra, e a excluída some. Os previstos só mudam quando a mudança subir.
+ * na regra que a tela mostra, e a excluída some; a recusada não. Os previstos só mudam quando a mudança subir.
  */
 export function useRecorrencias() {
   const { dados, atualizadoEm, semDados } = useResposta("/api/recorrencias");
@@ -511,7 +516,7 @@ export function useRecorrencias() {
   const recorrencias = useMemo(() => {
     if (!dados) return null;
     const porId = new Map<string, RecorrenciaNaTela>(dados.map((r) => [r.id, { ...r, mudancasNaoEnviadas: 0 }]));
-    for (const item of fila) {
+    for (const item of fila.filter((i) => !i.recusa)) {
       if (item.acao === "excluir_recorrencia") porId.delete(item.id);
       const regra = item.acao === "alterar_recorrencia" ? porId.get(item.recorrencia_id) : undefined;
       if (regra && item.acao === "alterar_recorrencia") porId.set(regra.id, { ...comAMudanca(regra, item.alteracao), mudancasNaoEnviadas: regra.mudancasNaoEnviadas + 1 });

@@ -15,11 +15,8 @@ import {
 } from "../dados";
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso } from "./datas";
-import { emCentavos } from "./dinheiro";
+import { comoDigitado, emCentavos } from "./dinheiro";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
-
-/** "189,90": o valor como se digita no campo, sem o "R$". */
-const comoDigitado = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -77,7 +74,9 @@ function alteracaoDo(f: Formulario, r: RecorrenciaNaTela, ocorrencia: number, da
   if (f.pessoa !== (r.pessoa ?? null)) mudou.pessoa = f.pessoa ?? "";
   if (aCada !== r.a_cada) mudou.a_cada = aCada;
   if (f.unidade !== r.unidade) mudou.unidade = f.unidade;
-  if (f.data !== data) mudou.inicio = f.data;
+  // O calendário novo vai sempre com a data desta vez que a tela mostra, para a regra que o aparelho
+  // mostra até o envio ser a mesma que o servidor grava.
+  if (f.data !== data || "a_cada" in mudou || "unidade" in mudou) mudou.inicio = f.data;
   return Object.keys(mudou).length > 1 ? mudou : "Nada mudou.";
 }
 

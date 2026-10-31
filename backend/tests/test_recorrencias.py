@@ -1015,3 +1015,28 @@ def test_a_mudanca_da_fila_sobre_um_campo_que_a_outra_pessoa_mudou_depois_e_recu
         (21000, "Luz da casa", "esposa"),
         (21000, "Luz da casa", "esposa"),
     ]
+
+
+def test_encerrar_pela_fila_numa_data_e_recusado_se_a_outra_pessoa_encerrou_por_vezes(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    # O fim é um campo só: encerrar por data tiraria em silêncio as 5 vezes que o Flávio pôs.
+    mudar(casal, nova["id"], 1, vezes=5)
+
+    [resultado] = lote(
+        casal,
+        "esposa",
+        {
+            "acao": "alterar_recorrencia",
+            "id": nova["id"],
+            "alteracao": {"a_partir_da_ocorrencia": 1, "ate": "2027-02-28"},
+            "antes": {"ate": None, "vezes": None},
+        },
+    )
+
+    assert (resultado["resultado"], resultado["motivo"]) == (
+        "recusada",
+        "a regra mudou depois (fim): confira e mude de novo",
+    )
+    assert len(gerados(casal, nova["id"])) == 5

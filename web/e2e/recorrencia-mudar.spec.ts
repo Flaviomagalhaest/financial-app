@@ -3,7 +3,9 @@ import { apiDaPagina, tokenDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
 
-test.use({ timezoneId: "America/Sao_Paulo" });
+// Sem service worker: o envio dele em segundo plano não passa pelo `page.route` e correria com o
+// envio da página que os testes seguram ou derrubam. Só o teste do envio em segundo plano o usa.
+test.use({ timezoneId: "America/Sao_Paulo", serviceWorkers: "block" });
 
 const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: nome }).click();
 /** Os lançamentos com esse texto, sem as mudanças não enviadas (que não mostram valor). */
@@ -185,23 +187,24 @@ test("a recorrência criada que talvez já esteja no servidor se exclui em vez d
   await context.setOffline(true);
   await lancarRecorrente(page, { conta, casa, descricao });
 
-  // O servidor grava o lote, mas a resposta não chega ao aparelho.
+  // O servidor grava o lote, mas a resposta não chega ao aparelho, até a pessoa excluir.
   let perdidas = 0;
+  let perder = true;
   await page.route("**/api/lancamentos/lote", async (rota) => {
-    if (perdidas > 0) return rota.continue();
+    if (!perder) return rota.continue();
     perdidas++;
     await rota.fetch();
     await rota.abort("connectionreset");
   });
   await context.setOffline(false);
-  await expect.poll(() => perdidas).toBe(1);
+  await expect.poll(() => perdidas).toBeGreaterThan(0);
 
   const criadas = page.getByRole("region", { name: "Recorrências não enviadas" });
   await expect(criadas).toContainText("talvez já esteja no servidor");
+  perder = false;
   page.once("dialog", (dialogo) => void dialogo.accept());
   await criadas.getByRole("button", { name: `Excluir ${descricao}` }).click();
   await expect(criadas).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Mudanças de recorrência não enviadas" })).toContainText(`${descricao}: excluir`);
 
   // Com internet, a exclusão sobe na hora.
   await aba(page, "Hoje");
@@ -213,11 +216,8 @@ test("a recorrência criada que talvez já esteja no servidor se exclui em vez d
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
-test("a recorrência descartada no meio do envio chega ao servidor e sai de lá também", async ({ page, context }) => {
+test("a recorrência descartada no meio do envio chega ao servidor e sai de lá também", async ({ page }) => {
   const { conta, casa, descricao } = await prepararCasal(page);
-  await context.setOffline(true);
-  await lancarRecorrente(page, { conta, casa, descricao });
-
   // O envio sai e fica parado no caminho enquanto a pessoa descarta.
   let soltar = () => {};
   const solto = new Promise<void>((resolve) => (soltar = resolve));
@@ -226,7 +226,7 @@ test("a recorrência descartada no meio do envio chega ao servidor e sai de lá 
     if (parados++ === 0) await solto;
     await rota.continue();
   });
-  await context.setOffline(false);
+  await lancarRecorrente(page, { conta, casa, descricao });
   await expect.poll(() => parados).toBe(1);
   const criadas = page.getByRole("region", { name: "Recorrências não enviadas" });
   await criadas.getByRole("button", { name: `Descartar ${descricao}` }).click();
@@ -244,29 +244,67 @@ test("a recorrência descartada no meio do envio chega ao servidor e sai de lá 
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
-test("quando quem envia é o service worker, ele lê de novo os previstos que a mudança da regra refez", async ({ page, context }) => {
-  const { descricao } = await prepararRegra(page, 2);
-  await page.evaluate(() => navigator.serviceWorker.ready);
-  const previstos = linha(page, descricao);
+test.describe("com o service worker", () => {
+  test.use({ serviceWorkers: "allow" });
 
-  // A página não consegue enviar (só o pedido dela é barrado); o service worker não passa por esta rota.
-  await page.route("**/api/lancamentos/lote", (rota) => rota.abort("connectionreset"));
-  await abrirRecorrencia(page, previstos.nth(1), descricao);
-  await mudarOValor(page, "210,00");
-  const naoEnviadas = page.getByRole("region", { name: "Mudanças de recorrência não enviadas" });
-  await expect(naoEnviadas).toContainText(`${descricao}: valor, não enviado`);
+  test("quando quem envia é o service worker, ele lê de novo os previstos que a mudança da regra refez", async ({ page, context }) => {
+    const { descricao } = await prepararRegra(page, 2);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    const previstos = linha(page, descricao);
 
-  // O `sync` que a página pediu, como o Android o dispara quando a rede volta.
-  const cdp = await context.newCDPSession(page);
-  const registro = new Promise<string>((resolve) =>
-    cdp.on("ServiceWorker.workerRegistrationUpdated", ({ registrations }) => registrations[0] && resolve(registrations[0].registrationId)),
-  );
-  await cdp.send("ServiceWorker.enable");
-  await cdp.send("ServiceWorker.dispatchSyncEvent", { origin: "http://127.0.0.1:4173", registrationId: await registro, tag: "enviar-fila", lastChance: false });
+    // A página não consegue enviar (só o pedido dela é barrado); o service worker não passa por esta rota.
+    await page.route("**/api/lancamentos/lote", (rota) => rota.abort("connectionreset"));
+    await abrirRecorrencia(page, previstos.nth(1), descricao);
+    await mudarOValor(page, "210,00");
+    const naoEnviadas = page.getByRole("region", { name: "Mudanças de recorrência não enviadas" });
+    await expect(naoEnviadas).toContainText(`${descricao}: valor, não enviado`);
 
-  // A página não leu nada de novo: a lista guardada mudou pelo service worker.
-  await expect(naoEnviadas).toHaveCount(0);
-  await expect(previstos.nth(0)).toContainText("− R$ 210,00");
-  await expect(previstos.nth(1)).toContainText("− R$ 210,00");
+    // O `sync` que a página pediu, como o Android o dispara quando a rede volta.
+    const cdp = await context.newCDPSession(page);
+    const registro = new Promise<string>((resolve) =>
+      cdp.on("ServiceWorker.workerRegistrationUpdated", ({ registrations }) => registrations[0] && resolve(registrations[0].registrationId)),
+    );
+    await cdp.send("ServiceWorker.enable");
+    await cdp.send("ServiceWorker.dispatchSyncEvent", { origin: "http://127.0.0.1:4173", registrationId: await registro, tag: "enviar-fila", lastChance: false });
+
+    // A página não leu nada de novo: a lista guardada mudou pelo service worker.
+    await expect(naoEnviadas).toHaveCount(0);
+    await expect(previstos.nth(0)).toContainText("− R$ 210,00");
+    await expect(previstos.nth(1)).toContainText("− R$ 210,00");
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+});
+
+test("a recorrência descartada no meio de um envio que fica sem resposta sai do servidor depois", async ({ page, request }) => {
+  const { conta, casa, descricao } = await prepararCasal(page);
+  const token = await tokenDaPagina(page);
+  // O servidor grava, mas a resposta se perde; enquanto isso, a pessoa descarta.
+  let soltar = () => {};
+  const solto = new Promise<void>((resolve) => (soltar = resolve));
+  let envios = 0;
+  await page.route("**/api/lancamentos/lote", async (rota) => {
+    if (envios++ > 0) return rota.continue();
+    await solto;
+    await rota.fetch();
+    await rota.abort("connectionreset");
+  });
+  await lancarRecorrente(page, { conta, casa, descricao });
+  await expect.poll(() => envios).toBe(1);
+  const criadas = page.getByRole("region", { name: "Recorrências não enviadas" });
+  await criadas.getByRole("button", { name: `Descartar ${descricao}` }).click();
+  await expect(criadas).toHaveCount(0);
+  soltar();
+
+  // Talvez tenha chegado: o aparelho guarda a exclusão, que sobe no envio seguinte.
+  await aba(page, "Hoje");
+  const noServidor = async () => {
+    const enviar = page.getByRole("button", { name: "Enviar agora" });
+    // O aviso some assim que a fila sobe: o clique não espera o botão voltar.
+    if (await enviar.isVisible()) await enviar.click({ timeout: 1_000 }).catch(() => undefined);
+    const resposta = await request.get("/api/recorrencias", { headers: { authorization: token } });
+    return (await resposta.json()).some((r: { descricao: string }) => r.descricao === descricao);
+  };
+  await expect.poll(noServidor).toBe(false);
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });

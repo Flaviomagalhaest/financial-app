@@ -4,7 +4,7 @@ status: accepted
 
 # A mudança da recorrência vai pela fila, e a regra sem versão recusa o campo que mudou depois
 
-Mudar uma recorrência "daqui para frente", encerrá-la e excluí-la passam a valer sem internet: cada uma entra na fila do aparelho como um pedido só (`alterar_recorrencia` e `excluir_recorrencia` em `POST /api/lancamentos/lote`) e o servidor reajusta ou tira os previstos ao receber, como já faz com a recorrência e o parcelamento novos. Isso abre uma exceção na [ADR 0011](0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md), que deixava toda mudança de regra só com internet. Quem decidiu foi o dono, no ticket 96: a conta que muda de valor ou a assinatura cancelada aparecem na hora de pagar, muitas vezes sem rede.
+Mudar uma recorrência "daqui para frente", encerrá-la e excluí-la passam a valer sem internet: cada uma entra na fila do aparelho como um pedido só (`alterar_recorrencia` e `excluir_recorrencia` em `POST /api/lancamentos/lote`) e o servidor reajusta ou tira os previstos ao receber, como já faz com a recorrência e o parcelamento novos. Isso abre uma exceção na [ADR 0011](0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md), que deixava toda mudança de regra só com internet. Quem decidiu foi o dono, no ticket 96: o reajuste da conta e o serviço que deixa de ser cobrado aparecem na hora de pagar, muitas vezes sem rede.
 
 O aparelho não repete a regra: enquanto a mudança não sobe, ele mostra a regra com a mudança por cima e esconde só os previstos que o fim ou a exclusão vão tirar; o valor novo dos previstos chega na leitura seguinte ao envio. Mudar só um mês e pular um mês já eram mudanças de um lançamento e seguem como antes.
 

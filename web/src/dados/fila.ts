@@ -243,7 +243,12 @@ function acoesDo(item: ItemDaFila): Acao[] {
   // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
   const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
   if (item.acao === "criar_recorrencia") return [{ acao: "criar_recorrencia", recorrencia: item.recorrencia }];
-  if (item.acao === "alterar_recorrencia") return [{ acao: "alterar_recorrencia", id: item.recorrencia_id, alteracao: item.alteracao, antes: comoAntes(item) }];
+  if (item.acao === "alterar_recorrencia") {
+    // Reenviada depois de um envio sem resposta, ela talvez já valha lá, e uma mudança seguinte no
+    // mesmo campo também: comparar com o que a tela mostrava recusaria à toa.
+    const antes = item.talvezNoServidor === undefined ? comoAntes(item) : undefined;
+    return [{ acao: "alterar_recorrencia", id: item.recorrencia_id, alteracao: item.alteracao, antes }];
+  }
   if (item.acao === "excluir_recorrencia") return [{ acao: "excluir_recorrencia", id: item.id }];
   if (item.acao === "criar_parcelamento") return [{ acao: "criar_parcelamento", parcelamento: item.parcelamento }];
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
@@ -260,10 +265,14 @@ function acoesDo(item: ItemDaFila): Acao[] {
   return comEdicao ? [{ acao: "criar", lancamento }, editar] : [{ acao: "criar", lancamento }];
 }
 
-/** Os campos que a mudança traz, como a tela os mostrava: o servidor recusa se a outra pessoa mexeu neles depois. */
+/**
+ * Os campos que a mudança traz, como a tela os mostrava: o servidor recusa se a outra pessoa mexeu
+ * neles depois. O fim é um campo só (a data e as vezes), porque um tira o outro.
+ */
 function comoAntes({ base, alteracao }: { base: Recorrencia; alteracao: AlteracaoDeRecorrencia }) {
-  const campos = Object.keys(alteracao).filter((campo) => campo !== "a_partir_da_ocorrencia") as (keyof AlteracaoDeRecorrencia & keyof Recorrencia)[];
-  return Object.fromEntries(campos.map((campo) => [campo, base[campo] ?? null]));
+  const campos = new Set(Object.keys(alteracao).filter((campo) => campo !== "a_partir_da_ocorrencia") as (keyof AlteracaoDeRecorrencia & keyof Recorrencia)[]);
+  if (campos.has("ate") || campos.has("vezes")) ["ate", "vezes"].forEach((campo) => campos.add(campo as "ate" | "vezes"));
+  return Object.fromEntries([...campos].map((campo) => [campo, base[campo] ?? null]));
 }
 
 /** Previsto que pede confirmação, atrasado ou até `contasDaSemanaDias` dias depois de hoje (`contas_da_semana_de_hoje`). */
@@ -350,6 +359,11 @@ async function marcarSemResposta(enviados: ItemDaFila[]) {
       // mesmo assim. Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
       if (atual && !deLancamento(atual) && atual.talvezNoServidor === undefined && navigator.onLine)
         await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao }));
+      // A recorrência descartada enquanto subia talvez tenha chegado: a exclusão a tira de lá, se estiver.
+      if (!atual && enviado.acao === "criar_recorrencia" && navigator.onLine)
+        await pedido(
+          fila.put({ id: enviado.id, acao: "excluir_recorrencia", recorrencia: enviado.recorrencia, desde: enviado.desde, revisao: 1, talvezNoServidor: enviado.revisao }),
+        );
     }
   });
 }
