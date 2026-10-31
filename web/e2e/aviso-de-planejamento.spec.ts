@@ -278,8 +278,9 @@ test("o criar enviado sem resposta e já lido pelo planejamento conta uma vez s�
   });
   await lancar(page, { teclas: ["1", "0", "0", "0", "0"], conta, categoria: mercado.nome, descricao: `Feira ${s}` });
   await expect.poll(() => perdidas).toBeGreaterThan(0);
-  const noServidor: { descricao: string }[] = await (await page.request.get("/api/lancamentos", { headers })).json();
-  expect(noServidor.map((l) => l.descricao)).toContain(`Feira ${s}`);
+  // O servidor gravou: o planejamento dele já conta os R$ 100,00.
+  const plano = await (await page.request.get(`/api/planejamento/${hoje().slice(0, 7)}`, { headers })).json();
+  expect(plano.itens.find((i: { categoria_id: string }) => i.categoria_id === mercado.id).realizado_centavos).toBe(10000);
   // A fila guarda a hora do envio e a versão enviada (`tentadoEm`, `base`).
   await expect
     .poll(() =>
