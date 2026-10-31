@@ -36,6 +36,19 @@ export function mesDepois(iso: string, deslocamento: number): string {
   return new Date(Date.UTC(ano, mes - 1 + deslocamento, 1)).toISOString().slice(0, 10);
 }
 
+/** O mesmo dia `meses` depois; o que não existe no mês de chegada cai no último dia (como `mais_meses` do servidor). */
+export function maisMeses(iso: string, meses: number): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const ultimo = new Date(Date.UTC(ano, mes - 1 + meses + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(ano, mes - 1 + meses, Math.min(dia, ultimo))).toISOString().slice(0, 10);
+}
+
+/** O dia `dias` depois de `iso`, sem passar pelo fuso do aparelho. */
+export function maisDias(iso: string, dias: number): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1, dia + dias)).toISOString().slice(0, 10);
+}
+
 /** O dia antes de `iso` (`AAAA-MM-DD`), sem passar pelo fuso do aparelho. */
 export function diaAnterior(iso: string): string {
   const [ano, mes, dia] = iso.split("-").map(Number);
