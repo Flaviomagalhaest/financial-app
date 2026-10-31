@@ -8,6 +8,7 @@ e, se uma parte é recusada, desfaz as anteriores: o tudo ou nada vale para o re
 restauração (ADR 0012)."""
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
@@ -37,6 +38,7 @@ from app.lancamentos import (
 from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
+_log = logging.getLogger(__name__)
 
 # Cada lançamento grava a linha dele, a versão de até três campos, o registro do desfazer e as
 # ligações de categoria e tag, apagadas e gravadas de novo (umas quinze, com folga); o
@@ -769,11 +771,14 @@ def _cancelar(url: str | None, id: UUID, usuario: str, motivo: str) -> str:
     mudou depois: o lote avisa quantos ficaram com a mudança dele. Devolve o motivo completo."""
     _voltar(url, id, usuario)
     with conectar(url) as conn:
-        (ficaram,) = conn.execute(
-            "SELECT count(*) FROM edicao_em_lote_lancamentos"
-            " WHERE lote_id = %s AND resultado_do_desfazer <> 'desfeito'",
-            (id,),
-        ).fetchone()
+        ficaram = sum(
+            conn.execute(
+                f"SELECT count(*) FROM {tabela}"
+                " WHERE lote_id = %s AND resultado_do_desfazer <> 'desfeito'",
+                (id,),
+            ).fetchone()[0]
+            for tabela in ("edicao_em_lote_lancamentos", "edicao_em_lote_parcelamentos")
+        )
     if ficaram:
         motivo += (
             f"; {ficaram} lançamento{'s' if ficaram > 1 else ''} mudado depois "
@@ -792,9 +797,16 @@ def cancelar_parados(url: str | None = None) -> int:
             " WHERE situacao = 'aplicando' AND criado_em < %s ORDER BY criado_em",
             (datetime.now(UTC) - PARADO_HA,),
         ).fetchall()
+    cancelados = 0
     for id, usuario in parados:
-        _cancelar(url, id, usuario, "a gravação parou no meio")
-    return len(parados)
+        try:
+            _cancelar(url, id, usuario, "a gravação parou no meio")
+            cancelados += 1
+        except Exception:
+            # Um lote que falha (conflito do banco) fica para a próxima rodada, sem derrubar os
+            # outros; o desfazer continua de onde parou.
+            _log.exception("não foi possível desfazer a edição em lote %s", id)
+    return cancelados
 
 
 def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[EdicaoEmLote, bool]:
