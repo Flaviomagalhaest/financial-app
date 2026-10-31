@@ -21,7 +21,9 @@ Origem: [ticket 61](61-edicao-em-lote.md): a spec (histórias 147 a 151), o [tic
 8. **A amostra da prévia.** São os 5 primeiros que mudam pela data, do mais recente ao mais antigo, e não na ordem escolhida na busca ("Maior valor").
 9. **Uma mudança por vez na tela.** A API aceita categorias e tags no mesmo lote, e o desfazer volta as duas juntas; a folha muda só uma das duas por vez (o casal faz dois lotes).
 10. **A lista de edições.** Mostra só as que ainda se desfazem (até 30 dias, não desfeitas). A desfeita some da lista, e não há histórico das edições antigas na tela.
-11. **Valores.** 30 dias (`desfazerEdicaoEmLoteDias`, da spec) e 5 na amostra (da spec); o lote grava 50 lançamentos por transação (`POR_TRANSACAO`), a conferir no DSQL no [ticket 35](35-teste-nos-dois-celulares.md).
+11. **A contagem enquanto se marca.** A barra da seleção diz "2 marcados" (as linhas marcadas); o "12 compras (58 lançamentos)" da história 149 só aparece na prévia, que é quando o servidor expande os parcelamentos e os estornos. Mostrar já na barra pediria uma chamada a cada marcação.
+12. **O parcelamento muda junto.** O lote muda também a classificação guardada no parcelamento (a com que as parcelas voltam quando ele cresce), e o desfazer a volta se ninguém a mudou depois. A parcela que o parcelamento reviveu depois do lote conta como mudada depois e fica como está.
+13. **Valores.** 30 dias (`desfazerEdicaoEmLoteDias`, da spec) e 5 na amostra (`amostraDaEdicaoEmLote`, da spec); o lote grava 50 lançamentos por transação (`POR_TRANSACAO`), a conferir no DSQL no [ticket 35](35-teste-nos-dois-celulares.md).
 
 ## Checklist
 

@@ -189,6 +189,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "categorias": 0,
             "contas": 0,
             "edicao_em_lote_lancamentos": 0,
+            "edicao_em_lote_parcelamentos": 0,
             "edicoes_em_lote": 0,
             "exportacoes": 0,
             "faturas": 0,
@@ -834,13 +835,14 @@ def test_backup_da_versao_19_sem_edicoes_em_lote_restaura_sem_nenhuma(database_u
     with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
         for nome in origem.namelist():
             conteudo = origem.read(nome)
-            if nome in ("edicoes_em_lote.csv", "edicao_em_lote_lancamentos.csv"):
+            if nome.startswith(("edicoes_em_lote", "edicao_em_lote_")):
                 continue
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
                 manifesto["versao_formato"] = 19
                 del manifesto["tabelas"]["edicoes_em_lote"]
                 del manifesto["tabelas"]["edicao_em_lote_lancamentos"]
+                del manifesto["tabelas"]["edicao_em_lote_parcelamentos"]
                 conteudo = json.dumps(manifesto).encode()
             destino.writestr(nome, conteudo)
 
@@ -879,5 +881,5 @@ def test_as_edicoes_em_lote_voltam_do_backup_com_o_de_antes(database_url):
             ("Tags: tirar #viagem", "aplicada")
         ]
         assert conn.execute(
-            "SELECT versao, desfazer FROM edicao_em_lote_lancamentos"
+            "SELECT versao, resultado_do_desfazer FROM edicao_em_lote_lancamentos"
         ).fetchall() == [(3, None)]

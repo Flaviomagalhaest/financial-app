@@ -530,7 +530,7 @@ def ids_das_tags(conn, nomes: list[str], usuario: str, ja_tinha: set[UUID]) -> l
     return ids
 
 
-def gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
+def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
     ja_tinha = {
         linha[0]
         for linha in conn.execute(
@@ -868,7 +868,7 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     ).rowcount
     if gravados:
         gravar_categorias(conn, novo.id, novo.categoria_ids)
-        gravar_tags(conn, novo.id, novo.tags, usuario)
+        _gravar_tags(conn, novo.id, novo.tags, usuario)
     return _atual(conn, novo.id, usuario), bool(gravados)
 
 
@@ -952,7 +952,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if "categoria_ids" in mudancas:
         gravar_categorias(conn, id, editado.categoria_ids)
     if "tags" in mudancas:
-        gravar_tags(conn, id, editado.tags, usuario)
+        _gravar_tags(conn, id, editado.tags, usuario)
     return _um(conn, id)
 
 

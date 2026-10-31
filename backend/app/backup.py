@@ -416,8 +416,8 @@ def _da_versao_18_para_a_19(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
 
 
 def _da_versao_19_para_a_20(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 20 (ticket 61) traz as edições em lote, com o que cada lançamento tinha antes,
-    para o desfazer. Backup antigo entra sem nenhuma."""
+    """A versão 20 (ticket 61) traz as edições em lote, com o que cada lançamento e cada
+    parcelamento tinha antes, para o desfazer. Backup antigo entra sem nenhuma."""
     novas = {
         "edicoes_em_lote": (
             [
@@ -442,9 +442,22 @@ def _da_versao_19_para_a_20(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
                 "tag_ids_antes",
                 "item_categoria_id_antes",
                 "item_atual_categoria_id_antes",
-                "desfazer",
+                "resultado_do_desfazer",
             ],
             {"versao": "0"},
+        ),
+        "edicao_em_lote_parcelamentos": (
+            [
+                "lote_id",
+                "parcelamento_id",
+                "categoria_ids_antes",
+                "tag_ids_antes",
+                "item_categoria_id_antes",
+                "categoria_ids_depois",
+                "tag_ids_depois",
+                "resultado_do_desfazer",
+            ],
+            {},
         ),
     }
     for tabela, (colunas, somas) in novas.items():

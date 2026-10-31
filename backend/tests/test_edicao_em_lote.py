@@ -555,3 +555,66 @@ def test_desfazer_pula_o_que_tinha_tag_juntada_depois(casal: Casal):
     assert resultado["desfeitos"] == 0
     assert [(p["descricao"], p["motivo"]) for p in resultado["pulados"]] == [("Feira", "saiu")]
     assert classificacao(casal, feira) == [({mercado, casa}, {"Dia a dia"})]
+
+
+def test_o_parcelamento_muda_junto_e_a_parcela_que_volta_vem_com_a_classificacao_do_lote(
+    casal: Casal,
+):
+    conta, mercado, casa = casal.conta(), casal.categoria("Mercado"), casal.categoria("Casa")
+    emprestimo = parcelar(
+        casal, conta, [mercado], parcelas=3, data="2026-11-10", descricao="Empréstimo"
+    )
+    lote = aplicada(
+        casal,
+        {"parcelamento_ids": [emprestimo]},
+        categorias={"acao": "trocar", "categoria_ids": [mercado], "por": casa},
+        tags={"acao": "acrescentar", "tags": ["Banco"]},
+    )
+
+    def corrigir(parcelas: int):
+        resposta = casal.pedir(
+            "flavio", "PATCH", f"/api/parcelamentos/{emprestimo}", json={"parcelas": parcelas}
+        )
+        assert resposta.status_code == 200, resposta.text
+
+    # O parcelamento encolhe e cresce de novo: a 3ª parcela volta com a classificação dele.
+    corrigir(2)
+    corrigir(3)
+    parcelas = [l for l in todos(casal).values() if l["parcelamento_id"] == emprestimo]
+    assert [
+        (p["parcela"], p["categoria_ids"], p["tags"])
+        for p in sorted(parcelas, key=lambda p: p["parcela"])
+    ] == [(n, [casa], ["Banco"]) for n in (1, 2, 3)]
+
+    # O desfazer volta o parcelamento também; a parcela que voltou depois do lote é dele, não do
+    # lote, e fica como está.
+    resultado = desfazer(casal, lote).json()
+    assert resultado["desfeitos"] == 2
+    corrigir(2)
+    corrigir(3)
+    parcelas = sorted(
+        (l for l in todos(casal).values() if l["parcelamento_id"] == emprestimo),
+        key=lambda p: p["parcela"],
+    )
+    assert [(p["categoria_ids"], p["tags"]) for p in parcelas] == [([mercado], [])] * 3
+
+
+def test_desfazer_pula_tambem_o_que_a_propria_pessoa_mudou_depois(casal: Casal):
+    conta, mercado, casa = casal.conta(), casal.categoria("Mercado"), casal.categoria("Casa")
+    feira = lancar(casal, conta, [mercado], descricao="Feira")
+    lote = aplicada(
+        casal, marcados(feira), categorias={"acao": "acrescentar", "categoria_ids": [casa]}
+    )
+    casal.pedir(
+        "esposa",
+        "PATCH",
+        f"/api/lancamentos/{feira['id']}",
+        json={"versao": todos(casal)[feira["id"]]["versao"], "tags": ["À mão"]},
+    )
+
+    resultado = desfazer(casal, lote).json()
+
+    assert [(p["descricao"], p["motivo"], p["por_voce"]) for p in resultado["pulados"]] == [
+        ("Feira", "mudou_depois", True)
+    ]
+    assert classificacao(casal, feira) == [({mercado, casa}, {"À mão"})]

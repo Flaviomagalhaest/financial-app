@@ -11,13 +11,17 @@ import {
   type PreviaDaEdicaoEmLote,
 } from "../dados";
 import { nomePorId, tituloDoLancamento } from "../lancamentos/apresentacao";
+import { contagem } from "./apresentacao";
 
-type Acao = "acrescentar" | "remover" | "trocar" | "substituir";
+type Acao = NonNullable<PedidoDeEdicaoEmLote["categorias"]>["acao"];
 
-const ACOES: Record<Acao, string> = { acrescentar: "Acrescentar", remover: "Tirar", trocar: "Trocar", substituir: "Substituir" };
-
-/** `1 compra`, `12 compras`. */
-export const contagem = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+/** O nome de cada ação e o título do que se escolhe nela. */
+const ACOES: Record<Acao, { nome: string; escolha: string }> = {
+  acrescentar: { nome: "Acrescentar", escolha: "Acrescentar" },
+  remover: { nome: "Tirar", escolha: "Tirar" },
+  trocar: { nome: "Trocar", escolha: "Trocar" },
+  substituir: { nome: "Substituir", escolha: "Ficam só" },
+};
 
 /** Fichas que se marcam: várias, ou uma só no "por" do trocar. */
 function Fichas({ nome, opcoes, marcadas, onAlternar }: { nome: string; opcoes: { valor: string; rotulo: string }[]; marcadas: string[]; onAlternar: (valor: string) => void }) {
@@ -132,7 +136,7 @@ export function FolhaDaEdicaoEmLote({
       </div>
       <Fichas
         nome="Como muda"
-        opcoes={(Object.keys(ACOES) as Acao[]).map((a) => ({ valor: a, rotulo: ACOES[a] }))}
+        opcoes={(Object.keys(ACOES) as Acao[]).map((a) => ({ valor: a, rotulo: ACOES[a].nome }))}
         marcadas={[acao]}
         onAlternar={(a) =>
           mudar(() => {
@@ -142,7 +146,7 @@ export function FolhaDaEdicaoEmLote({
         }
       />
 
-      <h4>{acao === "trocar" ? "Trocar" : acao === "remover" ? "Tirar" : acao === "substituir" ? "Ficam só" : "Acrescentar"}</h4>
+      <h4>{ACOES[acao].escolha}</h4>
       {campo === "categorias" ? (
         <>
           <Fichas nome="Categorias de despesa" opcoes={opcoesDeCategoria("despesa")} marcadas={escolhidas} onAlternar={alternar} />

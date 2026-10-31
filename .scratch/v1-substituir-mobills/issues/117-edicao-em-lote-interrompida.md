@@ -17,5 +17,6 @@ Hoje a edição em lote que para no meio fica com a situação `aplicando`, com 
 
 - [ ] A tarefa diária (`app.tarefa_diaria.handler`) desfaz os lotes em `aplicando` há mais de alguns minutos (o tempo máximo da Lambda), como a compensação que `aplicar` já faz, e os marca `cancelada` com o motivo
 - [ ] Decidir se o reenvio do mesmo id, com o lote parado há tempo, desfaz e aplica de novo, em vez de devolver o lote pela metade
+- [ ] A compensação de uma parte recusada usa o desfazer, que pula o lançamento mudado depois: se alguém mexer num lançamento já gravado enquanto o lote ainda grava, ele fica com a mudança do lote e o lote vira `cancelada` sem avisar ninguém. Decidir se a compensação volta só as categorias e tags que o lote pôs (sem tocar no que a outra pessoa mudou), ou se avisa quais ficaram (revisão do ticket 61)
 - [ ] Teste de API que simula a parada no meio (partes gravadas, situação `aplicando`) e confere a volta
 - [ ] README (seção Busca) e verificações do projeto rodando, PR aberto para `main`

@@ -17,10 +17,10 @@ import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apr
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { mesPorExtenso } from "../cartoes/apresentacao";
-import { SITUACOES, TIPOS } from "./apresentacao";
+import { contagem, SITUACOES, TIPOS } from "./apresentacao";
 import { FiltrosSalvos } from "./FiltrosSalvos";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";
-import { contagem, FolhaDaEdicaoEmLote } from "./FolhaDaEdicaoEmLote";
+import { FolhaDaEdicaoEmLote } from "./FolhaDaEdicaoEmLote";
 
 type Cadastro = ReturnType<typeof useCadastro>;
 

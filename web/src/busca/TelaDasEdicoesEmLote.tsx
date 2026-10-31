@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { desfazerLote, useConexao, useEdicoesEmLote, usePessoas, type DesfazerDaEdicaoEmLote, type EdicaoEmLote } from "../dados";
-import { dataPorExtenso, quando } from "../lancamentos/datas";
+import { dataPorExtenso, diaEmSaoPaulo, quando } from "../lancamentos/datas";
 import { config } from "../config";
-import { contagem } from "./FolhaDaEdicaoEmLote";
+import { contagem } from "./apresentacao";
 
 type Pulado = DesfazerDaEdicaoEmLote["pulados"][number];
 
@@ -78,7 +78,7 @@ export function TelaDasEdicoesEmLote() {
             <strong>{e.resumo}</strong>
             <p className="vazio">
               {contagem(e.lancamentos, "lançamento", "lançamentos")} · por {quem(e.criado_por)} {quando(e.criado_em)} · desfaz até{" "}
-              {dataPorExtenso(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(e.desfazer_ate)))}
+              {dataPorExtenso(diaEmSaoPaulo(new Date(e.desfazer_ate)))}
             </p>
             {e.situacao === "aplicando" && <p className="erro">A gravação parou no meio: desfaça para voltar o que já foi gravado.</p>}
             <div className="acoes">

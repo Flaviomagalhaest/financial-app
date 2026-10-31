@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
-from typing import Literal
+from typing import Literal, NamedTuple
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -25,7 +25,7 @@ from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import (
     Lancamento,
     gravar_categorias,
-    gravar_tags,
+    ids_das_tags,
     ler_por_ids,
     recusar,
     registrar_mudancas,
@@ -38,15 +38,22 @@ from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
 
-# Cada lançamento grava a linha dele, a versão de até três campos, as ligações que mudam e o
-# registro do desfazer: bem abaixo das 3.000 linhas por transação do DSQL.
-POR_TRANSACAO = max(1, LINHAS_POR_LOTE // 20)
+# Cada lançamento grava a linha dele, a versão de até três campos, o registro do desfazer e as
+# ligações de categoria e tag, apagadas e gravadas de novo (umas quinze, com folga); o
+# parcelamento dele, uma vez por lote, grava as dele.
+LINHAS_POR_LANCAMENTO = 20
+POR_TRANSACAO = max(1, LINHAS_POR_LOTE // LINHAS_POR_LANCAMENTO)
 PRAZO_EM_DIAS: int = valores_iniciais()["desfazerEdicaoEmLoteDias"]
-TAMANHO_DA_AMOSTRA = 5
+TAMANHO_DA_AMOSTRA: int = valores_iniciais()["amostraDaEdicaoEmLote"]
 # Os campos que o lote muda: mudou um deles depois, o desfazer pula o lançamento.
 CAMPOS_DO_LOTE = ["categoria_ids", "tags", "item_categoria_id"]
 
 Acao = Literal["acrescentar", "remover", "trocar", "substituir"]
+
+
+def _conferir_por(acao: Acao, por) -> None:
+    if (acao == "trocar") != (por is not None):
+        raise ValueError("só o trocar tem `por`, e ele é obrigatório")
 
 
 class MudancaDeCategorias(BaseModel):
@@ -60,8 +67,7 @@ class MudancaDeCategorias(BaseModel):
 
     @model_validator(mode="after")
     def _por_so_no_trocar(self):
-        if (self.acao == "trocar") != (self.por is not None):
-            raise ValueError("só o trocar tem `por`, e ele é obrigatório")
+        _conferir_por(self.acao, self.por)
         if self.por in self.categoria_ids:
             raise ValueError("trocar uma categoria por ela mesma")
         return self
@@ -77,8 +83,7 @@ class MudancaDeTags(BaseModel):
 
     @model_validator(mode="after")
     def _completa(self):
-        if (self.acao == "trocar") != (self.por is not None):
-            raise ValueError("só o trocar tem `por`, e ele é obrigatório")
+        _conferir_por(self.acao, self.por)
         if self.por is not None:
             (self.por,) = tags_limpas([self.por])
         if not self.tags and self.acao != "substituir":
@@ -224,16 +229,17 @@ class _Mudancas:
     def nome_da_tag(self, nome: str) -> str:
         return self._tags_existentes.get(nome.casefold(), nome)
 
-    def depois(self, l: Lancamento) -> tuple[list[UUID], list[str], bool]:
-        """As categorias e as tags do lançamento depois do lote, e se a categoria pedida é de
-        outro tipo (aí as categorias dele ficam como estão)."""
-        categorias, outro_tipo = list(l.categoria_ids), False
+    def depois(
+        self, tipo: str, categorias: list[UUID], tags: list[str]
+    ) -> tuple[list[UUID], list[str], bool]:
+        """As categorias e as tags (de um lançamento ou de um parcelamento) depois do lote, e se
+        a categoria pedida é de outro tipo (aí as categorias ficam como estão)."""
+        categorias, tags, outro_tipo = list(categorias), list(tags), False
         if c := self.categorias:
-            if c.acao in ("acrescentar", "substituir") and self.tipo != l.tipo:
+            if c.acao in ("acrescentar", "substituir") and self.tipo != tipo:
                 outro_tipo = True
             else:
                 categorias = _aplicar(c.acao, categorias, c.categoria_ids, c.por, lambda x: x)
-        tags = list(l.tags)
         if t := self.tags:
             pedidas = [self.nome_da_tag(n) for n in t.tags]
             por = t.por and self.nome_da_tag(t.por)
@@ -380,7 +386,7 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
     lancamentos, estornos_fora = _selecionados(conn, pedido.selecao)
     mudam, ja_estao, de_outro_tipo, sem_categoria = [], 0, 0, 0
     for l in lancamentos:
-        categorias, tags, outro_tipo = mudancas.depois(l)
+        categorias, tags, outro_tipo = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
         de_outro_tipo += outro_tipo
         if any(_mudou(l, categorias, tags)):
             mudam.append((l, categorias, tags))
@@ -432,6 +438,121 @@ def _tags_das(conn, ids: list[UUID]) -> dict[UUID, list[UUID]]:
     return tags
 
 
+def _religar(conn, tabela: str, dono: str, ligado: str, id: UUID, ids: list[UUID]) -> None:
+    """Troca as ligações de `id` em `tabela` (categorias ou tags de um lançamento ou de um
+    parcelamento) pelas de `ids`."""
+    conn.execute(f"DELETE FROM {tabela} WHERE {dono} = %s", (id,))
+    for ligado_id in ids:
+        conn.execute(f"INSERT INTO {tabela} ({dono}, {ligado}) VALUES (%s, %s)", (id, ligado_id))
+
+
+def _existem(conn, categorias: list[UUID], tags: list[UUID]) -> bool:
+    """As categorias e as tags ainda existem: nenhuma foi juntada a outra nem excluída."""
+    (existem,) = conn.execute(
+        "SELECT (SELECT count(*) FROM categorias WHERE id = ANY(%s))"
+        " + (SELECT count(*) FROM tags WHERE id = ANY(%s))",
+        (categorias, tags),
+    ).fetchone()
+    return existem == len(categorias) + len(tags)
+
+
+def _json(ids) -> str:
+    return json.dumps([str(id) for id in ids])
+
+
+def _ids(texto: str) -> list[UUID]:
+    return [UUID(id) for id in json.loads(texto)]
+
+
+def _regravar(
+    conn,
+    atual: Lancamento,
+    categorias: list[UUID] | None,
+    tags: list[UUID] | None,
+    item: tuple[UUID | None, UUID | None],
+    usuario: str,
+    momento: datetime,
+) -> int:
+    """Grava a classificação de um lançamento (categorias ou tags `None` ficam como estão) e a
+    escolha e o item atual do planejamento; sobe a versão, registra os campos que mudaram e
+    devolve a versão nova."""
+    escolhida, item_atual = item
+    versao = subir_versao(
+        conn,
+        atual.id,
+        atual.versao,
+        "item_categoria_id = %s, item_atual_categoria_id = %s, alterado_por = %s, alterado_em = %s",
+        (escolhida, item_atual, usuario, momento),
+    )
+    mudaram = (categorias is not None, tags is not None, escolhida != atual.item_categoria_id)
+    campos = [campo for campo, mudou in zip(CAMPOS_DO_LOTE, mudaram) if mudou]
+    registrar_mudancas(conn, atual.id, campos, versao, usuario, momento)
+    if categorias is not None:
+        gravar_categorias(conn, atual.id, categorias)
+    if tags is not None:
+        _religar(conn, "lancamento_tags", "lancamento_id", "tag_id", atual.id, tags)
+    return versao
+
+
+def _mudar_parcelamento(
+    conn,
+    lote_id: UUID,
+    id: UUID,
+    tipo: str,
+    mudancas: _Mudancas,
+    usuario: str,
+    momento: datetime,
+) -> None:
+    """O parcelamento guarda a classificação com que as parcelas voltam quando ele cresce (ticket
+    47): ela muda junto com as parcelas, uma vez por lote, e o de antes fica para o desfazer."""
+    if conn.execute(
+        "SELECT 1 FROM edicao_em_lote_parcelamentos WHERE lote_id = %s AND parcelamento_id = %s",
+        (lote_id, id),
+    ).fetchone():
+        return
+    categorias = [
+        c
+        for (c,) in conn.execute(
+            "SELECT categoria_id FROM parcelamento_categorias WHERE parcelamento_id = %s", (id,)
+        )
+    ]
+    tags = dict(
+        conn.execute(
+            "SELECT t.id, t.nome FROM parcelamento_tags pt JOIN tags t ON t.id = pt.tag_id"
+            " WHERE pt.parcelamento_id = %s",
+            (id,),
+        ).fetchall()
+    )
+    (escolhida,) = conn.execute(
+        "SELECT item_categoria_id FROM parcelamentos WHERE id = %s", (id,)
+    ).fetchone()
+    novas_categorias, novas_tags, _ = mudancas.depois(tipo, categorias, list(tags.values()))
+    tag_ids = ids_das_tags(conn, novas_tags, usuario, set(tags))
+    _religar(
+        conn, "parcelamento_categorias", "parcelamento_id", "categoria_id", id, novas_categorias
+    )
+    _religar(conn, "parcelamento_tags", "parcelamento_id", "tag_id", id, tag_ids)
+    conn.execute(
+        "UPDATE parcelamentos SET item_categoria_id = %s, alterado_por = %s, alterado_em = %s"
+        " WHERE id = %s",
+        (escolhida if escolhida in novas_categorias else None, usuario, momento, id),
+    )
+    conn.execute(
+        "INSERT INTO edicao_em_lote_parcelamentos (lote_id, parcelamento_id,"
+        " categoria_ids_antes, tag_ids_antes, item_categoria_id_antes, categoria_ids_depois,"
+        " tag_ids_depois) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (
+            lote_id,
+            id,
+            _json(categorias),
+            _json(tags),
+            escolhida,
+            _json(novas_categorias),
+            _json(tag_ids),
+        ),
+    )
+
+
 def _aplicar_parte(
     conn,
     lote_id: UUID,
@@ -445,31 +566,24 @@ def _aplicar_parte(
     mudancas = _Mudancas(conn, pedido)
     guardar_item_atual(conn, "l.id = ANY(%s)", (ids,))
     atuais, tags_antes = _itens_atuais(conn, ids), _tags_das(conn, ids)
+    parcelamentos: set[tuple[UUID, str]] = set()
     mudaram = 0
     for l in ler_por_ids(conn, ids):
-        categorias, tags, _ = mudancas.depois(l)
+        categorias, tags, _ = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
         muda_categorias, muda_tags = _mudou(l, categorias, tags)
         if not (muda_categorias or muda_tags):
             continue
         if not categorias:
             raise LoteRecusado(_sem_categoria(1))
-        escolhida, item_atual = _item_depois(l, categorias, atuais[l.id])
-        versao = subir_versao(
+        versao = _regravar(
             conn,
-            l.id,
-            l.versao,
-            "item_categoria_id = %s, item_atual_categoria_id = %s, alterado_por = %s,"
-            " alterado_em = %s",
-            (escolhida, item_atual, usuario, momento),
+            l,
+            categorias if muda_categorias else None,
+            ids_das_tags(conn, tags, usuario, set(tags_antes[l.id])) if muda_tags else None,
+            _item_depois(l, categorias, atuais[l.id]),
+            usuario,
+            momento,
         )
-        campos = zip(CAMPOS_DO_LOTE, (muda_categorias, muda_tags, escolhida != l.item_categoria_id))
-        registrar_mudancas(
-            conn, l.id, [c for c, mudou in campos if mudou], versao, usuario, momento
-        )
-        if muda_categorias:
-            gravar_categorias(conn, l.id, categorias)
-        if muda_tags:
-            gravar_tags(conn, l.id, tags, usuario)
         conn.execute(
             "INSERT INTO edicao_em_lote_lancamentos (lote_id, lancamento_id, versao,"
             " categoria_ids_antes, tag_ids_antes, item_categoria_id_antes,"
@@ -478,75 +592,118 @@ def _aplicar_parte(
                 lote_id,
                 l.id,
                 versao,
-                json.dumps([str(c) for c in l.categoria_ids]),
-                json.dumps([str(t) for t in tags_antes[l.id]]),
+                _json(l.categoria_ids),
+                _json(tags_antes[l.id]),
                 l.item_categoria_id,
                 atuais[l.id],
             ),
         )
+        if l.parcelamento_id:
+            parcelamentos.add((l.parcelamento_id, l.tipo))
         mudaram += 1
+    for parcelamento_id, tipo in parcelamentos:
+        _mudar_parcelamento(conn, lote_id, parcelamento_id, tipo, mudancas, usuario, momento)
     return mudaram
 
 
-def _desfazer_um(conn, lote: tuple, usuario: str, momento: datetime) -> str:
+class _AntesDoLote(NamedTuple):
+    """O que um lançamento tinha antes do lote, e a versão em que o lote o deixou."""
+
+    lancamento_id: UUID
+    versao: int
+    categoria_ids: str
+    tag_ids: str
+    item_categoria_id: UUID | None
+    item_atual_categoria_id: UUID | None
+
+
+def _desfazer_lancamento(conn, antes: _AntesDoLote, usuario: str, momento: datetime) -> str:
     """Volta um lançamento ao que era antes do lote, se ninguém mudou depois o que o lote mudou."""
-    id, versao, categorias_antes, tags_antes, escolhida, item_atual = lote
+    id = antes.lancamento_id
     excluido = conn.execute("SELECT excluido_em FROM lancamentos WHERE id = %s", (id,)).fetchone()
     if not excluido or excluido[0]:
         return "excluido"
     if conn.execute(
         "SELECT 1 FROM lancamento_campos WHERE lancamento_id = %s AND campo = ANY(%s)"
         " AND versao > %s",
-        (id, CAMPOS_DO_LOTE, versao),
+        (id, CAMPOS_DO_LOTE, antes.versao),
     ).fetchone():
         return "mudou_depois"
-    categorias = [UUID(c) for c in json.loads(categorias_antes)]
-    tags = [UUID(t) for t in json.loads(tags_antes)]
-    (existem,) = conn.execute(
-        "SELECT (SELECT count(*) FROM categorias WHERE id = ANY(%s))"
-        " + (SELECT count(*) FROM tags WHERE id = ANY(%s))",
-        (categorias, tags),
-    ).fetchone()
-    if existem != len(categorias) + len(tags):
+    categorias, tags = _ids(antes.categoria_ids), _ids(antes.tag_ids)
+    if not _existem(conn, categorias, tags):
         return "saiu"
     (atual,) = ler_por_ids(conn, [id])
-    muda_categorias = set(categorias) != set(atual.categoria_ids)
-    muda_tags = set(tags) != set(_tags_das(conn, [id])[id])
-    nova = subir_versao(
+    _regravar(
         conn,
-        id,
-        atual.versao,
-        "item_categoria_id = %s, item_atual_categoria_id = %s, alterado_por = %s, alterado_em = %s",
-        (escolhida, item_atual, usuario, momento),
+        atual,
+        categorias if set(categorias) != set(atual.categoria_ids) else None,
+        tags if set(tags) != set(_tags_das(conn, [id])[id]) else None,
+        (antes.item_categoria_id, antes.item_atual_categoria_id),
+        usuario,
+        momento,
     )
-    campos = zip(CAMPOS_DO_LOTE, (muda_categorias, muda_tags, escolhida != atual.item_categoria_id))
-    registrar_mudancas(conn, id, [c for c, mudou in campos if mudou], nova, usuario, momento)
-    if muda_categorias:
-        gravar_categorias(conn, id, categorias)
-    if muda_tags:
-        conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
-        for tag in tags:
-            conn.execute(
-                "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)", (id, tag)
-            )
+    return "desfeito"
+
+
+def _desfazer_parcelamento(conn, registro: tuple) -> str:
+    """Volta a classificação do parcelamento, se ninguém a mudou depois do lote."""
+    id, categorias_antes, tags_antes, escolhida, categorias_depois, tags_depois = registro
+    categorias = {
+        c
+        for (c,) in conn.execute(
+            "SELECT categoria_id FROM parcelamento_categorias WHERE parcelamento_id = %s", (id,)
+        )
+    }
+    tags = {
+        t
+        for (t,) in conn.execute(
+            "SELECT tag_id FROM parcelamento_tags WHERE parcelamento_id = %s", (id,)
+        )
+    }
+    if categorias != {*_ids(categorias_depois)} or tags != {*_ids(tags_depois)}:
+        return "mudou_depois"
+    categorias, tags = _ids(categorias_antes), _ids(tags_antes)
+    if not _existem(conn, categorias, tags):
+        return "saiu"
+    _religar(conn, "parcelamento_categorias", "parcelamento_id", "categoria_id", id, categorias)
+    _religar(conn, "parcelamento_tags", "parcelamento_id", "tag_id", id, tags)
+    conn.execute("UPDATE parcelamentos SET item_categoria_id = %s WHERE id = %s", (escolhida, id))
     return "desfeito"
 
 
 def _desfazer_parte(conn, lote_id: UUID, usuario: str, momento: datetime) -> int:
-    """Desfaz, numa transação, a próxima parte do que o lote gravou. Devolve quantos viu."""
-    registros = conn.execute(
+    """Desfaz, numa transação, a próxima parte do que o lote gravou: os lançamentos e, depois
+    deles, os parcelamentos. Devolve quantos viu."""
+    vistos = 0
+    for antes in conn.execute(
         "SELECT lancamento_id, versao, categoria_ids_antes, tag_ids_antes,"
         " item_categoria_id_antes, item_atual_categoria_id_antes FROM edicao_em_lote_lancamentos"
-        " WHERE lote_id = %s AND desfazer IS NULL ORDER BY lancamento_id LIMIT %s",
+        " WHERE lote_id = %s AND resultado_do_desfazer IS NULL ORDER BY lancamento_id LIMIT %s",
         (lote_id, POR_TRANSACAO),
-    ).fetchall()
-    for registro in registros:
+    ).fetchall():
         conn.execute(
-            "UPDATE edicao_em_lote_lancamentos SET desfazer = %s"
+            "UPDATE edicao_em_lote_lancamentos SET resultado_do_desfazer = %s"
             " WHERE lote_id = %s AND lancamento_id = %s",
-            (_desfazer_um(conn, registro, usuario, momento), lote_id, registro[0]),
+            (
+                _desfazer_lancamento(conn, _AntesDoLote(*antes), usuario, momento),
+                lote_id,
+                antes[0],
+            ),
         )
-    return len(registros)
+        vistos += 1
+    for registro in conn.execute(
+        "SELECT parcelamento_id, categoria_ids_antes, tag_ids_antes, item_categoria_id_antes,"
+        " categoria_ids_depois, tag_ids_depois FROM edicao_em_lote_parcelamentos"
+        " WHERE lote_id = %s AND resultado_do_desfazer IS NULL ORDER BY parcelamento_id LIMIT %s",
+        (lote_id, POR_TRANSACAO - vistos),
+    ).fetchall():
+        conn.execute(
+            "UPDATE edicao_em_lote_parcelamentos SET resultado_do_desfazer = %s"
+            " WHERE lote_id = %s AND parcelamento_id = %s",
+            (_desfazer_parcelamento(conn, registro), lote_id, registro[0]),
+        )
+        vistos += 1
+    return vistos
 
 
 def _voltar(url: str | None, lote_id: UUID, usuario: str) -> None:
@@ -562,26 +719,37 @@ def _voltar(url: str | None, lote_id: UUID, usuario: str) -> None:
         pass
 
 
-_COLUNAS_DO_LOTE = "id, resumo, situacao, lancamentos, criado_por, criado_em, recusa"
+class _LoteGravado(NamedTuple):
+    id: UUID
+    resumo: str
+    situacao: str
+    lancamentos: int
+    criado_por: str
+    criado_em: datetime
+    # Por que o lote parou no meio e foi desfeito (`cancelada`).
+    recusa: str | None
+
+    @property
+    def edicao(self) -> EdicaoEmLote:
+        return EdicaoEmLote(
+            id=self.id,
+            resumo=self.resumo,
+            situacao=self.situacao,
+            lancamentos=self.lancamentos,
+            criado_por=self.criado_por,
+            criado_em=self.criado_em,
+            desfazer_ate=self.criado_em + timedelta(days=PRAZO_EM_DIAS),
+        )
 
 
-def _lote(linha: tuple) -> EdicaoEmLote:
-    id, resumo, situacao, lancamentos, criado_por, criado_em, _ = linha
-    return EdicaoEmLote(
-        id=id,
-        resumo=resumo,
-        situacao=situacao,
-        lancamentos=lancamentos,
-        criado_por=criado_por,
-        criado_em=criado_em,
-        desfazer_ate=criado_em + timedelta(days=PRAZO_EM_DIAS),
-    )
+_COLUNAS_DO_LOTE = ", ".join(_LoteGravado._fields)
 
 
-def _ler(conn, id: UUID) -> tuple | None:
-    return conn.execute(
+def _ler(conn, id: UUID) -> _LoteGravado | None:
+    linha = conn.execute(
         f"SELECT {_COLUNAS_DO_LOTE} FROM edicoes_em_lote WHERE id = %s", (id,)
     ).fetchone()
+    return linha and _LoteGravado(*linha)
 
 
 def _mudar_lote(url: str | None, id: UUID, atribuicoes: str, parametros: tuple) -> None:
@@ -596,7 +764,7 @@ def _mudar_lote(url: str | None, id: UUID, atribuicoes: str, parametros: tuple) 
 def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[EdicaoEmLote, bool]:
     """Aplica o lote inteiro ou nada. Devolve o lote e se ele foi gravado agora."""
 
-    def preparar(conn) -> tuple[tuple, list[UUID] | None]:
+    def preparar(conn) -> tuple[_LoteGravado, list[UUID] | None]:
         if gravado := _ler(conn, nova.id):
             return gravado, None
         plano = _planejar(conn, nova)
@@ -611,11 +779,11 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
         )
         return _ler(conn, nova.id), [l.id for l, _, _ in plano.mudam]
 
-    linha, ids = em_transacao(url, preparar)
+    gravado, ids = em_transacao(url, preparar)
     if ids is None:
-        if linha[2] == "cancelada":
-            raise recusar(linha[6])
-        return _lote(linha), False
+        if gravado.situacao == "cancelada":
+            raise recusar(gravado.recusa)
+        return gravado.edicao, False
     momento, mudaram = datetime.now(UTC), 0
 
     def aplicar_parte(parte: list[UUID]) -> int:
@@ -642,16 +810,16 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
         raise
     _mudar_lote(url, nova.id, "situacao = 'aplicada', lancamentos = %s", (mudaram,))
     with conectar(url) as conn:
-        return _lote(_ler(conn, nova.id)), True
+        return _ler(conn, nova.id).edicao, True
 
 
 def _pulados(conn, lote_id: UUID, usuario: str) -> list[PuladoNoDesfazer]:
     pulados = []
     for id, motivo, versao, descricao, excluido_por, excluido_em in conn.execute(
-        "SELECT r.lancamento_id, r.desfazer, r.versao, l.descricao, l.excluido_por,"
+        "SELECT r.lancamento_id, r.resultado_do_desfazer, r.versao, l.descricao, l.excluido_por,"
         " l.excluido_em FROM edicao_em_lote_lancamentos r"
         " JOIN lancamentos l ON l.id = r.lancamento_id"
-        " WHERE r.lote_id = %s AND r.desfazer <> 'desfeito'"
+        " WHERE r.lote_id = %s AND r.resultado_do_desfazer <> 'desfeito'"
         " ORDER BY l.data DESC, l.criado_em DESC, l.id",
         (lote_id,),
     ):
@@ -683,12 +851,12 @@ def desfazer(url: str | None, id: UUID, usuario: str) -> DesfazerDaEdicaoEmLote:
     mesmo resultado."""
 
     def conferir(conn) -> str:
-        linha = _ler(conn, id)
-        if not linha or linha[2] == "cancelada":
+        gravado = _ler(conn, id)
+        if not gravado or gravado.situacao == "cancelada":
             raise HTTPException(status_code=404, detail="edição em lote não encontrada")
-        if linha[2] != "desfeita" and _lote(linha).desfazer_ate < datetime.now(UTC):
+        if gravado.situacao != "desfeita" and gravado.edicao.desfazer_ate < datetime.now(UTC):
             raise recusar(f"passou o prazo de {PRAZO_EM_DIAS} dias para desfazer")
-        return linha[2]
+        return gravado.situacao
 
     if em_transacao(url, conferir) != "desfeita":
         _voltar(url, id, usuario)
@@ -701,7 +869,7 @@ def desfazer(url: str | None, id: UUID, usuario: str) -> DesfazerDaEdicaoEmLote:
     with conectar(url) as conn:
         (desfeitos,) = conn.execute(
             "SELECT count(*) FROM edicao_em_lote_lancamentos"
-            " WHERE lote_id = %s AND desfazer = 'desfeito'",
+            " WHERE lote_id = %s AND resultado_do_desfazer = 'desfeito'",
             (id,),
         ).fetchone()
         return DesfazerDaEdicaoEmLote(desfeitos=desfeitos, pulados=_pulados(conn, id, usuario))
@@ -743,7 +911,7 @@ def listar(usuario: UsuarioLogado, request: Request) -> list[EdicaoEmLote]:
     """As que ainda se desfazem, da mais recente à mais antiga."""
     with conectar(url_do_banco(request)) as conn:
         return [
-            _lote(linha)
+            _LoteGravado(*linha).edicao
             for linha in conn.execute(
                 f"SELECT {_COLUNAS_DO_LOTE} FROM edicoes_em_lote"
                 " WHERE situacao IN ('aplicando', 'aplicada') AND criado_em > %s"

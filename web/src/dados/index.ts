@@ -867,16 +867,22 @@ export function criarTransferencia(transferencia: NovaTransferencia): Promise<st
   return recusaDe(() => api.POST("/api/transferencias", { body: transferencia }), "o servidor recusou a transferência");
 }
 
-/** O motivo da recusa do servidor, ou `null` quando ele aceitou. */
-async function recusaDe(pedir: () => Promise<{ data?: unknown; error?: unknown }>, padrao: string): Promise<string | null> {
+/** A resposta do servidor, ou o motivo da recusa. */
+async function respostaOuRecusa<D>(pedir: () => Promise<{ data?: D; error?: unknown }>, padrao: string): Promise<D | string> {
   try {
     const { data, error } = await pedir();
-    if (data) return null;
+    if (data) return data;
     const detalhe = (error as { detail?: unknown } | undefined)?.detail;
     return typeof detalhe === "string" ? detalhe : padrao;
   } catch {
     return "sem resposta do servidor";
   }
+}
+
+/** O motivo da recusa do servidor, ou `null` quando ele aceitou. */
+async function recusaDe(pedir: () => Promise<{ data?: unknown; error?: unknown }>, padrao: string): Promise<string | null> {
+  const resposta = await respostaOuRecusa(pedir, padrao);
+  return typeof resposta === "string" ? resposta : null;
 }
 
 /** Favoritos mudam só com internet (ADR 0011): devolvem o motivo da recusa, ou `null` quando o servidor aceitou. */
@@ -960,18 +966,6 @@ async function lerDeNovoDepoisDoLote() {
     buscarEGuardar("/api/tags", LEITURAS["/api/tags"]),
     buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]),
   ]);
-}
-
-/** A resposta do servidor, ou o motivo da recusa. */
-async function respostaOuRecusa<D>(pedir: () => Promise<{ data?: D; error?: unknown }>, padrao: string): Promise<D | string> {
-  try {
-    const { data, error } = await pedir();
-    if (data) return data;
-    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
-    return typeof detalhe === "string" ? detalhe : padrao;
-  } catch {
-    return "sem resposta do servidor";
-  }
 }
 
 /** A edição em lote precisa de internet (ADR 0011): não entra na fila. A prévia não grava nada. */
