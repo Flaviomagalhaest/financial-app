@@ -43,7 +43,7 @@ scripts/usuarios-do-app.sh listar prod
 
 O CI (`.github/workflows/ci.yml`) roda lint, testes, o contrato e o build com um Postgres em container.
 
-Os testes de navegador criam dados a cada rodada e não os apagam. O CI sobe um banco novo a cada run; no local, depois de umas duas suítes no mesmo banco, o Histórico do usuário de teste passa de mil lançamentos e os testes que esperam 5 s começam a falhar (tickets 120 e 123). Antes de conferir uma falha intermitente, recrie o banco local:
+Os testes de navegador criam dados a cada rodada e não os apagam. O CI sobe um banco novo a cada run; no local, depois de umas duas suítes no mesmo banco, o Histórico do usuário de teste passa de mil lançamentos e os testes que esperam 5 s começam a falhar (tickets 120 e 123; o caminho é o 124). Antes de conferir uma falha intermitente, recrie o banco local:
 
 ```sh
 psql postgresql://postgres@localhost:54329/postgres -c 'DROP DATABASE financial_app' && eval "$(scripts/postgres-local.sh)"
