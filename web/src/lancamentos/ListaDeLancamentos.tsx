@@ -8,20 +8,70 @@ import {
   situacaoDaFatura,
   useCadastro,
   useLancamentos,
+  useParcelamentosNaoEnviados,
   usePessoas,
   useRecorrenciasNaoEnviadas,
   type LancamentoNaTela,
+  type NovoLancamento,
 } from "../dados";
-import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
+import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, numeroDaParcela, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { mesPorExtenso } from "../cartoes/apresentacao";
 import { dataPorExtenso, quando } from "./datas";
+import { divisao, rotuloDasParcelas } from "./parcelamento";
 import { rotuloDaRecorrencia } from "./recorrencia";
+
+/** A recorrência ou o parcelamento que ainda não subiu, como a lista o mostra. */
+type RegraNaLista = {
+  id: string;
+  titulo: string;
+  valor: Pick<NovoLancamento, "tipo" | "valor_centavos">;
+  detalhes: string;
+  /** "todo mês", "10x". */
+  rotulo: string;
+  recusa?: string;
+  podeDescartar: boolean;
+};
+
+/** As regras criadas no aparelho que ainda não subiram: os lançamentos que elas geram vêm do servidor. */
+function RegrasNaoEnviadas(props: { id: string; titulo: string; explicacao: string; semResposta: string; regras: RegraNaLista[]; onDescartar: (id: string) => void }) {
+  if (props.regras.length === 0) return null;
+  return (
+    <section aria-labelledby={props.id}>
+      <h3 id={props.id}>{props.titulo}</h3>
+      <p className="vazio">{props.explicacao}</p>
+      <ul className="lista">
+        {props.regras.map((r) => (
+          <li key={r.id}>
+            <div>
+              <strong>{r.titulo}</strong>
+              <ValorComSinal l={r.valor} />
+            </div>
+            <p className="vazio">{r.detalhes}</p>
+            <p className={r.recusa ? "erro" : "vazio"}>
+              ⏳ {r.titulo}, {r.rotulo}, não enviado{r.recusa ? `: ${r.recusa}` : ""}
+            </p>
+            {r.podeDescartar ? (
+              <div className="acoes">
+                <button type="button" className="secundario" aria-label={`Descartar ${r.titulo}`} onClick={() => props.onDescartar(r.id)}>
+                  Descartar
+                </button>
+              </div>
+            ) : (
+              <p className="vazio">{props.semResposta}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 /** Lançamentos do casal, do mais recente ao mais antigo, com editar e excluir em cada linha. */
 export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   const { cartoes, contasECartoes, categorias } = useCadastro();
   const { lancamentos, atualizadoEm, semDados } = useLancamentos();
   const recorrencias = useRecorrenciasNaoEnviadas();
+  const parcelamentos = useParcelamentosNaoEnviados();
   const { euId, nomeDe } = usePessoas();
   const [erro, setErro] = useState("");
   const [informacoes, setInformacoes] = useState<string | null>(null);
@@ -75,41 +125,38 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
           {erro}
         </p>
       )}
-      {recorrencias.length > 0 && (
-        <section aria-labelledby="recorrencias-nao-enviadas">
-          <h3 id="recorrencias-nao-enviadas">Recorrências não enviadas</h3>
-          <p className="vazio">Os previstos aparecem quando a recorrência subir.</p>
-          <ul className="lista">
-            {recorrencias.map((r) => {
-              const titulo = tituloDoLancamento(r, categorias);
-              return (
-                <li key={r.id}>
-                  <div>
-                    <strong>{titulo}</strong>
-                    <ValorComSinal l={r} />
-                  </div>
-                  <p className="vazio">
-                    desde {dataPorExtenso(r.inicio)} · {nome(contasECartoes, r.conta_id)} · {r.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
-                    {r.tipo_do_valor === "estimado" ? " · estimado" : ""}
-                  </p>
-                  <p className={r.recusa ? "erro" : "vazio"}>
-                    ⏳ {titulo}, {rotuloDaRecorrencia(r)}, não enviado{r.recusa ? `: ${r.recusa}` : ""}
-                  </p>
-                  {r.podeDescartar ? (
-                    <div className="acoes">
-                      <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(r)}>
-                        Descartar
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="vazio">O envio ficou sem resposta: ela talvez já esteja no servidor e sobe quando a rede voltar.</p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      <RegrasNaoEnviadas
+        id="recorrencias-nao-enviadas"
+        titulo="Recorrências não enviadas"
+        explicacao="Os previstos aparecem quando a recorrência subir."
+        semResposta="O envio ficou sem resposta: ela talvez já esteja no servidor e sobe quando a rede voltar."
+        regras={recorrencias.map((r) => ({
+          ...r,
+          titulo: tituloDoLancamento(r, categorias),
+          valor: r,
+          detalhes: [`desde ${dataPorExtenso(r.inicio)}`, nome(contasECartoes, r.conta_id), r.categoria_ids.map((c) => nome(categorias, c)).join(", "), r.tipo_do_valor === "estimado" ? "estimado" : ""]
+            .filter(Boolean)
+            .join(" · "),
+          rotulo: rotuloDaRecorrencia(r),
+        }))}
+        onDescartar={(id) => void descartar({ id })}
+      />
+      <RegrasNaoEnviadas
+        id="parcelamentos-nao-enviados"
+        titulo="Parcelamentos não enviados"
+        explicacao="As parcelas aparecem quando o parcelamento subir."
+        semResposta="O envio ficou sem resposta: ele talvez já esteja no servidor e sobe quando a rede voltar."
+        regras={parcelamentos.map((p) => ({
+          ...p,
+          titulo: tituloDoLancamento(p, categorias),
+          valor: { tipo: p.tipo, valor_centavos: divisao(p).total },
+          detalhes: [dataPorExtenso(p.data), nome(contasECartoes, p.conta_id), p.categoria_ids.map((c) => nome(categorias, c)).join(", "), rotuloDasParcelas(p), p.automatico ? "automático" : ""]
+            .filter(Boolean)
+            .join(" · "),
+          rotulo: `${p.parcelas}x`,
+        }))}
+        onDescartar={(id) => void descartar({ id })}
+      />
       {!semDados && lancamentos?.length === 0 && <p className="vazio">Nenhum lançamento ainda.</p>}
       <ul className="lista">
         {lancamentos?.map((l) => {
@@ -118,7 +165,10 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
           return (
             <li key={l.id}>
               <div>
-                <strong>{titulo}</strong>
+                <strong>
+                  {titulo}
+                  {l.parcela && l.parcelas ? ` ${numeroDaParcela(l.parcela, l.parcelas)}` : ""}
+                </strong>
                 <ValorComSinal l={l} />
               </div>
               <p className="vazio">
@@ -126,6 +176,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                 {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                 {ligacao && ` · ${ligacao}`}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
+                {l.alterada_a_mao && " · alterada à mão"}
                 {" · "}
                 {l.pessoa ? nomeDe(l.pessoa) : "conjunto"}
               </p>
@@ -212,6 +263,11 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                   <button type="button" className="secundario" aria-label={`Informações ${titulo}`} onClick={() => setInformacoes(informacoes === l.id ? null : l.id)}>
                     Informações
                   </button>
+                  {l.parcelamento_id && !l.naoEnviado && (
+                    <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
+                      Parcelamento
+                    </a>
+                  )}
                 </details>
               </div>
               {informacoes === l.id && (

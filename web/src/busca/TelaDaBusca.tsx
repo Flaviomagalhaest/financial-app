@@ -10,17 +10,15 @@ import {
   type ParcelamentoNaTela,
   type Transferencia,
 } from "../dados";
-import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
+import { nomePorId, numeroDaParcela, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { mesPorExtenso } from "../cartoes/apresentacao";
 import { SITUACOES, TIPOS } from "./apresentacao";
+import { FiltrosSalvos } from "./FiltrosSalvos";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";
 
 type Cadastro = ReturnType<typeof useCadastro>;
-
-/** `3` de `10` vira `03/10`, como a fatura mostra a parcela. */
-const numeroDaParcela = (parcela: number, parcelas: number) => `${String(parcela).padStart(2, "0")}/${String(parcelas).padStart(2, "0")}`;
 
 /** Um filtro escolhido, como ficha que se tira com um toque. */
 type Ficha = { rotulo: string; tirar: (c: Criterios) => Criterios };
@@ -176,6 +174,13 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
           Filtros{fichas.length ? ` (${fichas.length})` : ""}
         </button>
       </div>
+      <FiltrosSalvos
+        criterios={criterios}
+        onAplicar={(c) => {
+          setCriterios(c);
+          setTexto(c.texto ?? "");
+        }}
+      />
       {fichas.length > 0 && (
         <ul className="fileira fichas-da-busca" aria-label="Filtros escolhidos">
           {fichas.map((f) => (

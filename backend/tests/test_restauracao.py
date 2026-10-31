@@ -191,6 +191,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "exportacoes": 0,
             "faturas": 0,
             "favoritos": 0,
+            "filtros_salvos": 0,
             "itens_do_planejamento": 0,
             "lancamento_campos": 0,
             "lancamento_categorias": 0,
@@ -769,8 +770,45 @@ def test_backup_da_versao_17_sem_favoritos_restaura_sem_favoritos(database_url):
         assert conn.execute("SELECT count(*) FROM favoritos").fetchone() == (0,)
 
 
-def test_backup_da_versao_18_sem_marca_da_regra_restaura_com_a_exclusao_de_pessoa(database_url):
-    # O formato 18, anterior ao ticket 110: nenhuma exclusão era marcada como da regra.
+def test_backup_da_versao_18_sem_filtros_salvos_restaura_sem_filtros(database_url):
+    # O que `prod` gravava antes do ticket 60: nenhuma tabela de filtros salvos.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, conta_id,"
+            " criado_por, alterado_por, versao) VALUES ('00000000-0000-0000-0000-000000000001',"
+            " 'despesa', 'realizado', 1000, '2026-03-28', '00000000-0000-0000-0000-000000000002',"
+            " 'flavio', 'flavio', 1)"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "filtros_salvos.csv":
+                continue
+            if nome == "lancamentos.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-1]) for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 18
+                del manifesto["tabelas"]["filtros_salvos"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT valor_centavos FROM lancamentos").fetchall() == [(1000,)]
+        assert conn.execute("SELECT count(*) FROM filtros_salvos").fetchone() == (0,)
+
+
+def test_backup_da_versao_19_sem_marca_da_regra_restaura_com_a_exclusao_de_pessoa(database_url):
+    # O formato 19, anterior ao ticket 110: nenhuma exclusão era marcada como da regra.
     aplicar_migrations(database_url)
     with psycopg.connect(database_url, autocommit=True) as conn:
         conn.execute(
@@ -792,7 +830,7 @@ def test_backup_da_versao_18_sem_marca_da_regra_restaura_com_a_exclusao_de_pesso
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
-                manifesto["versao_formato"] = 18
+                manifesto["versao_formato"] = 19
                 conteudo = json.dumps(manifesto).encode()
             destino.writestr(nome, conteudo)
 

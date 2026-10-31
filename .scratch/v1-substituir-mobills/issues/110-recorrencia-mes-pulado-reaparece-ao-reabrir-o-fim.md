@@ -29,5 +29,5 @@ A mesma coisa pelo horizonte, sem fim nenhum e mais fácil de acontecer: o casal
 
 ## Notas
 
-- Coluna `lancamentos.excluido_pela_regra` (migration 0050, `boolean` anulável: o DSQL não aceita `ADD COLUMN` com restrição, backup na versão 19 com o conversor da 18). `_reajustar_um_lote` marca a exclusão que o fim ou o horizonte faz; a geração só revive `excluido_pela_regra`, e o revive limpa a marca. O número de `geradas` deixa de distinguir o pulado. O realizado excluído por uma pessoa segue de fora (`situacao = 'previsto'`), com teste existente.
+- Coluna `lancamentos.excluido_pela_regra` (migration 0051, `boolean` anulável: o DSQL não aceita `ADD COLUMN` com restrição, backup na versão 20 com o conversor da 19). `_reajustar_um_lote` marca a exclusão que o fim ou o horizonte faz; a geração só revive `excluido_pela_regra`, e o revive limpa a marca. O número de `geradas` deixa de distinguir o pulado. O realizado excluído por uma pessoa segue de fora (`situacao = 'previsto'`), com teste existente.
 - Recorrência já encerrada antes desta mudança tem a exclusão sem a marca e não volta ao reabrir (o app ainda não tem dados reais).
