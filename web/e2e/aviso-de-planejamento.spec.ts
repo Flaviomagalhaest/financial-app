@@ -270,14 +270,20 @@ test("a compra não enviada num cartão arquivado conta pela fatura, não pelo m
 test("o criar enviado sem resposta e já lido pelo planejamento conta uma vez só no aviso", async ({ page }) => {
   const { s, headers, conta, categoria } = await prepararCasal(page);
   const mercado = await categoria("Mercado", 100000);
-  // O servidor grava o lançamento, mas a resposta não chega; depois nenhum envio passa.
-  let perdidas = 0;
+  // O servidor grava o lançamento, mas a resposta não chega; depois nenhum envio passa. O teste só
+  // segue quando o servidor terminou de gravar, e não quando o lote saiu (ticket 120).
+  let primeiro = true;
+  let gravou = false;
   await page.route("**/api/lancamentos/lote", async (rota) => {
-    if (perdidas++ === 0) await rota.fetch();
+    if (primeiro) {
+      primeiro = false;
+      await rota.fetch();
+      gravou = true;
+    }
     await rota.abort("connectionreset");
   });
   await lancar(page, { teclas: ["1", "0", "0", "0", "0"], conta, categoria: mercado.nome, descricao: `Feira ${s}` });
-  await expect.poll(() => perdidas).toBeGreaterThan(0);
+  await expect.poll(() => gravou).toBe(true);
   // O servidor gravou: o planejamento dele já conta os R$ 100,00.
   const plano = await (await page.request.get(`/api/planejamento/${hoje().slice(0, 7)}`, { headers })).json();
   expect(plano.itens.find((i: { categoria_id: string }) => i.categoria_id === mercado.id).realizado_centavos).toBe(10000);
