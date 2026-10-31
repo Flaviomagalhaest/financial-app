@@ -1,7 +1,7 @@
 # Recorrência: acabamentos da tela da recorrência
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 96
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -15,8 +15,8 @@ A tela da recorrência (`web/src/lancamentos/TelaDaRecorrencia.tsx`) muda "daqui
 
 ## Checklist
 
-- [ ] Escolha do item do planejamento (`item_categoria_id` na `AlteracaoDeRecorrencia`): a tela não pergunta; repetir o `AvisoDePlanejamento` da tela de lançamento (`useAvisoDePlanejamento` em `web/src/dados/index.ts`), como o [ticket 118](118-parcelamento-acabamentos-da-tela-de-correcao.md) faz no parcelamento
-- [ ] Criar tag nova na mudança "daqui para frente": hoje ela só marca e desmarca as tags que já existem
-- [ ] Os seletores de categorias, tags e pessoa e o `mesmos` estão repetidos em `TelaDaRecorrencia.tsx` e `TelaDoParcelamento.tsx`: juntar num componente só se o 118 mexer nos mesmos seletores
-- [ ] Testes de navegador em `web/e2e/recorrencia-mudar.spec.ts`
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Escolha do item do planejamento (`item_categoria_id` na `AlteracaoDeRecorrencia`): a tela não pergunta; repetir o `AvisoDePlanejamento` da tela de lançamento (`useAvisoDePlanejamento` em `web/src/dados/index.ts`), como o [ticket 118](118-parcelamento-acabamentos-da-tela-de-correcao.md) faz no parcelamento
+- [x] Criar tag nova na mudança "daqui para frente": hoje ela só marca e desmarca as tags que já existem
+- [x] Os seletores de categorias, tags e pessoa e o `mesmos` estão repetidos em `TelaDaRecorrencia.tsx` e `TelaDoParcelamento.tsx`: juntar num componente só se o 118 mexer nos mesmos seletores (o 118 ainda está aberto e não mexeu: nada a juntar agora; quem fechar o 118 junta, pois ele também vai pôr o `AvisoDePlanejamento` e a criação de tag lá)
+- [x] Testes de navegador em `web/e2e/recorrencia-mudar.spec.ts`
+- [x] Verificações do projeto rodando e PR aberto para `main`
