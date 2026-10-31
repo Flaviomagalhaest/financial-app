@@ -20,4 +20,8 @@ O aviso de planejamento (`web/src/dados/aviso.ts`, `useAvisoDePlanejamento` em `
 - [x] **Mês sem planejamento guardado**: ao abrir, o app guarda o planejamento do mês anterior, deste e do próximo. O previsto com data mais longe, lançado sem internet, mostra "o planejamento de <mês> não está no aparelho". Decidir se basta ou se o aparelho guarda mais meses — decisão: basta. O aparelho segue guardando anterior, atual e próximo; o aviso já diz que o planejamento do mês não está no aparelho, e guardar mais meses custaria mais chamadas a cada abertura por um caso raro
 - [x] **Receita**: os textos do item de receita ("Faltam R$ X para o planejado", "R$ X acima do planejado", "Chega ao planejado") não têm teste — `oQueSobra` foi para `aviso.ts` e tem teste de tabela em `web/e2e/aviso.spec.ts`
 - [x] **Transferência com categoria** conta no planejamento (história 67), mas a tela de transferência (`TelaDeTransferencia.tsx`) não mostra o aviso. Ela grava direto na API e já precisa de internet — `TelaDeTransferencia` mostra o aviso com a categoria escolhida; teste de navegador em `aviso-de-planejamento.spec.ts`
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Verificações do projeto rodando e PR aberto para `main` — suíte: 152 de 153; a falha (`pessoa-e-repetido.spec.ts` › "Excluir este") já existe na `main` sem estas mudanças
+
+## Pendências
+
+Sobras da revisão: [ticket 116](116-aviso-de-planejamento-sobras-do-109.md). A falha de `pessoa-e-repetido.spec.ts` › "Excluir este tira o lançamento repetido para os dois" é anterior a este ticket (banco local acumulado?) e não tem ticket ainda.
