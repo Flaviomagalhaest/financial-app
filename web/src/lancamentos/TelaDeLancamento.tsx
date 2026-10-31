@@ -4,6 +4,7 @@ import {
   identidadeDe,
   oferecerFavoritar,
   salvarLancamento,
+  salvarParcelamento,
   salvarRecorrencia,
   useAvisoDePlanejamento,
   useCadastro,
@@ -24,6 +25,7 @@ import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
+import { divisao, pedidoDo, problemaDo, rotuloDasParcelas, type ParcelamentoNaFolha } from "./parcelamento";
 import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
 import { Teclado } from "./Teclado";
 
@@ -83,6 +85,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   const [situacaoEscolhida, setSituacaoEscolhida] = useState<Situacao | null>(null);
   // "Repete? Recorrente": salvar cria a regra, e os previstos o servidor gera ao receber.
   const [recorrencia, setRecorrencia] = useState<RecorrenciaNaFolha | null>(null);
+  // "Repete? Parcelado": salvar cria o parcelamento, e as parcelas o servidor gera ao receber.
+  const [parcelamento, setParcelamento] = useState<ParcelamentoNaFolha | null>(null);
   // O item tocado em "Conta no planejamento em:"; sem toque, vale a escolha que o lançamento já tem
   // ou, no novo, a última para aquelas categorias.
   const [itemTocado, setItemTocado] = useState<string | null>(null);
@@ -154,6 +158,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
   const estornoPronto = estornando && (!estornoDe || estornoAplicado);
   const problemaDaRecorrencia = recorrencia && problemaDa(recorrencia, data);
+  const problemaDoParcelamento = parcelamento && problemaDo(parcelamento, centavos);
   const podeSalvar =
     centavos > 0 &&
     categoriaIds.length > 0 &&
@@ -161,17 +166,23 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     !enviando &&
     (!id || existente !== null) &&
     !problemaDaRecorrencia &&
+    !problemaDoParcelamento &&
     (!estornoDe || estornoAplicado) &&
     (!estornando || !compra || centavos <= restante);
+
+  const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
+  const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
+  const rotuloDoParcelamento = parcelamento && (parcelas ? rotuloDasParcelas(parcelas) : `${parcelamento.parcelas}x`);
 
   // O que a folha de detalhes preencheu, numa linha; a data de hoje e o realizado são o normal e não aparecem.
   const resumo = [
     descricao.trim(),
     ...tags.map((t) => `#${t}`),
     pessoa ? nomeDe(pessoa) : "",
-    recorrencia ? "" : faturaMes ? rotuloDaFatura(faturaMes) : "",
-    data === hoje() ? "" : recorrencia ? `desde ${rotuloDaData(data)}` : rotuloDaData(data),
-    recorrencia ? rotuloDaRecorrencia(regraDa(recorrencia, data)) : situacao === "previsto" ? "previsto" : "",
+    recorrencia || parcelamento ? "" : faturaMes ? rotuloDaFatura(faturaMes) : "",
+    data === hoje() ? "" : recorrencia ? `desde ${rotuloDaData(data)}` : parcelamento && !noCartao ? `1ª parcela ${rotuloDaData(data)}` : rotuloDaData(data),
+    recorrencia ? rotuloDaRecorrencia(regraDa(recorrencia, data)) : rotuloDoParcelamento ?? (situacao === "previsto" ? "previsto" : ""),
+    parcelamento?.automatico && !noCartao ? "automático" : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -252,12 +263,20 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     : [];
 
   const cartaoDoEstorno = estornando ? (cartoes.find((c) => c.id === conta)?.titular_id ?? conta) : "";
-  const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
 
+  // No parcelado, o aviso mostra a 1ª parcela, na fatura que a data dá.
   const planejamento = useAvisoDePlanejamento(
-    { id: existente?.id ?? novoId, valor_centavos: centavos, categoria_ids: categoriaIds, conta_id: conta, data, fatura_mes: noCartao ? faturaMes : null, situacao },
+    {
+      id: existente?.id ?? novoId,
+      valor_centavos: parcelas ? divisao(parcelas).primeira : centavos,
+      categoria_ids: categoriaIds,
+      conta_id: conta,
+      data,
+      fatura_mes: noCartao && !parcelamento ? faturaMes : null,
+      situacao,
+    },
     itemTocado,
   );
   // Sem duas categorias com item, a escolha que o lançamento já tem fica, se a categoria dela ficou.
@@ -275,6 +294,16 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   function trocarTipo(novo: Tipo) {
     setTipo(novo);
     setCategoriaIds([]);
+    // Só a despesa se parcela.
+    if (novo !== "despesa") setParcelamento(null);
+  }
+
+  /** "Repete?" é uma coisa só: recorrente ou parcelado, nunca os dois. */
+  function repetir(mudanca: { recorrencia?: RecorrenciaNaFolha | null; parcelamento?: ParcelamentoNaFolha | null }) {
+    if (mudanca.recorrencia !== undefined) setRecorrencia(mudanca.recorrencia);
+    if (mudanca.parcelamento !== undefined) setParcelamento(mudanca.parcelamento);
+    if (mudanca.recorrencia) setParcelamento(null);
+    if (mudanca.parcelamento) setRecorrencia(null);
   }
 
   function alternar(categoria: string) {
@@ -289,7 +318,20 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     try {
       const eFavorito = jaEFavorito;
       // Vai para a fila, que sobe na hora se houver internet; sem ela, fica como não enviado.
-      if (recorrencia)
+      if (parcelamento)
+        await salvarParcelamento({
+          id: novoId,
+          tipo: "despesa",
+          data,
+          descricao,
+          conta_id: conta,
+          categoria_ids: categoriaIds,
+          item_categoria_id: itemEscolhido,
+          tags,
+          pessoa,
+          ...pedidoDo(parcelamento, centavos, noCartao),
+        });
+      else if (recorrencia)
         await salvarRecorrencia({
           id: novoId,
           tipo,
@@ -330,7 +372,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
       }
       window.location.hash = "#/historico";
     } catch {
-      setErro(recorrencia ? "Não foi possível guardar a recorrência no aparelho." : "Não foi possível guardar o lançamento no aparelho.");
+      setErro(`Não foi possível guardar ${parcelamento ? "o parcelamento" : recorrencia ? "a recorrência" : "o lançamento"} no aparelho.`);
     } finally {
       setEnviando(false);
     }
@@ -441,7 +483,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
-          recorrencia={id || estornando ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, onMudar: setRecorrencia }}
+          recorrencia={id || estornando ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
+          parcelamento={
+            id || estornando || tipo !== "despesa"
+              ? undefined
+              : { valor: parcelamento, noCartao, parcelas: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
+          }
           onFechar={() => setDetalhesAbertos(false)}
         />
       )}

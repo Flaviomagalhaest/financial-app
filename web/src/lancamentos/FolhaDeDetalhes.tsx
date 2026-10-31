@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { chaveDaTag, type LancamentoNaTela, type Pessoa } from "../dados";
 import { EscolhaDaData } from "./EscolhaDaData";
+import { PARCELAMENTO_PADRAO, type ParcelamentoNaFolha } from "./parcelamento";
 import { RECORRENCIA_PADRAO, type RecorrenciaNaFolha } from "./recorrencia";
 
 type Situacao = LancamentoNaTela["situacao"];
@@ -33,6 +34,17 @@ type Props = {
    * recorrência que começa na data, e situação e fatura ficam por conta da regra.
    */
   recorrencia?: { valor: RecorrenciaNaFolha | null; problema: string | null; onMudar: (recorrencia: RecorrenciaNaFolha | null) => void };
+  /**
+   * Só na despesa nova: o "Parcelado" de "Repete?". Com ele, salvar cria o parcelamento, e a data é a
+   * da compra (no cartão) ou a da 1ª parcela; `parcelas` mostra como o valor digitado se divide.
+   */
+  parcelamento?: {
+    valor: ParcelamentoNaFolha | null;
+    noCartao: boolean;
+    parcelas: string;
+    problema: string | null;
+    onMudar: (parcelamento: ParcelamentoNaFolha | null) => void;
+  };
   onFechar: () => void;
 };
 
@@ -41,7 +53,7 @@ const numero = (texto: string) => (texto === "" ? 0 : Number(texto));
 
 const mesmaTag = (a: string, b: string) => chaveDaTag(a) === chaveDaTag(b);
 
-/** Folha de baixo com o que é opcional no lançamento: descrição, tags, pessoa, data e "Repete?". */
+/** Folha de baixo com o que é opcional no lançamento: descrição, tags, pessoa, data e "Repete?" (uma vez, parcelado ou recorrente). */
 export function FolhaDeDetalhes(props: Props) {
   const folha = useRef<HTMLDialogElement>(null);
   const [novaTag, setNovaTag] = useState("");
@@ -53,6 +65,11 @@ export function FolhaDeDetalhes(props: Props) {
   const marcada = (tag: string) => props.tags.some((t) => mesmaTag(t, tag));
   const recorrencia = props.recorrencia?.valor ?? null;
   const mudarRecorrencia = (mudanca: Partial<RecorrenciaNaFolha>) => recorrencia && props.recorrencia?.onMudar({ ...recorrencia, ...mudanca });
+  const parcelamento = props.parcelamento?.valor ?? null;
+  const mudarParcelamento = (mudanca: Partial<ParcelamentoNaFolha>) => parcelamento && props.parcelamento?.onMudar({ ...parcelamento, ...mudanca });
+  // A recorrência e o parcelamento decidem a situação e a fatura de cada lançamento que geram.
+  const porRegra = !!(recorrencia || parcelamento);
+  const tituloDaData = recorrencia ? "Primeira vez" : parcelamento ? (props.parcelamento?.noCartao ? "Data da compra" : "Primeira parcela") : "Data";
   // As marcadas vêm primeiro: a fileira rola de lado, e a tag recém-criada fica à vista.
   const opcoes = [...props.tags, ...(props.tagsTravadas ? [] : props.opcoesDeTags.filter((o) => !marcada(o)))];
 
@@ -140,9 +157,9 @@ export function FolhaDeDetalhes(props: Props) {
         ))}
       </div>
 
-      <h4>{recorrencia ? "Primeira vez" : "Data"}</h4>
+      <h4>{tituloDaData}</h4>
       <EscolhaDaData data={props.data} onMudar={props.onData} />
-      {!recorrencia && (
+      {!porRegra && (
         <div className="alternancia" role="group" aria-label="Situação">
           {(["realizado", "previsto"] as const).map((s) => (
             <button type="button" key={s} className={props.situacao === s ? "" : "secundario"} aria-pressed={props.situacao === s} onClick={() => props.onSituacao(s)}>
@@ -152,7 +169,7 @@ export function FolhaDeDetalhes(props: Props) {
         </div>
       )}
 
-      {props.fatura && !recorrencia && (
+      {props.fatura && !porRegra && (
         <>
           <h4>Fatura</h4>
           <div className="alternancia quatro" role="group" aria-label="Fatura">
@@ -175,17 +192,63 @@ export function FolhaDeDetalhes(props: Props) {
         <>
           <h4>Repete?</h4>
           <div className="alternancia tres" role="group" aria-label="Repete?">
-            <button type="button" className={recorrencia ? "secundario" : ""} aria-pressed={!recorrencia} onClick={() => props.recorrencia?.onMudar(null)}>
+            <button
+              type="button"
+              className={porRegra ? "secundario" : ""}
+              aria-pressed={!porRegra}
+              onClick={() => {
+                props.recorrencia?.onMudar(null);
+                props.parcelamento?.onMudar(null);
+              }}
+            >
               Uma vez
             </button>
-            <button type="button" className="secundario" aria-pressed="false" disabled>
+            <button
+              type="button"
+              className={parcelamento ? "" : "secundario"}
+              aria-pressed={!!parcelamento}
+              disabled={!props.parcelamento}
+              onClick={() => props.parcelamento?.onMudar(parcelamento ?? PARCELAMENTO_PADRAO)}
+            >
               Parcelado
             </button>
             <button type="button" className={recorrencia ? "" : "secundario"} aria-pressed={!!recorrencia} onClick={() => props.recorrencia?.onMudar(recorrencia ?? RECORRENCIA_PADRAO)}>
               Recorrente
             </button>
           </div>
-          {!recorrencia && <p className="vazio">Parcelado ainda não está disponível.</p>}
+          {!props.parcelamento && <p className="vazio">Só a despesa se parcela.</p>}
+        </>
+      )}
+      {parcelamento && (
+        <>
+          <div className="linha">
+            <input id="parcelas" type="number" inputMode="numeric" min={2} value={parcelamento.parcelas || ""} onChange={(e) => mudarParcelamento({ parcelas: numero(e.target.value) })} />
+            <label htmlFor="parcelas">parcelas</label>
+          </div>
+          <h4>O valor digitado é</h4>
+          <div className="alternancia" role="group" aria-label="O valor digitado é">
+            {(
+              [
+                ["total", "O total"],
+                ["parcela", "O da parcela"],
+              ] as const
+            ).map(([v, nome]) => (
+              <button type="button" key={v} className={parcelamento.valorDigitado === v ? "" : "secundario"} aria-pressed={parcelamento.valorDigitado === v} onClick={() => mudarParcelamento({ valorDigitado: v })}>
+                {nome}
+              </button>
+            ))}
+          </div>
+          <p className="vazio">{parcelamento.valorDigitado === "total" ? "Sem juros: o total se divide pelas parcelas." : "Com juros: cada parcela vale o digitado."}</p>
+          {props.parcelamento?.parcelas && <p>{props.parcelamento.parcelas}</p>}
+          {props.parcelamento?.noCartao ? (
+            <p className="vazio">No cartão, cada parcela cai numa fatura e vira realizada sozinha quando entra na fatura aberta.</p>
+          ) : (
+            <label className="caixa" htmlFor="automatico-parcelas">
+              <input id="automatico-parcelas" type="checkbox" checked={parcelamento.automatico} onChange={(e) => mudarParcelamento({ automatico: e.target.checked })} />
+              Automático: cada parcela vira realizada sozinha na data, sem confirmar
+            </label>
+          )}
+          {props.parcelamento?.problema && <p className="erro">{props.parcelamento.problema}</p>}
         </>
       )}
       {recorrencia && (

@@ -7,6 +7,7 @@ import { hoje, mesDepois } from "../lancamentos/datas";
 import {
   apagarTudo,
   comTrava,
+  deLancamento,
   guardarResposta,
   lerFila,
   lerResposta,
@@ -16,15 +17,18 @@ import {
   type Exclusao,
   type Guardada,
   type ItemDaFila,
+  type ItemDeLancamento,
   type Lancamento,
   type NovaRecorrencia,
   type NovoLancamento,
+  type NovoParcelamento,
 } from "./armazem";
 import {
   decidirConflito,
   descartar,
   enfileirarConfirmar,
   enfileirarExcluir,
+  enfileirarParcelamento,
   enfileirarRecorrencia,
   enfileirarSalvar,
   enviarFila,
@@ -70,7 +74,8 @@ export type Historico = components["schemas"]["Historico"];
 export type { Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
-export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovaRecorrencia, NovoLancamento };
+export type { Conflito, Exclusao, ItemDaFila, ItemDeLancamento, Lancamento, NovaRecorrencia, NovoLancamento, NovoParcelamento };
+export { deLancamento };
 export { identidadeDe, oferecerFavoritar, useOfertaDeFavoritar } from "./favoritos";
 export { criteriosDoEndereco, enderecoDaBusca } from "./busca";
 export type { Criterios, ParcelamentoNaTela, Transferencia } from "./busca";
@@ -286,8 +291,8 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
   const porId = new Map<string, LancamentoNaTela>(servidor.map((l) => [l.id, { ...l, naoEnviado: false }]));
   const novos: LancamentoNaTela[] = [];
   for (const item of fila) {
-    // Os previstos da recorrência são do servidor: até ela subir, o aparelho só mostra a regra.
-    if (item.acao === "criar_recorrencia") continue;
+    // Os previstos e as parcelas são do servidor: até a regra subir, o aparelho só mostra a regra.
+    if (!deLancamento(item)) continue;
     const anterior = porId.get(item.id);
     if (item.conflito) {
       const servidor = anterior ?? { ...item.conflito.lancamento, naoEnviado: false };
@@ -390,9 +395,12 @@ export function useBusca(criterios: Criterios) {
 }
 
 /**
- * A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. `podeDescartar`
- * só quando ela com certeza não está no servidor: nunca saiu do aparelho ou foi recusada.
+ * A regra só se descarta quando com certeza não está no servidor: nunca saiu do aparelho ou foi
+ * recusada. A que ficou sem resposta talvez já tenha gerado os previstos ou as parcelas.
  */
+const podeDescartar = (item: ItemDaFila) => !!item.recusa || item.talvezNoServidor === undefined;
+
+/** A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. */
 export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string; podeDescartar: boolean };
 
 /** As recorrências criadas no aparelho que ainda não subiram, da mais antiga à mais nova. */
@@ -401,7 +409,22 @@ export function useRecorrenciasNaoEnviadas(): RecorrenciaNaoEnviada[] {
   return useMemo(
     () =>
       fila.flatMap((item) =>
-        item.recorrencia ? [{ ...item.recorrencia, recusa: item.recusa, podeDescartar: !!item.recusa || item.talvezNoServidor === undefined }] : [],
+        item.acao === "criar_recorrencia" ? [{ ...item.recorrencia, recusa: item.recusa, podeDescartar: podeDescartar(item) }] : [],
+      ),
+    [fila],
+  );
+}
+
+/** O parcelamento na fila, como a recorrência. */
+export type ParcelamentoNaoEnviado = NovoParcelamento & { recusa?: string; podeDescartar: boolean };
+
+/** Os parcelamentos criados no aparelho que ainda não subiram, do mais antigo ao mais novo. */
+export function useParcelamentosNaoEnviados(): ParcelamentoNaoEnviado[] {
+  const fila = useFila();
+  return useMemo(
+    () =>
+      fila.flatMap((item) =>
+        item.acao === "criar_parcelamento" ? [{ ...item.parcelamento, recusa: item.recusa, podeDescartar: podeDescartar(item) }] : [],
       ),
     [fila],
   );
@@ -568,7 +591,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
   const porId = new Map<string, NoAparelho>(servidor.map((l) => [l.id, { ...l, em: Date.parse(l.alterado_em) }]));
   const mudancas: Mudanca[] = [];
   for (const item of fila) {
-    if (item.conflito || item.exclusao) continue;
+    if (!deLancamento(item) || item.conflito || item.exclusao) continue;
     const antes = porId.get(item.id);
     if (item.acao === "excluir" || !item.lancamento) {
       porId.delete(item.id);
@@ -710,13 +733,13 @@ export function useConexao(): boolean {
   return online && !semResposta;
 }
 
-/** Uma recorrência subiu: os previstos que o servidor gerou só vêm nas leituras dos lançamentos e da Hoje. */
-let previstosNovos = false;
+/** Uma regra subiu: os previstos e as parcelas que o servidor gerou só vêm nas leituras dos lançamentos e da Hoje. */
+let geradosNoServidor = false;
 
 const remeter: Remessa = async (acoes) => {
   try {
     const { data, response } = await api.POST("/api/lancamentos/lote", { body: { acoes } });
-    if (data?.resultados.some((r) => r.recorrencia)) previstosNovos = true;
+    if (data?.resultados.some((r) => r.recorrencia || r.parcelamento)) geradosNoServidor = true;
     return data ? data.resultados : response.status;
   } catch {
     return 0;
@@ -740,8 +763,8 @@ export async function enviarAgora(): Promise<boolean> {
   if (!enviou) pedirEnvioEmSegundoPlano();
   // O saldo guardado das contas não conta o que acabou de subir: sem a fila para cobrir a diferença, buscá-lo de novo (ticket 81).
   else if (pendentes > 0) void Promise.all((["/api/contas", "/api/contas?arquivadas=true"] as const).map((c) => buscarEGuardar(c, LEITURAS[c])));
-  if (previstosNovos) {
-    previstosNovos = false;
+  if (geradosNoServidor) {
+    geradosNoServidor = false;
     await Promise.all([buscarEGuardar(LISTA, LEITURAS[LISTA]), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
   }
   return enviou;
@@ -775,6 +798,12 @@ export async function salvarRecorrencia(recorrencia: NovaRecorrencia): Promise<v
   void enviarAgora();
 }
 
+/** O parcelamento novo também: as parcelas o servidor gera ao receber. */
+export async function salvarParcelamento(parcelamento: NovoParcelamento): Promise<void> {
+  await enfileirarParcelamento(parcelamento);
+  void enviarAgora();
+}
+
 export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {
   await enfileirarExcluir(mostrado.id, baseDe(mostrado));
   void enviarAgora();
@@ -784,10 +813,11 @@ export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<voi
  * Confirma o previsto pela fila (ADR 0011) e já tenta subir. Devolve a mudança se ela ainda está na
  * fila: sem internet, recusada, em conflito ou vencida pela exclusão.
  */
-export async function confirmarPrevisto(mostrado: LancamentoNaTela, ajustes: Ajustes = {}): Promise<ItemDaFila | undefined> {
+export async function confirmarPrevisto(mostrado: LancamentoNaTela, ajustes: Ajustes = {}): Promise<ItemDeLancamento | undefined> {
   await enfileirarConfirmar(mostrado, ajustes, baseDe(mostrado));
   await enviarAgora();
-  return (await lerFila()).find((item) => item.id === mostrado.id);
+  const item = (await lerFila()).find((i) => i.id === mostrado.id);
+  return item && deLancamento(item) ? item : undefined;
 }
 
 export const descartarNaoEnviado = descartar;

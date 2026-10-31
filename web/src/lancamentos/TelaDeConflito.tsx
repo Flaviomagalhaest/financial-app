@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   decidir,
+  deLancamento,
   descartarNaoEnviado,
   excluirApesarDoConflito,
   useCadastro,
@@ -66,7 +67,8 @@ function outroLado(c: Conflito["campos"][number], nomeDe: (id: string) => string
 export function TelaDeConflito({ id }: { id: string }) {
   const { contasECartoes, categorias } = useCadastro();
   const { nomeDe } = usePessoas();
-  const item = useFila().find((i) => i.id === id);
+  const achado = useFila().find((i) => i.id === id);
+  const item = achado && deLancamento(achado) ? achado : undefined;
   const [escolhas, setEscolhas] = useState<Partial<Record<Campo, "meu" | "deles">>>({});
   const [erro, setErro] = useState("");
 
