@@ -1,7 +1,7 @@
 # Ligar as pessoas do casal ao ambiente (PESSOAS)
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `wizard` (HITL: só o dono sabe o `sub` de cada usuário no Cognito); apoio: `implement`
 Modelo recomendado: Sonnet
@@ -15,7 +15,11 @@ Dar à Lambda de `dev` e de `prod` a variável `PESSOAS` com o `sub` e o nome de
 
 ## Checklist
 
-- [ ] Descobrir o `sub` de cada usuário em cada ambiente (`scripts/usuarios-do-app.sh listar` mostra e-mail e status; o `sub` sai de `aws cognito-idp admin-get-user`) e decidir os nomes que aparecem no app
+- [x] Descobrir o `sub` de cada usuário em cada ambiente (`scripts/usuarios-do-app.sh listar` mostra e-mail e status; o `sub` sai de `aws cognito-idp admin-get-user`) e decidir os nomes que aparecem no app
 - [x] Passar `PESSOAS` para a Lambda em `infra/lib/pilha-app.ts` (`environment`), sem pôr os `sub` reais no repositório se o dono preferir (parâmetro da pilha ou variável do deploy) e documentar no README
-- [ ] Conferir no app de `dev`: o seletor de pessoa mostra os dois nomes, a tela de conflito diz "O de <nome>" e o menu ⋯ > Informações mostra quem criou
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Conferir no app: o seletor de pessoa mostra os dois nomes, a tela de conflito diz "O de <nome>" e o menu ⋯ > Informações mostra quem criou (conferido em prod: o seletor mostra Flávio e Ester; a tela de conflito e o menu ⋯ > Informações não foram abertos)
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Nota
+
+Nos GitHub Environments só `prod` é usado: o `dev` lê `PESSOAS` da variável do repositório.
