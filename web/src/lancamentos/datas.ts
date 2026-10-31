@@ -22,9 +22,12 @@ export function dataPorExtenso(iso: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+/** `2026-11-01` vira `11/2026`. */
+export const mesPorExtenso = (mes: string) => `${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
+
 /** `2026-11-01` vira "fatura de 11/2026". */
 export function rotuloDaFatura(mes: string): string {
-  return `fatura de ${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
+  return `fatura de ${mesPorExtenso(mes)}`;
 }
 
 /** O primeiro dia do mês `deslocamento` meses depois do de `iso`, como `AAAA-MM-01`. */

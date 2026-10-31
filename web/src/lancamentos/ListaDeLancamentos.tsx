@@ -18,7 +18,7 @@ import {
   type NovoLancamento,
 } from "../dados";
 import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, numeroDaParcela, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
-import { mesPorExtenso } from "../cartoes/apresentacao";
+import { mesPorExtenso } from "./datas";
 import { dataPorExtenso, quando } from "./datas";
 import { divisao, rotuloDasParcelas } from "./parcelamento";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";

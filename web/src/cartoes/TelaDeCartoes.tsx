@@ -1,6 +1,7 @@
 import { atualizadoAs, useCadastro, useFaturas, useLimite, type Cartao, type LimiteDoCartao } from "../dados";
+import { mesPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
-import { faturasDaLinha, mesPorExtenso, SITUACAO } from "./apresentacao";
+import { faturasDaLinha, SITUACAO } from "./apresentacao";
 
 /** A barra do comprometido e, ao tocar, as três partes, os parcelamentos e os próximos 12 meses. */
 function LimiteDoCartaoNaLinha({ limite }: { limite: LimiteDoCartao }) {
@@ -90,18 +91,17 @@ function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
       <ul className="lista">
         {linhas.map(({ rotulo, fatura }) => (
           <li key={fatura.mes}>
-            <div>
-              <strong>
-                {rotulo} · fatura de {mesPorExtenso(fatura.mes)}
-              </strong>
-              <span>{formatarCentavos(fatura.total_centavos)}</span>
-            </div>
-            <p className="vazio">
-              {SITUACAO[fatura.situacao]}
-              {fatura.situacao === "fechada" && ` · a pagar ${formatarCentavos(fatura.a_pagar_centavos)}`}
-            </p>
-            <a className="botao secundario" href={`#/cartoes/${cartao.id}/${fatura.mes}`} aria-label={`Abrir fatura de ${mesPorExtenso(fatura.mes)} de ${cartao.nome}`}>
-              Abrir
+            <a className="linha-da-fatura" href={`#/cartoes/${cartao.id}/${fatura.mes}`} aria-label={`Abrir fatura de ${mesPorExtenso(fatura.mes)} de ${cartao.nome}`}>
+              <div>
+                <strong>
+                  {rotulo} · fatura de {mesPorExtenso(fatura.mes)}
+                </strong>
+                <span>{formatarCentavos(fatura.total_centavos)}</span>
+              </div>
+              <p className="vazio">
+                {SITUACAO[fatura.situacao]}
+                {fatura.situacao === "fechada" && ` · a pagar ${formatarCentavos(fatura.a_pagar_centavos)}`}
+              </p>
             </a>
           </li>
         ))}
