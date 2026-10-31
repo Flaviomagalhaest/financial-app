@@ -591,7 +591,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
     };
     porId.set(item.id, depois);
     // O criar sem resposta talvez já esteja no servidor, e o planejamento lido depois do envio já o conta.
-    const enviado = item.talvezNoServidor !== undefined && item.tentadoEm && item.base && !antes ? item.base : null;
+    const enviado = item.talvezNoServidor !== undefined && item.tentadoEm !== undefined && item.base && !antes ? item.base : null;
     const jaNoServidor = enviado && { ...enviado, situacao: situacaoNoAparelho(enviado, undefined), mes: mesEmQueConta(enviado, undefined, cartaoDe(enviado.conta_id)) };
     mudancas.push({ antes, depois, talvez: jaNoServidor ? { tentadoEm: item.tentadoEm!, jaNoServidor } : undefined });
   }
@@ -625,8 +625,8 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
   // Sem mês (cartão sem dia de fechamento), lê o deste mês, que o aviso não usa.
   const mesLido = (mes ?? hoje()).slice(0, 7);
   const guardado = useRespostaDe<Planejamento>(`/api/planejamento/${mesLido}`, planejamentoDe(mesLido));
-  // Ao vivo, o planejamento é de agora; guardado, é de quando o servidor respondeu.
-  const lidoEm = guardado.atualizadoEm ?? Date.now();
+  // Ao vivo, o planejamento é de agora, depois de qualquer envio; guardado, é de quando o servidor respondeu.
+  const lidoEm = guardado.atualizadoEm ?? Infinity;
   const planejamento = useMemo(() => (guardado.dados ? comAFila(guardado.dados, semContarDeNovo(mudancas, lidoEm)) : null), [guardado.dados, mudancas, lidoEm]);
 
   const comItem = planejamento ? categoriasComItem(planejamento, lancamento.categoria_ids) : [];
