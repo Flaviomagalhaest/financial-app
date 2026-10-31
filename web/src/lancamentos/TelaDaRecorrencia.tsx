@@ -4,6 +4,7 @@ import {
   excluirLancamento,
   excluirRecorrencia,
   mudarRecorrencia,
+  useAvisoDePlanejamento,
   useCadastro,
   useLancamentos,
   useMudancasDaRecorrenciaNaoEnviadas,
@@ -13,10 +14,12 @@ import {
   type AlteracaoDeRecorrencia,
   type RecorrenciaNaTela,
 } from "../dados";
+import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "./apresentacao";
-import { dataPorExtenso } from "./datas";
+import { dataPorExtenso, hoje } from "./datas";
 import { comoDigitado, emCentavos } from "./dinheiro";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
+import { SeletorDeTags } from "./SeletorDeTags";
 
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -55,7 +58,7 @@ function formularioDa(r: RecorrenciaNaTela, data: string): Formulario {
 }
 
 /** Só o que mudou, a partir desta ocorrência: o servidor deixa como está o campo que não vem. Devolve o problema, se houver. */
-function alteracaoDo(f: Formulario, r: RecorrenciaNaTela, ocorrencia: number, data: string): AlteracaoDeRecorrencia | string {
+function alteracaoDo(f: Formulario, r: RecorrenciaNaTela, ocorrencia: number, data: string, item: string | null): AlteracaoDeRecorrencia | string {
   const centavos = emCentavos(f.valor);
   const aCada = Number(f.aCada);
   if (!centavos) return "Digite o valor.";
@@ -70,6 +73,8 @@ function alteracaoDo(f: Formulario, r: RecorrenciaNaTela, ocorrencia: number, da
   if (f.contaId !== r.conta_id) mudou.conta_id = f.contaId;
   if (!mesmos(f.categoriaIds, r.categoria_ids)) mudou.categoria_ids = f.categoriaIds;
   if (!mesmos(f.tags, r.tags ?? [])) mudou.tags = f.tags;
+  // O item do planejamento só vai quando a pessoa o tocou: o que a ocorrência tem não é necessariamente o da regra.
+  if (item && item !== r.item_categoria_id) mudou.item_categoria_id = item;
   // O servidor lê a pessoa vazia como "do conjunto".
   if (f.pessoa !== (r.pessoa ?? null)) mudou.pessoa = f.pessoa ?? "";
   if (aCada !== r.a_cada) mudou.a_cada = aCada;
@@ -96,6 +101,20 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const regra = recorrencias?.find((r) => r.id === lancamento?.recorrencia_id);
   const [form, setForm] = useState<Formulario | null>(null);
   const [erro, setErro] = useState("");
+  const [itemTocado, setItemTocado] = useState<string | null>(null);
+  // O aviso é do previsto desta vez, como ele ficaria com o que o formulário tem.
+  const planejamento = useAvisoDePlanejamento(
+    {
+      id,
+      valor_centavos: (form && emCentavos(form.valor)) || 0,
+      categoria_ids: form?.categoriaIds ?? [],
+      conta_id: form?.contaId ?? "",
+      data: form?.data ?? lancamento?.data ?? hoje(),
+      fatura_mes: lancamento?.fatura_mes ?? null,
+      situacao: lancamento?.situacao ?? "previsto",
+    },
+    itemTocado,
+  );
 
   // Preenche uma vez só, quando a regra chega; a releitura não apaga o que se digita.
   useEffect(() => {
@@ -120,7 +139,6 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const mudar = (mudanca: Partial<Formulario>) => setForm({ ...form, ...mudanca });
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   const categoriasDoTipo = categorias.filter((c) => c.tipo === regra.tipo && (!c.arquivada || form.categoriaIds.includes(c.id)));
-  const tags = [...form.tags, ...opcoesDeTags.filter((t) => !form.tags.includes(t))];
   // A conta arquivada não está entre as do cadastro, mas segue sendo a da regra até alguém trocar.
   const contas = contasECartoes.some((c) => c.id === regra.conta_id) ? contasECartoes : [{ id: regra.conta_id, nome: "conta arquivada" }, ...contasECartoes];
 
@@ -131,7 +149,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   }
 
   function salvar() {
-    const alteracao = alteracaoDo(form!, regra!, ocorrencia, lancamento!.data);
+    const alteracao = alteracaoDo(form!, regra!, ocorrencia, lancamento!.data, itemTocado && itemTocado === planejamento.escolha ? itemTocado : null);
     if (typeof alteracao === "string") return setErro(alteracao);
     void enviar(alteracao);
   }
@@ -237,18 +255,9 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
           </button>
         ))}
       </div>
-      {tags.length > 0 && (
-        <>
-          <h4>Tags</h4>
-          <div className="fileira rolavel">
-            {tags.map((t) => (
-              <button type="button" key={t} className={`ficha${form.tags.includes(t) ? " marcada" : ""}`} aria-pressed={form.tags.includes(t)} onClick={() => mudar({ tags: alternar(form.tags, t) })}>
-                #{t}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {form.categoriaIds.length > 0 && <AvisoDePlanejamento {...planejamento} tipo={regra.tipo} nomeDaCategoria={(c) => nomePorId(categorias, c)} onEscolher={setItemTocado} />}
+      <h4>Tags</h4>
+      <SeletorDeTags tags={form.tags} opcoes={opcoesDeTags} onTags={(t) => mudar({ tags: t })} />
       <h4>Pessoa</h4>
       <div className={`alternancia${pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
         {[{ id: null, nome: "Conjunto" }, ...pessoas].map((p) => (

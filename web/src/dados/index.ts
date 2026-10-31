@@ -430,6 +430,8 @@ export function useBusca(criterios: Criterios) {
     carregando,
     temMais: !noAparelho && !!atual?.temMais,
     carregarMais: () => atual && void pedir(atual.paginas),
+    /** Depois de uma edição em lote: o resultado mudou no servidor. */
+    buscarDeNovo: () => void pedir(0),
   };
 }
 
@@ -1064,16 +1066,22 @@ export function criarTransferencia(transferencia: NovaTransferencia): Promise<st
   return recusaDe(() => api.POST("/api/transferencias", { body: transferencia }), "o servidor recusou a transferência");
 }
 
-/** O motivo da recusa do servidor, ou `null` quando ele aceitou. */
-async function recusaDe(pedir: () => Promise<{ data?: unknown; error?: unknown }>, padrao: string): Promise<string | null> {
+/** A resposta do servidor, ou o motivo da recusa. */
+async function respostaOuRecusa<D>(pedir: () => Promise<{ data?: D; error?: unknown }>, padrao: string): Promise<D | string> {
   try {
     const { data, error } = await pedir();
-    if (data) return null;
+    if (data) return data;
     const detalhe = (error as { detail?: unknown } | undefined)?.detail;
     return typeof detalhe === "string" ? detalhe : padrao;
   } catch {
     return "sem resposta do servidor";
   }
+}
+
+/** O motivo da recusa do servidor, ou `null` quando ele aceitou. */
+async function recusaDe(pedir: () => Promise<{ data?: unknown; error?: unknown }>, padrao: string): Promise<string | null> {
+  const resposta = await respostaOuRecusa(pedir, padrao);
+  return typeof resposta === "string" ? resposta : null;
 }
 
 /** Favoritos mudam só com internet (ADR 0011): devolvem o motivo da recusa, ou `null` quando o servidor aceitou. */
@@ -1137,6 +1145,60 @@ export async function excluirItemDoPlanejamento(id: string): Promise<string | nu
 /** Troca o modelo padrão inteiro pelos itens enviados. */
 export function definirModeloPadrao(itens: ItemDoModelo[]): Promise<string | null> {
   return recusaDe(() => api.PUT("/api/planejamento/modelo", { body: { itens } }), "o servidor recusou o modelo padrão");
+}
+
+export type PedidoDeEdicaoEmLote = components["schemas"]["PedidoDeEdicaoEmLote"];
+export type PreviaDaEdicaoEmLote = components["schemas"]["PreviaDaEdicaoEmLote"];
+export type EdicaoEmLote = components["schemas"]["EdicaoEmLote"];
+export type DesfazerDaEdicaoEmLote = components["schemas"]["DesfazerDaEdicaoEmLote"];
+
+/** Os critérios da busca como a seleção "todos do resultado" os leva: sem a ordem nem a página. */
+export function criteriosDoLote(criterios: Criterios): NonNullable<PedidoDeEdicaoEmLote["selecao"]["busca"]> {
+  const { ordem: _ordem, pagina: _pagina, ...busca } = pedidoDaBusca(criterios, 0);
+  return busca;
+}
+
+/** Depois do lote, o aparelho lê de novo o que ele mudou: a lista, as tags e o índice de sugestão. */
+async function lerDeNovoDepoisDoLote() {
+  await Promise.all([
+    buscarEGuardar("/api/lancamentos", LEITURAS["/api/lancamentos"]),
+    buscarEGuardar("/api/tags", LEITURAS["/api/tags"]),
+    buscarEGuardar("/api/sugestoes", LEITURAS["/api/sugestoes"]),
+  ]);
+}
+
+/** A edição em lote precisa de internet (ADR 0011): não entra na fila. A prévia não grava nada. */
+export function verPreviaDoLote(pedido: PedidoDeEdicaoEmLote): Promise<PreviaDaEdicaoEmLote | string> {
+  return respostaOuRecusa(() => api.POST("/api/edicoes-em-lote/previa", { body: pedido }), "o servidor recusou a prévia");
+}
+
+/** Aplica tudo ou nada; devolve o lote ou o motivo da recusa. Reenviar o mesmo id não aplica de novo. */
+export async function aplicarLote(pedido: PedidoDeEdicaoEmLote, id: string): Promise<EdicaoEmLote | string> {
+  const lote = await respostaOuRecusa(() => api.POST("/api/edicoes-em-lote", { body: { ...pedido, id } }), "o servidor recusou a edição em lote");
+  if (typeof lote !== "string") await lerDeNovoDepoisDoLote();
+  return lote;
+}
+
+/** As edições em lote que ainda se desfazem, da mais recente; `null` sem resposta do servidor. */
+export function useEdicoesEmLote() {
+  const [edicoes, setEdicoes] = useState<EdicaoEmLote[] | null>(null);
+  const [semResposta, setSemResposta] = useState(false);
+  const recarregar = useCallback(async () => {
+    const { data } = await api.GET("/api/edicoes-em-lote").catch(() => ({ data: undefined }));
+    setSemResposta(!data);
+    if (data) setEdicoes(data);
+  }, []);
+  useEffect(() => {
+    void recarregar();
+  }, [recarregar]);
+  return { edicoes, semResposta, recarregar };
+}
+
+/** Desfaz o lote, pulando o que alguém mudou depois; devolve o resultado ou o motivo da recusa. */
+export async function desfazerLote(id: string): Promise<DesfazerDaEdicaoEmLote | string> {
+  const desfeito = await respostaOuRecusa(() => api.POST("/api/edicoes-em-lote/{id}/desfazer", { params: { path: { id } } }), "o servidor recusou desfazer");
+  if (typeof desfeito !== "string") await lerDeNovoDepoisDoLote();
+  return desfeito;
 }
 
 export async function contarNaoEnviados(): Promise<number> {

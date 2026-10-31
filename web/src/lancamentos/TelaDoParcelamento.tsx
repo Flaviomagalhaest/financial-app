@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  chaveDaTag,
   corrigirParcelamento,
   excluirParcelamento,
   useCadastro,
@@ -15,12 +14,12 @@ import {
   type Parcelamento,
 } from "../dados";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
+import { SeletorDeTags } from "./SeletorDeTags";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, rotuloDaFatura } from "./datas";
 import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
 import { divisao, type ValorDigitado } from "./parcelamento";
 
-const mesmaTag = (a: string, b: string) => chaveDaTag(a) === chaveDaTag(b);
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /** O formulário da correção, que começa com o que o parcelamento tem. */
@@ -102,7 +101,6 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const [aviso, setAviso] = useState<AvisoDeRealizadas | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [novaTag, setNovaTag] = useState("");
   const [itemTocado, setItemTocado] = useState<string | null>(null);
   const doParcelamento = (lancamentos ?? []).filter((l) => l.parcelamento_id === id).sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
   const primeira = doParcelamento[0];
@@ -136,19 +134,6 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   };
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
-  const marcada = (tag: string) => form.tags.some((t) => mesmaTag(t, tag));
-  const tags = [...form.tags, ...opcoesDeTags.filter((t) => !marcada(t))];
-  const alternarTag = (tag: string) => mudar({ tags: marcada(tag) ? form.tags.filter((t) => !mesmaTag(t, tag)) : [...form.tags, tag] });
-
-  function criarTag() {
-    const nome = novaTag.trim();
-    if (!nome) return;
-    // A tag que já existe com outra caixa é a mesma: marca a existente.
-    const existente = tags.find((t) => mesmaTag(t, nome)) ?? nome;
-    if (!marcada(existente)) mudar({ tags: [...form.tags, existente] });
-    setNovaTag("");
-  }
-
   async function salvar(confirmarRealizadas: boolean) {
     const alteracao = alteracaoDo(form, parcelamento, itemEscolhido);
     if (!alteracao) return setErro("Digite o valor e o número de parcelas.");
@@ -228,34 +213,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         <AvisoDePlanejamento {...planejamento} tipo="despesa" nomeDaCategoria={(c) => nomePorId(categorias, c)} onEscolher={setItemTocado} />
       )}
       <h3>Tags</h3>
-      {tags.length > 0 && (
-        <div className="fileira rolavel">
-          {tags.map((t) => (
-            <button type="button" key={t} className={`ficha${marcada(t) ? " marcada" : ""}`} aria-pressed={marcada(t)} onClick={() => alternarTag(t)}>
-              #{t}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="linha">
-        <label className="oculto" htmlFor="nova-tag">
-          Nova tag
-        </label>
-        <input
-          id="nova-tag"
-          value={novaTag}
-          placeholder="Nova tag"
-          onChange={(e) => setNovaTag(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            criarTag();
-          }}
-        />
-        <button type="button" className="secundario" onClick={criarTag}>
-          Criar tag
-        </button>
-      </div>
+      <SeletorDeTags tags={form.tags} opcoes={opcoesDeTags} onTags={(t) => mudar({ tags: t })} />
       <h3>Pessoa</h3>
       <div className={`alternancia${pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
         {[{ id: null, nome: "Conjunto" }, ...pessoas].map((p) => (

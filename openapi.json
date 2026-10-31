@@ -3040,6 +3040,164 @@
           }
         ]
       }
+    },
+    "/api/edicoes-em-lote/previa": {
+      "post": {
+        "summary": "Ver Previa",
+        "operationId": "previa_da_edicao_em_lote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoDeEdicaoEmLote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviaDaEdicaoEmLote"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/edicoes-em-lote": {
+      "get": {
+        "summary": "Listar",
+        "description": "As que ainda se desfazem, da mais recente à mais antiga.",
+        "operationId": "listar_edicoes_em_lote",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EdicaoEmLote"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Edicoes Em Lote"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Aplicar Edicao Em Lote",
+        "description": "Tudo ou nada; o mesmo id reenviado devolve o lote gravado, com 200.",
+        "operationId": "aplicar_edicao_em_lote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaEdicaoEmLote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdicaoEmLote"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/edicoes-em-lote/{id}/desfazer": {
+      "post": {
+        "summary": "Desfazer Edicao Em Lote",
+        "operationId": "desfazer_edicao_em_lote",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesfazerDaEdicaoEmLote"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3824,6 +3982,35 @@
         "title": "Antecipacao",
         "description": "O pagamento adiantado das últimas parcelas que ainda não foram pagas."
       },
+      "AntesEDepois": {
+        "properties": {
+          "lancamento": {
+            "$ref": "#/components/schemas/Lancamento"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lancamento",
+          "categoria_ids",
+          "tags"
+        ],
+        "title": "AntesEDepois"
+      },
       "AvisoDeRealizadas": {
         "properties": {
           "motivo": {
@@ -4486,6 +4673,27 @@
         "title": "CriteriosDaBusca",
         "description": "Sem um filtro, ele não restringe; um filtro vazio também não."
       },
+      "DesfazerDaEdicaoEmLote": {
+        "properties": {
+          "desfeitos": {
+            "type": "integer",
+            "title": "Desfeitos"
+          },
+          "pulados": {
+            "items": {
+              "$ref": "#/components/schemas/PuladoNoDesfazer"
+            },
+            "type": "array",
+            "title": "Pulados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "desfeitos",
+          "pulados"
+        ],
+        "title": "DesfazerDaEdicaoEmLote"
+      },
       "Despesas": {
         "properties": {
           "realizado_centavos": {
@@ -4665,6 +4873,57 @@
           "tipo"
         ],
         "title": "EdicaoDeConta"
+      },
+      "EdicaoEmLote": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "resumo": {
+            "type": "string",
+            "title": "Resumo"
+          },
+          "situacao": {
+            "type": "string",
+            "enum": [
+              "aplicando",
+              "aplicada",
+              "desfeita"
+            ],
+            "title": "Situacao"
+          },
+          "lancamentos": {
+            "type": "integer",
+            "title": "Lancamentos"
+          },
+          "criado_por": {
+            "type": "string",
+            "title": "Criado Por"
+          },
+          "criado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Criado Em"
+          },
+          "desfazer_ate": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Desfazer Ate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "resumo",
+          "situacao",
+          "lancamentos",
+          "criado_por",
+          "criado_em",
+          "desfazer_ate"
+        ],
+        "title": "EdicaoEmLote"
       },
       "Eu": {
         "properties": {
@@ -6073,6 +6332,47 @@
         ],
         "title": "ModeloPadrao"
       },
+      "MudancaDeCategorias": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "enum": [
+              "acrescentar",
+              "remover",
+              "trocar",
+              "substituir"
+            ],
+            "title": "Acao"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "por": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Por"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "categoria_ids"
+        ],
+        "title": "MudancaDeCategorias"
+      },
       "MudancaDeItem": {
         "properties": {
           "valor_centavos": {
@@ -6115,6 +6415,44 @@
         },
         "type": "object",
         "title": "MudancaDeTag"
+      },
+      "MudancaDeTags": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "enum": [
+              "acrescentar",
+              "remover",
+              "trocar",
+              "substituir"
+            ],
+            "title": "Acao"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Por"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "tags"
+        ],
+        "title": "MudancaDeTags"
       },
       "NovaCategoria": {
         "properties": {
@@ -6186,6 +6524,44 @@
           "tipo"
         ],
         "title": "NovaConta"
+      },
+      "NovaEdicaoEmLote": {
+        "properties": {
+          "selecao": {
+            "$ref": "#/components/schemas/SelecaoDoLote"
+          },
+          "categorias": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MudancaDeCategorias"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MudancaDeTags"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selecao",
+          "id"
+        ],
+        "title": "NovaEdicaoEmLote"
       },
       "NovaOrdem": {
         "properties": {
@@ -7348,6 +7724,38 @@
         "type": "object",
         "title": "PedidoDeBusca"
       },
+      "PedidoDeEdicaoEmLote": {
+        "properties": {
+          "selecao": {
+            "$ref": "#/components/schemas/SelecaoDoLote"
+          },
+          "categorias": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MudancaDeCategorias"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MudancaDeTags"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "selecao"
+        ],
+        "title": "PedidoDeEdicaoEmLote"
+      },
       "PedidoDeExportacao": {
         "properties": {
           "formato": {
@@ -7444,6 +7852,128 @@
           "previsto_centavos"
         ],
         "title": "PorSituacao"
+      },
+      "PreviaDaEdicaoEmLote": {
+        "properties": {
+          "compras": {
+            "type": "integer",
+            "title": "Compras"
+          },
+          "lancamentos": {
+            "type": "integer",
+            "title": "Lancamentos"
+          },
+          "mudam": {
+            "type": "integer",
+            "title": "Mudam"
+          },
+          "ja_estao_como_pedido": {
+            "type": "integer",
+            "title": "Ja Estao Como Pedido"
+          },
+          "de_outro_tipo": {
+            "type": "integer",
+            "title": "De Outro Tipo"
+          },
+          "trocam_de_item": {
+            "type": "integer",
+            "title": "Trocam De Item"
+          },
+          "estornos_fora": {
+            "type": "integer",
+            "title": "Estornos Fora"
+          },
+          "amostra": {
+            "items": {
+              "$ref": "#/components/schemas/AntesEDepois"
+            },
+            "type": "array",
+            "title": "Amostra"
+          },
+          "recusa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recusa"
+          }
+        },
+        "type": "object",
+        "required": [
+          "compras",
+          "lancamentos",
+          "mudam",
+          "ja_estao_como_pedido",
+          "de_outro_tipo",
+          "trocam_de_item",
+          "estornos_fora",
+          "amostra",
+          "recusa"
+        ],
+        "title": "PreviaDaEdicaoEmLote"
+      },
+      "PuladoNoDesfazer": {
+        "properties": {
+          "lancamento_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Lancamento Id"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "motivo": {
+            "type": "string",
+            "enum": [
+              "mudou_depois",
+              "excluido",
+              "saiu"
+            ],
+            "title": "Motivo"
+          },
+          "alterado_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alterado Por"
+          },
+          "alterado_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alterado Em"
+          },
+          "por_voce": {
+            "type": "boolean",
+            "title": "Por Voce"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lancamento_id",
+          "descricao",
+          "motivo",
+          "alterado_por",
+          "alterado_em",
+          "por_voce"
+        ],
+        "title": "PuladoNoDesfazer"
       },
       "Quitacao": {
         "properties": {
@@ -7837,6 +8367,42 @@
           "migrations"
         ],
         "title": "Saude"
+      },
+      "SelecaoDoLote": {
+        "properties": {
+          "lancamento_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Lancamento Ids",
+            "default": []
+          },
+          "parcelamento_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Parcelamento Ids",
+            "default": []
+          },
+          "busca": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CriteriosDaBusca"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SelecaoDoLote",
+        "description": "Os marcados no resultado e, com `busca`, todos do resultado com esses critérios. A parcela\nmarcada leva o parcelamento todo, e a compra leva os estornos dela (ADR 0016)."
       },
       "Sugerido": {
         "properties": {
