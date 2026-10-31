@@ -43,6 +43,9 @@ router = APIRouter(prefix="/api")
 # parcelamento dele, uma vez por lote, grava as dele.
 LINHAS_POR_LANCAMENTO = 20
 POR_TRANSACAO = max(1, LINHAS_POR_LOTE // LINHAS_POR_LANCAMENTO)
+# Uma gravação que passa disto (o tempo máximo da Lambda, com folga) parou no meio: a tarefa
+# diária e o reenvio desfazem o lote.
+PARADO_HA = timedelta(minutes=5)
 PRAZO_EM_DIAS: int = valores_iniciais()["desfazerEdicaoEmLoteDias"]
 TAMANHO_DA_AMOSTRA: int = valores_iniciais()["amostraDaEdicaoEmLote"]
 # Os campos que o lote muda: mudou um deles depois, o desfazer pula o lançamento.
@@ -761,6 +764,39 @@ def _mudar_lote(url: str | None, id: UUID, atribuicoes: str, parametros: tuple) 
     )
 
 
+def _cancelar(url: str | None, id: UUID, usuario: str, motivo: str) -> str:
+    """Desfaz o que o lote gravou e o marca `cancelada`. O desfazer pula o lançamento que alguém
+    mudou depois: o lote avisa quantos ficaram com a mudança dele. Devolve o motivo completo."""
+    _voltar(url, id, usuario)
+    with conectar(url) as conn:
+        (ficaram,) = conn.execute(
+            "SELECT count(*) FROM edicao_em_lote_lancamentos"
+            " WHERE lote_id = %s AND resultado_do_desfazer <> 'desfeito'",
+            (id,),
+        ).fetchone()
+    if ficaram:
+        motivo += (
+            f"; {ficaram} lançamento{'s' if ficaram > 1 else ''} mudado depois "
+            f"ficou com a mudança do lote"
+        )
+    _mudar_lote(url, id, "situacao = 'cancelada', recusa = %s", (motivo,))
+    return motivo
+
+
+def cancelar_parados(url: str | None = None) -> int:
+    """Desfaz os lotes que ficaram em `aplicando` além do tempo máximo da gravação (a Lambda caiu
+    ou estourou o tempo no meio). Devolve quantos cancelou."""
+    with conectar(url) as conn:
+        parados = conn.execute(
+            "SELECT id, criado_por FROM edicoes_em_lote"
+            " WHERE situacao = 'aplicando' AND criado_em < %s ORDER BY criado_em",
+            (datetime.now(UTC) - PARADO_HA,),
+        ).fetchall()
+    for id, usuario in parados:
+        _cancelar(url, id, usuario, "a gravação parou no meio")
+    return len(parados)
+
+
 def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[EdicaoEmLote, bool]:
     """Aplica o lote inteiro ou nada. Devolve o lote e se ele foi gravado agora."""
 
@@ -783,6 +819,10 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
     if ids is None:
         if gravado.situacao == "cancelada":
             raise recusar(gravado.recusa)
+        if gravado.situacao == "aplicando" and gravado.criado_em < datetime.now(UTC) - PARADO_HA:
+            # Parado há tempo: desfaz em vez de devolver o lote pela metade. Não grava de novo
+            # com o mesmo id; o aparelho manda um lote novo.
+            raise recusar(_cancelar(url, nova.id, gravado.criado_por, "a gravação parou no meio"))
         return gravado.edicao, False
     momento, mudaram = datetime.now(UTC), 0
 
@@ -803,10 +843,9 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
             if isinstance(erro, HTTPException)
             else "a gravação parou no meio"
         )
-        _voltar(url, nova.id, usuario)
-        _mudar_lote(url, nova.id, "situacao = 'cancelada', recusa = %s", (motivo,))
+        motivo = _cancelar(url, nova.id, usuario, motivo)
         if isinstance(erro, LoteRecusado):
-            raise recusar(erro.motivo) from erro
+            raise recusar(motivo) from erro
         raise
     _mudar_lote(url, nova.id, "situacao = 'aplicada', lancamentos = %s", (mudaram,))
     with conectar(url) as conn:
