@@ -60,8 +60,11 @@ test("a pessoa se troca na edição e a outra pessoa vê a troca", async ({ page
   await dela.getByRole("button", { name: "Salvar" }).click();
   await expect(linha(dela, descricao)).toContainText("Fulana");
   await expect(linha(dela, descricao)).not.toContainText("não enviado");
-  await page.reload();
-  await expect(linha(page, descricao)).toContainText("Fulana");
+  // A troca sobe pela fila dela: a tela dele a vê depois que ela chega ao servidor (ticket 114).
+  await expect(async () => {
+    await page.reload();
+    await expect(linha(page, descricao)).toContainText("Fulana", { timeout: 2000 });
+  }).toPass();
   await contextoDela.close();
 });
 

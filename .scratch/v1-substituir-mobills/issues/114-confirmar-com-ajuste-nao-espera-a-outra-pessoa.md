@@ -1,7 +1,7 @@
 # Teste "confirmar com ajuste" não espera a confirmação da outra pessoa chegar
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -26,7 +26,11 @@ Com um atraso de 1,5 s **antes** do `route.fetch()` em `contextoDela.route("**/a
 
 ## Checklist
 
-- [ ] O teste com o atraso acima passa (fica como teste ou como verificação local, a decidir). O PR do [ticket 98](98-parcelamento-criar-pela-tela-e-sem-internet.md) trouxe a correção, porque o teste derrubava o CI dele: depois de ela confirmar, o teste pergunta ao servidor (`apiDaPagina(dela)`, `expect.poll`) até o lançamento estar realizado. Com o atraso de 1,5 s, falhou sem a correção e passou 2 de 2 com ela, como verificação local; o atraso não ficou no teste
-- [ ] Os outros testes de duas pessoas com o mesmo padrão corrigidos. O PR do [ticket 98](98-parcelamento-criar-pela-tela-e-sem-internet.md) já corrigiu os dois de `pessoa-e-repetido.spec.ts` ("'Parece repetido' aparece só para quem recebeu..." e "'Excluir este' tira..."), que falhavam no CI da `main`: eles recarregam a outra tela até a fila de quem mudou chegar ao servidor (`toPass`)
-- [ ] `conflito.spec.ts` e `pessoa-e-repetido.spec.ts` com `--repeat-each=5` sem falha
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] O teste com o atraso acima passa (fica como teste ou como verificação local, a decidir). O PR do [ticket 98](98-parcelamento-criar-pela-tela-e-sem-internet.md) trouxe a correção, porque o teste derrubava o CI dele: depois de ela confirmar, o teste pergunta ao servidor (`apiDaPagina(dela)`, `expect.poll`) até o lançamento estar realizado. Com o atraso de 1,5 s, falhou sem a correção e passou 2 de 2 com ela, como verificação local; o atraso não ficou no teste
+- [x] Os outros testes de duas pessoas com o mesmo padrão corrigidos. O PR do [ticket 98](98-parcelamento-criar-pela-tela-e-sem-internet.md) já corrigiu os dois de `pessoa-e-repetido.spec.ts` ("'Parece repetido' aparece só para quem recebeu..." e "'Excluir este' tira..."), que falhavam no CI da `main`: eles recarregam a outra tela até a fila de quem mudou chegar ao servidor (`toPass`)
+- [x] `conflito.spec.ts` e `pessoa-e-repetido.spec.ts` com `--repeat-each=5` sem falha
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Resolução
+
+Os cinco testes de duas pessoas de `conflito.spec.ts` em que um lado muda e o outro age em seguida (mesmo campo, descartar, exclusão vence a edição, excluir o que a outra pessoa mudou, criação que sobe) agora esperam a mudança chegar ao servidor (`esperarNoServidor`, `expect.poll` na API), em vez de só o "não enviado" sumir. Em `pessoa-e-repetido.spec.ts`, "a pessoa se troca na edição" recarrega a tela dele com `toPass`. `conflito.spec.ts` e `pessoa-e-repetido.spec.ts` com `--repeat-each=5`: 60 de 60. `aviso.spec.ts` é de função pura, sem duas pessoas.

@@ -8,7 +8,7 @@ export const ABAS = [
   { id: "futuro", nome: "Futuro" },
 ] as const;
 
-export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "favorito" | "favoritos" | "conflito" | "parcelamento" | "recorrencia" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento" | "busca";
+export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "favorito" | "favoritos" | "conflito" | "parcelamento" | "recorrencia" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento" | "busca" | "edicoes-em-lote";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
 export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; consulta?: string } {
@@ -27,6 +27,7 @@ export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; 
     tela === "contas-e-categorias" ||
     tela === "configuracoes" ||
     tela === "modelo-do-planejamento" ||
+    tela === "edicoes-em-lote" ||
     ABAS.some((aba) => aba.id === tela);
   // `#/favorito/<id>` abre o novo lançamento já preenchido pelo favorito `<id>`.
   // `#/estornar/<id>` abre o estorno da compra `<id>`.
