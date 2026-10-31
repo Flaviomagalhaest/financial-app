@@ -1,7 +1,7 @@
 # Testes sem internet intermitentes no CI (saldo da conta e resposta perdida)
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Opus
