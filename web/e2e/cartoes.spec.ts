@@ -113,3 +113,34 @@ test("a linha do cartão com limite mostra a barra e o detalhe do comprometido; 
   await expect(secao.getByRole("heading", { name: "Próximos 12 meses" })).toBeVisible();
   await expect(page.getByRole("region", { name: semLimite }).getByText("Comprometido")).toHaveCount(0);
 });
+
+test("sem fatura no mês do meio a vizinha é 'Depois', não 'Próxima', e a linha inteira abre a fatura", async ({ page }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const [visa, mercado] = [`Visa ${s}`, `Mercado ${s}`];
+  await page.goto("/#/cartoes");
+  await entrar(page);
+  await expect(page.getByRole("heading", { name: "Cartões", level: 2 })).toBeVisible();
+  const headers = { authorization: await tokenDaPagina(page) };
+  const criar = async (caminho: string, data: object) => {
+    const resposta = await page.request.post(caminho, { headers, data });
+    expect(resposta.ok(), await resposta.text()).toBe(true);
+    return resposta.json();
+  };
+  const cartao = await criar("/api/cartoes", { nome: visa, dia_fechamento: 10, dia_vencimento: 20 });
+  const categoria = await criar("/api/categorias", { nome: mercado, tipo: "despesa" });
+  const comprar = (data: string, descricao: string) =>
+    criar("/api/lancamentos", { id: randomUUID(), tipo: "despesa", valor_centavos: 1000, data, descricao, conta_id: cartao.id, categoria_ids: [categoria.id] });
+  const deHoje = await comprar(dia(0), `Hoje ${s}`);
+  // Dois meses e meio à frente: a fatura do mês seguinte não existe.
+  const longe = await comprar(dia(75), `Longe ${s}`);
+
+  await page.reload();
+  const secao = page.getByRole("region", { name: visa });
+  const depois = secao.getByRole("listitem").filter({ hasText: `fatura de ${mesDaFatura(longe.mes)}` });
+  await expect(depois).toContainText("Depois");
+  await expect(secao.getByRole("listitem").filter({ hasText: "Próxima" })).toHaveCount(0);
+
+  // Tocar no texto da linha, fora do antigo botão "Abrir", abre a fatura.
+  await secao.getByRole("listitem").filter({ hasText: `fatura de ${mesDaFatura(deHoje.mes)}` }).getByText("Aberta").click();
+  await expect(page.getByRole("heading", { name: `Fatura de ${mesDaFatura(deHoje.mes)}`, level: 2 })).toBeVisible();
+});
