@@ -20,6 +20,7 @@ import {
   type Sugestao,
 } from "../dados";
 import { indiceDeEstornos, nomePorId, restanteDaCompra, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
+import { pagaPeloPagamento } from "../cartoes/apresentacao";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
@@ -262,6 +263,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
       }))
     : [];
 
+  // O titular das faturas da compra no cartão, para avisar da fatura paga.
+  const cartaoDaCompra = cartoes.find((c) => c.id === conta);
+  const titularDaCompra = cartaoDaCompra ? (cartaoDaCompra.titular_id ?? cartaoDaCompra.id) : "";
   const cartaoDoEstorno = estornando ? (cartoes.find((c) => c.id === conta)?.titular_id ?? conta) : "";
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
@@ -462,6 +466,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           onEscolher={setItemTocado}
         />
       )}
+      {titularDaCompra && planejamento.mes && (!existente || existente.mes !== planejamento.mes || existente.valor_centavos !== centavos) && (
+        <AvisoDaFaturaPaga cartaoId={titularDaCompra} mes={planejamento.mes} />
+      )}
       {/* Editando, o valor só vale depois de o lançamento carregar: a hidratação apagaria o toque. */}
       <Teclado centavos={centavos} onMudar={setCentavos} desativado={!!id && !existente} />
       {detalhesAbertos && (
@@ -511,4 +518,16 @@ function FaturaDoEstorno({ cartaoId, data, faturaMes }: { cartaoId: string; data
   const { dados: faturas } = useFaturas(cartaoId);
   const mes = faturaMes ?? faturas?.find((f) => f.fechamento && f.fechamento > data)?.mes;
   return mes ? <p>Entra na {rotuloDaFatura(mes)}</p> : null;
+}
+
+/** A compra que cai numa fatura paga é recusada (ADR 0021): a tela avisa antes de salvar e leva à correção da fatura. */
+function AvisoDaFaturaPaga({ cartaoId, mes }: { cartaoId: string; mes: string }) {
+  const { dados: faturas } = useFaturas(cartaoId);
+  const fatura = faturas?.find((f) => f.mes === mes);
+  if (!fatura || !pagaPeloPagamento(fatura)) return null;
+  return (
+    <p role="alert" className="erro">
+      A {rotuloDaFatura(mes)} está paga e não recebe mais compras nem estornos. <a href={`#/cartoes/${cartaoId}/${mes}`}>Corrigir a fatura</a>
+    </p>
+  );
 }
