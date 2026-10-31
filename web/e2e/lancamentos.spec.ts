@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { entrar } from "./entrar";
-import { cadastrar, digitar } from "./lancar";
+import { cadastrar, digitar, lancar } from "./lancar";
 
 test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ page }) => {
   const s = String(Date.now());
@@ -193,4 +193,36 @@ test("a leitura das contas que saiu antes de arquivar e chega depois não desfaz
   await page.goto("/#/novo");
   await page.goto("/#/contas-e-categorias");
   await expect(desarquivar).toBeVisible();
+});
+
+test("o teclado da edição fica desativado até o lançamento carregar (ticket 124)", async ({ page }) => {
+  const s = String(Date.now());
+  const [conta, categoria] = [`Corrente ${s}`, `Mercado ${s}`];
+  await page.goto("/#/contas-e-categorias");
+  await entrar(page);
+  await cadastrar(page, "Nova conta", conta, "corrente");
+  await cadastrar(page, "Nova categoria", categoria, "despesa");
+  await page.goto("/#/novo");
+  await lancar(page, { teclas: ["1", "9"], conta, categoria, descricao: `Feira ${s}` });
+  const editar = page.getByRole("link", { name: `Editar Feira ${s}` });
+  const destino = await editar.getAttribute("href");
+
+  // Aparelho sem cache e a lista demora a chegar: o toque na tecla não pode se perder nem gravar o valor antigo.
+  let liberar = () => {};
+  const segurada = new Promise<void>((pronto) => (liberar = pronto));
+  const outro = await page.context().browser()!.newContext({ baseURL: "http://127.0.0.1:4173" });
+  const tela = await outro.newPage();
+  await tela.route("**/api/lancamentos", async (rota) => {
+    if (rota.request().method() !== "GET") return rota.continue();
+    await segurada;
+    await rota.continue();
+  });
+  await tela.goto(`/${destino}`);
+  await entrar(tela);
+  const nove = tela.getByRole("button", { name: "9", exact: true });
+  await expect(nove).toBeDisabled();
+  liberar();
+  await expect(tela.getByTestId("valor")).toHaveText("R$ 0,19");
+  await expect(nove).toBeEnabled();
+  await outro.close();
 });

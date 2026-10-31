@@ -462,7 +462,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           onEscolher={setItemTocado}
         />
       )}
-      <Teclado centavos={centavos} onMudar={setCentavos} />
+      {/* Editando, o valor só vale depois de o lançamento carregar: a hidratação apagaria o toque. */}
+      <Teclado centavos={centavos} onMudar={setCentavos} desativado={!!id && !existente} />
       {detalhesAbertos && (
         <FolhaDeDetalhes
           descricao={descricao}
