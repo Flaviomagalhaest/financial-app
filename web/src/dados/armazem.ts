@@ -92,12 +92,16 @@ export interface Guardada<T> {
   dados: T;
   /** Quando o servidor respondeu (ms): "atualizado às 14:32". */
   em: number;
+  /** O número da leitura que a trouxe (`lerEGuardar`); a guardada antes dele não o tem. */
+  leitura?: number;
 }
 
 const BANCO = "financial-app-dados";
 const FILA = "fila";
 const RESPOSTAS = "respostas";
 const CANAL = "financial-app-dados";
+/** Nas respostas, quantas leituras do servidor já saíram, contando a tela, as abas e o service worker. */
+const LEITURAS_FEITAS = "leituras/feitas";
 
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -133,10 +137,11 @@ export function ouvirMudancas(ouvinte: () => void): () => void {
  * Roda `trabalho` numa transação sobre a fila e as respostas; só pode esperar pedidos do próprio
  * IndexedDB, senão a transação fecha no meio. Uma escrita confirmada avisa os ouvintes.
  */
-export async function emTransacao<T>(
-  modo: IDBTransactionMode,
-  trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore) => Promise<T>,
-): Promise<T> {
+export function emTransacao<T>(modo: IDBTransactionMode, trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore) => Promise<T>): Promise<T> {
+  return transacao(modo, trabalho, modo === "readwrite");
+}
+
+async function transacao<T>(modo: IDBTransactionMode, trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore) => Promise<T>, avisar: boolean): Promise<T> {
   const banco = await abrir();
   try {
     const transacao = banco.transaction([FILA, RESPOSTAS], modo);
@@ -152,7 +157,7 @@ export async function emTransacao<T>(
       throw erro;
     }
     await fim;
-    if (modo === "readwrite") {
+    if (avisar) {
       ouvintes.forEach((ouvinte) => ouvinte());
       canal?.postMessage("mudou");
     }
@@ -165,8 +170,35 @@ export async function emTransacao<T>(
 export const lerResposta = <T>(caminho: string) =>
   emTransacao("readonly", (_, respostas) => pedido(respostas.get(caminho)) as Promise<Guardada<T> | undefined>);
 
-export const guardarResposta = <T>(caminho: string, dados: T) =>
-  emTransacao("readwrite", async (_, respostas) => void (await pedido(respostas.put({ dados, em: Date.now() }, caminho))));
+/** O número da próxima leitura; contar não muda nada que se mostre, então não avisa os ouvintes. */
+const numerarLeitura = () =>
+  transacao(
+    "readwrite",
+    async (_, respostas) => {
+      const numero = (((await pedido(respostas.get(LEITURAS_FEITAS))) as number | undefined) ?? 0) + 1;
+      await pedido(respostas.put(numero, LEITURAS_FEITAS));
+      return numero;
+    },
+    false,
+  );
+
+/**
+ * Busca no servidor (`ler`, `undefined` quando ele não respondeu) e guarda a resposta. As leituras
+ * de uma resposta correm juntas, na tela, noutra aba ou no service worker, e a que saiu antes pode
+ * chegar depois: numeradas na saída, no IndexedDB, a mais velha não troca a guardada (tickets 120 e 122).
+ */
+export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined>): Promise<D | undefined> {
+  return comTrava("shared", async () => {
+    const numero = await numerarLeitura();
+    const dados = await ler().catch(() => undefined);
+    if (dados === undefined) return undefined;
+    await emTransacao("readwrite", async (_, respostas) => {
+      const guardada = (await pedido(respostas.get(caminho))) as Guardada<D> | undefined;
+      if ((guardada?.leitura ?? 0) < numero) await pedido(respostas.put({ dados, em: Date.now(), leitura: numero } satisfies Guardada<D>, caminho));
+    });
+    return dados;
+  });
+}
 
 export async function lerFila(): Promise<ItemDaFila[]> {
   const itens = await emTransacao("readonly", (fila) => pedido(fila.getAll()) as Promise<ItemDaFila[]>);

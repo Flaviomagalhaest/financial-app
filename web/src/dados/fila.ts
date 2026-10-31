@@ -364,11 +364,11 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
     }
     const recentes = Object.entries(aceitos).sort(([, a], [, b]) => b.em - a.em).slice(0, MAXIMO_DE_ACEITOS);
     await pedido(respostas.put(Object.fromEntries(recentes), ACEITOS));
-    if (guardada) await pedido(respostas.put({ dados: ordenar(lista), em: guardada.em }, LISTA));
-    if (daHoje) await pedido(respostas.put({ dados: { ...daHoje.dados, contas_da_semana: previstos }, em: daHoje.em }, HOJE));
+    if (guardada) await pedido(respostas.put({ ...guardada, dados: ordenar(lista) }, LISTA));
+    if (daHoje) await pedido(respostas.put({ ...daHoje, dados: { ...daHoje.dados, contas_da_semana: previstos } }, HOJE));
     for (const caminho of CONTAS) {
       const contas: Guardada<Conta[]> | undefined = await pedido(respostas.get(caminho));
-      if (contas && noSaldo.length > 0) await pedido(respostas.put({ dados: comOsEnviados(contas.dados, noSaldo), em: contas.em }, caminho));
+      if (contas && noSaldo.length > 0) await pedido(respostas.put({ ...contas, dados: comOsEnviados(contas.dados, noSaldo) }, caminho));
     }
   });
 }

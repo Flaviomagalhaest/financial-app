@@ -1,7 +1,7 @@
 # Envio em segundo plano sem a lista guardada: o enviado some do aparelho
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 120
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
@@ -20,7 +20,14 @@ O teste "no Android, o service worker sobe a fila em segundo plano" (`web/e2e/se
 
 ## Checklist
 
-- [ ] Teste vermelho com o `sync` pelo CDP: lançar sem internet sem a lista guardada, a leitura da lista falha e o lote do service worker passaria
-- [ ] O service worker lê e guarda a lista antes de enviar quando ela falta e, sem ela, não sobe (o navegador tenta de novo)
-- [ ] A ordem das leituras vale também entre a tela e o service worker (por exemplo, a numeração guardada no IndexedDB junto da resposta)
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Teste vermelho com o `sync` pelo CDP: lançar sem internet sem a lista guardada, a leitura da lista falha e o lote do service worker passaria
+- [x] O service worker lê e guarda a lista antes de enviar quando ela falta e, sem ela, não sobe (o navegador tenta de novo)
+- [x] A ordem das leituras vale também entre a tela e o service worker (por exemplo, a numeração guardada no IndexedDB junto da resposta)
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Answer
+
+Confirmado com dois testes no `sync` pelo CDP (`web/e2e/sem-internet.spec.ts`), vermelhos no código de antes e verdes depois:
+
+- **"o service worker só sobe com a lista, e o enviado continua no aparelho"**: com a leitura da lista falhando, o service worker antigo subia o lote (`lotes` com 1); com a lista chegando, o enviado sumia do Histórico sem internet. Causa: o `enviarEmSegundoPlano` chamava o `enviarFila` direto, e o `aplicar` só acerta a lista já guardada. Agora ele faz o que o `enviarAgora` faz: com fila e sem lista guardada, lê e guarda a lista e, sem ela, falha (o navegador tenta de novo).
+- **"a leitura da lista que a tela pediu antes da do service worker, se chega depois, não troca a guardada"**: a resposta da tela, que saiu antes de outro aparelho lançar, chegava depois da do service worker e apagava o lançamento do outro aparelho da lista guardada. Causa: a numeração das leituras era da memória da tela. Agora as duas usam o `lerEGuardar` (`web/src/dados/armazem.ts`): o número sai de um contador no IndexedDB (`leituras/feitas`, sem avisar os ouvintes) e vai junto da resposta guardada (`Guardada.leitura`); a resposta só troca a guardada com número menor. O `aplicar` mantém o número ao acertar a lista, a Hoje e as contas.

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { tokenDaPagina } from "./api";
+import { randomUUID } from "node:crypto";
+import { apiDaPagina, tokenDaPagina } from "./api";
 import { renovacoes } from "./cognito-falso";
 import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
@@ -244,14 +245,9 @@ test("o aviso de não enviado fica em destaque depois de 24 h", async ({ page, c
   await expect(aviso).toHaveClass("aviso");
 });
 
-test("no Android, o service worker sobe a fila em segundo plano, sem o app aberto", async ({ page, context, browser }) => {
-  const { s, conta, mercado } = await prepararCasal(page);
-  await instalarCasca(page);
-  await context.setOffline(true);
-  await lancar(page, { teclas: ["6", "00"], conta, categoria: mercado, descricao: `Segundo plano ${s}` });
-
-  // Fecha o app (a aba sai dele) e a rede volta: quem envia é o `sync` do service worker.
-  const cdp = await context.newCDPSession(page);
+/** Dispara o `sync` do envio no service worker, como o Android faz quando a rede volta. */
+async function syncDoServiceWorker(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
   const registro = new Promise<string>((resolve) =>
     cdp.on("ServiceWorker.workerRegistrationUpdated", ({ registrations }) => {
       const nosso = registrations.find((r) => r.scopeURL.startsWith("http://127.0.0.1:4173") && !r.isDeleted);
@@ -260,6 +256,17 @@ test("no Android, o service worker sobe a fila em segundo plano, sem o app abert
   );
   await cdp.send("ServiceWorker.enable");
   const registrationId = await registro;
+  return () => cdp.send("ServiceWorker.dispatchSyncEvent", { origin: "http://127.0.0.1:4173", registrationId, tag: "enviar-fila", lastChance: false });
+}
+
+test("no Android, o service worker sobe a fila em segundo plano, sem o app aberto", async ({ page, context, browser }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await instalarCasca(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["6", "00"], conta, categoria: mercado, descricao: `Segundo plano ${s}` });
+
+  // Fecha o app (a aba sai dele) e a rede volta: quem envia é o `sync` do service worker.
+  const disparar = await syncDoServiceWorker(page);
   // Com o app fechado há tempo, o token de acesso guardado já venceu: o service worker renova.
   await page.evaluate(
     () =>
@@ -276,7 +283,7 @@ test("no Android, o service worker sobe a fila em segundo plano, sem o app abert
   const renovadasAntes = await renovacoes();
   await page.goto("about:blank");
   await context.setOffline(false);
-  await cdp.send("ServiceWorker.dispatchSyncEvent", { origin: "http://127.0.0.1:4173", registrationId, tag: "enviar-fila", lastChance: false });
+  await disparar();
 
   // A outra pessoa, noutro aparelho, já vê o lançamento.
   const outro = await browser.newContext({ baseURL: "http://127.0.0.1:4173" });
@@ -446,4 +453,85 @@ test("lançado sem internet antes de a lista ser guardada continua no Histórico
   await context.setOffline(true);
   await aba(page, "Histórico");
   await expect(page.getByRole("listitem").filter({ hasText: `Sem lista ${s}` })).toContainText("− R$ 3,00");
+});
+
+test("no Android, lançado sem internet antes de a lista ser guardada: o service worker só sobe com a lista, e o enviado continua no aparelho", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await instalarCasca(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["7", "00"], conta, categoria: mercado, descricao: `Sem lista no fundo ${s}` });
+  const disparar = await syncDoServiceWorker(page);
+  const lotes: string[] = [];
+  context.on("request", (pedido) => void (pedido.url().endsWith("/api/lancamentos/lote") && lotes.push(pedido.url())));
+  const linha = page.getByRole("listitem").filter({ hasText: `Sem lista no fundo ${s}` });
+
+  // O app fecha e a rede volta, mas a leitura da lista falha: o service worker não sobe a fila (ticket 122).
+  const daLista = (url: URL) => url.pathname === "/api/lancamentos";
+  await context.route(daLista, (rota) => rota.abort("internetdisconnected"));
+  const listaFalhou = context.waitForEvent("requestfailed", (pedido) => daLista(new URL(pedido.url())));
+  const loteSaiu = context.waitForEvent("request", (pedido) => pedido.url().endsWith("/api/lancamentos/lote"));
+  await page.goto("about:blank");
+  await context.setOffline(false);
+  await disparar();
+  await Promise.race([listaFalhou, loteSaiu]);
+  expect(lotes).toHaveLength(0);
+  await context.setOffline(true);
+  await context.unroute(daLista);
+  await page.goto("/#/historico");
+  await expect(linha).toContainText("⏳ não enviado");
+  expect(lotes).toHaveLength(0);
+
+  // No `sync` seguinte a lista chega: o service worker a guarda antes de enviar, e o enviado fica no Histórico.
+  const lote = context.waitForEvent("request", (pedido) => pedido.url().endsWith("/api/lancamentos/lote"));
+  await page.goto("about:blank");
+  await context.setOffline(false);
+  await disparar();
+  await (await lote).response();
+  await context.setOffline(true);
+  await page.goto("/#/historico");
+  await expect(linha).toContainText("− R$ 7,00");
+  await expect(linha).not.toContainText("não enviado");
+});
+
+test("a leitura da lista que a tela pediu antes da do service worker, se chega depois, não troca a guardada", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  const api = await apiDaPagina(page);
+  const contaId = ((await api.ler("/api/contas")) as { id: string; nome: string }[]).find((c) => c.nome === conta)!.id;
+  const categoriaId = ((await api.ler("/api/categorias")) as { id: string; nome: string }[]).find((c) => c.nome === mercado)!.id;
+  await instalarCasca(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["4", "00"], conta, categoria: mercado, descricao: `Na fila ${s}` });
+  const disparar = await syncDoServiceWorker(page);
+
+  // A rede volta e a tela lê a lista: o servidor responde, mas a resposta demora a chegar.
+  const daLista = (url: URL) => url.pathname === "/api/lancamentos";
+  let soltar = () => {};
+  const solta = new Promise<void>((resolve) => (soltar = resolve));
+  let respondida = () => {};
+  const daTela = new Promise<void>((resolve) => (respondida = resolve));
+  await context.route(daLista, async (rota) => {
+    if (rota.request().serviceWorker()) return rota.continue();
+    const resposta = await rota.fetch();
+    respondida();
+    await solta;
+    await rota.fulfill({ response: resposta }).catch(() => undefined);
+  });
+  await context.setOffline(false);
+  await daTela;
+
+  // Noutro aparelho, a outra pessoa lança; depois o service worker lê a lista, já com esse lançamento.
+  await api.criar("/api/lancamentos", { id: randomUUID(), tipo: "despesa", valor_centavos: 900, data: new Date().toISOString().slice(0, 10), descricao: `Do outro aparelho ${s}`, conta_id: contaId, categoria_ids: [categoriaId] });
+  const doServiceWorker = context.waitForEvent("requestfinished", (pedido) => daLista(new URL(pedido.url())) && !!pedido.serviceWorker());
+  await disparar();
+  await doServiceWorker;
+
+  // A resposta da tela, mais velha, chega por último (ticket 122).
+  const lote = context.waitForEvent("request", (pedido) => pedido.url().endsWith("/api/lancamentos/lote"));
+  soltar();
+  await (await lote).response();
+  await context.setOffline(true);
+  await context.unrouteAll({ behavior: "ignoreErrors" });
+  await page.goto("/#/historico");
+  await expect(page.getByRole("listitem").filter({ hasText: `Na fila ${s}` })).not.toContainText("não enviado");
+  await expect(page.getByRole("listitem").filter({ hasText: `Do outro aparelho ${s}` })).toContainText("− R$ 9,00");
 });
