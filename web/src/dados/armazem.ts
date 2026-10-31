@@ -1,28 +1,21 @@
 // O que o aparelho guarda para funcionar sem internet (ADR 0011): a última resposta de cada
-// leitura e a fila dos lançamentos não enviados. Banco próprio, separado do da sessão; a tela e o
+// leitura e a fila do que não foi enviado. Banco próprio, separado do da sessão; a tela e o
 // service worker usam este mesmo módulo.
 import type { components } from "../api/schema";
 
 export type NovoLancamento = components["schemas"]["NovoLancamento"];
 export type Lancamento = components["schemas"]["Lancamento"];
 export type NovaRecorrencia = components["schemas"]["NovaRecorrencia"];
+export type NovoParcelamento = components["schemas"]["NovoParcelamento"];
 export type Conflito = components["schemas"]["Conflito"];
 export type Exclusao = components["schemas"]["Exclusao"];
 /** O lançamento numa versão do servidor: a edição sobe só o que mudou desde ela (ADR 0011). */
 export type Base = NovoLancamento & { versao: number };
 
-/**
- * Uma mudança não enviada: no máximo uma por lançamento, a soma do que se fez nele. A recorrência
- * vai como um pedido só, que o servidor transforma em previstos ao receber.
- */
-export interface ItemDaFila {
-  /** O id do lançamento, ou o da recorrência. */
+/** O que todo pedido não enviado tem, seja de um lançamento, seja de uma regra. */
+interface PedidoNaFila {
+  /** O id do lançamento, ou o da recorrência ou do parcelamento. */
   id: string;
-  acao: "criar" | "editar" | "excluir" | "confirmar" | "criar_recorrencia";
-  /** No confirmar, o previsto já realizado, com os ajustes. */
-  lancamento?: NovoLancamento;
-  /** A regra da recorrência criada no aparelho; não se edita, só se descarta. */
-  recorrencia?: NovaRecorrencia;
   /** Quando a primeira mudança ainda não enviada foi feita (ms), para o aviso de 24 h. */
   desde: number;
   /** A hora da última ação no aparelho (ms): é a hora que o servidor grava, não a da chegada. */
@@ -31,8 +24,15 @@ export interface ItemDaFila {
   revisao: number;
   /** Motivo da recusa do servidor; recusado não sobe até ser corrigido ou descartado. */
   recusa?: string;
-  /** No criar (ou na recorrência) enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
+  /** O criar (o do lançamento ou o da regra) enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
   talvezNoServidor?: number;
+}
+
+/** Uma mudança de lançamento não enviada: no máximo uma por lançamento, a soma do que se fez nele. */
+export interface ItemDeLancamento extends PedidoNaFila {
+  acao: "criar" | "editar" | "excluir" | "confirmar";
+  /** O lançamento como fica; no confirmar, o previsto já realizado, com os ajustes. */
+  lancamento?: NovoLancamento;
   /** Quando o envio que talvez gravou o criar saiu (ms): o planejamento lido depois dele já pode contá-lo. */
   tentadoEm?: number;
   /**
@@ -45,6 +45,26 @@ export interface ItemDaFila {
   /** A exclusão venceu: a mudança não foi salva e espera "Lançar de novo" ou ser dispensada. */
   exclusao?: Exclusao;
 }
+
+/** A recorrência criada no aparelho; os previstos o servidor gera ao receber. */
+export interface ItemDeRecorrencia extends PedidoNaFila {
+  acao: "criar_recorrencia";
+  recorrencia: NovaRecorrencia;
+}
+
+/** O parcelamento criado no aparelho; as parcelas o servidor gera ao receber. */
+export interface ItemDeParcelamento extends PedidoNaFila {
+  acao: "criar_parcelamento";
+  parcelamento: NovoParcelamento;
+}
+
+/** A regra vai como um pedido só e não se edita no aparelho, só se descarta. */
+export type ItemDeRegra = ItemDeRecorrencia | ItemDeParcelamento;
+
+/** Um pedido não enviado: a mudança de um lançamento ou a regra nova, pela `acao`. */
+export type ItemDaFila = ItemDeLancamento | ItemDeRegra;
+
+export const deLancamento = (item: ItemDaFila): item is ItemDeLancamento => item.acao !== "criar_recorrencia" && item.acao !== "criar_parcelamento";
 
 export interface Guardada<T> {
   dados: T;

@@ -75,9 +75,12 @@ test("'Parece repetido' aparece só para quem recebeu o lançamento igual, e 'Ma
   await expect(linha(dela, descricao).first()).not.toContainText("não enviado");
   await expect(dela.getByRole("group", { name: `Parece repetido ${descricao}` })).toHaveCount(0);
 
-  await page.reload();
+  // O "não enviado" que sumiu pode ser o dele: o dela chega ao servidor quando a fila dela subir.
+  await expect(async () => {
+    await page.reload();
+    await expect(linha(page, descricao)).toHaveCount(2, { timeout: 2000 });
+  }).toPass();
   const repetido = page.getByRole("group", { name: `Parece repetido ${descricao}` });
-  await expect(linha(page, descricao)).toHaveCount(2);
   await expect(repetido).toContainText("Parece repetido: Fulana lançou o mesmo valor na mesma conta.");
 
   await repetido.getByRole("button", { name: `Manter os dois ${descricao}` }).click();
@@ -97,13 +100,19 @@ test("'Excluir este' tira o lançamento repetido para os dois", async ({ page, b
   await lancar(dela, { teclas: ["8", "00"], conta, categoria, descricao });
   await expect(linha(dela, descricao).first()).not.toContainText("não enviado");
 
-  await page.reload();
+  await expect(async () => {
+    await page.reload();
+    await expect(page.getByRole("group", { name: `Parece repetido ${descricao}` })).toBeVisible({ timeout: 2000 });
+  }).toPass();
   page.once("dialog", (dialogo) => void dialogo.accept());
   await page.getByRole("group", { name: `Parece repetido ${descricao}` }).getByRole("button", { name: `Excluir este ${descricao}` }).click();
 
   await expect(linha(page, descricao)).toHaveCount(1);
   await expect(page.getByRole("group", { name: `Parece repetido ${descricao}` })).toHaveCount(0);
-  await dela.reload();
-  await expect(linha(dela, descricao)).toHaveCount(1);
+  // A exclusão sobe pela fila dele: a tela dela só a vê depois que ela chega ao servidor (ticket 114).
+  await expect(async () => {
+    await dela.reload();
+    await expect(linha(dela, descricao)).toHaveCount(1, { timeout: 2000 });
+  }).toPass();
   await contextoDela.close();
 });

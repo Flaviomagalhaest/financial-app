@@ -1,10 +1,13 @@
-// As regras que o app repete para o aviso de planejamento sem internet (ticket 52), contra as
-// mesmas tabelas que `backend/tests/test_tabelas_compartilhadas.py` roda no servidor. Sem navegador.
+// As regras que o app repete para o aviso de planejamento sem internet (ticket 52) e para mostrar
+// a divisão do parcelamento (ticket 98), contra as mesmas tabelas que
+// `backend/tests/test_tabelas_compartilhadas.py` roda no servidor. Sem navegador.
 import { expect, test } from "@playwright/test";
 import ondeContaTabela from "../../tabelas-de-teste/onde-conta.json" with { type: "json" };
 import percentualTabela from "../../tabelas-de-teste/percentual.json" with { type: "json" };
 import mesDaCompraTabela from "../../tabelas-de-teste/mes-da-compra.json" with { type: "json" };
+import divisaoTabela from "../../tabelas-de-teste/divisao-das-parcelas.json" with { type: "json" };
 import { mesDaCompra, ondeConta, percentual } from "../src/dados/aviso";
+import { dividirEmParcelas } from "../src/lancamentos/dinheiro";
 
 test.describe("onde conta", () => {
   for (const c of ondeContaTabela.casos) {
@@ -18,6 +21,14 @@ test.describe("percentual", () => {
   for (const c of percentualTabela.casos) {
     test(c.caso, () => {
       expect(percentual(c.realizado_e_previsto, c.planejado)).toBe(c.percentual);
+    });
+  }
+});
+
+test.describe("divisão das parcelas", () => {
+  for (const c of divisaoTabela.casos) {
+    test(c.caso, () => {
+      expect(dividirEmParcelas(c.total, c.parcelas)).toEqual({ primeira: c.primeira, outras: c.outras });
     });
   }
 });
