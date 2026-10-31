@@ -49,7 +49,7 @@ test("transferência prevista atrasada aparece nas contas da semana e se confirm
   await page.goto("/#/hoje");
   await bloco.getByRole("button", { name: `Ajustar Reserva ${s}` }).click();
   const ajuste = bloco.getByRole("group", { name: `Ajuste de Reserva ${s}` });
-  await digitar(page, "Apagar", "Apagar", "Apagar", "4", "0", "00");
+  await digitar(page, "Apagar", "Apagar", "Apagar", "Apagar", "4", "0", "00");
   await expect(ajuste.getByTestId("valor")).toHaveText("R$ 40,00");
   await ajuste.getByLabel("Data").fill(dia(0));
   await ajuste.getByRole("button", { name: "Confirmar com ajuste" }).click();
