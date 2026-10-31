@@ -299,9 +299,12 @@ test("no Android, o service worker sobe a fila em segundo plano, sem o app abert
 
 test("criado com a resposta perdida e depois editado ou excluído sem internet: a mudança não se perde", async ({ page, context }) => {
   const { s, conta, mercado } = await prepararCasal(page);
-  // O servidor grava os dois lançamentos, mas a resposta não chega ao aparelho.
+  // O servidor grava os dois lançamentos, mas a resposta não chega ao aparelho. O `rota.fetch` não
+  // respeita o `setOffline`: sem `comRede`, o lote perderia a resposta ainda sem internet (ticket 120).
   let perdidas = 0;
+  let comRede = false;
   await page.route("**/api/lancamentos/lote", async (rota) => {
+    if (!comRede) return rota.abort("internetdisconnected");
     if (perdidas > 0) return rota.continue();
     perdidas++;
     await rota.fetch();
@@ -310,9 +313,11 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   await context.setOffline(true);
   await lancar(page, { teclas: ["1"], conta, categoria: mercado, descricao: `Editado ${s}` });
   await lancar(page, { teclas: ["2"], conta, categoria: mercado, descricao: `Excluído ${s}` });
+  comRede = true;
   await context.setOffline(false);
   await expect.poll(() => perdidas).toBe(1);
 
+  comRede = false;
   await context.setOffline(true);
   const editado = page.getByRole("listitem").filter({ hasText: `Editado ${s}` });
   const excluido = page.getByRole("listitem").filter({ hasText: `Excluído ${s}` });
@@ -324,6 +329,7 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   await excluido.getByRole("button", { name: `Excluir Excluído ${s}` }).click();
   await expect(excluido).toHaveCount(0);
 
+  comRede = true;
   await context.setOffline(false);
   await aba(page, "Hoje");
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
@@ -371,6 +377,58 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
   await page.reload();
   await expect(saldo()).toContainText("-R$ 450,07");
   await expect(saldo()).not.toContainText("⏳");
+});
+
+test("a rede cai logo depois do envio, antes de o saldo ser lido de novo: o saldo guardado já conta o enviado", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  const saldo = page.getByRole("listitem").filter({ hasText: conta });
+  await expect(saldo).toContainText("R$ 0,00");
+  // O lote sobe, mas nenhuma leitura das contas chega depois dele (ticket 120).
+  await page.route("**/api/contas**", (rota) => rota.abort("internetdisconnected"));
+  await lancar(page, { teclas: ["1", "00"], conta, categoria: mercado, descricao: `Enviado ${s}` });
+  await expect(page.getByRole("listitem").filter({ hasText: `Enviado ${s}` })).not.toContainText("não enviado");
+
+  await context.setOffline(true);
+  await page.unroute("**/api/contas**");
+  await aba(page, "Hoje");
+  await page.getByRole("link", { name: "Contas e categorias" }).click();
+  await expect(saldo).toContainText("-R$ 1,00");
+  await expect(saldo).not.toContainText("⏳");
+
+  await context.setOffline(false);
+  await page.reload();
+  await expect(saldo).toContainText("-R$ 1,00");
+});
+
+test("a rede volta, mas a lista não chega antes do envio: o lançamento não sobe e não some do aparelho", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["3", "00"], conta, categoria: mercado, descricao: `Sem lista ${s}` });
+  const linha = page.getByRole("listitem").filter({ hasText: `Sem lista ${s}` });
+  await expect(linha).toContainText("⏳ não enviado");
+
+  // A leitura da lista falha e o lote passaria (ticket 120).
+  const daLista = (url: URL) => url.pathname === "/api/lancamentos";
+  await page.route(daLista, (rota) => rota.abort("internetdisconnected"));
+  const lida = page.waitForRequest((pedido) => daLista(new URL(pedido.url())));
+  await context.setOffline(false);
+  await lida;
+  await aba(page, "Hoje");
+  await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento não enviado");
+
+  await context.setOffline(true);
+  await page.unroute(daLista);
+  await aba(page, "Histórico");
+  await expect(linha).toContainText("− R$ 3,00");
+
+  await context.setOffline(false);
+  await aba(page, "Hoje");
+  await page.getByRole("button", { name: "Enviar agora" }).click();
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await context.setOffline(true);
+  await aba(page, "Histórico");
+  await expect(linha).toContainText("− R$ 3,00");
+  await expect(linha).not.toContainText("não enviado");
 });
 
 test("lançado sem internet antes de a lista ser guardada continua no Histórico depois de enviado, mesmo sem internet", async ({ page, context }) => {

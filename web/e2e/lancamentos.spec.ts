@@ -160,3 +160,37 @@ test("contas: cria com saldo de abertura, renomeia e arquiva, e a arquivada sai 
   await page.goto("/#/novo");
   await expect(page.getByRole("button", { name: renomeada })).toHaveCount(0);
 });
+
+test("a leitura das contas que saiu antes de arquivar e chega depois não desfaz o arquivar", async ({ page, context }) => {
+  const conta = `Carteira ${Date.now()}`;
+  await page.goto("/#/contas-e-categorias");
+  await entrar(page);
+  await cadastrar(page, "Nova conta", conta, "carteira");
+
+  // A leitura que a tela faz ao abrir chega por último, como num banco cheio (ticket 120).
+  let atrasar = true;
+  let entregue = false;
+  await page.route(
+    (url) => url.pathname === "/api/contas" && url.search === "?arquivadas=true",
+    async (rota) => {
+      if (!atrasar) return rota.continue();
+      atrasar = false;
+      const resposta = await rota.fetch();
+      await new Promise((pronto) => setTimeout(pronto, 1500));
+      await rota.fulfill({ response: resposta });
+      entregue = true;
+    },
+  );
+  await page.goto("/#/novo");
+  await page.goto("/#/contas-e-categorias");
+  await page.getByRole("button", { name: `Arquivar conta ${conta}` }).click();
+  const desarquivar = page.getByRole("button", { name: `Desarquivar conta ${conta}` });
+  await expect(desarquivar).toBeVisible();
+  await expect.poll(() => entregue).toBe(true);
+
+  // Sem internet, a tela mostra o que ficou guardado.
+  await context.setOffline(true);
+  await page.goto("/#/novo");
+  await page.goto("/#/contas-e-categorias");
+  await expect(desarquivar).toBeVisible();
+});

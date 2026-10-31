@@ -1,7 +1,7 @@
 # Testes sem internet intermitentes no CI (saldo da conta e resposta perdida)
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Opus
@@ -26,8 +26,47 @@ Só local, com o Postgres de `scripts/postgres-local.sh` já cheio de execuçõe
 
 ## Checklist
 
-- [ ] Reprodução determinística de cada falha do CI (atraso no `context.route`, como nos tickets 113 e 114)
-- [ ] Causa (app ou teste) e correção, com o teste vermelho antes
-- [ ] Os dois só locais conferidos num banco novo: bug, ou nota no README sobre limpar o banco local
-- [ ] `sem-internet.spec.ts` com `--repeat-each=5` sem falha
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Reprodução determinística de cada falha do CI (atraso no `context.route`, como nos tickets 113 e 114)
+- [x] Causa (app ou teste) e correção, com o teste vermelho antes
+- [x] Os dois só locais conferidos num banco novo: bug, ou nota no README sobre limpar o banco local
+- [x] `sem-internet.spec.ts` com `--repeat-each=5` sem falha
+- [x] Verificações do projeto rodando e PR aberto para `main`
+
+## Answer
+
+São três bugs do app e duas corridas dos testes. O volume do banco local só alargava a janela do `lancamentos.spec.ts:134`. Cada correção tem teste vermelho antes, determinístico, com `page.route`.
+
+### `sem-internet.spec.ts:336` (saldo da conta): bug do app
+
+O saldo do aparelho é o saldo guardado das contas mais o efeito da fila. Quando o lançamento sobe, o `aplicar` (`web/src/dados/fila.ts`) tira o item da fila e acerta a lista e a Hoje guardadas, mas o saldo guardado só mudava com a releitura de `/api/contas` que o `enviarAgora` dispara depois (ticket 81). Se a rede cai entre o lote e essa releitura, o saldo guardado fica sem o enviado. A sonda mostrou isso no CI: o teste via "-R$ 1,00" (guardado 0 + fila), o item saía da fila e a releitura saía 44 ms depois do lote, já sem internet.
+
+A hipótese da `comTrava("shared")` não se confirmou: a trava exclusiva do envio impede que uma leitura velha das contas seja guardada depois do lote.
+
+Correção: o `aplicar` acerta também o saldo guardado de `/api/contas` e `/api/contas?arquivadas=true` (`comOsEnviados`, em `saldo.ts`), na mesma transação que tira o item da fila, pela diferença entre como a lista guardada tinha e passa a ter o lançamento. A releitura continua, e traz o saldo do servidor. Teste: "a rede cai logo depois do envio, antes de o saldo ser lido de novo...", em que nenhuma leitura das contas chega depois do lote.
+
+### `sem-internet.spec.ts:300` (resposta perdida): corrida do teste e bug do app
+
+- **Teste.** O `rota.fetch()` do Playwright não respeita o `context.setOffline`: o lote do segundo `lancar`, ainda sem internet, passava pela rota e perdia a resposta ali. O `expect.poll(perdidas)` já valia antes de a rede voltar, e o envio de verdade ainda estava no caminho quando o teste desligava a rede e abria a edição. Agora a rota recusa o lote enquanto o teste está sem rede (`comRede`).
+- **App.** Esse envio era aceito sem a lista guardada: a leitura dela no `enviarAgora` (ticket 90) falhava porque a rede ainda não tinha voltado de todo, e o lote saía logo depois. O `aplicar` tirava os itens da fila e eles sumiam do aparelho, o que dava o Histórico vazio ("não foi possível carregar os lançamentos") e a edição aberta em branco (R$ 0,09 e o Salvar desabilitado). Agora, se a lista não chega, o `enviarAgora` não envia e devolve `false`. Teste: "a rede volta, mas a lista não chega antes do envio...".
+
+### `lancamentos.spec.ts:134` (só local): bug do app
+
+As leituras de uma resposta correm juntas (a trava é `shared`), e a última a chegar era a guardada. A leitura que a tela "Contas e categorias" faz ao abrir pode sair antes do `PUT` de arquivar e chegar depois da releitura, e aí guarda a conta ainda não arquivada. No banco local cheio, o `GET /api/contas` demora mais e a janela cresce, daí o 5 de 5. Correção: o `buscarEGuardar` (`web/src/dados/index.ts`) numera as leituras e só guarda a resposta de uma que saiu depois da última guardada naquele caminho. O `manterOsDois` passou a guardar a lista por ele. Teste: "a leitura das contas que saiu antes de arquivar e chega depois não desfaz o arquivar".
+
+### `busca.spec.ts:142` (só local, uma vez): corrida do teste
+
+Falhou também num banco novo. O resultado online vem do `POST /api/busca` do servidor, e o teste desligava a rede antes de a tela terminar de ler e guardar a lista, as contas e as categorias criadas pela API, de onde sai a busca sem internet. Com o `abort` dessas leituras o teste ficou vermelho 3 de 3, com o mesmo sintoma. Agora ele espera as três leituras chegarem com o que a API criou.
+
+### O banco local cheio
+
+Numa segunda suíte no mesmo banco novo, `pessoa-e-repetido.spec.ts` e `favoritos.spec.ts` falharam também com o código da `main`: com uns 1.600 lançamentos do usuário de teste, o Histórico levou 6,1 s para mostrar o lançamento novo, e os testes esperam 5 s. Isso ficou no README ("Como testar": recriar o banco local antes de conferir uma falha intermitente), e a medida com o volume real foi para o [ticket 123](123-historico-com-o-volume-real.md).
+
+### Verificação
+
+- Sonda do `:336`, 50 rodadas antes da correção: 6 falhas; depois: 0 em 40. `:300`, 40 rodadas: 3 falhas antes, 0 depois. `busca.spec.ts:142`: 10 de 10.
+- `sem-internet.spec.ts --repeat-each=5`: 65 de 65. `npm run typecheck` e `npm run build` passando. Suíte inteira num banco novo: 178 de 179, e a que falhou foi o `busca.spec.ts:142`, corrigido depois (10 de 10).
+
+### Pendências
+
+- [Ticket 122](122-envio-em-segundo-plano-sem-a-lista-guardada.md): o envio em segundo plano (service worker) não tem as duas garantias novas (não subir sem a lista guardada e não deixar a leitura velha trocar a guardada), sem teste para o `sync` (o CDP já o dispara num teste do arquivo).
+- [Ticket 123](123-historico-com-o-volume-real.md): medir o Histórico no aparelho com o volume real (a lista inteira na tela).

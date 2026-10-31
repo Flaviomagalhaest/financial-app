@@ -146,11 +146,16 @@ test("sem internet, a busca mostra o que o aparelho guarda, com os não enviados
   const api = await apiDaPagina(page);
   const { lancamento } = await prepararCadastro(api, s);
   await lancamento({ valor_centavos: 10000, data: dia(-1), descricao: `Feira ${s}` });
-  // Abrir a busca com internet guarda a lista dos lançamentos e o cadastro no aparelho.
+  // Abrir a busca com internet guarda a lista dos lançamentos e o cadastro no aparelho. O resultado
+  // vem do servidor: a rede só cai depois de as leituras guardadas chegarem com o que a API criou (ticket 120).
+  const chegou = (caminho: string) =>
+    page.waitForResponse(async (r) => new URL(r.url()).pathname === caminho && r.request().method() === "GET" && (await r.text()).includes(s));
+  const guardadas = Promise.all(["/api/lancamentos", "/api/contas", "/api/categorias"].map(chegou));
   await page.goto(`/#/busca?texto=${s}`);
   const linhas = page.getByRole("list", { name: "Resultado da busca" }).locator(":scope > li");
   await expect(linhas).toHaveCount(1);
   await expect(linhas.first()).toContainText(`Corrente ${s}`);
+  await guardadas;
 
   await context.setOffline(true);
   await lancar(page, { teclas: ["7", "00"], conta: `Corrente ${s}`, categoria: `Mercado ${s}`, descricao: `Padaria ${s}` });
