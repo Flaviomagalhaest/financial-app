@@ -493,11 +493,11 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
-          recorrencia={id || estornando ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia ?? null, onMudar: (r) => repetir({ recorrencia: r }) }}
+          recorrencia={id || estornando ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia || null, onMudar: (r) => repetir({ recorrencia: r }) }}
           parcelamento={
             id || estornando || tipo !== "despesa"
               ? undefined
-              : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, aviso: avisoDoParcelamento ?? null, onMudar: (p) => repetir({ parcelamento: p }) }
+              : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, aviso: avisoDoParcelamento || null, onMudar: (p) => repetir({ parcelamento: p }) }
           }
           onFechar={() => setDetalhesAbertos(false)}
         />

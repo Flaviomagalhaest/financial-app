@@ -23,4 +23,4 @@ O `## Answer` do [ticket 87](87-recorrencia-com-inicio-no-passado.md) diz que "a
 
 Feito. A folha de detalhes do novo lançamento mostra, antes de salvar, "N ocorrências/parcelas não serão lançadas: caem antes de hoje" (`ocorrenciasPuladas` em `web/src/lancamentos/recorrencia.ts`, `parcelasPuladas` em `parcelamento.ts`; repetem a geração do servidor só para mostrar, ADR 0018). O cartão não pula parcela, então não avisa. A `TelaDoParcelamento.tsx` mostra as puladas pelo `parcelas_puladas`. Testes de navegador em `web/e2e/puladas.spec.ts`.
 
-Sem pendências novas. Observação (o 422 do boleto já é tema do ticket 129): o servidor responde 422 quando o boleto ou a recorrência inteiros estão no passado; a folha avisa as puladas, mas não trata esse caso à parte.
+Pendência: [130](130-tabela-das-puladas.md) (a ADR 0018 pede tabela de casos para a conta repetida no app). Observação (o 422 do boleto já é tema do ticket 129): o servidor responde 422 quando o boleto ou a recorrência inteiros estão no passado; a folha avisa as puladas, mas não trata esse caso à parte.

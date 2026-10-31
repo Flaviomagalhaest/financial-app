@@ -164,7 +164,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         {parcelamento.parcelas}x · {nomePorId(contasECartoes, parcelamento.conta_id)}
         {parcelamento.automatico ? " · automático" : ""}
       </p>
-      {(parcelamento.parcelas_puladas ?? 0) > 0 && (
+      {parcelamento.parcelas_puladas > 0 && (
         <p className="aviso">
           {parcelamento.parcelas_puladas === 1 ? "1 parcela não foi lançada: vencia" : `${parcelamento.parcelas_puladas} parcelas não foram lançadas: venciam`} antes de hoje, na criação (a numeração segue a do total).
         </p>
