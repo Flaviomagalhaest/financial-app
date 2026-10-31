@@ -1,7 +1,7 @@
 # Correção do boleto com parcelas puladas e nada retroativo na correção
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `domain-modeling` para o `GLOSSARY.md`
 Modelo recomendado: Opus
