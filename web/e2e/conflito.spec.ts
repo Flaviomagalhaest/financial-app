@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar, lancar } from "./lancar";
 
@@ -194,6 +195,11 @@ test("confirmar com ajuste o que a outra pessoa já confirmou leva à tela de co
   await entrar(dela, "esposa@teste.com");
   await linha(dela, descricao).getByRole("button", { name: `Confirmar ${descricao}` }).click();
   await expect(linha(dela, descricao)).toHaveCount(0);
+  // A confirmação dela sobe pela fila: o ajuste dele só dá conflito depois que ela chega ao servidor (ticket 114).
+  const apiDela = await apiDaPagina(dela);
+  await expect
+    .poll(async () => (await apiDela.ler("/api/lancamentos")).find((l: { descricao: string }) => l.descricao === descricao)?.situacao)
+    .toBe("realizado");
 
   // A tela dele ainda mostra o previsto: ele ajusta o valor e confirma.
   await linha(page, descricao).getByRole("button", { name: `Ajustar ${descricao}` }).click();

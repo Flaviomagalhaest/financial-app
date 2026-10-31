@@ -11,6 +11,9 @@ export function tituloDoLancamento(l: Pick<NovoLancamento, "descricao" | "catego
   return l.descricao || l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ");
 }
 
+/** `3` de `10` vira `03/10`, como a fatura mostra a parcela. */
+export const numeroDaParcela = (parcela: number, parcelas: number) => `${String(parcela).padStart(2, "0")}/${String(parcelas).padStart(2, "0")}`;
+
 /** O estorno é uma despesa que devolve dinheiro: aparece como crédito (ADR 0016). */
 export const eCredito = (l: Pick<NovoLancamento, "tipo" | "estorno_de">) => l.tipo !== "despesa" || !!l.estorno_de;
 

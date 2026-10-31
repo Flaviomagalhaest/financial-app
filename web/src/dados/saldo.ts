@@ -1,6 +1,6 @@
 // O saldo da conta no aparelho: o guardado do servidor mais o efeito dos não enviados da fila.
 // Sem React, como `fila.ts`, para ser a única conta do saldo em qualquer tela.
-import type { ItemDaFila, Lancamento } from "./armazem";
+import { deLancamento, type ItemDaFila, type Lancamento } from "./armazem";
 
 /** O que a conta precisa para a conta do saldo: o saldo guardado e a data de abertura. */
 interface ContaComSaldo {
@@ -34,7 +34,7 @@ export function saldoNoAparelho(
   let centavos = conta.saldo_centavos;
   let naoEnviado = false;
   for (const item of fila) {
-    if (item.conflito || item.exclusao) continue;
+    if (!deLancamento(item) || item.conflito || item.exclusao) continue;
     const mudou = efeito(naTela.get(item.id), conta) - efeito(doServidor.get(item.id), conta);
     if (mudou === 0) continue;
     centavos += mudou;

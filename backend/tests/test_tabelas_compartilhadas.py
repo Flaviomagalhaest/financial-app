@@ -1,5 +1,6 @@
-"""As regras que o app repete para o aviso de planejamento sem internet (ticket 52), contra as
-mesmas tabelas que `web/e2e/tabelas.spec.ts` roda no código do app."""
+"""As regras que o app repete para o aviso de planejamento sem internet (ticket 52) e para mostrar
+a divisão do parcelamento (ticket 98), contra as mesmas tabelas que `web/e2e/tabelas.spec.ts`
+roda no código do app."""
 
 import json
 from datetime import date
@@ -11,6 +12,7 @@ from fastapi import HTTPException
 
 from app.faturas import Titular, escolher_fatura
 from app.item_em_que_conta import onde_conta
+from app.parcelamentos import valor_da_parcela
 from app.planejamento import percentual
 
 TABELAS = Path(__file__).resolve().parents[2] / "tabelas-de-teste"
@@ -31,6 +33,15 @@ def test_onde_conta(caso: dict):
 @pytest.mark.parametrize("caso", casos("percentual"), ids=lambda c: c["caso"])
 def test_percentual(caso: dict):
     assert percentual(caso["realizado_e_previsto"], caso["planejado"]) == caso["percentual"]
+
+
+@pytest.mark.parametrize("caso", casos("divisao-das-parcelas"), ids=lambda c: c["caso"])
+def test_divisao_das_parcelas(caso: dict):
+    total, parcelas = caso["total"], caso["parcelas"]
+    assert valor_da_parcela(total, parcelas, 1) == caso["primeira"]
+    assert {valor_da_parcela(total, parcelas, n) for n in range(2, parcelas + 1)} == {
+        caso["outras"]
+    }
 
 
 @pytest.mark.parametrize("caso", casos("mes-da-compra"), ids=lambda c: c["caso"])
