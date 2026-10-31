@@ -60,3 +60,4 @@ Notas:
 
 - `excluirLancamento` (lista), `confirmarPrevisto` (Contas da semana) e `escolherItem` (Mês) chamam com o lançamento da tela no momento do toque, então só pegam um "não enviado" já aceito por atraso de render. Agora eles também vão sobre o aceito: a exclusão sobe com `versao`, e não sem ela, pulando a checagem de conflito. Não ganharam teste próprio, porque a janela é a do render, e o caminho é o mesmo `mudar` do teste acima.
 - Sem seam de unidade para a fila: testar `mudar`/`aplicar` fora do navegador pediria um IndexedDB falso (dependência nova). Fica registrado aqui; os testes de navegador cobrem a fila hoje.
+- O CI do PR deste ticket falhou em `sem-internet.spec.ts:336` (saldo da conta), que este PR não toca: na `main` local, sem a mudança, ele falhou 2 de 5. Esse teste, o vizinho `:300` (que falha na `main` e no PR do 61) e os dois que só falham no banco local cheio foram para o [ticket 120](120-testes-sem-internet-intermitentes.md).
