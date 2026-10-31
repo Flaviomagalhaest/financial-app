@@ -13,7 +13,7 @@ import {
   type ParcelamentoNaTela,
   type Transferencia,
 } from "../dados";
-import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
+import { nomePorId, numeroDaParcela, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { mesPorExtenso } from "../cartoes/apresentacao";
@@ -36,9 +36,6 @@ function CaixaDeMarcar({ titulo, marcacao }: { titulo: string; marcacao?: Marcac
     </label>
   );
 }
-
-/** `3` de `10` vira `03/10`, como a fatura mostra a parcela. */
-const numeroDaParcela = (parcela: number, parcelas: number) => `${String(parcela).padStart(2, "0")}/${String(parcelas).padStart(2, "0")}`;
 
 /** Um filtro escolhido, como ficha que se tira com um toque. */
 type Ficha = { rotulo: string; tirar: (c: Criterios) => Criterios };

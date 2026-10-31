@@ -7,6 +7,7 @@ import { hoje, mesDepois } from "../lancamentos/datas";
 import {
   apagarTudo,
   comTrava,
+  deLancamento,
   guardarResposta,
   lerFila,
   lerResposta,
@@ -16,15 +17,18 @@ import {
   type Exclusao,
   type Guardada,
   type ItemDaFila,
+  type ItemDeLancamento,
   type Lancamento,
   type NovaRecorrencia,
   type NovoLancamento,
+  type NovoParcelamento,
 } from "./armazem";
 import {
   decidirConflito,
   descartar,
   enfileirarConfirmar,
   enfileirarExcluir,
+  enfileirarParcelamento,
   enfileirarRecorrencia,
   enfileirarSalvar,
   enviarFila,
@@ -67,10 +71,14 @@ export type LeituraDaHoje = components["schemas"]["Hoje"];
 export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type Futuro = components["schemas"]["Futuro"];
 export type Historico = components["schemas"]["Historico"];
+export type Parcelamento = components["schemas"]["Parcelamento"];
+export type AlteracaoDeParcelamento = components["schemas"]["AlteracaoDeParcelamento"];
+export type AvisoDeRealizadas = components["schemas"]["AvisoDeRealizadas"];
 export type { Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
-export type { Conflito, Exclusao, ItemDaFila, Lancamento, NovaRecorrencia, NovoLancamento };
+export type { Conflito, Exclusao, ItemDaFila, ItemDeLancamento, Lancamento, NovaRecorrencia, NovoLancamento, NovoParcelamento };
+export { deLancamento };
 export { identidadeDe, oferecerFavoritar, useOfertaDeFavoritar } from "./favoritos";
 export { criteriosDoEndereco, enderecoDaBusca } from "./busca";
 export type { Criterios, ParcelamentoNaTela, Transferencia } from "./busca";
@@ -97,6 +105,8 @@ export type LancamentoNaTela = NovoLancamento & {
   parcelamento_id?: Lancamento["parcelamento_id"];
   parcela?: Lancamento["parcela"];
   parcelas?: Lancamento["parcelas"];
+  /** A parcela que uma pessoa mudou: a correção do parcelamento preserva valor, data, conta e fatura dela. */
+  alterada_a_mao?: Lancamento["alterada_a_mao"];
   /** O lançamento da outra pessoa que este parece repetir. */
   parece_repetido_de?: string | null;
   /** A hora da última ação no aparelho, enquanto a mudança não subiu. */
@@ -123,6 +133,7 @@ const LEITURAS = {
   "/api/sugestoes": () => api.GET("/api/sugestoes"),
   "/api/favoritos": () => api.GET("/api/favoritos"),
   "/api/filtros-salvos": () => api.GET("/api/filtros-salvos"),
+  "/api/parcelamentos": () => api.GET("/api/parcelamentos"),
 };
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
@@ -287,8 +298,8 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
   const porId = new Map<string, LancamentoNaTela>(servidor.map((l) => [l.id, { ...l, naoEnviado: false }]));
   const novos: LancamentoNaTela[] = [];
   for (const item of fila) {
-    // Os previstos da recorrência são do servidor: até ela subir, o aparelho só mostra a regra.
-    if (item.acao === "criar_recorrencia") continue;
+    // Os previstos e as parcelas são do servidor: até a regra subir, o aparelho só mostra a regra.
+    if (!deLancamento(item)) continue;
     const anterior = porId.get(item.id);
     if (item.conflito) {
       const servidor = anterior ?? { ...item.conflito.lancamento, naoEnviado: false };
@@ -393,22 +404,37 @@ export function useBusca(criterios: Criterios) {
 }
 
 /**
- * A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. `podeDescartar`
- * só quando ela com certeza não está no servidor: nunca saiu do aparelho ou foi recusada.
+ * A regra só se descarta quando com certeza não está no servidor: nunca saiu do aparelho ou foi
+ * recusada. A que ficou sem resposta talvez já tenha gerado os previstos ou as parcelas.
  */
+const podeDescartar = (item: ItemDaFila) => !!item.recusa || item.talvezNoServidor === undefined;
+
+/** A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. */
 export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string; podeDescartar: boolean };
 
-/** As recorrências criadas no aparelho que ainda não subiram, da mais antiga à mais nova. */
-export function useRecorrenciasNaoEnviadas(): RecorrenciaNaoEnviada[] {
+/** Os pedidos de um tipo de regra que ainda não subiram, do mais antigo ao mais novo, com a recusa e se dá para descartar. */
+function useRegrasNaoEnviadas<R>(regraDo: (item: ItemDaFila) => R | undefined) {
   const fila = useFila();
   return useMemo(
     () =>
-      fila.flatMap((item) =>
-        item.recorrencia ? [{ ...item.recorrencia, recusa: item.recusa, podeDescartar: !!item.recusa || item.talvezNoServidor === undefined }] : [],
-      ),
-    [fila],
+      fila.flatMap((item) => {
+        const regra = regraDo(item);
+        return regra ? [{ ...regra, recusa: item.recusa, podeDescartar: podeDescartar(item) }] : [];
+      }),
+    [fila, regraDo],
   );
 }
+
+/** As recorrências criadas no aparelho que ainda não subiram. */
+export const useRecorrenciasNaoEnviadas = (): RecorrenciaNaoEnviada[] => useRegrasNaoEnviadas(recorrenciaDo);
+const recorrenciaDo = (item: ItemDaFila) => (item.acao === "criar_recorrencia" ? item.recorrencia : undefined);
+
+/** O parcelamento na fila, como a recorrência. */
+export type ParcelamentoNaoEnviado = NovoParcelamento & { recusa?: string; podeDescartar: boolean };
+
+/** Os parcelamentos criados no aparelho que ainda não subiram. */
+export const useParcelamentosNaoEnviados = (): ParcelamentoNaoEnviado[] => useRegrasNaoEnviadas(parcelamentoDo);
+const parcelamentoDo = (item: ItemDaFila) => (item.acao === "criar_parcelamento" ? item.parcelamento : undefined);
 
 /**
  * As contas da semana da leitura da Hoje com a fila por cima: o previsto criado ou mudado no
@@ -571,7 +597,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
   const porId = new Map<string, NoAparelho>(servidor.map((l) => [l.id, { ...l, em: Date.parse(l.alterado_em) }]));
   const mudancas: Mudanca[] = [];
   for (const item of fila) {
-    if (item.conflito || item.exclusao) continue;
+    if (!deLancamento(item) || item.conflito || item.exclusao) continue;
     const antes = porId.get(item.id);
     if (item.acao === "excluir" || !item.lancamento) {
       porId.delete(item.id);
@@ -745,13 +771,13 @@ export function useConexao(): boolean {
   return online && !semResposta;
 }
 
-/** Uma recorrência subiu: os previstos que o servidor gerou só vêm nas leituras dos lançamentos e da Hoje. */
-let previstosNovos = false;
+/** Uma regra subiu: os previstos e as parcelas que o servidor gerou só vêm nas leituras dos lançamentos e da Hoje. */
+let geradosNoServidor = false;
 
 const remeter: Remessa = async (acoes) => {
   try {
     const { data, response } = await api.POST("/api/lancamentos/lote", { body: { acoes } });
-    if (data?.resultados.some((r) => r.recorrencia)) previstosNovos = true;
+    if (data?.resultados.some((r) => r.recorrencia || r.parcelamento)) geradosNoServidor = true;
     return data ? data.resultados : response.status;
   } catch {
     return 0;
@@ -775,9 +801,14 @@ export async function enviarAgora(): Promise<boolean> {
   if (!enviou) pedirEnvioEmSegundoPlano();
   // O saldo guardado das contas não conta o que acabou de subir: sem a fila para cobrir a diferença, buscá-lo de novo (ticket 81).
   else if (pendentes > 0) void Promise.all((["/api/contas", "/api/contas?arquivadas=true"] as const).map((c) => buscarEGuardar(c, LEITURAS[c])));
-  if (previstosNovos) {
-    previstosNovos = false;
-    await Promise.all([buscarEGuardar(LISTA, LEITURAS[LISTA]), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
+  if (geradosNoServidor) {
+    geradosNoServidor = false;
+    await Promise.all([
+      buscarEGuardar(LISTA, LEITURAS[LISTA]),
+      buscarEGuardar("/api/hoje", () => api.GET("/api/hoje")),
+      // A tela do parcelamento recém-enviado também o acha sem internet.
+      buscarEGuardar("/api/parcelamentos", LEITURAS["/api/parcelamentos"]),
+    ]);
   }
   return enviou;
 }
@@ -810,6 +841,12 @@ export async function salvarRecorrencia(recorrencia: NovaRecorrencia): Promise<v
   void enviarAgora();
 }
 
+/** O parcelamento novo também: as parcelas o servidor gera ao receber. */
+export async function salvarParcelamento(parcelamento: NovoParcelamento): Promise<void> {
+  await enfileirarParcelamento(parcelamento);
+  void enviarAgora();
+}
+
 export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {
   await enfileirarExcluir(mostrado.id, baseDe(mostrado));
   void enviarAgora();
@@ -819,10 +856,11 @@ export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<voi
  * Confirma o previsto pela fila (ADR 0011) e já tenta subir. Devolve a mudança se ela ainda está na
  * fila: sem internet, recusada, em conflito ou vencida pela exclusão.
  */
-export async function confirmarPrevisto(mostrado: LancamentoNaTela, ajustes: Ajustes = {}): Promise<ItemDaFila | undefined> {
+export async function confirmarPrevisto(mostrado: LancamentoNaTela, ajustes: Ajustes = {}): Promise<ItemDeLancamento | undefined> {
   await enfileirarConfirmar(mostrado, ajustes, baseDe(mostrado));
   await enviarAgora();
-  return (await lerFila()).find((item) => item.id === mostrado.id);
+  const item = (await lerFila()).find((i) => i.id === mostrado.id);
+  return item && deLancamento(item) ? item : undefined;
 }
 
 export const descartarNaoEnviado = descartar;
@@ -847,6 +885,56 @@ function eEnvia<A extends unknown[]>(mudar: (...args: A) => Promise<void>) {
 export const decidir = eEnvia(decidirConflito);
 export const excluirApesarDoConflito = eEnvia(excluirMesmoAssim);
 export const lancarDeNovoOExcluido = eEnvia(lancarDeNovo);
+
+/** Os parcelamentos do casal, do servidor ou os guardados. */
+export function useParcelamentos() {
+  return useResposta("/api/parcelamentos");
+}
+
+/** A correção e a exclusão refazem as parcelas no servidor: o aparelho lê de novo o que elas mudam. */
+async function relerAsParcelas() {
+  const caminhos = [LISTA, "/api/contas", "/api/contas?arquivadas=true", "/api/parcelamentos"] as const;
+  await Promise.all([...caminhos.map((c) => buscarEGuardar<unknown>(c, LEITURAS[c])), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
+}
+
+/** O que o servidor disse da correção: gravou (`{}`), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`). */
+export type Correcao = { aviso?: AvisoDeRealizadas; motivo?: string };
+
+/**
+ * Corrigir o parcelamento muda uma regra e precisa de internet (ADR 0011): não entra na fila. Se
+ * uma parcela realizada mudar ou sair, nada é gravado e volta o aviso, para repetir com
+ * `confirmar_realizadas`.
+ */
+export async function corrigirParcelamento(id: string, alteracao: AlteracaoDeParcelamento): Promise<Correcao> {
+  try {
+    const { data, error, response } = await api.PATCH("/api/parcelamentos/{id}", { params: { path: { id } }, body: alteracao });
+    if (data) {
+      await relerAsParcelas();
+      return {};
+    }
+    if (response.status === 409) return { aviso: error as AvisoDeRealizadas };
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return { motivo: typeof detalhe === "string" ? detalhe : "o servidor recusou a correção" };
+  } catch {
+    return { motivo: "sem resposta do servidor" };
+  }
+}
+
+/**
+ * Exclui o parcelamento inteiro, as realizadas também; precisa de internet. Devolve o motivo da
+ * recusa, ou `null`. O 204 não tem corpo, então `recusaDe` (que exige `data`) não serve.
+ */
+export async function excluirParcelamento(id: string): Promise<string | null> {
+  try {
+    const { error } = await api.DELETE("/api/parcelamentos/{id}", { params: { path: { id } } });
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    if (error) return typeof detalhe === "string" ? detalhe : "o servidor recusou excluir o parcelamento";
+  } catch {
+    return "sem resposta do servidor";
+  }
+  await relerAsParcelas();
+  return null;
+}
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */
 export async function criarConta(nome: string, tipo: Conta["tipo"]): Promise<boolean> {

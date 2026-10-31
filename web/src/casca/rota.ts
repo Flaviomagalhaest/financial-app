@@ -8,7 +8,7 @@ export const ABAS = [
   { id: "futuro", nome: "Futuro" },
 ] as const;
 
-export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "favorito" | "favoritos" | "conflito" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento" | "busca" | "edicoes-em-lote";
+export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "favorito" | "favoritos" | "conflito" | "parcelamento" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento" | "busca" | "edicoes-em-lote";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
 export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; consulta?: string } {
@@ -22,6 +22,7 @@ export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; 
     (tela === "favorito" && !!id) ||
     tela === "favoritos" ||
     (tela === "conflito" && !!id) ||
+    (tela === "parcelamento" && !!id) ||
     tela === "contas-e-categorias" ||
     tela === "configuracoes" ||
     tela === "modelo-do-planejamento" ||
@@ -30,11 +31,12 @@ export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; 
   // `#/favorito/<id>` abre o novo lançamento já preenchido pelo favorito `<id>`.
   // `#/estornar/<id>` abre o estorno da compra `<id>`.
   // `#/novo/<id>` edita o lançamento de identidade `<id>`; `#/conflito/<id>` decide o conflito dele.
+  // `#/parcelamento/<id>` corrige ou exclui o parcelamento `<id>`.
   // `#/cartoes/<cartão>/<AAAA-MM-01>` abre a fatura desse mês do cartão.
   // `#/mes/<AAAA-MM>` abre esse mês na aba Mês; sem o mês, o atual.
   if (conhecida && tela === "mes") return /^\d{4}-(0[1-9]|1[0-2])$/.test(id ?? "") ? { rota: "mes", mes: id } : { rota: "mes" };
   if (conhecida && tela === "cartoes") return id && mes ? { rota: "cartoes", id, mes } : { rota: "cartoes" };
-  return conhecida ? { rota: tela as Rota, id: tela === "novo" || tela === "estornar" || tela === "favorito" || tela === "conflito" ? id : undefined } : { rota: "hoje" };
+  return conhecida ? { rota: tela as Rota, id: ["novo", "estornar", "favorito", "conflito", "parcelamento"].includes(tela) ? id : undefined } : { rota: "hoje" };
 }
 
 export function useRota(): ReturnType<typeof lerRota> {
