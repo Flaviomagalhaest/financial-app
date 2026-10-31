@@ -84,6 +84,7 @@ function FaturasQueVencem({ faturas, dia }: { faturas: LeituraDaHoje["faturas_qu
               <p className="vazio">
                 {vencida && <span className="selo-atrasado">vencida</span>}
                 {f.vencimento && `vence em ${dataPorExtenso(f.vencimento)}`}
+                {f.saldo_anterior_centavos > 0 && ` · ${formatarCentavos(f.saldo_anterior_centavos)} de saldo anterior`}
               </p>
               <a className="botao secundario" href={`#/cartoes/${f.cartao_id}/${f.mes}`} aria-label={`Abrir fatura de ${nome}`}>
                 Abrir

@@ -209,3 +209,29 @@ def test_parcelamentos_em_andamento_e_os_proximos_12_meses(casal: Casal):
         ("2026-07-01", 0, 10000, 10000),
         ("2026-08-01", 0, 0, 0),
     ]
+
+
+def test_fechada_sem_pagamento_antes_de_uma_paga_continua_no_comprometido(casal: Casal):
+    cartao = novo_cartao(casal, limite_centavos=100000)["id"]
+    conta = casal.conta()
+    comprar(casal, cartao, "2026-01-26", valor_centavos=5000)  # fevereiro, fechada
+    comprar(casal, cartao, "2026-02-26", valor_centavos=10000)  # março, fechada
+    pagamento = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/transferencias",
+        json={
+            "id": str(uuid4()),
+            "conta_origem_id": conta,
+            "conta_destino_id": cartao,
+            "valor_centavos": 10000,
+            "data": "2026-04-05",
+            "fatura_mes": "2026-03-01",
+        },
+    )
+    assert pagamento.status_code == 201, pagamento.text
+
+    limite = limite_de(casal, cartao)
+
+    # Março está paga; fevereiro, sem pagamento, ainda deve os 50,00 dela.
+    assert (limite["faturas_fechadas_centavos"], limite["disponivel_centavos"]) == (5000, 95000)

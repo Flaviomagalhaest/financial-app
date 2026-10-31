@@ -240,7 +240,12 @@ def test_transferencia_aparece_fora_dos_totais_e_o_pagamento_de_fatura_so_pelo_t
     lancar(casal, corrente, [mercado], descricao="Feira", valor_centavos=5000, data="2026-10-01")
     comprar(casal, nubank, "2026-09-28", descricao="Cinema", valor_centavos=2000)
     transferir(casal, transferencia(corrente, poupanca, data="2026-10-03", categoria_id=reserva))
-    transferir(casal, pagamento(corrente, nubank, data="2026-10-05", fatura_mes="2026-10-01"))
+    transferir(
+        casal,
+        pagamento(
+            corrente, nubank, data="2026-10-05", fatura_mes="2026-10-01", valor_centavos=2000
+        ),
+    )
 
     tudo = buscar(casal)
     assert descricoes(tudo) == ["Guardar na reserva", "Feira", "Cinema"]

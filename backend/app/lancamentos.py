@@ -988,10 +988,15 @@ def excluir(
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
 
 
-def _na_rota[T](request: Request, trabalho: Callable[..., T]) -> T | JSONResponse:
-    """Uma rota de um lançamento só: o conflito vira 409 e a exclusão que venceu, 410."""
+def na_rota[T](
+    request: Request, trabalho: Callable[..., T], corrigida: tuple[UUID, date] | None = None
+) -> T | JSONResponse:
+    """Uma rota de lançamentos, com as regras da fatura paga (só a `corrigida` muda, na correção
+    de fatura): o conflito vira 409 e a exclusão que venceu, 410."""
+    from app import cartoes
+
     try:
-        return em_transacao(url_do_banco(request), trabalho)
+        return em_transacao(url_do_banco(request), cartoes.protegida(trabalho, corrigida))
     except LancamentoNaoEncontrado:
         raise HTTPException(status_code=404, detail="lançamento não encontrado")
     except LancamentoExcluido as e:
@@ -1021,7 +1026,7 @@ def criar_lancamento(
         response.status_code = 201 if gravado else 200
         return criado
 
-    return _na_rota(request, gravar)
+    return na_rota(request, gravar)
 
 
 def _todos(
@@ -1112,7 +1117,7 @@ def editar_lancamento(
 ) -> Lancamento | JSONResponse:
     """Só os campos mudados, sobre uma versão: campos diferentes se mesclam, o mesmo campo
     mudado depois pelo outro lado é 409, e o excluído é 410 (ADR 0011)."""
-    return _na_rota(request, lambda conn: editar(conn, id, alteracao, usuario))
+    return na_rota(request, lambda conn: editar(conn, id, alteracao, usuario))
 
 
 def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
@@ -1199,7 +1204,7 @@ def confirmar_lancamento(
     """Confirmar de novo sem ajuste diferente (a fila reenviou, a outra pessoa confirmou em um
     toque) devolve o gravado; com ajuste diferente é 409 com os campos em conflito e quem
     confirmou, para nada se perder em silêncio."""
-    return _na_rota(request, lambda conn: confirmar(conn, id, confirmacao, usuario))
+    return na_rota(request, lambda conn: confirmar(conn, id, confirmacao, usuario))
 
 
 @router.delete(
@@ -1217,7 +1222,7 @@ def excluir_lancamento(
 ) -> Response:
     """Idempotente: excluir o que já não existe também dá 204. Com `versao`, o que o outro lado
     mudou depois dela é 409, para perguntar antes."""
-    resposta = _na_rota(request, lambda conn: excluir(conn, id, versao, usuario, acao_em))
+    resposta = na_rota(request, lambda conn: excluir(conn, id, versao, usuario, acao_em))
     return resposta if isinstance(resposta, JSONResponse) else Response(status_code=204)
 
 
@@ -1240,4 +1245,4 @@ def manter_os_dois(id: UUID, usuario: UsuarioLogado, request: Request) -> Lancam
         )
         return _um(conn, id)
 
-    return _na_rota(request, gravar)
+    return na_rota(request, gravar)

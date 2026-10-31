@@ -1500,7 +1500,7 @@
     "/api/cartoes/{id}/faturas/{mes}": {
       "patch": {
         "summary": "Editar Fatura",
-        "description": "Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e\nredistribui as compras dela e das abertas e futuras, ou grava o ajuste dela (ADR 0008); o mês\nda fatura não muda.",
+        "description": "Acerta o fechamento ou o vencimento de uma fatura e redistribui as compras dela e das\nabertas e futuras, ou grava o ajuste dela (ADR 0008); o mês da fatura não muda. A fatura paga\nsó muda pela correção de fatura (ADR 0021).",
         "operationId": "editar_fatura",
         "security": [
           {
@@ -1546,6 +1546,82 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Fatura"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cartoes/{id}/faturas/{mes}/correcao": {
+      "post": {
+        "summary": "Corrigir Fatura",
+        "description": "Corrige a fatura paga de uma vez: datas e ajuste, compras novas, editadas e excluídas, e\nos pagamentos. Tudo ou nada: a correção que deixaria o pago acima do total, mexeria em outra\nfatura paga ou cairia num conflito não grava nada.",
+        "operationId": "corrigir_fatura",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          },
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Mes"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrecaoDeFatura"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fatura"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Uma compra mudou depois",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflito"
                 }
               }
             }
@@ -4414,6 +4490,205 @@
         "title": "Comparacao",
         "description": "As despesas do mês por categoria contra o mês anterior e o mesmo mês do ano passado, com o\nrealizado e o previsto. O lançamento com várias categorias conta inteiro em cada linha, e o\ntotal o conta uma vez (com os ajustes de fatura), então as linhas somam mais que o total."
       },
+      "CompraEditada": {
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Versao"
+          },
+          "tipo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "despesa",
+                  "receita"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "descricao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descricao"
+          },
+          "conta_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Ids"
+          },
+          "situacao": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "previsto",
+                  "realizado"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Situacao"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "fatura_mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatura Mes"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "versao",
+          "id"
+        ],
+        "title": "CompraEditada"
+      },
+      "CompraExcluida": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "versao": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "CompraExcluida"
+      },
       "Confirmacao": {
         "properties": {
           "versao": {
@@ -4617,6 +4892,85 @@
           "de"
         ],
         "title": "CopiaDeMes"
+      },
+      "CorrecaoDeFatura": {
+        "properties": {
+          "fechamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechamento"
+          },
+          "vencimento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vencimento"
+          },
+          "ajuste_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000000000.0,
+                "minimum": -1000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ajuste Centavos"
+          },
+          "pagamentos": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PagamentoDaCorrecao"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagamentos"
+          },
+          "compras_novas": {
+            "items": {
+              "$ref": "#/components/schemas/NovoLancamento"
+            },
+            "type": "array",
+            "title": "Compras Novas"
+          },
+          "compras_editadas": {
+            "items": {
+              "$ref": "#/components/schemas/CompraEditada"
+            },
+            "type": "array",
+            "title": "Compras Editadas"
+          },
+          "compras_excluidas": {
+            "items": {
+              "$ref": "#/components/schemas/CompraExcluida"
+            },
+            "type": "array",
+            "title": "Compras Excluidas"
+          }
+        },
+        "type": "object",
+        "title": "CorrecaoDeFatura"
       },
       "CriteriosDaBusca": {
         "properties": {
@@ -7400,6 +7754,44 @@
           "categoria_ids"
         ],
         "title": "NovoParcelamento"
+      },
+      "PagamentoDaCorrecao": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "conta_origem_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Origem Id"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "conta_origem_id",
+          "valor_centavos",
+          "data"
+        ],
+        "title": "PagamentoDaCorrecao",
+        "description": "Um pagamento realizado da fatura: o id que já existe é editado, o novo é criado."
       },
       "ParcelaQueMuda": {
         "properties": {

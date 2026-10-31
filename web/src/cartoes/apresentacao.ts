@@ -31,3 +31,11 @@ export function faturasDaLinha(faturas: Fatura[]): { rotulo: Rotulo; fatura: Fat
 export function comSinal(centavos: number): string {
   return centavos === 0 ? formatarCentavos(0) : `${centavos > 0 ? "+" : "−"} ${formatarCentavos(Math.abs(centavos))}`;
 }
+
+/** A paga por um pagamento (ADR 0021); a importada do Mobills, sem datas, também é paga, mas segue recebendo as compras escolhidas à mão. */
+export function pagaPeloPagamento(f: Pick<Fatura, "situacao" | "fechamento" | "vencimento">): boolean {
+  return f.situacao === "paga" && !!(f.fechamento || f.vencimento);
+}
+
+/** O saldo anterior que a fatura paga passou para a seguinte: o que faltou pagar dela. */
+export const saldoQuePassou = (f: Fatura) => (pagaPeloPagamento(f) ? Math.max(f.saldo_anterior_centavos + f.total_centavos - f.pago_centavos, 0) : 0);

@@ -106,12 +106,12 @@ def _previstos_por_mes(conn, mes_atual: date) -> dict[date, int]:
 def _faturas_por_mes(conn, mes_atual: date) -> dict[date, int]:
     """O que falta pagar de cada fatura, no mês dela (a compra no cartão conta no mês da fatura,
     ADR 0003); o que falta das faturas de meses que passaram sai no mês atual. O saldo anterior
-    já está na fatura de onde veio e não conta de novo."""
+    conta na fatura em que está: a paga que o passou adiante não deve mais nada (ADR 0021)."""
     por_mes: dict[date, int] = {}
     for titular in cartoes.titulares(conn):
         for f in cartoes.faturas_do_titular(conn, titular):
             mes = max(f.mes, mes_atual)
-            por_mes[mes] = por_mes.get(mes, 0) + f.a_pagar_centavos - f.saldo_anterior_centavos
+            por_mes[mes] = por_mes.get(mes, 0) + f.a_pagar_centavos
     return por_mes
 
 

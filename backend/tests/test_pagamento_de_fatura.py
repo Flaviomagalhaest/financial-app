@@ -93,11 +93,11 @@ def test_pagamento_recusa_cartao_arquivado_mas_mantem_o_historico(casal: Casal, 
         "flavio",
         "PUT",
         f"/api/transferencias/{existente['id']}",
-        json=pagamento(conta, cartao["id"], id=existente["id"], valor_centavos=7000),
+        json=pagamento(conta, cartao["id"], id=existente["id"], descricao="Fatura de abril"),
     )
 
     assert novo.status_code == 422
-    assert editado.status_code == 200 and editado.json()["valor_centavos"] == 7000
+    assert editado.status_code == 200 and editado.json()["descricao"] == "Fatura de abril"
 
 
 def test_pagar_o_cartao_adicional_quita_a_fatura_do_titular(casal: Casal, hoje_10_05):
@@ -183,45 +183,123 @@ def numeros(fatura: dict) -> tuple:
     )
 
 
-def test_pagamento_parcial_vira_saldo_anterior_na_fatura_seguinte(casal: Casal, hoje_10_05):
+def test_pagamento_em_parte_deixa_a_fatura_paga_e_a_sobra_vira_saldo_anterior_da_seguinte(
+    casal: Casal, hoje_10_05
+):
     conta = nova_conta(casal)["id"]
     cartao = novo_cartao(casal)["id"]
-    comprar(casal, cartao, "2026-04-10", valor_centavos=10000)
-    comprar(casal, cartao, "2026-05-08", valor_centavos=5000)
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+    comprar(casal, cartao, "2026-05-08", valor_centavos=50000)
 
-    pagar(casal, conta, cartao, valor_centavos=4000)
+    pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02")
 
     assert {mes: numeros(f) for mes, f in faturas(casal, cartao).items()} == {
         # total, saldo anterior, pago, a pagar, situação
-        "2026-04-01": (10000, 0, 4000, 6000, "fechada"),
-        "2026-05-01": (5000, 6000, 0, 11000, "aberta"),
+        "2026-04-01": (100000, 0, 60000, 0, "paga"),
+        "2026-05-01": (50000, 40000, 0, 90000, "aberta"),
     }
-
-    pagar(casal, conta, cartao, valor_centavos=6000, data="2026-05-09")
-
-    assert {mes: numeros(f) for mes, f in faturas(casal, cartao).items()} == {
-        "2026-04-01": (10000, 0, 10000, 0, "paga"),
-        "2026-05-01": (5000, 0, 0, 5000, "aberta"),
-    }
+    # Abril paga em parte não fica vencida na Hoje.
+    hoje = casal.pedir("esposa", "GET", "/api/hoje").json()
+    assert hoje["faturas_que_vencem"] == []
 
 
-def test_pagamento_previsto_nao_conta_como_pago_e_o_a_mais_nao_vira_saldo_anterior(
+def test_fatura_fechada_sem_pagamento_continua_devendo_e_nao_passa_saldo_anterior(
     casal: Casal, hoje_10_05
 ):
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+    comprar(casal, cartao, "2026-05-08", valor_centavos=50000)
+
+    assert {mes: numeros(f) for mes, f in faturas(casal, cartao).items()} == {
+        "2026-04-01": (100000, 0, 0, 100000, "fechada"),
+        "2026-05-01": (50000, 0, 0, 50000, "aberta"),
+    }
+    hoje = casal.pedir("esposa", "GET", "/api/hoje").json()
+    assert [(f["mes"], f["a_pagar_centavos"]) for f in hoje["faturas_que_vencem"]] == [
+        ("2026-04-01", 100000)
+    ]
+
+
+def test_pagar_o_total_da_seguinte_com_o_saldo_anterior_dentro_deixa_as_duas_pagas(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 5, 10))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+    comprar(casal, cartao, "2026-05-08", valor_centavos=50000)
+    pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02")
+
+    # Maio fecha em 25/05; em 05/06 o casal paga os 900,00 dela, os 400,00 de abril dentro.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 5))
+    pagar(casal, conta, cartao, fatura_mes="2026-05-01", valor_centavos=90000, data="2026-06-05")
+
+    assert {mes: numeros(f) for mes, f in faturas(casal, cartao).items()} == {
+        "2026-04-01": (100000, 0, 60000, 0, "paga"),
+        "2026-05-01": (50000, 40000, 90000, 0, "paga"),
+    }
+    assert casal.pedir("esposa", "GET", "/api/hoje").json()["faturas_que_vencem"] == []
+
+
+def test_pagamento_lancado_depois_de_a_seguinte_fechar_tambem_passa_a_sobra(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+    comprar(casal, cartao, "2026-05-08", valor_centavos=50000)
+
+    # Abril e maio já fecharam; o pagamento de abril é lançado só agora.
+    pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02")
+
+    assert numeros(faturas(casal, cartao)["2026-05-01"]) == (50000, 40000, 0, 90000, "fechada")
+
+
+def test_a_sobra_pula_os_meses_sem_fatura(casal: Casal, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 7, 10))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+    comprar(casal, cartao, "2026-06-08", valor_centavos=50000)
+
+    pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02")
+
+    assert numeros(faturas(casal, cartao)["2026-06-01"]) == (50000, 40000, 0, 90000, "fechada")
+
+
+def test_pagamento_previsto_nao_deixa_a_fatura_paga(casal: Casal, hoje_10_05):
     conta = nova_conta(casal)["id"]
     cartao = novo_cartao(casal)["id"]
     comprar(casal, cartao, "2026-04-10", valor_centavos=10000)
     comprar(casal, cartao, "2026-05-08", valor_centavos=5000)
 
     pagar(casal, conta, cartao, valor_centavos=10000, data="2026-05-20")
-    assert numeros(faturas(casal, cartao)["2026-04-01"]) == (10000, 0, 0, 10000, "fechada")
 
-    pagar(casal, conta, cartao, valor_centavos=12000, data="2026-05-05")
-    # Pagou 20,00 a mais: o excesso não abate a fatura seguinte (decisão provisória, ticket 89).
     assert {mes: numeros(f) for mes, f in faturas(casal, cartao).items()} == {
-        "2026-04-01": (10000, 0, 12000, 0, "paga"),
+        "2026-04-01": (10000, 0, 0, 10000, "fechada"),
         "2026-05-01": (5000, 0, 0, 5000, "aberta"),
     }
+
+
+def test_fatura_fechada_de_total_zero_sem_pagamento_fica_fechada(casal: Casal, hoje_10_05):
+    cartao = novo_cartao(casal)["id"]
+    compra = comprar(casal, cartao, "2026-04-10", valor_centavos=10000)
+    casal.pedir("flavio", "DELETE", f"/api/lancamentos/{compra['id']}")
+
+    assert numeros(faturas(casal, cartao)["2026-04-01"]) == (0, 0, 0, 0, "fechada")
+
+
+def test_pagamento_acima_do_devido_e_recusado(casal: Casal, hoje_10_05):
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=10000)
+
+    a_mais = pagar(casal, conta, cartao, valor_centavos=12000)
+
+    assert a_mais.status_code == 422
+    assert a_mais.json()["detail"] == "o pagamento passa do valor da fatura"
+    assert numeros(faturas(casal, cartao)["2026-04-01"]) == (10000, 0, 0, 10000, "fechada")
 
 
 def test_so_a_fatura_fechada_passa_o_que_sobrou_para_a_seguinte(casal: Casal, hoje_10_05):
@@ -287,3 +365,16 @@ def test_juros_e_iof_do_rotativo_entram_na_fatura_seguinte_e_o_saldo_anterior_na
     realizado = {i["categoria_id"]: i["realizado_centavos"] for i in plano}
     # Os 60,00 do saldo anterior não são alimentação de maio nem de abril de novo.
     assert realizado == {alimentacao: 0, juros: 350}
+
+
+def test_a_sobra_da_ultima_fatura_faz_nascer_a_seguinte(casal: Casal, hoje_10_05):
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+
+    pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02")
+
+    assert {mes: numeros(f) for mes, f in faturas(casal, cartao).items()} == {
+        "2026-04-01": (100000, 0, 60000, 0, "paga"),
+        "2026-05-01": (0, 40000, 0, 40000, "aberta"),
+    }

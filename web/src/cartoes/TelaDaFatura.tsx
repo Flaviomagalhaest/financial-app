@@ -5,7 +5,8 @@ import { eCredito, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, 
 import { mesEmQueConta } from "../dados/aviso";
 import { dataPorExtenso, mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
-import { comSinal, SITUACAO } from "./apresentacao";
+import { comSinal, pagaPeloPagamento, SITUACAO, saldoQuePassou } from "./apresentacao";
+import { FormularioDeCorrecao } from "./FormularioDeCorrecao";
 
 const TODAS = "";
 
@@ -86,6 +87,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const { dados: faturas, buscar } = useFaturas(cartaoId);
   const online = useConexao();
   const [ajustando, setAjustando] = useState(false);
+  const [corrigindo, setCorrigindo] = useState(false);
   const { lancamentos } = useLancamentos();
   const { nomeDe } = usePessoas();
   const [categoria, setCategoria] = useState(TODAS);
@@ -93,6 +95,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
 
   const cartao = cartoes.find((c) => c.id === cartaoId);
   const fatura = faturas?.find((f) => f.mes === mes);
+  const paga = !!fatura && pagaPeloPagamento(fatura);
   // As compras do adicional caem na fatura do titular.
   const doCartao = useMemo(() => new Set(cartoes.filter((c) => c.id === cartaoId || c.titular_id === cartaoId).map((c) => c.id)), [cartoes, cartaoId]);
   // A compra criada só no aparelho ainda não tem `mes`: vale a fatura escolhida ou a da data (ADR 0003).
@@ -145,18 +148,42 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
           <dd>{comSinal(fatura.ajuste_centavos)}</dd>
           <dt>Total</dt>
           <dd>{formatarCentavos(fatura.total_centavos)}</dd>
-          <dt>A pagar</dt>
-          <dd>{formatarCentavos(fatura.a_pagar_centavos)}</dd>
+          {fatura.saldo_anterior_centavos > 0 && (
+            <>
+              <dt>Saldo anterior</dt>
+              <dd>{formatarCentavos(fatura.saldo_anterior_centavos)}</dd>
+            </>
+          )}
+          <dt>Pago</dt>
+          <dd>{formatarCentavos(fatura.pago_centavos)}</dd>
+          {pagaPeloPagamento(fatura) ? (
+            <>
+              <dt>Passou para a seguinte</dt>
+              <dd>{formatarCentavos(saldoQuePassou(fatura))}</dd>
+            </>
+          ) : (
+            <>
+              <dt>A pagar</dt>
+              <dd>{formatarCentavos(fatura.a_pagar_centavos)}</dd>
+            </>
+          )}
         </dl>
       )}
-      {fatura && !ajustando && (
+      {fatura && paga && !corrigindo && (
+        <button type="button" className="secundario" disabled={!online} onClick={() => setCorrigindo(true)}>
+          Corrigir fatura
+        </button>
+      )}
+      {fatura && !paga && !ajustando && (
         <button type="button" className="secundario" disabled={!online} onClick={() => setAjustando(true)}>
           Ajustar fatura
         </button>
       )}
-      {fatura && !online && <p className="vazio">Ajustar a fatura precisa de internet.</p>}
+      {fatura && !online && <p className="vazio">{paga ? "Corrigir" : "Ajustar"} a fatura precisa de internet.</p>}
       {fatura && ajustando && <FormularioDeAjuste cartaoId={cartaoId} fatura={fatura} aoFechar={() => setAjustando(false)} aoSalvar={buscar} />}
-      {fatura && fatura.situacao !== "aberta" && <p className="aviso">Esta fatura já fechou: para cancelar uma compra, estorne-a.</p>}
+      {fatura && corrigindo && <FormularioDeCorrecao cartaoId={cartaoId} doCartao={doCartao} fatura={fatura} compras={compras} aoFechar={() => setCorrigindo(false)} aoSalvar={buscar} />}
+      {fatura && paga && <p className="aviso">Esta fatura está paga: não recebe mais compras, estornos nem pagamentos. Para consertar um erro, corrija a fatura.</p>}
+      {fatura && !paga && fatura.situacao !== "aberta" && <p className="aviso">Esta fatura já fechou: para cancelar uma compra, estorne-a.</p>}
       <label>
         Categoria
         <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>

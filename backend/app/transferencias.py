@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from app import faturas, lancamentos
+from app import cartoes, faturas, lancamentos
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import conferir_conta, recusar, situacao_pela_data, url_do_banco
@@ -88,7 +88,7 @@ def contas_da_semana_de_hoje(conn) -> list[Transferencia]:
 
 
 def _conferir_transferencia(
-    conn, t: NovaTransferencia, atual: tuple[UUID, UUID] | None = None
+    conn, t: NovaTransferencia, atual: tuple[UUID, UUID, date | None] | None = None
 ) -> None:
     if t.conta_origem_id == t.conta_destino_id:
         raise recusar("origem e destino são a mesma conta")
@@ -96,7 +96,8 @@ def _conferir_transferencia(
     conferir_conta(conn, t.conta_origem_id, ja_ligada=bool(atual) and t.conta_origem_id == atual[0])
     ja_no_destino = bool(atual) and t.conta_destino_id == atual[1]
     if cartao := faturas.ler_cartao(conn, t.conta_destino_id):
-        _conferir_pagamento_de_fatura(conn, t, cartao, ja_no_destino)
+        ja_na_fatura = ja_no_destino and t.fatura_mes == atual[2]
+        _conferir_pagamento_de_fatura(conn, t, cartao, ja_no_destino, ja_na_fatura)
     else:
         conferir_conta(conn, t.conta_destino_id, ja_ligada=ja_no_destino)
         if t.fatura_mes:
@@ -112,7 +113,11 @@ def _conferir_transferencia(
 
 
 def _conferir_pagamento_de_fatura(
-    conn, t: NovaTransferencia, cartao: faturas.CartaoComTitular, ja_no_destino: bool
+    conn,
+    t: NovaTransferencia,
+    cartao: faturas.CartaoComTitular,
+    ja_no_destino: bool,
+    ja_na_fatura: bool,
 ) -> None:
     if cartao.arquivado and not ja_no_destino:
         raise recusar("cartão arquivado")
@@ -125,6 +130,11 @@ def _conferir_pagamento_de_fatura(
     ).fetchone()
     if not existe:
         raise recusar("fatura não encontrada")
+    # A fatura paga não recebe pagamento novo, nem o previsto (ADR 0021).
+    if not ja_na_fatura:
+        [fatura] = cartoes.faturas_do_titular(conn, cartao.titular.id, t.fatura_mes)
+        if cartoes.paga_pelo_pagamento(fatura):
+            raise cartoes.recusa_da_paga(conn, cartao.titular.id, t.fatura_mes)
 
 
 @router.post(
@@ -162,7 +172,7 @@ def criar_transferencia(
         response.status_code = 201 if gravadas else 200
         return _ler_transferencias(conn, nova.id)[0]
 
-    return em_transacao(url_do_banco(request), gravar)
+    return em_transacao(url_do_banco(request), cartoes.protegida(gravar))
 
 
 @router.get(
@@ -184,14 +194,14 @@ def editar_transferencia(
 
     def gravar(conn) -> Transferencia:
         atual = conn.execute(
-            "SELECT data, situacao, conta_origem_id, conta_destino_id FROM transferencias"
-            " WHERE id = %s",
+            "SELECT data, situacao, conta_origem_id, conta_destino_id, fatura_mes"
+            " FROM transferencias WHERE id = %s",
             (id,),
         ).fetchone()
         if not atual:
             raise HTTPException(status_code=404, detail="transferência não encontrada")
-        data_atual, situacao_atual, origem, destino = atual
-        _conferir_transferencia(conn, editada, (origem, destino))
+        data_atual, situacao_atual, origem, destino, fatura_mes = atual
+        _conferir_transferencia(conn, editada, (origem, destino, fatura_mes))
         # Como no lançamento: sem situação no pedido, só mudar a data refaz a inferência.
         if editada.situacao:
             situacao = editada.situacao
@@ -218,7 +228,7 @@ def editar_transferencia(
         )
         return _ler_transferencias(conn, id)[0]
 
-    return em_transacao(url_do_banco(request), gravar)
+    return em_transacao(url_do_banco(request), cartoes.protegida(gravar))
 
 
 class ConfirmacaoDeTransferencia(BaseModel):
@@ -264,7 +274,7 @@ def confirmar_transferencia(
         )
         return _ler_transferencias(conn, id)[0]
 
-    return em_transacao(url_do_banco(request), gravar)
+    return em_transacao(url_do_banco(request), cartoes.protegida(gravar))
 
 
 @router.delete("/transferencias/{id}", status_code=204, operation_id="excluir_transferencia")
@@ -272,6 +282,8 @@ def excluir_transferencia(id: UUID, usuario: UsuarioLogado, request: Request) ->
     """Idempotente: excluir o que já não existe também dá 204."""
     em_transacao(
         url_do_banco(request),
-        lambda conn: conn.execute("DELETE FROM transferencias WHERE id = %s", (id,)),
+        cartoes.protegida(
+            lambda conn: conn.execute("DELETE FROM transferencias WHERE id = %s", (id,))
+        ),
     )
     return Response(status_code=204)

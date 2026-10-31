@@ -2,6 +2,7 @@
 ficam o cadastro, a edição das datas de uma fatura e a redistribuição das compras quando as
 datas mudam (fatura fechada nunca muda, ADR 0003)."""
 
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID, uuid4
@@ -59,8 +60,8 @@ class Fatura(BaseModel):
     mes: date
     fechamento: date | None
     vencimento: date | None
-    # Fechada a partir do dia do fechamento. Paga quando fechada e quitada pelos pagamentos
-    # realizados; a importada do Mobills, sem datas, nasce paga sem pagamento de fatura.
+    # Fechada a partir do dia do fechamento. Paga quando fechada e com um pagamento realizado, de
+    # qualquer valor (ADR 0021); a importada do Mobills, sem datas, nasce paga sem pagamento.
     situacao: Literal["aberta", "fechada", "paga"]
     # As compras da fatura (despesas menos estornos e receitas, previstas e realizadas).
     compras_centavos: int
@@ -68,11 +69,11 @@ class Fatura(BaseModel):
     ajuste_centavos: int
     # Compras mais o ajuste.
     total_centavos: int
-    # O que sobrou da fatura anterior fechada, sem pagar: não é compra e não conta de novo.
+    # O que faltou pagar da fatura anterior paga: não é compra e não conta de novo.
     saldo_anterior_centavos: int
     # Os pagamentos de fatura realizados desta fatura.
     pago_centavos: int
-    # Saldo anterior mais o total menos o pago, sem passar de zero.
+    # Saldo anterior mais o total menos o pago; zero na paga, que passou o que faltou adiante.
     a_pagar_centavos: int
 
 
@@ -197,7 +198,7 @@ def editar_cartao(
             _novo_padrao(conn, faturas.ler_cartao(conn, id).titular, usuario)
         return _ler(conn, id)
 
-    return em_transacao(url_do_banco(request), gravar)
+    return em_transacao(url_do_banco(request), protegida(gravar))
 
 
 @router.get("/cartoes", response_model=list[Cartao], operation_id="listar_cartoes")
@@ -218,7 +219,7 @@ def titulares(conn) -> list[UUID]:
 
 def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
     """As faturas do titular, com os números. O saldo anterior de cada uma vem da anterior
-    fechada, por isso a conta corre desde a mais antiga, mesmo quando se pede um mês só."""
+    paga, por isso a conta corre desde a mais antiga, mesmo quando se pede um mês só."""
     dia = lancamentos.hoje()
     compras = dict(
         conn.execute(
@@ -229,15 +230,16 @@ def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[
             (titular_id,),
         )
     )
-    pagos = dict(
-        conn.execute(
-            "SELECT t.fatura_mes, SUM(t.valor_centavos)::bigint FROM transferencias t"
+    pagos = {
+        mes: (soma, quantos)
+        for mes, soma, quantos in conn.execute(
+            "SELECT t.fatura_mes, SUM(t.valor_centavos)::bigint, COUNT(*) FROM transferencias t"
             " JOIN cartoes c ON c.id = t.conta_destino_id"
             " WHERE COALESCE(c.titular_id, c.id) = %s AND t.situacao = 'realizado'"
             " GROUP BY t.fatura_mes",
             (titular_id,),
         )
-    )
+    }
     resultado = []
     saldo_anterior = 0
     for cartao_id, mes_da_fatura, fechamento, vencimento, ajuste in conn.execute(
@@ -245,20 +247,17 @@ def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[
         " FROM faturas WHERE cartao_id = %s ORDER BY mes",
         (titular_id,),
     ).fetchall():
-        compras_da_fatura, pago = compras.get(mes_da_fatura, 0), pagos.get(mes_da_fatura, 0)
+        compras_da_fatura = compras.get(mes_da_fatura, 0)
+        pago, pagamentos = pagos.get(mes_da_fatura, (0, 0))
         total = compras_da_fatura + ajuste
         devido = saldo_anterior + total
         # A importada já foi paga no Mobills, e o pagamento não veio no histórico.
         importada = faturas.importada(fechamento, vencimento)
-        a_pagar = 0 if importada else max(devido - pago, 0)
         aberta = faturas.aberta(fechamento, dia)
-        situacao = (
-            "aberta"
-            if aberta
-            else "paga"
-            if importada or (devido > 0 and a_pagar == 0)
-            else "fechada"
-        )
+        # Um pagamento realizado, de qualquer valor, deixa paga a fatura fechada (ADR 0021).
+        paga = not aberta and (importada or pagamentos > 0)
+        a_pagar = 0 if paga else max(devido - pago, 0)
+        situacao = "aberta" if aberta else "paga" if paga else "fechada"
         if not mes or mes == mes_da_fatura:
             resultado.append(
                 Fatura(
@@ -275,9 +274,100 @@ def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[
                     a_pagar_centavos=a_pagar,
                 )
             )
-        # Só a fatura fechada passa o que sobrou: a aberta ainda recebe compras.
-        saldo_anterior = 0 if aberta else a_pagar
+        # Só a fatura paga passa o que faltou: a aberta ainda recebe compras, a fechada sem
+        # pagamento continua devendo e a importada já foi paga no Mobills.
+        saldo_anterior = max(devido - pago, 0) if paga and not importada else 0
     return resultado
+
+
+def _todas(conn) -> dict[tuple[UUID, date], Fatura]:
+    return {(f.cartao_id, f.mes): f for t in titulares(conn) for f in faturas_do_titular(conn, t)}
+
+
+def _o_que_so_um_evento_muda(f: Fatura) -> tuple[date | None, date | None, int, int, int]:
+    """As datas, as compras, o ajuste e os pagamentos da fatura; o saldo anterior vem da
+    anterior."""
+    return f.fechamento, f.vencimento, f.compras_centavos, f.ajuste_centavos, f.pago_centavos
+
+
+def paga_pelo_pagamento(f: Fatura) -> bool:
+    """A paga que recebeu um pagamento; a importada do Mobills (sem datas) segue recebendo as
+    compras escolhidas à mão."""
+    return f.situacao == "paga" and not faturas.importada(f.fechamento, f.vencimento)
+
+
+def recusa_da_paga(conn, cartao_id: UUID, mes: date) -> HTTPException:
+    (nome,) = conn.execute("SELECT nome FROM cartoes WHERE id = %s", (cartao_id,)).fetchone()
+    return recusar(
+        f"a fatura de {mes:%m/%Y} do {nome} está paga: para mudá-la, use a correção da fatura"
+    )
+
+
+def _passa_adiante(f: Fatura) -> int:
+    """O que faltou pagar da fatura paga, que vira saldo anterior da seguinte."""
+    if not paga_pelo_pagamento(f):
+        return 0
+    return max(f.saldo_anterior_centavos + f.total_centavos - f.pago_centavos, 0)
+
+
+def _garantir_a_seguinte(conn, todas: dict[tuple[UUID, date], Fatura]) -> bool:
+    """O saldo anterior precisa de uma fatura seguinte: se a última fatura de um titular é paga e
+    passa algo adiante, a do mês seguinte nasce aqui. Havendo uma mais adiante, o saldo pula os
+    meses sem fatura até ela. Devolve se alguma nasceu."""
+    ultimas: dict[UUID, Fatura] = {}
+    for (titular_id, _), f in sorted(todas.items()):
+        ultimas[titular_id] = f
+    nasceu = False
+    for titular_id, ultima in ultimas.items():
+        if _passa_adiante(ultima):
+            titular = faturas.ler_cartao(conn, titular_id).titular
+            faturas.garantir_fatura(conn, titular, faturas.somar_meses(ultima.mes, 1))
+            nasceu = True
+    return nasceu
+
+
+def _conferir_faturas(
+    conn,
+    antes: dict[tuple[UUID, date], Fatura],
+    corrigida: tuple[UUID, date] | None,
+) -> None:
+    depois_de_tudo = _todas(conn)
+    if _garantir_a_seguinte(conn, depois_de_tudo):
+        depois_de_tudo = _todas(conn)
+    for chave, depois in depois_de_tudo.items():
+        anterior = antes.get(chave)
+        if (
+            anterior
+            and chave != corrigida
+            and paga_pelo_pagamento(anterior)
+            and _o_que_so_um_evento_muda(anterior) != _o_que_so_um_evento_muda(depois)
+        ):
+            raise recusa_da_paga(conn, *chave)
+        # Só a fatura que mudou: a gravada antes da regra (ticket 125) não trava o resto.
+        if chave == corrigida and not paga_pelo_pagamento(depois):
+            raise recusar("a correção não reabre a fatura: ela continua paga")
+        mudou = not anterior or anterior != depois
+        devido = depois.saldo_anterior_centavos + depois.total_centavos
+        if mudou and depois.pago_centavos > max(devido, 0):
+            raise recusar("o pagamento passa do valor da fatura")
+
+
+def protegida[T](
+    trabalho: Callable[..., T], corrigida: tuple[UUID, date] | None = None
+) -> Callable[..., T]:
+    """`trabalho(conn)` com as regras da fatura paga (ADR 0021) conferidas no resultado: a paga
+    não recebe mais pagamento, compra, troca de fatura, estorno nem acerto de datas, e nenhum
+    pagamento passa do valor da fatura (saldo anterior mais o total). Só a `corrigida` (titular e
+    mês, na correção de fatura) muda sendo paga, e ela continua paga. A fatura paga que é a
+    última e passa saldo anterior adiante ganha a seguinte."""
+
+    def com_as_regras(conn) -> T:
+        antes = _todas(conn)
+        resultado = trabalho(conn)
+        _conferir_faturas(conn, antes, corrigida)
+        return resultado
+
+    return com_as_regras
 
 
 def faturas_que_vencem_ate(conn, ate: date) -> list[Fatura]:
@@ -358,44 +448,53 @@ def _redistribuir(conn, titular: faturas.Titular, meses: list[date], usuario: st
         lancamentos.mudar_fatura(conn, id, versao, nova, usuario, f"datas do cartão {titular.nome}")
 
 
+def alterar_fatura(
+    conn, titular: faturas.Titular, mes: date, alteracao: AlteracaoDeFatura, usuario: str
+) -> None:
+    """Grava o ajuste ou acerta as datas da fatura (a que ainda não nasceu nasce aqui) e
+    redistribui as compras dela e das abertas e futuras."""
+    abertas = _abertas(conn, titular)
+    faturas.garantir_fatura(conn, titular, mes)
+    if alteracao.ajuste_centavos is not None:
+        conn.execute(
+            "UPDATE faturas SET ajuste_centavos = %s WHERE cartao_id = %s AND mes = %s",
+            (alteracao.ajuste_centavos, titular.id, mes),
+        )
+    # Só o ajuste não mexe nas datas nem nas compras da fatura.
+    if not (alteracao.fechamento or alteracao.vencimento):
+        return
+    fechamento, vencimento = conn.execute(
+        "SELECT fechamento, vencimento FROM faturas WHERE cartao_id = %s AND mes = %s",
+        (titular.id, mes),
+    ).fetchone()
+    fechamento = alteracao.fechamento or fechamento
+    vencimento = alteracao.vencimento or vencimento
+    if fechamento and vencimento and vencimento <= fechamento:
+        raise recusar("vencimento antes do fechamento")
+    # A escolha da fatura (`faturas.mes_da_compra`) conta com fechamentos em ordem.
+    anterior, seguinte = faturas.fechamentos(
+        conn, titular, [faturas.somar_meses(mes, -1), faturas.somar_meses(mes, 1)]
+    ).values()
+    if fechamento and (
+        (anterior and fechamento <= anterior) or (seguinte and fechamento >= seguinte)
+    ):
+        raise recusar("fechamento fora do intervalo entre a fatura anterior e a seguinte")
+    faturas.gravar_datas(conn, titular, mes, fechamento, vencimento)
+    _redistribuir(conn, titular, sorted({*abertas, mes}), usuario)
+
+
 @router.patch("/cartoes/{id}/faturas/{mes}", response_model=Fatura, operation_id="editar_fatura")
 def editar_fatura(
     id: UUID, mes: date, alteracao: AlteracaoDeFatura, usuario: UsuarioLogado, request: Request
 ) -> Fatura:
-    """Acerta o fechamento ou o vencimento de uma fatura (a que ainda não nasceu nasce aqui) e
-    redistribui as compras dela e das abertas e futuras, ou grava o ajuste dela (ADR 0008); o mês
-    da fatura não muda."""
+    """Acerta o fechamento ou o vencimento de uma fatura e redistribui as compras dela e das
+    abertas e futuras, ou grava o ajuste dela (ADR 0008); o mês da fatura não muda. A fatura paga
+    só muda pela correção de fatura (ADR 0021)."""
     mes = faturas.mes_de(mes)
 
     def gravar(conn) -> Fatura:
         titular = cartao_ou_404(conn, id).titular
-        abertas = _abertas(conn, titular)
-        faturas.garantir_fatura(conn, titular, mes)
-        if alteracao.ajuste_centavos is not None:
-            conn.execute(
-                "UPDATE faturas SET ajuste_centavos = %s WHERE cartao_id = %s AND mes = %s",
-                (alteracao.ajuste_centavos, titular.id, mes),
-            )
-        # Só o ajuste não mexe nas datas nem nas compras da fatura.
-        if alteracao.fechamento or alteracao.vencimento:
-            fechamento, vencimento = conn.execute(
-                "SELECT fechamento, vencimento FROM faturas WHERE cartao_id = %s AND mes = %s",
-                (titular.id, mes),
-            ).fetchone()
-            fechamento = alteracao.fechamento or fechamento
-            vencimento = alteracao.vencimento or vencimento
-            if fechamento and vencimento and vencimento <= fechamento:
-                raise recusar("vencimento antes do fechamento")
-            # A escolha da fatura (`faturas.mes_da_compra`) conta com fechamentos em ordem.
-            anterior, seguinte = faturas.fechamentos(
-                conn, titular, [faturas.somar_meses(mes, -1), faturas.somar_meses(mes, 1)]
-            ).values()
-            if fechamento and (
-                (anterior and fechamento <= anterior) or (seguinte and fechamento >= seguinte)
-            ):
-                raise recusar("fechamento fora do intervalo entre a fatura anterior e a seguinte")
-            faturas.gravar_datas(conn, titular, mes, fechamento, vencimento)
-            _redistribuir(conn, titular, sorted({*abertas, mes}), usuario)
+        alterar_fatura(conn, titular, mes, alteracao, usuario)
         return faturas_do_titular(conn, titular.id, mes)[0]
 
-    return em_transacao(url_do_banco(request), gravar)
+    return em_transacao(url_do_banco(request), protegida(gravar))

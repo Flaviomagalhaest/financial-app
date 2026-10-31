@@ -11,7 +11,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app import parcelamentos, recorrencias
+from app import cartoes, parcelamentos, recorrencias
 from app.banco import em_transacao
 from app.lancamentos import (
     AlteracaoDeLancamento,
@@ -170,16 +170,24 @@ def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
     várias."""
     match acao:
         case AcaoCriar(lancamento=novo):
-            criado = em_transacao(url, lambda conn: criar(conn, novo, usuario)[0])
+            criado = em_transacao(
+                url, cartoes.protegida(lambda conn: criar(conn, novo, usuario)[0])
+            )
             return Resultado(resultado="aceita", lancamento=criado)
         case AcaoEditar(id=id, alteracao=alteracao):
-            editado = em_transacao(url, lambda conn: editar(conn, id, alteracao, usuario))
+            editado = em_transacao(
+                url, cartoes.protegida(lambda conn: editar(conn, id, alteracao, usuario))
+            )
             return Resultado(resultado="aceita", lancamento=editado)
         case AcaoConfirmar(id=id, confirmacao=confirmacao):
-            confirmado = em_transacao(url, lambda conn: confirmar(conn, id, confirmacao, usuario))
+            confirmado = em_transacao(
+                url, cartoes.protegida(lambda conn: confirmar(conn, id, confirmacao, usuario))
+            )
             return Resultado(resultado="aceita", lancamento=confirmado)
         case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
-            em_transacao(url, lambda conn: excluir(conn, id, versao, usuario, acao_em))
+            em_transacao(
+                url, cartoes.protegida(lambda conn: excluir(conn, id, versao, usuario, acao_em))
+            )
             return Resultado(resultado="aceita")
         case AcaoCriarParcelamento(parcelamento=novo):
             # Grava numa transação e gera as parcelas em outras (o limite de linhas do DSQL).

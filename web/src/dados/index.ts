@@ -1250,3 +1250,31 @@ export function iniciarEnvioAutomatico(): () => void {
     document.removeEventListener("visibilitychange", aoVoltar);
   };
 }
+
+export type CorrecaoDeFatura = components["schemas"]["CorrecaoDeFatura"];
+
+/**
+ * Os pagamentos realizados da fatura `mes` feitos para `doTitular` (o titular e os adicionais dele), para a correção.
+ * Precisa de internet, como a correção; `null` sem resposta do servidor.
+ */
+export async function pagamentosDaFatura(doTitular: Set<string>, mes: string): Promise<components["schemas"]["Transferencia"][] | null> {
+  try {
+    const { data } = await api.GET("/api/transferencias");
+    return data ? data.filter((t) => t.fatura_mes === mes && t.situacao === "realizado" && doTitular.has(t.conta_destino_id)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Corrige a fatura paga de uma vez (ADR 0021): datas, ajuste, compras e pagamentos. Precisa de
+ * internet; devolve o motivo da recusa, ou `null` quando gravou, e relê os lançamentos e a Hoje.
+ */
+export async function corrigirFatura(cartaoId: string, mes: string, correcao: CorrecaoDeFatura): Promise<string | null> {
+  const motivo = await recusaDe(
+    () => api.POST("/api/cartoes/{id}/faturas/{mes}/correcao", { params: { path: { id: cartaoId, mes } }, body: correcao }),
+    "o servidor recusou a correção",
+  );
+  if (motivo === null) await Promise.all([buscarEGuardar(LISTA, LEITURAS[LISTA]), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
+  return motivo;
+}

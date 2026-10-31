@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from app import faturas, lancamentos
+from app import cartoes, faturas, lancamentos
 from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
@@ -398,6 +398,17 @@ def origem(descricao: str) -> str:
     return f"o parcelamento {descricao}".strip()
 
 
+def _conferir_faturas_das_parcelas(conn, novo: NovoParcelamento, primeira: date) -> None:
+    """Nenhuma parcela cai numa fatura paga (ADR 0021). A parcela n cai n - 1 faturas depois da
+    primeira, e a paga pode vir depois de uma fechada sem pagamento: confere todas aqui, porque
+    a geração em lotes não volta atrás."""
+    titular = faturas.ler_cartao(conn, novo.conta_id).titular
+    ultima = faturas.somar_meses(primeira, novo.parcelas - 1)
+    for fatura in cartoes.faturas_do_titular(conn, titular.id):
+        if primeira <= fatura.mes <= ultima and cartoes.paga_pelo_pagamento(fatura):
+            raise cartoes.recusa_da_paga(conn, titular.id, fatura.mes)
+
+
 def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bool]:
     """Grava o parcelamento sem as parcelas (`gerar_as_parcelas` as gera depois) e devolve se é
     novo. Reenviar o mesmo id (a fila repete) devolve o gravado."""
@@ -413,7 +424,9 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
     # A fatura da 1ª parcela (no cartão sem dia de fechamento, não há como escolher) é
     # conferida antes de gravar: senão a regra ficaria sem parcelas, e a tarefa diária
     # tentaria gerá-las todo dia.
-    lancamentos.mes_em_que_conta(conn, novo.conta_id, novo.data)
+    primeira = lancamentos.mes_em_que_conta(conn, novo.conta_id, novo.data)
+    if no_cartao:
+        _conferir_faturas_das_parcelas(conn, novo, primeira)
     tags = ids_das_tags(conn, novo.tags, usuario, set())
     gravado = conn.execute(
         f"INSERT INTO parcelamentos ({_COLUNAS}, geradas)"
@@ -970,13 +983,15 @@ def antecipar_parcelas(
     url = url_do_banco(request)
     antecipadas = em_transacao(
         url,
-        lambda conn: _antecipar(
-            conn,
-            id,
-            antecipacao.parcelas,
-            antecipacao.data,
-            antecipacao.valor_total_centavos,
-            usuario,
+        cartoes.protegida(
+            lambda conn: _antecipar(
+                conn,
+                id,
+                antecipacao.parcelas,
+                antecipacao.data,
+                antecipacao.valor_total_centavos,
+                usuario,
+            )
         ),
     )
     return _responder(url, antecipadas)
@@ -994,8 +1009,10 @@ def quitar_parcelamento(
     url = url_do_banco(request)
     quitadas = em_transacao(
         url,
-        lambda conn: _antecipar(
-            conn, id, None, quitacao.data, quitacao.valor_total_centavos, usuario
+        cartoes.protegida(
+            lambda conn: _antecipar(
+                conn, id, None, quitacao.data, quitacao.valor_total_centavos, usuario
+            )
         ),
     )
     return _responder(url, quitadas)
