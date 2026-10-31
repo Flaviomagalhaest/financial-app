@@ -36,6 +36,14 @@ export const ETIQUETA_DO_ENVIO = "enviar-fila";
 export const LISTA = "/api/lancamentos";
 /** A leitura da Hoje guardada: o resultado do envio acerta as contas da semana dela. */
 export const HOJE = "/api/hoje";
+/**
+ * Nas respostas guardadas, o último lançamento aceito de cada mudança que saiu da fila: a tela que
+ * abriu a mudança ainda "não enviada" edita sobre a versão que ela gerou (ticket 113).
+ */
+const ACEITOS = "fila/aceitos";
+/** Quantos aceitos ficam guardados; os mais antigos saem. */
+const MAXIMO_DE_ACEITOS = 100;
+type Aceitos = Record<string, { base: Base; em: number }>;
 /** O mesmo limite do servidor (`LIMITE_DO_LOTE`). */
 const LIMITE_DO_LOTE = 100;
 /**
@@ -54,11 +62,15 @@ export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "d
 type SemControle<I> = I extends ItemDaFila ? Omit<I, "id" | "desde" | "revisao"> : never;
 type Proximo = SemControle<ItemDaFila> | null;
 
-/** `proximo` recebe a mudança de lançamento que já está na fila (a regra não se edita). */
-async function mudar(id: string, proximo: (atual: ItemDeLancamento | undefined) => Proximo) {
-  await emTransacao("readwrite", async (fila) => {
+/**
+ * `proximo` recebe a mudança de lançamento que já está na fila (a regra não se edita) e, para a
+ * tela que não tinha a versão do servidor, a do último aceito deste lançamento.
+ */
+async function mudar(id: string, proximo: (atual: ItemDeLancamento | undefined, aceito: Base | undefined) => Proximo) {
+  await emTransacao("readwrite", async (fila, respostas) => {
     const atual: ItemDaFila | undefined = await pedido(fila.get(id));
-    const item = proximo(atual && deLancamento(atual) ? atual : undefined);
+    const aceitos: Aceitos | undefined = await pedido(respostas.get(ACEITOS));
+    const item = proximo(atual && deLancamento(atual) ? atual : undefined, aceitos?.[id]?.base);
     if (!item) await pedido(fila.delete(id));
     else await pedido(fila.put({ ...item, id, desde: atual?.desde ?? Date.now(), feitoEm: Date.now(), revisao: (atual?.revisao ?? 0) + 1 }));
   });
@@ -108,10 +120,11 @@ function pedidoDeSalvar(atual: ItemDeLancamento | undefined, mudado: NovoLancame
 
 /**
  * Criar (`novo`) ou editar; editar o que ainda não subiu muda o pedido de criar. Tira a recusa e o
- * conflito. `base` é a versão do servidor que a tela mostrava; a primeira mudança a guarda.
+ * conflito. `base` é a versão do servidor que a tela mostrava; a primeira mudança a guarda. Sem
+ * ela (a tela mostrava a mudança não enviada, que subiu depois), vale a versão que a mudança gerou.
  */
 export function enfileirarSalvar(lancamento: NovoLancamento, novo: boolean, base?: Base): Promise<void> {
-  return mudar(lancamento.id, (atual) => pedidoDeSalvar(atual, lancamento, novo, base));
+  return mudar(lancamento.id, (atual, aceito) => pedidoDeSalvar(atual, lancamento, novo, base ?? aceito));
 }
 
 const AJUSTAVEIS = ["valor_centavos", "data", "conta_id"] as const;
@@ -124,7 +137,8 @@ export type Ajustes = Partial<Pick<NovoLancamento, (typeof AJUSTAVEIS)[number]>>
  * sobre a versão `base`.
  */
 export function enfileirarConfirmar(mostrado: NovoLancamento, ajustes: Ajustes, base?: Base): Promise<void> {
-  return mudar(mostrado.id, (atual) => {
+  return mudar(mostrado.id, (atual, aceito) => {
+    base ??= aceito;
     const antes = atual?.lancamento && !atual.conflito ? atual.lancamento : comoNovo(mostrado);
     const lancamento: NovoLancamento = { ...antes, ...ajustes, situacao: "realizado" };
     return !atual || (atual.acao === "confirmar" && !atual.conflito)
@@ -180,10 +194,10 @@ export function enfileirarParcelamento(parcelamento: NovoParcelamento): Promise<
 
 /** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
 export function enfileirarExcluir(id: string, base?: Base): Promise<void> {
-  return mudar(id, (atual) =>
+  return mudar(id, (atual, aceito) =>
     atual?.acao === "criar" && atual.talvezNoServidor === undefined
       ? null
-      : { acao: "excluir", base: atual?.conflito?.lancamento ?? atual?.base ?? base },
+      : { acao: "excluir", base: atual?.conflito?.lancamento ?? atual?.base ?? base ?? aceito },
   );
 }
 
@@ -292,6 +306,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
     let lista = guardada?.dados ?? [];
     const daHoje: Guardada<LeituraDaHoje> | undefined = await pedido(respostas.get(HOJE));
     let previstos = daHoje?.dados.contas_da_semana ?? [];
+    const aceitos: Aceitos = (await pedido(respostas.get(ACEITOS))) ?? {};
     for (const [i, enviado] of enviados.entries()) {
       const { resultado, motivo, lancamento, campos, exclusao } = resultados[i];
       // Nas contas da semana, vale a versão do servidor: o confirmado ou excluído sai, e o conflito
@@ -332,6 +347,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       // Excluído no aparelho enquanto subia: agora que existe no servidor, sai de lá também.
       const excluidoNoCaminho = !atual && enviado.acao === "criar";
       if (lancamento && !excluidoNoCaminho) lista.push(lancamento);
+      if (lancamento) aceitos[enviado.id] = { base: lancamento, em: Date.now() };
       if (excluidoNoCaminho) await pedido(fila.put({ id: enviado.id, acao: "excluir", base: lancamento, desde: enviado.desde, revisao: 1 }));
       else if (intacto) await pedido(fila.delete(enviado.id));
       // Mudou no caminho: a mudança nova sobe sobre a versão que acabou de ser aceita (o que era
@@ -339,6 +355,8 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       else if (atual)
         await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, base: lancamento ?? atual.base }));
     }
+    const recentes = Object.entries(aceitos).sort(([, a], [, b]) => b.em - a.em).slice(0, MAXIMO_DE_ACEITOS);
+    await pedido(respostas.put(Object.fromEntries(recentes), ACEITOS));
     if (guardada) await pedido(respostas.put({ dados: ordenar(lista), em: guardada.em }, LISTA));
     if (daHoje) await pedido(respostas.put({ dados: { ...daHoje.dados, contas_da_semana: previstos }, em: daHoje.em }, HOJE));
   });
