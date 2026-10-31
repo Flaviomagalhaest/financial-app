@@ -802,7 +802,7 @@ def cancelar_parados(url: str | None = None) -> int:
         try:
             _cancelar(url, id, usuario, "a gravação parou no meio")
             cancelados += 1
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Um lote que falha (conflito do banco) fica para a próxima rodada, sem derrubar os
             # outros; o desfazer continua de onde parou.
             _log.exception("não foi possível desfazer a edição em lote %s", id)
