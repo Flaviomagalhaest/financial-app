@@ -4,15 +4,16 @@ Tabela própria porque o DSQL não altera o `CHECK` do tipo dos lançamentos (AD
 O pagamento de fatura é a transferência de uma conta para um cartão: leva o mês da fatura que
 quita, não tem categoria e só mexe no saldo da conta."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from app import faturas
+from app import faturas, lancamentos
 from app.banco import conectar, em_transacao
+from app.config import valores_iniciais
 from app.lancamentos import conferir_conta, recusar, situacao_pela_data, url_do_banco
 from app.login import UsuarioLogado
 
@@ -44,6 +45,8 @@ class Transferencia(NovaTransferencia):
     criado_em: datetime
     alterado_por: str
     alterado_em: datetime
+    # Previsto com data antes de hoje (São Paulo), a mesma regra do lançamento.
+    atrasado: bool = False
 
 
 _COLUNAS = (
@@ -67,7 +70,21 @@ def _ler(conn, filtro: str, parametros: tuple) -> list[Transferencia]:
         f"SELECT {_COLUNAS} FROM transferencias {filtro} ORDER BY data DESC, criado_em DESC, id",
         parametros,
     ).fetchall()
-    return [Transferencia(**dict(zip(_NOMES_DAS_COLUNAS, linha))) for linha in linhas]
+    dia = lancamentos.hoje()
+    return [_montar(dict(zip(_NOMES_DAS_COLUNAS, linha)), dia) for linha in linhas]
+
+
+def _montar(campos: dict, dia: date) -> Transferencia:
+    atrasado = campos["situacao"] == "previsto" and campos["data"] < dia
+    return Transferencia(**campos, atrasado=atrasado)
+
+
+def contas_da_semana_de_hoje(conn) -> list[Transferencia]:
+    """Os previstos atrasados e os até `contasDaSemanaDias` dias a partir de hoje, como nos
+    lançamentos; o pagamento de fatura previsto entra também."""
+    ate = lancamentos.hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
+    previstas = _ler(conn, "WHERE situacao = 'previsto' AND data <= %s", (ate,))
+    return sorted(previstas, key=lambda t: (t.data, t.criado_em, t.id))
 
 
 def _conferir_transferencia(
@@ -198,6 +215,52 @@ def editar_transferencia(
                 usuario,
                 id,
             ),
+        )
+        return _ler_transferencias(conn, id)[0]
+
+    return em_transacao(url_do_banco(request), gravar)
+
+
+class ConfirmacaoDeTransferencia(BaseModel):
+    """O que de fato aconteceu; campo ausente fica como estava no previsto."""
+
+    valor_centavos: int | None = Field(default=None, gt=0)
+    data: date | None = None
+
+
+@router.post(
+    "/transferencias/{id}/confirmar",
+    response_model=Transferencia,
+    operation_id="confirmar_transferencia",
+    responses={409: {"description": "Já confirmada com outros valores"}},
+)
+def confirmar_transferencia(
+    id: UUID, confirmacao: ConfirmacaoDeTransferencia, usuario: UsuarioLogado, request: Request
+) -> Transferencia:
+    """Como no lançamento: confirmar de novo sem ajuste diferente devolve o gravado; com ajuste
+    diferente de uma já realizada é 409, para nada se perder em silêncio."""
+
+    def gravar(conn) -> Transferencia:
+        atual = next(iter(_ler_transferencias(conn, id)), None)
+        if not atual:
+            raise HTTPException(status_code=404, detail="transferência não encontrada")
+        ajustes = {
+            campo: pedido
+            for campo, pedido in confirmacao.model_dump(exclude_none=True).items()
+            if pedido != getattr(atual, campo)
+        }
+        if atual.situacao == "realizado":
+            if ajustes:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"já confirmada com outros valores ({', '.join(sorted(ajustes))})",
+                )
+            return atual
+        conn.execute(
+            "UPDATE transferencias SET situacao = 'realizado',"
+            " valor_centavos = COALESCE(%s, valor_centavos), data = COALESCE(%s, data),"
+            " alterado_por = %s, alterado_em = now() WHERE id = %s",
+            (confirmacao.valor_centavos, confirmacao.data, usuario, id),
         )
         return _ler_transferencias(conn, id)[0]
 

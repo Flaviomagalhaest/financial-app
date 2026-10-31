@@ -153,6 +153,7 @@ def test_transferencia_move_o_saldo_das_duas_contas_sem_ser_despesa(casal: Casal
     assert criada.status_code == 201
     assert criada.json() | {"criado_em": None, "alterado_em": None} == nova | {
         "situacao": "realizado",
+        "atrasado": False,
         "fatura_mes": None,
         "criado_por": "flavio",
         "alterado_por": "flavio",

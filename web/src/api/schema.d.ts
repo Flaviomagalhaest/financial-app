@@ -370,6 +370,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transferencias/{id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Transferencia
+         * @description Como no lançamento: confirmar de novo sem ajuste diferente devolve o gravado; com ajuste
+         *     diferente de uma já realizada é 409, para nada se perder em silêncio.
+         */
+        post: operations["confirmar_transferencia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cartoes": {
         parameters: {
             query?: never;
@@ -1514,6 +1535,16 @@ export interface components {
             acao_em?: string | null;
         };
         /**
+         * ConfirmacaoDeTransferencia
+         * @description O que de fato aconteceu; campo ausente fica como estava no previsto.
+         */
+        ConfirmacaoDeTransferencia: {
+            /** Valor Centavos */
+            valor_centavos?: number | null;
+            /** Data */
+            data?: string | null;
+        };
+        /**
          * Conflito
          * @description Corpo do 409: o lançamento como o servidor o tem e os campos em conflito. Na exclusão, os
          *     campos são os que o outro lado mudou depois.
@@ -1954,6 +1985,8 @@ export interface components {
             lancamentos_a_escolher: components["schemas"]["Lancamento"][];
             /** Contas Da Semana */
             contas_da_semana: components["schemas"]["Lancamento"][];
+            /** Transferencias Da Semana */
+            transferencias_da_semana: components["schemas"]["Transferencia"][];
             /** Faturas Que Vencem */
             faturas_que_vencem: components["schemas"]["Fatura"][];
             /** Itens Em Destaque */
@@ -3282,6 +3315,11 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+            /**
+             * Atrasado
+             * @default false
+             */
+            atrasado: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -4173,6 +4211,48 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_transferencia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmacaoDeTransferencia"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transferencia"];
+                };
+            };
+            /** @description Já confirmada com outros valores */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
