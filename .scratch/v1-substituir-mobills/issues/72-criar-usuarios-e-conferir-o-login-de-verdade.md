@@ -13,6 +13,8 @@ Origem: [ticket 30](30-login-no-app.md) (código só verificado contra o Cognito
 
 O login do ticket 30 foi testado contra o Cognito falso (`web/e2e/cognito-falso.ts`), que não confere a senha nem roda o SRP do lado do servidor. Falta ver, no `dev` e depois no `prod`, o login com o Cognito de verdade e um token real passando pelo CloudFront até a API.
 
+Assistente pronto: `scripts/conferir-login-real.sh dev` guia os passos do dono (cria os usuários, confere o login errado/certo, "API no ar" e o desconectar); `scripts/conferir-login-real.sh prod` repete a criação no prod. O dono roda com a credencial AWS dele; os itens abaixo só são marcados depois da execução.
+
 ## Checklist
 
 - [ ] Dono cria os dois usuários no `dev` com `scripts/usuarios-do-app.sh criar dev <email>` e confere com `listar dev` que só eles existem
