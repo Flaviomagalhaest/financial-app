@@ -263,12 +263,12 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
  * chegado, e o que ela levava como base da edição seguinte: uma tentativa depois, sem rede, não
  * prova que a anterior não chegou.
  */
-async function marcarSemResposta(enviados: ItemDaFila[]) {
+async function marcarSemResposta(enviados: ItemDaFila[], saiuEm: number) {
   await emTransacao("readwrite", async (fila) => {
     for (const enviado of enviados) {
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       if (enviado.acao === "criar" && atual?.acao === "criar" && atual.talvezNoServidor === undefined)
-        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, tentadoEm: Date.now(), base: { ...enviado.lancamento!, versao: 1 } }));
+        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, tentadoEm: saiuEm, base: { ...enviado.lancamento!, versao: 1 } }));
       // A recorrência talvez gravada não se descarta mais no aparelho: os previstos viriam mesmo assim.
       // Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
       if (atual?.acao === "criar_recorrencia" && atual.talvezNoServidor === undefined && navigator.onLine)
@@ -318,9 +318,11 @@ export function enviarFila(remeter: Remessa): Promise<boolean> {
     for (;;) {
       const lote = ateOLimite((await lerFila()).filter((item) => !esperaAPessoa(item)));
       if (lote.length === 0) return true;
+      // A hora em que o pedido saiu, não a da falha: o planejamento lido no meio já pode ter o criar.
+      const saiuEm = Date.now();
       const resultados = await remeterLote(remeter, lote).catch(() => null);
       if (!resultados) {
-        await marcarSemResposta(lote);
+        await marcarSemResposta(lote, saiuEm);
         return false;
       }
       await aplicar(lote, resultados);
