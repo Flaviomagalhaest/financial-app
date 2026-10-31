@@ -8,7 +8,7 @@ Mudar uma recorrência "daqui para frente", encerrá-la e excluí-la passam a va
 
 O aparelho não repete a regra: enquanto a mudança não sobe, ele mostra a regra com a mudança por cima e esconde só os previstos que o fim ou a exclusão vão tirar; o valor novo dos previstos chega na leitura seguinte ao envio. Mudar só um mês e pular um mês já eram mudanças de um lançamento e seguem como antes.
 
-A regra não tem versão. Em vez de criar uma, o pedido da fila leva em `antes` o que a tela mostrava nos campos que ele muda. Se a outra pessoa (ou outro aparelho) mudou depois um desses campos para outro valor, o servidor recusa a mudança com o motivo ("a regra mudou depois (valor): confira e mude de novo"), e ela fica no aparelho até ser descartada. Campos diferentes se mesclam, e a mudança igual à que já chegou passa, o que torna o reenvio inofensivo. Nada se perde em silêncio, como o dono pediu na ADR 0011, sem uma segunda tela de conflito.
+A regra não tem versão. Em vez de criar uma, o pedido da fila leva em `antes` o que a tela mostrava nos campos que ele muda. Se a outra pessoa (ou outro aparelho) mudou depois um desses campos para outro valor, o servidor recusa a mudança com o motivo ("a regra mudou depois (valor): confira e mude de novo"), e ela fica no aparelho até ser descartada. Campos diferentes se mesclam, e a mudança igual à que já chegou passa. O fim conta como um campo só (a data e as vezes), porque um tira o outro. A mudança reenviada depois de um envio sem resposta vai sem `antes`: ela e as seguintes talvez já valham no servidor, e a comparação a recusaria à toa. Nada se perde em silêncio, como o dono pediu na ADR 0011, sem uma segunda tela de conflito.
 
 ## Considered Options
 
