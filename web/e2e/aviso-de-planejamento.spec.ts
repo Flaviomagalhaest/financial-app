@@ -200,3 +200,19 @@ test("sem escolha para o conjunto, nada fica marcado e o lançamento fica a esco
   expect(salvo.item_categoria_id).toBeNull();
   expect(plano.a_escolher.map((a: { lancamento_id: string }) => a.lancamento_id)).toContain(salvo.id);
 });
+
+test("a transferência com categoria mostra o efeito no item de transferência do planejamento", async ({ page }) => {
+  const { s, conta, criar } = await prepararCasal(page);
+  await criar("/api/contas", { nome: `Reserva ${s}`, tipo: "poupanca" });
+  const { id } = await criar("/api/categorias", { nome: `Guardar ${s}`, tipo: "transferencia" });
+  await criar(`/api/planejamento/${hoje().slice(0, 7)}/itens`, { id: randomUUID(), categoria_id: id, valor_centavos: 100000 });
+
+  await novoLancamento(page);
+  await page.getByRole("group", { name: "Tipo" }).getByRole("button", { name: "Transferência" }).click();
+  await expect(aviso(page)).toHaveCount(0);
+  await digitar(page, "3", "0", "0", "0", "0");
+  await page.getByRole("group", { name: "De" }).getByRole("button", { name: conta, exact: true }).click();
+  await page.getByRole("group", { name: "Categoria (opcional)" }).getByRole("button", { name: `Guardar ${s}` }).click();
+  await expect(aviso(page)).toContainText(`Guardar ${s}: 0% → 30% do planejado de ${rotulo(hoje())}`);
+  await expect(aviso(page)).toContainText("Ainda dá para gastar R$ 700,00");
+});

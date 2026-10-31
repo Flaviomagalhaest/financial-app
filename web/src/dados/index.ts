@@ -54,11 +54,13 @@ import {
   comAFila,
   fechamentoDaFatura,
   mesEmQueConta,
+  semContarDeNovo,
   ultimaEscolha,
   type Aviso,
   type CartaoDaCompra,
   type Contagem,
   type Mudanca,
+  type MudancaTalvezJaContada,
   type Planejamento,
 } from "./aviso";
 import { fetchComTempoLimite, ouvirFalhaDeRede, redeVoltou, ultimaChamadaFalhou } from "./rede";
@@ -80,7 +82,7 @@ export type Historico = components["schemas"]["Historico"];
 export type Parcelamento = components["schemas"]["Parcelamento"];
 export type AlteracaoDeParcelamento = components["schemas"]["AlteracaoDeParcelamento"];
 export type AvisoDeRealizadas = components["schemas"]["AvisoDeRealizadas"];
-export type { Aviso } from "./aviso";
+export { oQueSobra, type Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
 export type { AlteracaoDeRecorrencia, Conflito, Exclusao, ItemDaFila, ItemDeLancamento, Lancamento, NovaRecorrencia, NovoLancamento, NovoParcelamento, Recorrencia };
@@ -685,7 +687,7 @@ type NoAparelho = Contagem & { conta_id: string; data: string; parcela?: number 
  */
 function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoDe: (contaId: string) => CartaoDaCompra | undefined) {
   const porId = new Map<string, NoAparelho>(servidor.map((l) => [l.id, { ...l, em: Date.parse(l.alterado_em) }]));
-  const mudancas: Mudanca[] = [];
+  const mudancas: MudancaTalvezJaContada[] = [];
   for (const item of fila) {
     if (!deLancamento(item) || item.conflito || item.exclusao) continue;
     const antes = porId.get(item.id);
@@ -707,7 +709,10 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
       em: item.feitoEm ?? item.desde,
     };
     porId.set(item.id, depois);
-    mudancas.push({ antes, depois });
+    // O criar sem resposta talvez já esteja no servidor, e o planejamento lido depois do envio já o conta.
+    const enviado = item.talvezNoServidor !== undefined && item.tentadoEm !== undefined && item.base && !antes ? item.base : null;
+    const jaNoServidor = enviado && { ...enviado, situacao: situacaoNoAparelho(enviado, undefined), mes: mesEmQueConta(enviado, undefined, cartaoDe(enviado.conta_id)) };
+    mudancas.push({ antes, depois, talvez: jaNoServidor ? { tentadoEm: item.tentadoEm!, jaNoServidor } : undefined });
   }
   return { mudancas, porId };
 }
@@ -726,7 +731,8 @@ export type LancamentoEmEdicao = Pick<NovoLancamento, "id" | "valor_centavos" | 
  */
 export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTocada: string | null) {
   const { dados: servidor } = useResposta(LISTA);
-  const { dados: cartoes } = useResposta("/api/cartoes");
+  // Com os arquivados: a compra não enviada num cartão arquivado conta pela fatura, não pelo mês da data.
+  const { dados: cartoes } = useResposta("/api/cartoes?arquivados=true");
   const fila = useFila();
   const faturas = useFaturasDosTitulares(cartoes ?? []);
   const cartaoDe = useCallback((contaId: string) => cartaoDaCompra(cartoes ?? [], faturas, contaId), [cartoes, faturas]);
@@ -738,7 +744,9 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
   // Sem mês (cartão sem dia de fechamento), lê o deste mês, que o aviso não usa.
   const mesLido = (mes ?? hoje()).slice(0, 7);
   const guardado = useRespostaDe<Planejamento>(`/api/planejamento/${mesLido}`, planejamentoDe(mesLido));
-  const planejamento = useMemo(() => (guardado.dados ? comAFila(guardado.dados, mudancas) : null), [guardado.dados, mudancas]);
+  // Ao vivo, o planejamento é de agora, depois de qualquer envio; guardado, é de quando o servidor respondeu.
+  const lidoEm = guardado.atualizadoEm ?? Infinity;
+  const planejamento = useMemo(() => (guardado.dados ? comAFila(guardado.dados, semContarDeNovo(mudancas, lidoEm)) : null), [guardado.dados, mudancas, lidoEm]);
 
   const comItem = planejamento ? categoriasComItem(planejamento, lancamento.categoria_ids) : [];
   const ultima = () => (antes || !planejamento ? null : ultimaEscolha(comItem, [...porId.values()], planejamento.itens.map((i) => i.categoria_id)));
@@ -1155,7 +1163,9 @@ export function iniciarEnvioAutomatico(): () => void {
           const mes = mesDepois(hoje(), n).slice(0, 7);
           return buscarEGuardar(`/api/planejamento/${mes}`, planejamentoDe(mes));
         }),
-        buscarEGuardar("/api/cartoes", LEITURAS["/api/cartoes"]).then((cartoes) =>
+        buscarEGuardar("/api/cartoes", LEITURAS["/api/cartoes"]),
+        // Os arquivados também: uma compra não enviada neles ainda conta pela fatura.
+        buscarEGuardar("/api/cartoes?arquivados=true", LEITURAS["/api/cartoes?arquivados=true"]).then((cartoes) =>
           Promise.all(titulares(cartoes ?? []).map((id) => buscarEGuardar(caminhoDasFaturas(id), faturasDe(id)))),
         ),
       ]),

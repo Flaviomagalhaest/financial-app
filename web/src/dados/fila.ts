@@ -113,7 +113,7 @@ function pedidoDeSalvar(atual: ItemDeLancamento | undefined, mudado: NovoLancame
   const ficaASituacao = !mudado.situacao && antes?.situacao && antes.data === mudado.data;
   const lancamento = ficaASituacao ? { ...mudado, situacao: antes.situacao } : mudado;
   return atual?.acao === "criar" || novo
-    ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, base: atual?.base }
+    ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, tentadoEm: atual?.tentadoEm, base: atual?.base }
     : // Sobre um conflito, a tela já mostrava a versão do servidor.
       { acao: "editar", lancamento, base: atual?.conflito?.lancamento ?? atual?.base ?? base };
 }
@@ -353,7 +353,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       // Mudou no caminho: a mudança nova sobe sobre a versão que acabou de ser aceita (o que era
       // criar já existe lá e sobe como edição).
       else if (atual)
-        await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, base: lancamento ?? atual.base }));
+        await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, tentadoEm: undefined, base: lancamento ?? atual.base }));
     }
     const recentes = Object.entries(aceitos).sort(([, a], [, b]) => b.em - a.em).slice(0, MAXIMO_DE_ACEITOS);
     await pedido(respostas.put(Object.fromEntries(recentes), ACEITOS));
@@ -367,12 +367,12 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
  * chegado, e o que ela levava como base da edição seguinte: uma tentativa depois, sem rede, não
  * prova que a anterior não chegou.
  */
-async function marcarSemResposta(enviados: ItemDaFila[]) {
+async function marcarSemResposta(enviados: ItemDaFila[], saiuEm: number) {
   await emTransacao("readwrite", async (fila) => {
     for (const enviado of enviados) {
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       if (enviado.acao === "criar" && atual?.acao === "criar" && atual.talvezNoServidor === undefined)
-        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, base: { ...enviado.lancamento!, versao: 1 } }));
+        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, tentadoEm: saiuEm, base: { ...enviado.lancamento!, versao: 1 } }));
       // A regra talvez gravada não se descarta mais no aparelho: os previstos e as parcelas viriam
       // mesmo assim. Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
       if (atual && !deLancamento(atual) && atual.talvezNoServidor === undefined && navigator.onLine)
@@ -462,9 +462,11 @@ export function enviarFila(remeter: Remessa): Promise<boolean> {
     for (;;) {
       const lote = ateOLimite((await lerFila()).filter((item) => !esperaAPessoa(item)));
       if (lote.length === 0) return true;
+      // A hora em que o pedido saiu, não a da falha: o planejamento lido no meio já pode ter o criar.
+      const saiuEm = Date.now();
       const resultados = await remeterLote(remeter, lote).catch(() => null);
       if (!resultados) {
-        await marcarSemResposta(lote);
+        await marcarSemResposta(lote, saiuEm);
         return false;
       }
       await aplicar(lote, resultados);

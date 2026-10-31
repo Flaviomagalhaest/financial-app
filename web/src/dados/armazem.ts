@@ -35,6 +35,8 @@ export interface ItemDeLancamento extends PedidoNaFila {
   acao: "criar" | "editar" | "excluir" | "confirmar";
   /** O lançamento como fica; no confirmar, o previsto já realizado, com os ajustes. */
   lancamento?: NovoLancamento;
+  /** Quando o envio que talvez gravou o criar saiu (ms): o planejamento lido depois dele já pode contá-lo. */
+  tentadoEm?: number;
   /**
    * A versão do servidor sobre a qual a mudança foi feita: a edição sobe só os campos que
    * mudaram desde ela, e a exclusão leva a versão. No criar talvez gravado, o que foi enviado.
