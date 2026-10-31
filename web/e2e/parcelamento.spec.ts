@@ -318,16 +318,25 @@ test("sem internet, abre a tela de um parcelamento que o aparelho nunca abriu", 
   await page.reload();
   await aba(page, "Hoje");
   await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => new Promise<boolean>((resolve) => {
-    const abertura = indexedDB.open("financial-app-dados");
-    abertura.onsuccess = () => {
-      const pedido = abertura.result.transaction("respostas").objectStore("respostas").get("/api/parcelamentos");
-      pedido.onsuccess = () => {
-        abertura.result.close();
-        resolve(!!pedido.result);
-      };
-    };
-  }))).toBe(true);
+  // Só vale a leitura que já tem este parcelamento: a guardada antes de ele existir não serve.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (procurado) =>
+          new Promise<boolean>((resolve) => {
+            const abertura = indexedDB.open("financial-app-dados");
+            abertura.onsuccess = () => {
+              const pedido = abertura.result.transaction("respostas").objectStore("respostas").get("/api/parcelamentos");
+              pedido.onsuccess = () => {
+                abertura.result.close();
+                resolve(!!pedido.result?.dados?.some((p: { id: string }) => p.id === procurado));
+              };
+            };
+          }),
+        id,
+      ),
+    )
+    .toBe(true);
 
   await context.setOffline(true);
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
