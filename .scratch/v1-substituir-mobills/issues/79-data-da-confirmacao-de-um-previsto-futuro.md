@@ -1,7 +1,7 @@
 # Data da confirmação de um previsto futuro
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se a regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -23,5 +23,11 @@ Hoje a API (`POST /api/lancamentos/{id}/confirmar`) aceita isso, e o lançamento
 
 ## Checklist
 
-- [ ] O dono escolhe a regra e ela vai para `## Answer`
-- [ ] Se a regra mudar: teste de API em `backend/tests/test_previstos.py`, ajuste em `confirmar_lancamento` (`backend/app/lancamentos.py`) e, se precisar, no bloco `ContasDaSemana` do app
+- [x] O dono escolhe a regra e ela vai para `## Answer`
+- [x] Se a regra mudar (não mudou: o comportamento atual já é a regra, sem código novo): teste de API em `backend/tests/test_previstos.py`, ajuste em `confirmar_lancamento` (`backend/app/lancamentos.py`) e, se precisar, no bloco `ContasDaSemana` do app
+
+## Answer
+
+Decisão do dono: a confirmação traz a **data do previsto como padrão**, com a opção de trocar por **qualquer data**, inclusive a da efetivação (hoje). Não há recusa nem troca automática por hoje. O "Ajustar" segue livre e o lançamento manual não muda.
+
+É exatamente o comportamento atual: o "Confirmar" em um toque mantém a data do previsto, e o "Ajustar" (`ContasDaSemana`) tem o campo Data aceito pela API (`POST /api/lancamentos/{id}/confirmar`, coberto por `test_confirmar_ajusta_valor_data_e_conta`). Nenhuma mudança de código.
