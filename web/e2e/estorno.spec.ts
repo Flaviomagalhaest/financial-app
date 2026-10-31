@@ -139,7 +139,10 @@ test("cancelar a compra de uma fatura aberta é excluir; depois do fechamento a 
   page.once("dialog", (dialogo) => void dialogo.accept());
   await linhaDeHoje.getByRole("button", { name: `Excluir ${nomeDeHoje}` }).click();
   await expect(linhaDeHoje).toHaveCount(0);
-  expect((await api.ler(`/api/cartoes/${cartao.id}/faturas`)).find((f: { mes: string }) => f.mes === deHoje.mes)?.total_centavos ?? 0).toBe(0);
+  // A linha some assim que a exclusão entra na fila; a fatura só muda quando ela sobe ao servidor.
+  await expect
+    .poll(async () => (await api.ler(`/api/cartoes/${cartao.id}/faturas`)).find((f: { mes: string }) => f.mes === deHoje.mes)?.total_centavos ?? 0)
+    .toBe(0);
 
   // Fechada: não exclui; sugere o estorno, que abre a compra para estornar.
   const linhaAntiga = page.getByRole("listitem").filter({ hasText: nomeAntiga });
