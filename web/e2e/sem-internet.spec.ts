@@ -332,3 +332,57 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   await expect(editado).toContainText("− R$ 0,19");
   await expect(excluido).toHaveCount(0);
 });
+
+test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com ⏳ e, ao enviar, fica igual ao do servidor", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await lancar(page, { teclas: ["1", "00"], conta, categoria: mercado, descricao: `Enviado ${s}` });
+  const saldo = () => page.getByRole("listitem").filter({ hasText: conta });
+  const verSaldo = async () => {
+    await aba(page, "Hoje");
+    await page.getByRole("link", { name: "Contas e categorias" }).click();
+  };
+  await verSaldo();
+  await expect(saldo()).toContainText("-R$ 1,00");
+  await expect(saldo()).not.toContainText("⏳");
+
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["4", "5", "00"], conta, categoria: mercado, descricao: `Padaria ${s}` });
+  await verSaldo();
+  await expect(saldo()).toContainText("-R$ 46,00");
+  await expect(saldo()).toContainText("⏳");
+
+  await aba(page, "Histórico");
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await page.getByRole("button", { name: `Excluir Enviado ${s}` }).click();
+  await verSaldo();
+  await expect(saldo()).toContainText("-R$ 45,00");
+
+  // Editar vale a diferença: 45,00 vira 450,07.
+  await aba(page, "Histórico");
+  await page.getByRole("link", { name: `Editar Padaria ${s}` }).click();
+  await page.getByRole("button", { name: "7", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await verSaldo();
+  await expect(saldo()).toContainText("-R$ 450,07");
+
+  await context.setOffline(false);
+  await expect(saldo()).not.toContainText("⏳");
+  await expect(saldo()).toContainText("-R$ 450,07");
+  await page.reload();
+  await expect(saldo()).toContainText("-R$ 450,07");
+  await expect(saldo()).not.toContainText("⏳");
+});
+
+test("lançado sem internet antes de a lista ser guardada continua no Histórico depois de enviado, mesmo sem internet", async ({ page, context }) => {
+  const { s, conta, mercado } = await prepararCasal(page);
+  await context.setOffline(true);
+  await lancar(page, { teclas: ["3", "00"], conta, categoria: mercado, descricao: `Sem lista ${s}` });
+  await aba(page, "Hoje");
+  await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento não enviado");
+  await context.setOffline(false);
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+
+  await context.setOffline(true);
+  await aba(page, "Histórico");
+  await expect(page.getByRole("listitem").filter({ hasText: `Sem lista ${s}` })).toContainText("− R$ 3,00");
+});

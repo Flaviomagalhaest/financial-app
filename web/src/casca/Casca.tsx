@@ -13,19 +13,25 @@ import { TelaDaFatura } from "../cartoes/TelaDaFatura";
 import { TelaDoFuturo } from "../futuro/TelaDoFuturo";
 import { TelaDoMes } from "../mes/TelaDoMes";
 import { TelaDoModelo } from "../mes/TelaDoModelo";
+import { TelaDaBusca } from "../busca/TelaDaBusca";
 import { ABAS, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
 
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
-  const { rota, id, mes } = useRota();
+  const { rota, id, mes, consulta } = useRota();
+  // A busca é da aba Histórico (ticket 24), e a lupa a abre de qualquer aba.
+  const aba = rota === "busca" ? "historico" : rota;
 
   return (
     <div className="casca">
       <header className="topo">
         <h1>Financial App</h1>
         <p>Entrou como {email}</p>
+        <a className="lupa" href="#/busca" aria-label="Buscar lançamentos">
+          🔍
+        </a>
         <a href="#/configuracoes">Configurações</a>
         <button className="secundario" onClick={onSair}>
           Sair
@@ -33,7 +39,7 @@ export function Casca({ email, onSair, hoje }: Props) {
       </header>
       <nav className="abas" aria-label="Telas">
         {ABAS.map((a) => (
-          <a key={a.id} href={`#/${a.id}`} aria-current={a.id === rota ? "page" : undefined}>
+          <a key={a.id} href={`#/${a.id}`} aria-current={a.id === aba ? "page" : undefined}>
             {a.nome}
           </a>
         ))}
@@ -59,6 +65,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}
         {rota === "historico" && <ListaDeLancamentos />}
+        {rota === "busca" && <TelaDaBusca key={consulta} consulta={consulta ?? ""} />}
         {rota === "mes" && <TelaDoMes key={mes ?? "atual"} mes={mes} />}
         {rota === "modelo-do-planejamento" && <TelaDoModelo />}
         {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}

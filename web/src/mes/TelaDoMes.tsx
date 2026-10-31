@@ -3,6 +3,7 @@ import {
   aplicarModeloPadrao,
   atualizadoAs,
   copiarPlanejamento,
+  enderecoDaBusca,
   escolherItem,
   useCadastro,
   useConexao,
@@ -241,7 +242,13 @@ const DIMENSOES: { id: Dimensao; nome: string; linhas: keyof LeituraDoMes["ranki
   { id: "pessoa", nome: "Pessoa", linhas: "por_pessoa", vazio: "Nenhuma despesa neste mês.", somaMais: false },
 ];
 
-type LinhaAberta = { nome: string; centavos: number; ids: string[] };
+type LinhaAberta = { nome: string; centavos: number; ids: string[]; busca: string };
+
+/** A busca das despesas da linha, pelo mês em que contam (o da fatura no cartão), como o ranking. */
+function buscaDaLinha(mes: string, dimensao: Dimensao, chave: string | null): string {
+  const filtro = dimensao === "categoria" ? { categoria_ids: [chave ?? ""] } : dimensao === "tag" ? { tags: [chave ?? ""] } : chave ? { pessoas: [chave] } : { conjunto: true };
+  return enderecoDaBusca({ tipos: ["despesa"], fatura: { mes: `${mes}-01` }, ...filtro });
+}
 
 /** Os lançamentos de uma linha do ranking, numa folha que sobe de baixo. */
 function FolhaDoRanking({ linha, categorias, lancamentos, aoFechar }: { linha: LinhaAberta; categorias: Categorias; lancamentos: LancamentoNaTela[]; aoFechar: () => void }) {
@@ -267,6 +274,9 @@ function FolhaDoRanking({ linha, categorias, lancamentos, aoFechar }: { linha: L
           </li>
         ))}
       </ul>
+      <a className="botao secundario" href={linha.busca}>
+        Ver os lançamentos
+      </a>
       <button onClick={() => folha.current?.close()}>Fechar</button>
     </dialog>
   );
@@ -303,7 +313,7 @@ function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; 
         <ol className="ranking">
           {linhas.map((l) => (
             <li key={l.chave ?? "conjunto"}>
-              <button onClick={() => setAberta({ nome: nome(l.chave), centavos: l.centavos, ids: l.lancamento_ids })}>
+              <button onClick={() => setAberta({ nome: nome(l.chave), centavos: l.centavos, ids: l.lancamento_ids, busca: buscaDaLinha(leitura.mes, dimensao.id, l.chave) })}>
                 <span className="nome">{nome(l.chave)}</span>
                 <span className="valor-da-linha">{formatarCentavos(l.centavos)}</span>
                 <span className="trilho" aria-hidden="true">

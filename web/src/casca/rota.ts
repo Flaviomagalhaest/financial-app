@@ -8,11 +8,14 @@ export const ABAS = [
   { id: "futuro", nome: "Futuro" },
 ] as const;
 
-export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "favorito" | "favoritos" | "conflito" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento";
+export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "favorito" | "favoritos" | "conflito" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento" | "busca";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
-export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string } {
-  const [tela, id, mes] = hash.replace(/^#\/?/, "").split("/");
+export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; consulta?: string } {
+  const [caminho, consulta = ""] = hash.replace(/^#\/?/, "").split("?");
+  // `#/busca?<critérios>` abre a busca já filtrada (`enderecoDaBusca`).
+  if (caminho === "busca") return { rota: "busca", consulta };
+  const [tela, id, mes] = caminho.split("/");
   const conhecida =
     tela === "novo" ||
     (tela === "estornar" && !!id) ||
@@ -33,7 +36,7 @@ export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string }
   return conhecida ? { rota: tela as Rota, id: tela === "novo" || tela === "estornar" || tela === "favorito" || tela === "conflito" ? id : undefined } : { rota: "hoje" };
 }
 
-export function useRota(): { rota: Rota; id?: string; mes?: string } {
+export function useRota(): ReturnType<typeof lerRota> {
   const [rota, setRota] = useState(() => lerRota(window.location.hash));
   useEffect(() => {
     const aoMudar = () => setRota(lerRota(window.location.hash));

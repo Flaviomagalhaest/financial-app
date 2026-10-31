@@ -55,7 +55,14 @@ _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
 
 
 def _ler_transferencias(conn, id: UUID | None = None) -> list[Transferencia]:
-    filtro, parametros = ("WHERE id = %s", (id,)) if id else ("", ())
+    return _ler(conn, *(("WHERE id = %s", (id,)) if id else ("", ())))
+
+
+def ler_por_ids(conn, ids: list[UUID]) -> list[Transferencia]:
+    return _ler(conn, "WHERE id = ANY(%s)", (ids,))
+
+
+def _ler(conn, filtro: str, parametros: tuple) -> list[Transferencia]:
     linhas = conn.execute(
         f"SELECT {_COLUNAS} FROM transferencias {filtro} ORDER BY data DESC, criado_em DESC, id",
         parametros,
