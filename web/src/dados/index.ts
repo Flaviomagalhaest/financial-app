@@ -410,32 +410,29 @@ const podeDescartar = (item: ItemDaFila) => !!item.recusa || item.talvezNoServid
 /** A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. */
 export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string; podeDescartar: boolean };
 
-/** As recorrências criadas no aparelho que ainda não subiram, da mais antiga à mais nova. */
-export function useRecorrenciasNaoEnviadas(): RecorrenciaNaoEnviada[] {
+/** Os pedidos de um tipo de regra que ainda não subiram, do mais antigo ao mais novo, com a recusa e se dá para descartar. */
+function useRegrasNaoEnviadas<R>(regraDo: (item: ItemDaFila) => R | undefined) {
   const fila = useFila();
   return useMemo(
     () =>
-      fila.flatMap((item) =>
-        item.acao === "criar_recorrencia" ? [{ ...item.recorrencia, recusa: item.recusa, podeDescartar: podeDescartar(item) }] : [],
-      ),
-    [fila],
+      fila.flatMap((item) => {
+        const regra = regraDo(item);
+        return regra ? [{ ...regra, recusa: item.recusa, podeDescartar: podeDescartar(item) }] : [];
+      }),
+    [fila, regraDo],
   );
 }
+
+/** As recorrências criadas no aparelho que ainda não subiram. */
+export const useRecorrenciasNaoEnviadas = (): RecorrenciaNaoEnviada[] => useRegrasNaoEnviadas(recorrenciaDo);
+const recorrenciaDo = (item: ItemDaFila) => (item.acao === "criar_recorrencia" ? item.recorrencia : undefined);
 
 /** O parcelamento na fila, como a recorrência. */
 export type ParcelamentoNaoEnviado = NovoParcelamento & { recusa?: string; podeDescartar: boolean };
 
-/** Os parcelamentos criados no aparelho que ainda não subiram, do mais antigo ao mais novo. */
-export function useParcelamentosNaoEnviados(): ParcelamentoNaoEnviado[] {
-  const fila = useFila();
-  return useMemo(
-    () =>
-      fila.flatMap((item) =>
-        item.acao === "criar_parcelamento" ? [{ ...item.parcelamento, recusa: item.recusa, podeDescartar: podeDescartar(item) }] : [],
-      ),
-    [fila],
-  );
-}
+/** Os parcelamentos criados no aparelho que ainda não subiram. */
+export const useParcelamentosNaoEnviados = (): ParcelamentoNaoEnviado[] => useRegrasNaoEnviadas(parcelamentoDo);
+const parcelamentoDo = (item: ItemDaFila) => (item.acao === "criar_parcelamento" ? item.parcelamento : undefined);
 
 /**
  * As contas da semana da leitura da Hoje com a fila por cima: o previsto criado ou mudado no
@@ -804,7 +801,12 @@ export async function enviarAgora(): Promise<boolean> {
   else if (pendentes > 0) void Promise.all((["/api/contas", "/api/contas?arquivadas=true"] as const).map((c) => buscarEGuardar(c, LEITURAS[c])));
   if (geradosNoServidor) {
     geradosNoServidor = false;
-    await Promise.all([buscarEGuardar(LISTA, LEITURAS[LISTA]), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
+    await Promise.all([
+      buscarEGuardar(LISTA, LEITURAS[LISTA]),
+      buscarEGuardar("/api/hoje", () => api.GET("/api/hoje")),
+      // A tela do parcelamento recém-enviado também o acha sem internet.
+      buscarEGuardar("/api/parcelamentos", LEITURAS["/api/parcelamentos"]),
+    ]);
   }
   return enviou;
 }
@@ -916,14 +918,20 @@ export async function corrigirParcelamento(id: string, alteracao: AlteracaoDePar
   }
 }
 
-/** Exclui o parcelamento inteiro, as realizadas também; precisa de internet. Devolve o motivo da recusa, ou `null`. */
+/**
+ * Exclui o parcelamento inteiro, as realizadas também; precisa de internet. Devolve o motivo da
+ * recusa, ou `null`. O 204 não tem corpo, então `recusaDe` (que exige `data`) não serve.
+ */
 export async function excluirParcelamento(id: string): Promise<string | null> {
-  const motivo = await recusaDe(async () => {
-    const { response, error } = await api.DELETE("/api/parcelamentos/{id}", { params: { path: { id } } });
-    return { data: response.ok || undefined, error };
-  }, "o servidor recusou excluir o parcelamento");
-  if (motivo === null) await relerAsParcelas();
-  return motivo;
+  try {
+    const { error } = await api.DELETE("/api/parcelamentos/{id}", { params: { path: { id } } });
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    if (error) return typeof detalhe === "string" ? detalhe : "o servidor recusou excluir o parcelamento";
+  } catch {
+    return "sem resposta do servidor";
+  }
+  await relerAsParcelas();
+  return null;
 }
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */

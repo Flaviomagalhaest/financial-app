@@ -36,12 +36,12 @@ type Props = {
   recorrencia?: { valor: RecorrenciaNaFolha | null; problema: string | null; onMudar: (recorrencia: RecorrenciaNaFolha | null) => void };
   /**
    * Só na despesa nova: o "Parcelado" de "Repete?". Com ele, salvar cria o parcelamento, e a data é a
-   * da compra (no cartão) ou a da 1ª parcela; `parcelas` mostra como o valor digitado se divide.
+   * da compra (no cartão) ou a da 1ª parcela; `rotulo` mostra como o valor digitado se divide.
    */
   parcelamento?: {
     valor: ParcelamentoNaFolha | null;
     noCartao: boolean;
-    parcelas: string;
+    rotulo: string;
     problema: string | null;
     onMudar: (parcelamento: ParcelamentoNaFolha | null) => void;
   };
@@ -239,7 +239,7 @@ export function FolhaDeDetalhes(props: Props) {
             ))}
           </div>
           <p className="vazio">{parcelamento.valorDigitado === "total" ? "Sem juros: o total se divide pelas parcelas." : "Com juros: cada parcela vale o digitado."}</p>
-          {props.parcelamento?.parcelas && <p>{props.parcelamento.parcelas}</p>}
+          {props.parcelamento?.rotulo && <p>{props.parcelamento.rotulo}</p>}
           {props.parcelamento?.noCartao ? (
             <p className="vazio">No cartão, cada parcela cai numa fatura e vira realizada sozinha quando entra na fatura aberta.</p>
           ) : (

@@ -1,12 +1,14 @@
 import { config } from "../config";
 import type { NovoParcelamento } from "../dados";
-import { formatarCentavos } from "./dinheiro";
+import { dividirEmParcelas, formatarCentavos } from "./dinheiro";
+
+/** Sem juros, o total se divide pelas parcelas; com juros, cada parcela vale o digitado. */
+export type ValorDigitado = "total" | "parcela";
 
 /** O "Repete? Parcelado" da folha de detalhes, como a tela o edita; o valor do teclado é o total ou o da parcela. */
 export type ParcelamentoNaFolha = {
   parcelas: number;
-  /** Sem juros, o total se divide pelas parcelas; com juros, cada parcela vale o digitado. */
-  valorDigitado: "total" | "parcela";
+  valorDigitado: ValorDigitado;
   /** Só fora do cartão: no cartão o parcelamento já é automático, e o servidor recusa o contrário. */
   automatico: boolean;
 };
@@ -33,11 +35,10 @@ export function problemaDo(p: ParcelamentoNaFolha, centavos: number): string | n
   return null;
 }
 
-/** O total e as parcelas como o servidor divide (`valor_da_parcela`): os centavos que sobram vão na 1ª. */
+/** O total do pedido e como ele se divide pelas parcelas. */
 export function divisao({ parcelas, valor_total_centavos, valor_da_parcela_centavos }: Valores) {
   const total = valor_total_centavos ?? (valor_da_parcela_centavos ?? 0) * parcelas;
-  const outras = Math.floor(total / parcelas);
-  return { total, primeira: outras + (total % parcelas), outras };
+  return { total, ...dividirEmParcelas(total, parcelas) };
 }
 
 /** "10x de R$ 99,90", "3x: R$ 33,34 na 1ª e R$ 33,33 nas outras", com o total quando ele não foi o digitado. */

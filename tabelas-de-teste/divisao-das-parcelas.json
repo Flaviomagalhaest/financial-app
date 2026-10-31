@@ -1,0 +1,10 @@
+{
+  "sobre": "Como o total se divide pelas parcelas (backend/app/parcelamentos.py, valor_da_parcela, e web/src/lancamentos/dinheiro.ts, dividirEmParcelas): por igual, com os centavos que sobram na 1ª. O app repete a conta para mostrar a divisão na folha de detalhes e para o aviso de planejamento contar a 1ª parcela (ADR 0018).",
+  "casos": [
+    { "caso": "divide por igual", "total": 99900, "parcelas": 10, "primeira": 9990, "outras": 9990 },
+    { "caso": "os centavos que sobram vão na 1ª", "total": 10000, "parcelas": 3, "primeira": 3334, "outras": 3333 },
+    { "caso": "sobra quase uma parcela inteira de centavos", "total": 1099, "parcelas": 12, "primeira": 98, "outras": 91 },
+    { "caso": "um centavo por parcela", "total": 420, "parcelas": 420, "primeira": 1, "outras": 1 },
+    { "caso": "o total que mal passa das parcelas", "total": 421, "parcelas": 420, "primeira": 2, "outras": 1 }
+  ]
+}

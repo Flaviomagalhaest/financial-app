@@ -173,8 +173,8 @@ test("parcelamentos longos sobem em lotes separados, para o servidor responder a
   expect(lotes).toEqual([1, 1]);
 });
 
-/** Um boleto automático de 6 parcelas de R$ 100,00 que começou há 3 meses: as que já venceram estão realizadas. */
-async function prepararParcelamento(page: Page) {
+/** Um boleto automático de 6 parcelas (R$ 600,00) que começou há 3 meses: as que já venceram estão realizadas. */
+async function prepararParcelamento(page: Page, total = 60000) {
   const { s, conta, eletro } = await prepararCasal(page);
   const api = await apiDaPagina(page);
   const categoria = (await api.ler("/api/categorias")).find((c: { nome: string }) => c.nome === eletro);
@@ -192,7 +192,7 @@ async function prepararParcelamento(page: Page) {
     conta_id: contaId,
     categoria_ids: [categoria.id],
     tags: [],
-    valor_total_centavos: 60000,
+    valor_total_centavos: total,
     automatico: true,
   });
   return { api, id, descricao };
@@ -252,4 +252,19 @@ test("exclui o parcelamento inteiro pela tela; sem internet, corrigir e excluir 
   await page.getByRole("button", { name: "Excluir parcelamento" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(0);
+});
+
+test("no modo do valor da parcela, corrigir só a descrição não mexe no total", async ({ page }) => {
+  // R$ 100,00 em 6 não divide por igual: a 1ª leva R$ 16,70 e as outras R$ 16,66.
+  const { api, id, descricao } = await prepararParcelamento(page, 10000);
+  await page.reload();
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  await page.getByRole("group", { name: "O valor é" }).getByRole("button", { name: "O da parcela" }).click();
+  await expect(page.getByLabel("Valor da parcela")).toHaveValue("16,66");
+  await page.getByLabel("Descrição").fill(`${descricao} da sala`);
+  await page.getByRole("button", { name: "Salvar correção" }).click();
+
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  const [corrigido] = (await api.ler("/api/parcelamentos")).filter((p: { id: string }) => p.id === id);
+  expect(corrigido).toMatchObject({ descricao: `${descricao} da sala`, valor_total_centavos: 10000 });
 });

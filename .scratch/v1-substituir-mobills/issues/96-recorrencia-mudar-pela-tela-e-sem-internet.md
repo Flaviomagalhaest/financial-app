@@ -21,6 +21,6 @@ O casal muda, pula e encerra uma recorrência na tela, e o pedido sobe com a fil
 - [ ] Mostrar na tela de conflito "O da regra <origem>" (a `origem` já vem no 409)
 - [ ] Alterar a recorrência não tem versão: duas pessoas mudando a regra ao mesmo tempo ficam com a última a chegar; decidir se isso basta (ADR 0011)
 - [ ] Recorrência criada no aparelho que talvez já esteja no servidor (envio sem resposta, ou "Descartar" tocado no meio do envio): hoje ela não se descarta e, se descartada no meio do envio, fica no servidor com os previstos; com `excluir_recorrencia` na fila, oferecer "Excluir" no lugar de "Descartar" (do [ticket 86](86-recorrencia-criar-pela-tela-e-sem-internet.md))
-- [ ] Depois de uma ação de recorrência aceita, o app relê `/api/lancamentos` e `/api/hoje` só quando o envio sai da tela (`enviarAgora` em `web/src/dados/index.ts`); o envio do service worker (`segundoPlano.ts`) não relê, e a tela só se acerta ao voltar para o app (do ticket 86)
+- [ ] Depois de uma ação de recorrência (ou, desde o ticket 98, de um parcelamento) aceita, o app relê `/api/lancamentos` e `/api/hoje` só quando o envio sai da tela (`enviarAgora` em `web/src/dados/index.ts`); o envio do service worker (`segundoPlano.ts`) não relê, e a tela só se acerta ao voltar para o app (do ticket 86)
 - [ ] Testes de API das ações no lote e de navegador do fluxo, online e sem internet
 - [ ] Verificações do projeto rodando e PR aberto para `main`

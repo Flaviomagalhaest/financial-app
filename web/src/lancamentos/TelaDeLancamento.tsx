@@ -487,7 +487,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           parcelamento={
             id || estornando || tipo !== "despesa"
               ? undefined
-              : { valor: parcelamento, noCartao, parcelas: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
+              : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
           }
           onFechar={() => setDetalhesAbertos(false)}
         />

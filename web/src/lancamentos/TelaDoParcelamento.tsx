@@ -13,8 +13,9 @@ import {
   type Parcelamento,
 } from "../dados";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
-import { dataPorExtenso } from "./datas";
+import { dataPorExtenso, rotuloDaFatura } from "./datas";
 import { emCentavos, formatarCentavos } from "./dinheiro";
+import type { ValorDigitado } from "./parcelamento";
 
 /** "1.200,00": o valor como se digita no campo, sem o "R$". */
 const comoDigitado = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -24,7 +25,7 @@ const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x
 /** O formulário da correção, que começa com o que o parcelamento tem. */
 type Formulario = {
   descricao: string;
-  valorDigitado: "total" | "parcela";
+  valorDigitado: ValorDigitado;
   valor: string;
   parcelas: string;
   data: string;
@@ -33,11 +34,14 @@ type Formulario = {
   pessoa: string | null;
 };
 
+/** O valor que o campo mostra ao abrir ou ao trocar de modo; o da parcela, sem os centavos que sobram na 1ª. */
+const valorDoModo = (p: Parcelamento, modo: ValorDigitado) => (modo === "total" ? p.valor_total_centavos : Math.floor(p.valor_total_centavos / p.parcelas));
+
 function formularioDo(p: Parcelamento): Formulario {
   return {
     descricao: p.descricao,
     valorDigitado: "total",
-    valor: comoDigitado(p.valor_total_centavos),
+    valor: comoDigitado(valorDoModo(p, "total")),
     parcelas: String(p.parcelas),
     data: p.data,
     categoriaIds: p.categoria_ids,
@@ -58,10 +62,8 @@ function alteracaoDo(f: Formulario, p: Parcelamento): Omit<AlteracaoDeParcelamen
   if (f.pessoa !== (p.pessoa ?? null)) mudou.pessoa = f.pessoa;
   if (parcelas !== p.parcelas) mudou.parcelas = parcelas;
   if (f.data !== p.data) mudou.data = f.data;
-  // Só o número de parcelas mudou: o total fica, e as parcelas se dividem de novo.
-  if (f.valorDigitado === "parcela") {
-    if (centavos * parcelas !== p.valor_total_centavos) mudou.valor_da_parcela_centavos = centavos;
-  } else if (centavos !== p.valor_total_centavos) mudou.valor_total_centavos = centavos;
+  // O valor vai só se a pessoa o mudou: sem ele, o total fica (mesmo com outro número de parcelas).
+  if (centavos !== valorDoModo(p, f.valorDigitado)) mudou[f.valorDigitado === "total" ? "valor_total_centavos" : "valor_da_parcela_centavos"] = centavos;
   return mudou;
 }
 
@@ -106,8 +108,8 @@ export function TelaDoParcelamento({ id }: { id: string }) {
     setAviso(null);
   };
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
-  const parcelas = (lancamentos ?? []).filter((l) => l.parcelamento_id === id).sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
-  const noCartao = !!parcelas[0]?.fatura_mes;
+  const doParcelamento = (lancamentos ?? []).filter((l) => l.parcelamento_id === id).sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
+  const noCartao = !!doParcelamento[0]?.fatura_mes;
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
   const tags = [...form.tags, ...opcoesDeTags.filter((t) => !form.tags.includes(t))];
 
@@ -158,7 +160,7 @@ export function TelaDoParcelamento({ id }: { id: string }) {
             key={v}
             className={form.valorDigitado === v ? "" : "secundario"}
             aria-pressed={form.valorDigitado === v}
-            onClick={() => mudar({ valorDigitado: v, valor: comoDigitado(v === "total" ? parcelamento.valor_total_centavos : Math.floor(parcelamento.valor_total_centavos / parcelamento.parcelas)) })}
+            onClick={() => mudar({ valorDigitado: v, valor: comoDigitado(valorDoModo(parcelamento, v)) })}
           >
             {nome}
           </button>
@@ -237,7 +239,7 @@ export function TelaDoParcelamento({ id }: { id: string }) {
 
       <h3>Parcelas</h3>
       <ul className="lista parcelas" aria-label={`Parcelas de ${parcelamento.descricao}`}>
-        {parcelas.map((l) => (
+        {doParcelamento.map((l) => (
           <li key={l.id}>
             <div>
               <span>{l.parcela && numeroDaParcela(l.parcela, parcelamento.parcelas)}</span>
@@ -245,7 +247,7 @@ export function TelaDoParcelamento({ id }: { id: string }) {
             </div>
             <p className="vazio">
               {dataPorExtenso(l.data)}
-              {l.fatura_mes ? ` · fatura de ${l.fatura_mes.slice(5, 7)}/${l.fatura_mes.slice(0, 4)}` : ""} · {l.situacao}
+              {l.fatura_mes ? ` · ${rotuloDaFatura(l.fatura_mes)}` : ""} · {l.situacao}
               {l.alterada_a_mao && " · alterada à mão"}
               {l.naoEnviado && " · ⏳ não enviado"}
             </p>
