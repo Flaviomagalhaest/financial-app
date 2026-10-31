@@ -18,4 +18,5 @@ Sem internet, o app só mexe em lançamentos um a um: criar (inclusive parcelado
 - A fila sai em lote, na ordem das ações. Um conflito ou uma recusa (cartão arquivado, por exemplo) fica marcado no aparelho de quem fez a mudança, e o resto da fila segue. Enquanto espera, o aparelho mostra a versão do servidor.
 - Exclusão vence edição: editar algo já excluído descarta a edição, com aviso e "Lançar de novo". Excluir algo que outro mudou depois é conflito.
 - Mudanças feitas pelo próprio app (recorrência alterada "daqui para frente", automático que vira realizado) contam como o outro lado, e a tela de conflito diz de onde veio a mudança.
+- A mudança da recorrência ("daqui para frente", encerrar e excluir) é a exceção: vai pela fila, como a regra nova ([ADR 0020](0020-mudanca-da-recorrencia-vai-pela-fila.md)).
 - O aviso de planejamento repete no aparelho, só para mostrar, as regras de fatura e de item do servidor ([ADR 0018](0018-aviso-de-planejamento-repete-regras-do-servidor-so-para-mostrar.md)); gravar continua sendo do servidor.

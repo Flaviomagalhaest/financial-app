@@ -243,3 +243,30 @@ test("a recorrência descartada no meio do envio chega ao servidor e sai de lá 
   await expect(linha(page, descricao)).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
+
+test("quando quem envia é o service worker, ele lê de novo os previstos que a mudança da regra refez", async ({ page, context }) => {
+  const { descricao } = await prepararRegra(page, 2);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  const previstos = linha(page, descricao);
+
+  // A página não consegue enviar (só o pedido dela é barrado); o service worker não passa por esta rota.
+  await page.route("**/api/lancamentos/lote", (rota) => rota.abort("connectionreset"));
+  await abrirRecorrencia(page, previstos.nth(1), descricao);
+  await mudarOValor(page, "210,00");
+  const naoEnviadas = page.getByRole("region", { name: "Mudanças de recorrência não enviadas" });
+  await expect(naoEnviadas).toContainText(`${descricao}: valor, não enviado`);
+
+  // O `sync` que a página pediu, como o Android o dispara quando a rede volta.
+  const cdp = await context.newCDPSession(page);
+  const registro = new Promise<string>((resolve) =>
+    cdp.on("ServiceWorker.workerRegistrationUpdated", ({ registrations }) => registrations[0] && resolve(registrations[0].registrationId)),
+  );
+  await cdp.send("ServiceWorker.enable");
+  await cdp.send("ServiceWorker.dispatchSyncEvent", { origin: "http://127.0.0.1:4173", registrationId: await registro, tag: "enviar-fila", lastChance: false });
+
+  // A página não leu nada de novo: a lista guardada mudou pelo service worker.
+  await expect(naoEnviadas).toHaveCount(0);
+  await expect(previstos.nth(0)).toContainText("− R$ 210,00");
+  await expect(previstos.nth(1)).toContainText("− R$ 210,00");
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
