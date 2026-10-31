@@ -1,4 +1,4 @@
-import type { NovaRecorrencia } from "../dados";
+import type { AlteracaoDeRecorrencia, NovaRecorrencia } from "../dados";
 import { dataPorExtenso } from "./datas";
 
 /** O "Repete? Recorrente" da folha de detalhes, como a tela o edita. */
@@ -51,4 +51,28 @@ function calendario(n: number, unidade: NovaRecorrencia["unidade"]): string {
 export function rotuloDaRecorrencia(regra: Pick<NovaRecorrencia, "a_cada" | "unidade" | "ate" | "vezes" | "automatico">): string {
   const fim = regra.ate ? `até ${dataPorExtenso(regra.ate)}` : regra.vezes ? (regra.vezes === 1 ? "1 vez" : `${regra.vezes} vezes`) : "";
   return [calendario(regra.a_cada, regra.unidade), fim, regra.automatico ? "automático" : ""].filter(Boolean).join(", ");
+}
+
+const NOMES_DOS_CAMPOS: Partial<Record<keyof AlteracaoDeRecorrencia, string>> = {
+  descricao: "descrição",
+  valor_centavos: "valor",
+  tipo_do_valor: "fixo ou estimado",
+  automatico: "automático",
+  conta_id: "conta",
+  categoria_ids: "categorias",
+  tags: "tags",
+  pessoa: "pessoa",
+  a_cada: "calendário",
+  unidade: "calendário",
+  inicio: "data",
+};
+
+/** "valor, descrição", "termina na 3ª vez", "termina em 10/12/2026": o que a mudança não enviada faz. */
+export function oQueMuda(alteracao: AlteracaoDeRecorrencia): string {
+  const campos = Object.keys(alteracao).flatMap((campo) => NOMES_DOS_CAMPOS[campo as keyof AlteracaoDeRecorrencia] ?? []);
+  const partes = [...new Set(campos)];
+  if (alteracao.vezes) partes.push(`termina na ${alteracao.vezes}ª vez`);
+  else if (alteracao.ate) partes.push(`termina em ${dataPorExtenso(alteracao.ate)}`);
+  else if ("ate" in alteracao || "vezes" in alteracao) partes.push("sem fim");
+  return partes.join(", ");
 }
