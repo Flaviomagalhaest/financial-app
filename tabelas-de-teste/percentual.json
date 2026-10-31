@@ -1,0 +1,15 @@
+{
+  "sobre": "A porcentagem do item do planejamento: (realizado + previsto) sobre o planejado, arredondada como o servidor (o meio vai para o par). backend/app/planejamento.py e web/src/dados/aviso.ts.",
+  "casos": [
+    { "caso": "nada gasto", "realizado_e_previsto": 0, "planejado": 100000, "percentual": 0 },
+    { "caso": "82%", "realizado_e_previsto": 82000, "planejado": 100000, "percentual": 82 },
+    { "caso": "estourado", "realizado_e_previsto": 105000, "planejado": 100000, "percentual": 105 },
+    { "caso": "um terço arredonda para baixo", "realizado_e_previsto": 1, "planejado": 3, "percentual": 33 },
+    { "caso": "dois terços arredondam para cima", "realizado_e_previsto": 2, "planejado": 3, "percentual": 67 },
+    { "caso": "meio vai para o par de baixo", "realizado_e_previsto": 1, "planejado": 200, "percentual": 0 },
+    { "caso": "meio vai para o par de cima", "realizado_e_previsto": 3, "planejado": 200, "percentual": 2 },
+    { "caso": "2,5 vai para 2", "realizado_e_previsto": 5, "planejado": 200, "percentual": 2 },
+    { "caso": "o estorno maior que as compras dá negativo", "realizado_e_previsto": -3, "planejado": 200, "percentual": -2 },
+    { "caso": "meio negativo vai para zero", "realizado_e_previsto": -1, "planejado": 200, "percentual": 0 }
+  ]
+}

@@ -6,7 +6,7 @@ ela pelo `recorrencia_id` e pelo número da ocorrência. A recorrência sem fim 
 
 from calendar import monthrange
 from datetime import UTC, date, datetime, timedelta
-from typing import Literal
+from typing import Literal, NamedTuple
 from uuid import UUID, uuid5
 
 import psycopg
@@ -186,7 +186,8 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Recorrencia]:
 def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas ocorrências até o horizonte, quantas cabem numa transação, e devolve se
     pode faltar alguma. O id de cada previsto vem da regra e do número da ocorrência: gerar de
-    novo não duplica, e o previsto excluído (o mês pulado) não volta."""
+    novo não duplica, e o previsto excluído de um número já gerado (o mês pulado) não volta. O que
+    o fim ou o horizonte tirou volta quando a regra chega a ele: `geradas` recua até lá."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -202,35 +203,82 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         proximas.append((n, dia))
     if not proximas:
         return False
+    # O que está excluído com número acima de `geradas` saiu do fim ou do horizonte, nunca de um
+    # mês pulado (esse tem número já gerado): volta, com a regra de hoje. Quem uma pessoa excluiu
+    # depois de realizado também fica de fora.
+    excluidos = {
+        n: versao
+        for n, versao in conn.execute(
+            f"SELECT ocorrencia, {lancamentos.VERSAO} FROM lancamentos WHERE recorrencia_id = %s"
+            " AND ocorrencia = ANY(%s) AND situacao = 'previsto' AND excluido_em IS NOT NULL",
+            (id, [n for n, _ in proximas]),
+        )
+    }
     for n, dia in proximas:
         lancamento_id = uuid5(id, str(n))
         # O automático com data de hoje ou do passado já nasce realizado; o resto, previsto.
         situacao = "realizado" if regra.automatico and dia <= dia_de_hoje else "previsto"
-        gravado = conn.execute(
-            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
-            " conta_id, criado_por, alterado_por, versao, recorrencia_id, ocorrencia, automatico,"
-            " pessoa, fonte, mes, item_categoria_id)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s, %s)"
-            " ON CONFLICT (id) DO NOTHING",
-            (
+        mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia)
+        if n in excluidos:
+            nova = subir_versao(
+                conn,
                 lancamento_id,
-                regra.tipo,
-                situacao,
-                regra.valor_centavos,
-                dia,
-                regra.descricao,
-                regra.conta_id,
+                excluidos[n],
+                "tipo = %s, situacao = %s, valor_centavos = %s, data = %s, descricao = %s,"
+                " conta_id = %s, pessoa = %s, automatico = %s, mes = %s, fatura_a_mao = NULL,"
+                " item_categoria_id = %s, item_atual_categoria_id = NULL, excluido_em = NULL,"
+                " excluido_por = NULL, alterado_por = %s, alterado_em = now()",
+                (
+                    regra.tipo,
+                    situacao,
+                    regra.valor_centavos,
+                    dia,
+                    regra.descricao,
+                    regra.conta_id,
+                    regra.pessoa,
+                    regra.automatico,
+                    mes,
+                    regra.item_categoria_id,
+                    regra.alterado_por,
+                ),
+            )
+            # Vale a regra de hoje: a marca de alterado à mão que o previsto tinha sai.
+            registrar_mudancas(
+                conn,
+                lancamento_id,
+                [*_campos_da_regra(regra), "data"],
+                nova,
                 regra.alterado_por,
-                regra.alterado_por,
-                id,
-                n,
-                regra.automatico,
-                regra.pessoa,
-                # No cartão, o mês da fatura em que o previsto cai (ADR 0003).
-                lancamentos.mes_em_que_conta(conn, regra.conta_id, dia),
-                regra.item_categoria_id,
-            ),
-        ).rowcount
+                datetime.now(UTC),
+                origem=origem(regra.descricao),
+            )
+            gravado = True
+        else:
+            gravado = conn.execute(
+                "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
+                " conta_id, criado_por, alterado_por, versao, recorrencia_id, ocorrencia,"
+                " automatico, pessoa, fonte, mes, item_categoria_id)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, 'app', %s, %s)"
+                " ON CONFLICT (id) DO NOTHING",
+                (
+                    lancamento_id,
+                    regra.tipo,
+                    situacao,
+                    regra.valor_centavos,
+                    dia,
+                    regra.descricao,
+                    regra.conta_id,
+                    regra.alterado_por,
+                    regra.alterado_por,
+                    id,
+                    n,
+                    regra.automatico,
+                    regra.pessoa,
+                    # No cartão, o mês da fatura em que o previsto cai (ADR 0003).
+                    mes,
+                    regra.item_categoria_id,
+                ),
+            ).rowcount
         if not gravado:
             continue
         for categoria in categorias:
@@ -388,12 +436,19 @@ def _por_lote(regra: Recorrencia) -> int:
     return max(1, LINHAS_POR_LOTE // (10 + 2 * (len(regra.categoria_ids) + len(regra.tags))))
 
 
+class _Retirada(NamedTuple):
+    id: UUID
+    ocorrencia: int
+
+
 def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     """Põe os previstos de acordo com a regra de hoje, até um lote, e devolve se pode faltar
-    algum: tira os que passaram do fim e refaz, da ocorrência `desde` em diante, os que ninguém
+    algum: tira os que passaram do fim ou do horizonte (a data nova, de um calendário menos
+    frequente, pode cair além dele) e refaz, da ocorrência `desde` em diante, os que ninguém
     alterou à mão (previsto com algum campo de `origem` vazia, mexido por uma pessoa, fica como
-    está por inteiro). Não toca no realizado. O que já está como a regra
-    manda não conta, por isso o lote seguinte sempre anda."""
+    está por inteiro). O que sai faz `geradas` recuar até antes dele, para a geração trazê-lo de
+    volta quando o fim sair ou o horizonte chegar. Não toca no realizado. O que já está como a
+    regra manda não conta, por isso o lote seguinte sempre anda."""
     [regra] = _ler(conn, "id = %s", (id,))
     previstos = conn.execute(
         f"SELECT l.id, l.ocorrencia, l.data, l.tipo, l.valor_centavos, l.descricao, l.conta_id,"
@@ -420,7 +475,8 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     ):
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
     regras = _campos_da_regra(regra)
-    trabalho: list[tuple[UUID, int, list[str], date] | UUID] = []
+    ultimo_dia = horizonte()
+    trabalho: list[tuple[UUID, int, list[str], date] | _Retirada] = []
     for (
         lancamento_id,
         n,
@@ -436,7 +492,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         a_mao,
     ) in previstos:
         if _fora_do_fim(regra, n, dia):
-            trabalho.append(lancamento_id)
+            trabalho.append(_Retirada(lancamento_id, n))
             continue
         if a_mao or n < desde:
             continue
@@ -453,6 +509,9 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         }
         # Antes da última mudança de calendário a regra não sabe mais a data: fica a que tem.
         dia_novo = data_da_ocorrencia(regra, n) if n >= regra.ocorrencia_do_inicio else dia
+        if dia_novo > ultimo_dia:
+            trabalho.append(_Retirada(lancamento_id, n))
+            continue
         quer = regras | {"data": dia_novo}
         mudou = [campo for campo in quer if quer[campo] != tem[campo]]
         if mudou or automatico != regra.automatico:
@@ -461,8 +520,12 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     agora = datetime.now(UTC)
     por_lote = _por_lote(regra)
     for item in trabalho[:por_lote]:
-        if isinstance(item, UUID):
-            excluir(conn, item, None, usuario)
+        if isinstance(item, _Retirada):
+            excluir(conn, item.id, None, usuario)
+            conn.execute(
+                "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
+                (item.ocorrencia - 1, id),
+            )
             continue
         lancamento_id, versao, mudou, dia = item
         nova = subir_versao(
@@ -512,8 +575,12 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeRecorrencia, usuario: str) -> R
         raise HTTPException(status_code=404, detail="recorrência não encontrada")
     [atual] = lidas
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
+    # `geradas` recua quando o fim ou o horizonte tira previstos: o que saiu ainda existe.
+    (maior_numero,) = conn.execute(
+        "SELECT COALESCE(max(ocorrencia), 0) FROM lancamentos WHERE recorrencia_id = %s", (id,)
+    ).fetchone()
     n = alteracao.a_partir_da_ocorrencia
-    if n > geradas + 1:
+    if n > max(geradas, maior_numero) + 1:
         raise recusar("a ocorrência ainda não foi gerada")
     pedidas = alteracao.model_dump(
         exclude={"a_partir_da_ocorrencia"}, include=alteracao.model_fields_set

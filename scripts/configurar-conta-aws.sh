@@ -192,14 +192,14 @@ finish() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────
-# STAGES: ticket 20, configurar o acesso à conta AWS 255235818791.
+# STAGES: ticket 20, configurar o acesso à conta AWS <conta AWS>.
 # Nenhum valor secreto é capturado; a única escrita em disco é a cópia da SCP.
 # ──────────────────────────────────────────────────────────────────────────
 
 run_wizard() {
 
 TOTAL_STAGES=6
-ACCOUNT_ID=255235818791
+ACCOUNT_ID="${AWS_CONTA:?exporte AWS_CONTA com o número da conta antes de rodar}"
 SCP_ID=p-q0eemrzp
 SCP_FILE="docs/aws/scp-${SCP_ID}.json"
 CONSOLE="https://console.aws.amazon.com"

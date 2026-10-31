@@ -6,9 +6,18 @@ import { PilhaDados } from "../lib/pilha-dados.js";
 import { PilhaOrcamento } from "../lib/pilha-orcamento.js";
 import { PilhaGithub } from "../lib/pilha-github.js";
 
+// O repositório é público: a conta e o e-mail do dono vêm do ambiente (secrets `AWS_CONTA` e
+// `EMAIL_DO_DONO` no deploy; variáveis exportadas na máquina do dono nos deploys à mão).
+function exigir(nome: string): string {
+  const valor = process.env[nome];
+  if (!valor) throw new Error(`Falta a variável de ambiente ${nome} (veja o README, seção Deploy)`);
+  return valor;
+}
+
 const app = new App();
-// Região e conta só em configuração (config/aws.json).
-const env = { account: aws.conta, region: aws.regiao };
+// A região fica em config/aws.json.
+const env = { account: exigir("AWS_CONTA"), region: aws.regiao };
+const emailDoDono = exigir("EMAIL_DO_DONO");
 const pacoteDaLambda = "../build/lambda"; // scripts/empacotar-lambda.sh
 const site = "../web/dist"; // npm run build em web/
 
@@ -19,7 +28,7 @@ new PilhaGithub(app, "financial-github", {
 });
 
 // O orçamento é da conta, não de um ambiente.
-new PilhaOrcamento(app, "financial-orcamento", { env, emailDoDono: aws.emailDoDono });
+new PilhaOrcamento(app, "financial-orcamento", { env, emailDoDono });
 
 for (const ambiente of ["prod", "dev"] as const) {
   const guardar = ambiente === "prod";
@@ -38,7 +47,7 @@ for (const ambiente of ["prod", "dev"] as const) {
       pacoteDaLambda,
       site,
       guardar,
-      emailDoDono: aws.emailDoDono,
+      emailDoDono,
       terminationProtection: guardar,
     });
   }

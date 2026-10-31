@@ -11,13 +11,13 @@ Origem: decisões de conta de [Como o app roda na AWS](12-como-o-app-roda-na-aws
 
 ## Question
 
-A conta filha 255235818791 está pronta para o app: acesso humano só com MFA, nenhuma chave de longa duração, a SCP registrada no repositório e os pontos que a documentação da AWS deixou ambíguos conferidos?
+A conta filha <conta AWS> está pronta para o app: acesso humano só com MFA, nenhuma chave de longa duração, a SCP registrada no repositório e os pontos que a documentação da AWS deixou ambíguos conferidos?
 
 Bloqueado pelo [ticket 17](17-medir-retomada-e-confirmar-pontos-no-prototipo.md) porque os testes dele usam a chave de acesso do `financial-cli`. Os itens que não dependem da chave (MFA, SCP, cota) podem ser feitos antes.
 
 ## Checklist
 
-- [x] Root da conta 255235818791 com MFA, guardado e sem uso no dia a dia
+- [x] Root da conta <conta AWS> com MFA, guardado e sem uso no dia a dia
 - [x] Usuário IAM `financial-cli` com MFA obrigatório (é o acesso humano do dono na conta); senha de console só se o dono quiser entrar no console com ele
 - [x] Chave de acesso de longa duração do `financial-cli` desativada depois do ticket 17; o CLI na máquina do dono passa a usar credencial temporária com MFA, e o deploy sai só pelo GitHub Actions com OIDC
 - [x] Cópia do JSON atual da SCP `p-q0eemrzp` em `docs/aws/` (`aws organizations describe-policy --policy-id p-q0eemrzp`, da conta de gerência), com uma nota de que ela libera sa-east-1 no bloco `RegionFloor` e de que reaplicá-la sem São Paulo derruba o app

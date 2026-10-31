@@ -59,6 +59,7 @@ test("a pessoa se troca na edição e a outra pessoa vê a troca", async ({ page
   await dela.getByRole("button", { name: "Pronto" }).click();
   await dela.getByRole("button", { name: "Salvar" }).click();
   await expect(linha(dela, descricao)).toContainText("Fulana");
+  await expect(linha(dela, descricao)).not.toContainText("não enviado");
   await page.reload();
   await expect(linha(page, descricao)).toContainText("Fulana");
   await contextoDela.close();
