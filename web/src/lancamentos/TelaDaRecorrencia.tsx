@@ -74,7 +74,7 @@ function alteracaoDo(f: Formulario, r: RecorrenciaNaTela, ocorrencia: number, da
   if (f.contaId !== r.conta_id) mudou.conta_id = f.contaId;
   if (!mesmos(f.categoriaIds, r.categoria_ids)) mudou.categoria_ids = f.categoriaIds;
   if (!mesmos(f.tags, r.tags ?? [])) mudou.tags = f.tags;
-  // O item do planejamento só vai quando a tela pergunta (duas categorias com item) e a escolha é outra.
+  // O item do planejamento só vai quando a pessoa o tocou: o que a ocorrência tem não é necessariamente o da regra.
   if (item && item !== r.item_categoria_id) mudou.item_categoria_id = item;
   // O servidor lê a pessoa vazia como "do conjunto".
   if (f.pessoa !== (r.pessoa ?? null)) mudou.pessoa = f.pessoa ?? "";
@@ -145,12 +145,14 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   // A conta arquivada não está entre as do cadastro, mas segue sendo a da regra até alguém trocar.
   const contas = contasECartoes.some((c) => c.id === regra.conta_id) ? contasECartoes : [{ id: regra.conta_id, nome: "conta arquivada" }, ...contasECartoes];
 
+  const marcada = (tag: string) => form!.tags.some((t) => mesmaTag(t, tag));
+
   function criarTag() {
     const nome = novaTag.trim();
     if (!nome) return;
     // A tag que já existe com outra caixa é a mesma: marca a existente.
     const existente = tags.find((t) => mesmaTag(t, nome)) ?? nome;
-    if (!form!.tags.some((t) => mesmaTag(t, existente))) mudar({ tags: [...form!.tags, existente] });
+    if (!marcada(existente)) mudar({ tags: [...form!.tags, existente] });
     setNovaTag("");
   }
 
@@ -161,7 +163,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   }
 
   function salvar() {
-    const alteracao = alteracaoDo(form!, regra!, ocorrencia, lancamento!.data, planejamento.escolha);
+    const alteracao = alteracaoDo(form!, regra!, ocorrencia, lancamento!.data, itemTocado && itemTocado === planejamento.escolha ? itemTocado : null);
     if (typeof alteracao === "string") return setErro(alteracao);
     void enviar(alteracao);
   }
@@ -272,7 +274,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
       {tags.length > 0 && (
         <div className="fileira rolavel">
           {tags.map((t) => (
-            <button type="button" key={t} className={`ficha${form.tags.includes(t) ? " marcada" : ""}`} aria-pressed={form.tags.includes(t)} onClick={() => mudar({ tags: alternar(form.tags, t) })}>
+            <button type="button" key={t} className={`ficha${marcada(t) ? " marcada" : ""}`} aria-pressed={marcada(t)} onClick={() => mudar({ tags: marcada(t) ? form.tags.filter((x) => !mesmaTag(x, t)) : [...form.tags, t] })}>
               #{t}
             </button>
           ))}

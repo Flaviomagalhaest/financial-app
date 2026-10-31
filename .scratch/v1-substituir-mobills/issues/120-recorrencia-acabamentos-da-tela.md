@@ -19,4 +19,4 @@ A tela da recorrência (`web/src/lancamentos/TelaDaRecorrencia.tsx`) muda "daqui
 - [x] Criar tag nova na mudança "daqui para frente": hoje ela só marca e desmarca as tags que já existem
 - [x] Os seletores de categorias, tags e pessoa e o `mesmos` estão repetidos em `TelaDaRecorrencia.tsx` e `TelaDoParcelamento.tsx`: juntar num componente só se o 118 mexer nos mesmos seletores (o 118 ainda está aberto e não mexeu: nada a juntar agora; quem fechar o 118 junta, pois ele também vai pôr o `AvisoDePlanejamento` e a criação de tag lá)
 - [x] Testes de navegador em `web/e2e/recorrencia-mudar.spec.ts`
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Verificações do projeto rodando e PR aberto para `main`
