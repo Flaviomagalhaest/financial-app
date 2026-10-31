@@ -1,7 +1,9 @@
 name: Sincronizar projeto
 
-# Na main, espelha todos os tickets (acerta qualquer desvio).
-# Nas outras branches, só os tickets que a branch mudou, para a coluna andar antes do merge.
+# Na main, espelha todos os tickets (acerta qualquer desvio): só ela põe issue no projeto, e tira
+# as que não são de nenhum ticket dela (ticket 12).
+# Nas outras branches, só os tickets que a branch mudou e que já estão no projeto, para a coluna
+# andar antes do merge; o ticket novo da branch entra no merge.
 on:
   push:
     paths:
@@ -35,7 +37,7 @@ jobs:
             exit 1
           fi
           if [ "$BRANCH" = main ]; then
-            scripts/sincronizar-projeto.sh
+            scripts/sincronizar-projeto.sh --tirar-sem-ticket
             exit 0
           fi
           # Push anterior da branch; no primeiro push (ou à mão), compara com a main
@@ -48,4 +50,4 @@ jobs:
             echo "nenhum ticket mudou nesta branch"
             exit 0
           fi
-          scripts/sincronizar-projeto.sh "${tickets[@]}"
+          scripts/sincronizar-projeto.sh --so-no-projeto "${tickets[@]}"
