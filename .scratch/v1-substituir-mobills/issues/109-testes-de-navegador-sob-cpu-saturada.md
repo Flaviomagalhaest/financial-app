@@ -11,6 +11,8 @@ Origem: [ticket 90](90-teste-do-recusado-intermitente.md): com 2 a 4 laços de C
 
 - `e2e/sem-internet.spec.ts` › "criado com a resposta perdida e depois editado ou excluído sem internet": o link "Editar" fica "not stable" (a lista reordena enquanto o `sync` reenvia a fila) ou "Salvar" fica desativado. Hipótese do 90 ainda de pé: o reenvio da fila disputa com o `setOffline(true)` do teste.
 - `e2e/sem-internet.spec.ts` › "sem internet, as telas abertas...": "Salvar" desativado dentro de `lancar` (cadastro ainda não carregado na tela).
+- `e2e/sem-internet.spec.ts` › "o saldo da conta conta os não enviados do aparelho...": falhou uma vez num `toContainText` do saldo na suíte inteira com o Postgres local cheio de rodadas (ticket 96), e passou 4 de 4 sozinho; o diff do 96 não mexe no saldo.
+- Aviso para quem escreve teste: ao abrir a Hoje, o `nao-enviados` começa vazio até a fila ser lida do IndexedDB, então `toHaveCount(0)` logo depois de trocar de aba não prova que a fila subiu (ticket 96: os testes da recorrência perguntam ao servidor).
 
 ## Checklist
 

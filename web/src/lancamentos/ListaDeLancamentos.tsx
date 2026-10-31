@@ -3,13 +3,16 @@ import {
   atualizadoAs,
   descartarNaoEnviado,
   excluirLancamento,
+  excluirRecorrencia,
   lancarDeNovoOExcluido,
   manterOsDois,
   situacaoDaFatura,
   useCadastro,
   useLancamentos,
+  useMudancasDaRecorrenciaNaoEnviadas,
   useParcelamentosNaoEnviados,
   usePessoas,
+  useRecorrencias,
   useRecorrenciasNaoEnviadas,
   type LancamentoNaTela,
   type NovoLancamento,
@@ -18,7 +21,7 @@ import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, numeroDaParcela,
 import { mesPorExtenso } from "../cartoes/apresentacao";
 import { dataPorExtenso, quando } from "./datas";
 import { divisao, rotuloDasParcelas } from "./parcelamento";
-import { rotuloDaRecorrencia } from "./recorrencia";
+import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
 
 /** A recorrência ou o parcelamento que ainda não subiu, como a lista o mostra. */
 type RegraNaLista = {
@@ -32,8 +35,19 @@ type RegraNaLista = {
   podeDescartar: boolean;
 };
 
-/** As regras criadas no aparelho que ainda não subiram: os lançamentos que elas geram vêm do servidor. */
-function RegrasNaoEnviadas(props: { id: string; titulo: string; explicacao: string; semResposta: string; regras: RegraNaLista[]; onDescartar: (id: string) => void }) {
+/**
+ * As regras criadas no aparelho que ainda não subiram: os lançamentos que elas geram vêm do
+ * servidor. Com `onExcluir`, a que talvez já esteja lá se exclui em vez de se descartar.
+ */
+function RegrasNaoEnviadas(props: {
+  id: string;
+  titulo: string;
+  explicacao: string;
+  semResposta: string;
+  regras: RegraNaLista[];
+  onDescartar: (id: string) => void;
+  onExcluir?: (id: string) => void;
+}) {
   if (props.regras.length === 0) return null;
   return (
     <section aria-labelledby={props.id}>
@@ -57,7 +71,16 @@ function RegrasNaoEnviadas(props: { id: string; titulo: string; explicacao: stri
                 </button>
               </div>
             ) : (
-              <p className="vazio">{props.semResposta}</p>
+              <>
+                <p className="vazio">{props.semResposta}</p>
+                {props.onExcluir && (
+                  <div className="acoes">
+                    <button type="button" className="secundario" aria-label={`Excluir ${r.titulo}`} onClick={() => props.onExcluir!(r.id)}>
+                      Excluir
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </li>
         ))}
@@ -71,6 +94,8 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   const { cartoes, contasECartoes, categorias } = useCadastro();
   const { lancamentos, atualizadoEm, semDados } = useLancamentos();
   const recorrencias = useRecorrenciasNaoEnviadas();
+  const mudancasDeRecorrencia = useMudancasDaRecorrenciaNaoEnviadas();
+  const { recorrencias: regras } = useRecorrencias();
   const parcelamentos = useParcelamentosNaoEnviados();
   const { euId, nomeDe } = usePessoas();
   const [erro, setErro] = useState("");
@@ -110,6 +135,15 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
     await descartarNaoEnviado(id).catch(() => setErro("Não foi possível descartar no aparelho."));
   }
 
+  /** A recorrência que talvez já tenha subido: a exclusão tira do servidor também, se ela estiver lá. */
+  async function excluirNaoEnviada(id: string) {
+    const recorrencia = recorrencias.find((r) => r.id === id);
+    if (!recorrencia) return;
+    if (!window.confirm(`Excluir a recorrência ${tituloDoLancamento(recorrencia, categorias)}? Se ela já chegou ao servidor, os previstos de hoje em diante saem.`)) return;
+    setErro("");
+    await excluirRecorrencia(recorrencia).catch(() => setErro("Não foi possível excluir no aparelho."));
+  }
+
   return (
     <section>
       <h2>Histórico</h2>
@@ -140,7 +174,35 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
           rotulo: rotuloDaRecorrencia(r),
         }))}
         onDescartar={(id) => void descartar({ id })}
+        onExcluir={(id) => void excluirNaoEnviada(id)}
       />
+      {mudancasDeRecorrencia.length > 0 && (
+        <section aria-labelledby="mudancas-de-recorrencia-nao-enviadas">
+          <h3 id="mudancas-de-recorrencia-nao-enviadas">Mudanças de recorrência não enviadas</h3>
+          <p className="vazio">Os previstos mudam quando a mudança subir.</p>
+          <ul className="lista">
+            {mudancasDeRecorrencia.map((m) => {
+              const titulo = tituloDoLancamento(m.recorrencia, categorias);
+              return (
+                <li key={m.id}>
+                  <p className={m.recusa ? "erro" : "vazio"}>
+                    ⏳ {titulo}: {m.alteracao ? oQueMuda(m.alteracao) : "excluir"}, não enviado{m.recusa ? `: ${m.recusa}` : ""}
+                  </p>
+                  {m.podeDescartar ? (
+                    <div className="acoes">
+                      <button type="button" className="secundario" aria-label={`Descartar a mudança de ${titulo}`} onClick={() => void descartar(m)}>
+                        Descartar
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="vazio">O envio ficou sem resposta: ela talvez já valha no servidor e sobe quando a rede voltar.</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       <RegrasNaoEnviadas
         id="parcelamentos-nao-enviados"
         titulo="Parcelamentos não enviados"
@@ -263,6 +325,11 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                   <button type="button" className="secundario" aria-label={`Informações ${titulo}`} onClick={() => setInformacoes(informacoes === l.id ? null : l.id)}>
                     Informações
                   </button>
+                  {l.recorrencia_id && l.ocorrencia && (!regras || regras.some((r) => r.id === l.recorrencia_id)) && (
+                    <a className="botao secundario" href={`#/recorrencia/${l.id}`} aria-label={`Recorrência ${titulo}`}>
+                      Recorrência
+                    </a>
+                  )}
                   {l.parcelamento_id && !l.naoEnviado && (
                     <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
                       Parcelamento

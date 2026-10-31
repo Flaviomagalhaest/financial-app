@@ -188,7 +188,6 @@ def test_editar_para_um_lancamento_invalido_mantem_o_que_estava(casal: Casal):
         ("DELETE", f"/api/lancamentos/{uuid4()}"),
         ("POST", "/api/lancamentos/lote"),
         ("POST", f"/api/lancamentos/{uuid4()}/confirmar"),
-        ("GET", "/api/contas-da-semana"),
     ],
 )
 def test_sem_login_nada_de_lancamentos(client: TestClient, metodo: str, caminho: str):

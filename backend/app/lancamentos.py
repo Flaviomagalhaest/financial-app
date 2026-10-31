@@ -1115,13 +1115,6 @@ def editar_lancamento(
     return _na_rota(request, lambda conn: editar(conn, id, alteracao, usuario))
 
 
-class ContasDaSemana(BaseModel):
-    """Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
-    automático fica de fora: não pede confirmação."""
-
-    lancamentos: list[Lancamento]
-
-
 def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
     """Os atrasados e os previstos até `contasDaSemanaDias` dias a partir de hoje."""
     ate = hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
@@ -1131,12 +1124,6 @@ def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
         (ate,),
         ordem="data, criado_em, id",
     )
-
-
-@router.get("/contas-da-semana", response_model=ContasDaSemana, operation_id="contas_da_semana")
-def contas_da_semana(usuario: UsuarioLogado, request: Request) -> ContasDaSemana:
-    with conectar(url_do_banco(request)) as conn:
-        return ContasDaSemana(lancamentos=contas_da_semana_de_hoje(conn))
 
 
 class Confirmacao(BaseModel):

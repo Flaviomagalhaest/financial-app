@@ -1,7 +1,7 @@
 """Parcelamento: compra ou dívida em N parcelas, cada uma um lançamento (ADR 0004)."""
 
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -131,7 +131,7 @@ def test_no_cartao_cada_parcela_cai_na_fatura_seguinte_com_a_data_da_compra(casa
     # O cartão já nasce automático: nada dele pede confirmação.
     assert casal.pedir("flavio", "GET", "/api/parcelamentos").json()[0]["automatico"] is True
     assert all(l["automatico"] and not l["atrasado"] for l in parcelas(casal, novo["id"]))
-    assert casal.pedir("esposa", "GET", "/api/contas-da-semana").json()["lancamentos"] == []
+    assert casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"] == []
     faturas = casal.pedir("flavio", "GET", f"/api/cartoes/{nubank}/faturas").json()
     assert [f["mes"] for f in faturas] == ["2026-11-01", "2026-12-01", "2027-01-01", "2027-02-01"]
 
@@ -156,7 +156,7 @@ def test_boleto_pede_confirmacao_de_cada_parcela_e_o_automatico_nao(casal: Casal
     casal.pedir("flavio", "POST", "/api/parcelamentos", json=consorcio)
 
     # A parcela de ontem do acordo fica atrasada; a do consórcio já nasce realizada.
-    semana = casal.pedir("esposa", "GET", "/api/contas-da-semana").json()["lancamentos"]
+    semana = casal.pedir("esposa", "GET", "/api/hoje").json()["contas_da_semana"]
     assert [(l["descricao"], l["parcela"], l["atrasado"]) for l in semana] == [("Acordo", 1, True)]
     assert [l["situacao"] for l in parcelas(casal, consorcio["id"])] == [
         "realizado",
@@ -1045,3 +1045,131 @@ def test_a_parcela_antecipada_conta_como_editada_a_mao_e_a_correcao_a_preserva(c
         (4, 20000, "realizado"),
     ]
     assert mudar(casal, novo["id"], parcelas=3).status_code == 422
+
+
+def interromper_o_refazer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A correção grava o parcelamento e cai antes de refazer as parcelas (timeout, queda)."""
+    from app import parcelamentos
+
+    def cai(*_):
+        raise RuntimeError("a Lambda caiu")
+
+    monkeypatch.setattr(parcelamentos, "_reajustar_um_lote", cai)
+
+
+def test_a_tarefa_diaria_refaz_as_parcelas_de_uma_correcao_que_parou_no_meio(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", valor_total_centavos=90000)
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], valor_total_centavos=60000, data="2026-12-10")
+    assert [v[1] for v in valores(casal, novo["id"])] == [30000, 30000, 30000]
+
+    feito = fazer_tarefa_diaria(database_url)
+
+    assert feito["parcelamentos"] == 1
+    assert valores(casal, novo["id"]) == [
+        (1, 20000, "2026-12-10", "previsto"),
+        (2, 20000, "2027-01-10", "previsto"),
+        (3, 20000, "2027-02-10", "previsto"),
+    ]
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
+
+
+def test_gerar_as_parcelas_entre_o_crescer_e_o_refazer_revive_as_que_a_correcao_tirou(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    from app import parcelamentos
+
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", parcelas=4)
+    assert mudar(casal, novo["id"], parcelas=2).status_code == 200
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], parcelas=4)
+
+    # A tarefa diária gera antes de o pedido refazer: as parcelas 3 e 4 não ficam excluídas.
+    parcelamentos.gerar_as_parcelas(database_url, UUID(novo["id"]))
+
+    assert valores(casal, novo["id"])[2:] == [
+        (3, 25000, "2027-01-10", "previsto"),
+        (4, 25000, "2027-02-10", "previsto"),
+    ]
+
+
+def test_excluir_o_parcelamento_no_meio_do_refazer_da_correcao_nao_deixa_parcela_nem_da_erro(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    from app import parcelamentos
+
+    conta = casal.conta()
+    novo = parcelamento(
+        conta,
+        [casal.categoria(f"Categoria {n}") for n in range(5)],
+        tags=[f"tag {n}" for n in range(5)],
+        parcelas=300,
+        valor_total_centavos=30000000,
+        data="2026-11-05",
+        automatico=True,
+    )
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    em_transacao = parcelamentos.em_transacao
+    transacoes = []
+
+    def apaga_depois_do_primeiro_lote(url, fazer):
+        feito = em_transacao(url, fazer)
+        transacoes.append(feito)
+        if len(transacoes) == 2:  # a correção e o primeiro lote do refazer
+            # Outra sessão exclui o parcelamento entre dois lotes.
+            casal.pedir("esposa", "DELETE", f"/api/parcelamentos/{novo['id']}")
+        return feito
+
+    monkeypatch.setattr(parcelamentos, "em_transacao", apaga_depois_do_primeiro_lote)
+
+    resposta = mudar(casal, novo["id"], valor_total_centavos=60000000)
+
+    assert resposta.status_code == 404
+    assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []
+    assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
+
+
+def test_o_aviso_de_realizadas_olha_o_que_falta_refazer_e_a_tarefa_diaria_termina_o_que_foi_confirmado(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    # 10/10 já passou: a 1ª parcela, automática, é realizada; as outras, previstas.
+    novo = criar_geladeira(
+        casal, casal.conta(), data="2026-10-10", automatico=True, valor_total_centavos=90000
+    )
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], valor_total_centavos=60000, confirmar_realizadas=True)
+
+    # A mudança já está gravada, mas a realizada ainda não mudou: repetir sem confirmar avisa só
+    # dela, e as previstas que faltam não entram no aviso.
+    repetido = mudar(casal, novo["id"], valor_total_centavos=60000)
+    assert repetido.status_code == 409
+    assert [
+        (p["parcela"], p["valor_centavos"], p["valor_novo_centavos"])
+        for p in repetido.json()["parcelas"]
+    ] == [(1, 30000, 20000)]
+
+    # A tarefa diária termina o que o dono já confirmou.
+    fazer_tarefa_diaria(database_url)
+    assert [v[1] for v in valores(casal, novo["id"])] == [20000, 20000, 20000]
+    assert mudar(casal, novo["id"], valor_total_centavos=60000).status_code == 200
+
+
+def test_a_tarefa_diaria_e_os_automaticos_com_o_parcelamento_excluido_nao_fazem_nada(
+    casal: Casal, database_url: str
+):
+    from app import automaticos
+
+    novo = criar_geladeira(casal, casal.conta(), data="2026-10-10", automatico=True)
+    assert casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}").status_code == 204
+
+    assert automaticos.realizar_automaticos(database_url, UUID(novo["id"])) == 0
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
+    assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []

@@ -35,3 +35,6 @@ export function emCentavos(texto: string): number | null | undefined {
   const reais = Number(limpo);
   return Number.isFinite(reais) ? Math.round(reais * 100) : undefined;
 }
+
+/** "1.200,00": o valor como se digita no campo, sem o "R$". */
+export const comoDigitado = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

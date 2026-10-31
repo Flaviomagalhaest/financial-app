@@ -17,11 +17,8 @@ import {
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, rotuloDaFatura } from "./datas";
-import { emCentavos, formatarCentavos } from "./dinheiro";
+import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
 import { divisao, type ValorDigitado } from "./parcelamento";
-
-/** "1.200,00": o valor como se digita no campo, sem o "R$". */
-const comoDigitado = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const mesmaTag = (a: string, b: string) => chaveDaTag(a) === chaveDaTag(b);
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));

@@ -1,7 +1,7 @@
 # Rota das contas da semana sem uso no app
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ Tirar a rota `GET /api/contas-da-semana` (`contas_da_semana` em `backend/app/lan
 
 ## Checklist
 
-- [ ] Os testes de `backend/tests/test_previstos.py` que leem a rota passam a ler `contas_da_semana` de `GET /api/hoje` (ou a função `contas_da_semana_de_hoje`), sem perder o que eles cobrem: ordem, janela de `contasDaSemanaDias`, atrasados, automático de fora, confirmado sai
-- [ ] Rota e modelo `ContasDaSemana` removidos; `openapi.json` e `web/src/api/schema.d.ts` regenerados; README sem a rota
-- [ ] Verificações do projeto rodando e PR aberto para `main`
+- [x] Os testes de `backend/tests/test_previstos.py` que leem a rota passam a ler `contas_da_semana` de `GET /api/hoje` (ou a função `contas_da_semana_de_hoje`), sem perder o que eles cobrem: ordem, janela de `contasDaSemanaDias`, atrasados, automático de fora, confirmado sai
+- [x] Rota e modelo `ContasDaSemana` removidos; `openapi.json` e `web/src/api/schema.d.ts` regenerados; README sem a rota
+- [x] Verificações do projeto rodando e PR aberto para `main`

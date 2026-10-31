@@ -1,7 +1,7 @@
 # e2e cartoes.spec.ts:87 estoura o tempo ao pegar o token da página
 
 Type: bug
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,4 +15,8 @@ Origem: [ticket 82](82-rede-que-nao-responde-e-tempo-limite.md) (o teste já fal
 
 ## Checklist
 
-- [ ] Achar a causa (token já em cache no recarregamento? pedido saindo antes do `waitForRequest`?) e corrigir
+- [x] Achar a causa (token já em cache no recarregamento? pedido saindo antes do `waitForRequest`?) e corrigir
+
+## Resolução
+
+Não reproduzido: `npx playwright test cartoes.spec.ts --repeat-each=8` passou 16 de 16 numa máquina limpa (Postgres local, `npm ci`). A causa era o `reload` cortar o login no meio, sem nenhum pedido com token; já está tratada na `main` pela espera do botão "Sair" em `tokenDaPagina` (`web/e2e/api.ts`) e pela espera do título "Cartões" nos testes. Nenhuma mudança de código.

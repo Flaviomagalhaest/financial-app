@@ -220,3 +220,80 @@ test("confirmar com ajuste o que a outra pessoa já confirmou leva à tela de co
   await expect(linha(dela, descricao)).toContainText("− R$ 10,07");
   await contextoDela.close();
 });
+
+/**
+ * Flávio cadastra conta e categoria e lança "Mercado <s>" de R$ 1,00 com a resposta da criação
+ * presa: o servidor grava, e o aparelho só sabe disso quando `soltar()` deixa a resposta chegar.
+ */
+async function lancarComARespostaPresa(page: Page) {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const [conta, mercado, descricao] = [`Corrente ${s}`, `Mercado ${s}`, `Mercado ${s}`];
+  await page.goto("/#/contas-e-categorias");
+  await entrar(page);
+  await cadastrar(page, "Nova conta", conta, "corrente");
+  await cadastrar(page, "Nova categoria", mercado, "despesa");
+
+  let soltar = () => {};
+  const presa = new Promise<void>((resolver) => (soltar = resolver));
+  const estado = { gravada: false, chegou: false };
+  // Pelo contexto: o `page.route` não pega o que sobe pelo service worker.
+  let primeira = true;
+  await page.context().route("**/api/lancamentos/lote", async (rota) => {
+    if (!primeira) return rota.continue();
+    primeira = false;
+    const resposta = await rota.fetch();
+    estado.gravada = true;
+    await presa;
+    await rota.fulfill({ response: resposta });
+    estado.chegou = true;
+  });
+  await lancar(page, { teclas: ["1", "00"], conta, categoria: mercado, descricao });
+  await expect.poll(() => estado.gravada).toBe(true);
+  await expect(linha(page, descricao)).toContainText("⏳ não enviado");
+  return { descricao, estado, soltar };
+}
+
+test("editar enquanto a criação sobe não vira conflito com a própria criação", async ({ page }) => {
+  const { descricao, estado, soltar } = await lancarComARespostaPresa(page);
+
+  // A tela abre com o lançamento ainda "não enviado"; a criação chega enquanto ela está aberta.
+  await linha(page, descricao).getByRole("link", { name: `Editar ${descricao}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 1,00");
+  soltar();
+  await expect.poll(() => estado.chegou).toBe(true);
+  await page.getByRole("button", { name: "7", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  const minha = linha(page, descricao);
+  await expect(minha).toContainText("− R$ 10,07");
+  // Antes de subir, o "conflito" ainda não teria aparecido.
+  await expect(minha).not.toContainText("não enviado");
+  await expect(minha).not.toContainText("conflito");
+  await page.reload();
+  await expect(minha).toContainText("− R$ 10,07");
+  await expect(minha).not.toContainText("conflito");
+});
+
+test("editar enquanto a criação sobe ainda vira conflito se a outra pessoa mudou o mesmo campo", async ({ page, browser }) => {
+  const { descricao, estado, soltar } = await lancarComARespostaPresa(page);
+  await linha(page, descricao).getByRole("link", { name: `Editar ${descricao}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 1,00");
+  soltar();
+  await expect.poll(() => estado.chegou).toBe(true);
+
+  // Entre a criação chegar e o "Salvar", a esposa muda o valor no celular dela.
+  const contextoDela = await browser.newContext();
+  const dela = await contextoDela.newPage();
+  await dela.goto("/#/historico");
+  await entrar(dela, "esposa@teste.com");
+  await editarValor(dela, descricao, "5");
+  await expect(linha(dela, descricao)).toContainText("− R$ 10,05");
+  await expect(linha(dela, descricao)).not.toContainText("não enviado");
+
+  await page.getByRole("button", { name: "7", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  const minha = linha(page, descricao);
+  await expect(minha).toContainText("⚠ conflito: sua mudança espera decisão");
+  await expect(minha).toContainText("− R$ 10,05");
+  await contextoDela.close();
+});

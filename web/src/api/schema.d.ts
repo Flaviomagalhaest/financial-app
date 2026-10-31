@@ -185,23 +185,6 @@ export interface paths {
         patch: operations["editar_lancamento"];
         trace?: never;
     };
-    "/api/contas-da-semana": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Contas Da Semana */
-        get: operations["contas_da_semana"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/lancamentos/{id}/confirmar": {
         parameters: {
             query?: never;
@@ -1027,6 +1010,21 @@ export interface components {
             /** Categorias Com Item */
             categorias_com_item: string[];
         };
+        /** AcaoAlterarRecorrencia */
+        AcaoAlterarRecorrencia: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "alterar_recorrencia";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            alteracao: components["schemas"]["AlteracaoDeRecorrencia"];
+            antes?: components["schemas"]["CamposDaRecorrencia"] | null;
+        };
         /** AcaoConfirmar */
         AcaoConfirmar: {
             /**
@@ -1098,6 +1096,19 @@ export interface components {
             versao?: number | null;
             /** Acao Em */
             acao_em?: string | null;
+        };
+        /** AcaoExcluirRecorrencia */
+        AcaoExcluirRecorrencia: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "excluir_recorrencia";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /**
          * AlteracaoDeCategoria
@@ -1198,8 +1209,6 @@ export interface components {
          *     ausente fica como está; `pessoa` vazia passa a regra para o conjunto.
          */
         AlteracaoDeRecorrencia: {
-            /** A Partir Da Ocorrencia */
-            a_partir_da_ocorrencia: number;
             /**
              * Tipo
              * @enum {string}
@@ -1245,6 +1254,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** A Partir Da Ocorrencia */
+            a_partir_da_ocorrencia: number;
         };
         /** AnoDaSerie */
         AnoDaSerie: {
@@ -1307,6 +1318,57 @@ export interface components {
             por_voce: boolean;
             /** Origem */
             origem?: string | null;
+        };
+        /**
+         * CamposDaRecorrencia
+         * @description Os campos da regra que uma mudança pode trazer; o que não vem fica como está.
+         */
+        CamposDaRecorrencia: {
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo?: "despesa" | "receita";
+            /** Valor Centavos */
+            valor_centavos?: number;
+            /**
+             * Tipo Do Valor
+             * @enum {string}
+             */
+            tipo_do_valor?: "fixo" | "estimado";
+            /** Automatico */
+            automatico?: boolean;
+            /** Descricao */
+            descricao?: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id?: string;
+            /** Categoria Ids */
+            categoria_ids?: string[];
+            /** Tags */
+            tags?: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** A Cada */
+            a_cada?: number;
+            /**
+             * Unidade
+             * @enum {string}
+             */
+            unidade?: "semanas" | "meses";
+            /**
+             * Inicio
+             * Format: date
+             */
+            inicio?: string;
+            /** Ate */
+            ate?: string | null;
+            /** Vezes */
+            vezes?: number | null;
         };
         /** Cartao */
         Cartao: {
@@ -1419,15 +1481,6 @@ export interface components {
             saldo_centavos: number;
             /** Arquivada */
             arquivada: boolean;
-        };
-        /**
-         * ContasDaSemana
-         * @description Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O
-         *     automático fica de fora: não pede confirmação.
-         */
-        ContasDaSemana: {
-            /** Lancamentos */
-            lancamentos: components["schemas"]["Lancamento"][];
         };
         /** CopiaDeMes */
         CopiaDeMes: {
@@ -2042,7 +2095,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"] | components["schemas"]["AcaoAlterarRecorrencia"] | components["schemas"]["AcaoExcluirRecorrencia"])[];
         };
         /** MesDaProjecao */
         MesDaProjecao: {
@@ -3499,26 +3552,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    contas_da_semana: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContasDaSemana"];
                 };
             };
         };

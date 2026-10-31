@@ -6,6 +6,8 @@ import type { components } from "../api/schema";
 export type NovoLancamento = components["schemas"]["NovoLancamento"];
 export type Lancamento = components["schemas"]["Lancamento"];
 export type NovaRecorrencia = components["schemas"]["NovaRecorrencia"];
+export type Recorrencia = components["schemas"]["Recorrencia"];
+export type AlteracaoDeRecorrencia = components["schemas"]["AlteracaoDeRecorrencia"];
 export type NovoParcelamento = components["schemas"]["NovoParcelamento"];
 export type Conflito = components["schemas"]["Conflito"];
 export type Exclusao = components["schemas"]["Exclusao"];
@@ -33,6 +35,8 @@ export interface ItemDeLancamento extends PedidoNaFila {
   acao: "criar" | "editar" | "excluir" | "confirmar";
   /** O lançamento como fica; no confirmar, o previsto já realizado, com os ajustes. */
   lancamento?: NovoLancamento;
+  /** Quando o envio que talvez gravou o criar saiu (ms): o planejamento lido depois dele já pode contá-lo. */
+  tentadoEm?: number;
   /**
    * A versão do servidor sobre a qual a mudança foi feita: a edição sobe só os campos que
    * mudaram desde ela, e a exclusão leva a versão. No criar talvez gravado, o que foi enviado.
@@ -56,13 +60,33 @@ export interface ItemDeParcelamento extends PedidoNaFila {
   parcelamento: NovoParcelamento;
 }
 
-/** A regra vai como um pedido só e não se edita no aparelho, só se descarta. */
-export type ItemDeRegra = ItemDeRecorrencia | ItemDeParcelamento;
+/**
+ * A mudança "daqui para frente" (ou o fim) de uma recorrência que está no servidor. Cada mudança é
+ * um pedido, com id próprio; o servidor reajusta os previstos ao receber.
+ */
+export interface ItemDeMudancaDaRecorrencia extends PedidoNaFila {
+  acao: "alterar_recorrencia";
+  recorrencia_id: string;
+  /** A regra como a tela a mostrava: o envio leva dela os campos que a mudança traz (`antes`). */
+  base: Recorrencia;
+  alteracao: AlteracaoDeRecorrencia;
+}
 
-/** Um pedido não enviado: a mudança de um lançamento ou a regra nova, pela `acao`. */
+/** A recorrência excluída no aparelho, com o id dela: toma o lugar do criar que talvez já tenha subido. */
+export interface ItemDeExclusaoDaRecorrencia extends PedidoNaFila {
+  acao: "excluir_recorrencia";
+  /** Para a tela dizer qual; o servidor só recebe o id. */
+  recorrencia: NovaRecorrencia;
+}
+
+/** A regra vai como um pedido só e não se edita no aparelho, só se descarta. */
+export type ItemDeRegra = ItemDeRecorrencia | ItemDeParcelamento | ItemDeMudancaDaRecorrencia | ItemDeExclusaoDaRecorrencia;
+
+/** Um pedido não enviado: a mudança de um lançamento ou a de uma regra, pela `acao`. */
 export type ItemDaFila = ItemDeLancamento | ItemDeRegra;
 
-export const deLancamento = (item: ItemDaFila): item is ItemDeLancamento => item.acao !== "criar_recorrencia" && item.acao !== "criar_parcelamento";
+const ACOES_DE_LANCAMENTO: ReadonlySet<string> = new Set<ItemDeLancamento["acao"]>(["criar", "editar", "excluir", "confirmar"]);
+export const deLancamento = (item: Pick<ItemDaFila, "acao">): item is ItemDeLancamento => ACOES_DE_LANCAMENTO.has(item.acao);
 
 export interface Guardada<T> {
   dados: T;

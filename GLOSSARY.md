@@ -84,6 +84,10 @@ _Avoid_: instância, repetição
 Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número.
 _Avoid_: a partir de agora, mudar tudo
 
+**Encerrar**:
+Dar fim a uma recorrência numa data ou depois de N vezes: os previstos depois do fim saem, também os alterados à mão, e o realizado fica. Excluir a recorrência é diferente: tira a regra e os previstos de hoje em diante, e o atrasado fica.
+_Avoid_: cancelar, parar
+
 **Alterado à mão**:
 Previsto de uma recorrência que uma pessoa editou (qualquer campo): uma mudança "daqui para frente" não o sobrescreve, nem o mês pulado volta. Mudar só um mês é editar o previsto; pular um mês é excluí-lo.
 _Avoid_: customizado, manual
@@ -315,11 +319,11 @@ _Avoid_: par duvidoso, casamento parcial
 ### Sem internet
 
 **Não enviado**:
-Lançamento, ou mudança num lançamento, feito no aparelho que ainda não chegou ao servidor; já conta no que o próprio aparelho mostra, mas a outra pessoa só o vê depois do envio.
+Lançamento, ou mudança num lançamento, feito no aparelho que ainda não chegou ao servidor; já conta no que o próprio aparelho mostra, mas a outra pessoa só o vê depois do envio. A recorrência e o parcelamento novos e a mudança de uma recorrência também ficam não enviados, cada um como um pedido só.
 _Avoid_: pendente, offline, na fila, não sincronizado
 
 **Conflito**:
-Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica.
+Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica. A mudança não enviada de uma recorrência não vira conflito: o servidor a recusa com o motivo, e quem a fez a refaz sobre a regra nova (ADR 0020).
 _Avoid_: colisão, divergência
 
 **Parece repetido**:

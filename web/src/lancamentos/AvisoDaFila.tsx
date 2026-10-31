@@ -20,12 +20,17 @@ const juntar = (partes: string[]) => (partes.length > 1 ? `${partes.slice(0, -1)
 
 /**
  * "1 lançamento não enviado", "2 recorrências não enviadas", "1 lançamento, 1 recorrência e 1
- * parcelamento não enviados": no feminino só quando são só recorrências.
+ * parcelamento não enviados": no feminino só quando são só recorrências e mudanças de recorrência.
  */
-function naoEnviados(lancamentos: number, recorrencias: number, parcelamentos: number): string {
-  const partes = [contar(lancamentos, "lançamento", "lançamentos"), contar(recorrencias, "recorrência", "recorrências"), contar(parcelamentos, "parcelamento", "parcelamentos")];
-  const total = lancamentos + recorrencias + parcelamentos;
-  const enviado = recorrencias === total ? "enviada" : "enviado";
+function naoEnviados(lancamentos: number, recorrencias: number, mudancas: number, parcelamentos: number): string {
+  const partes = [
+    contar(lancamentos, "lançamento", "lançamentos"),
+    contar(recorrencias, "recorrência", "recorrências"),
+    contar(mudancas, "mudança de recorrência", "mudanças de recorrência"),
+    contar(parcelamentos, "parcelamento", "parcelamentos"),
+  ];
+  const total = lancamentos + recorrencias + mudancas + parcelamentos;
+  const enviado = recorrencias + mudancas === total ? "enviada" : "enviado";
   return `${juntar(partes.filter((p) => p !== null))} não ${enviado}${total === 1 ? "" : "s"}`;
 }
 
@@ -40,9 +45,10 @@ export function AvisoDaFila() {
   const mudancas = fila.filter(deLancamento);
   const conflitos = mudancas.filter((item) => item.conflito).length;
   const recorrencias = fila.filter((item) => item.acao === "criar_recorrencia").length;
+  const mudancasDeRecorrencia = fila.filter((item) => item.acao === "alterar_recorrencia" || item.acao === "excluir_recorrencia").length;
   const parcelamentos = fila.filter((item) => item.acao === "criar_parcelamento").length;
   // Só recorrências na fila: o motivo fala delas, no feminino.
-  const soRecorrencias = recorrencias === fila.length;
+  const soRecorrencias = recorrencias + mudancasDeRecorrencia === fila.length;
 
   const atrasado = agora - fila[0].desde > AVISO_DE_NAO_ENVIADO_MS;
   const exclusoes = mudancas.flatMap((item) => (item.exclusao ? [item.exclusao] : []));
@@ -62,7 +68,7 @@ export function AvisoDaFila() {
   return (
     <div className={atrasado ? "aviso" : undefined} data-testid="nao-enviados">
       <p>
-        {naoEnviados(mudancas.length, recorrencias, parcelamentos)}
+        {naoEnviados(mudancas.length, recorrencias, mudancasDeRecorrencia, parcelamentos)}
         {esperando.length > 0 && ` (${esperando.join(", ")}: veja no Histórico)`}
       </p>
       {conflitos > 0 && (

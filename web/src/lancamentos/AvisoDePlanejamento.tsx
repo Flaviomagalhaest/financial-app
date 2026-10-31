@@ -1,6 +1,5 @@
-import { atualizadoAs, type Aviso } from "../dados";
+import { atualizadoAs, oQueSobra, type Aviso } from "../dados";
 import { dataPorExtenso, rotuloDaFatura, rotuloDoMes } from "./datas";
-import { formatarCentavos } from "./dinheiro";
 
 type Props = {
   aviso: Aviso | null;
@@ -16,16 +15,6 @@ type Props = {
   escolha: string | null;
   onEscolher: (categoria: string) => void;
 };
-
-/** "Ainda dá para gastar R$ 180,00" ou "Passa R$ 50,00 do planejado"; na receita, o que falta receber. */
-function oQueSobra(tipo: Props["tipo"], centavos: number): string {
-  if (tipo === "receita") {
-    if (centavos > 0) return `Faltam ${formatarCentavos(centavos)} para o planejado`;
-    return centavos === 0 ? "Chega ao planejado" : `${formatarCentavos(-centavos)} acima do planejado`;
-  }
-  if (centavos > 0) return `Ainda dá para gastar ${formatarCentavos(centavos)}`;
-  return centavos === 0 ? "Chega ao limite do planejado" : `Passa ${formatarCentavos(-centavos)} do planejado`;
-}
 
 /** O planejado como uma barra: o que já conta e, mais claro, a parte deste lançamento. */
 function Medidor({ antes, depois }: { antes: number; depois: number }) {
