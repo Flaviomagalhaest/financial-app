@@ -1,7 +1,7 @@
 # Envio em segundo plano sem a lista guardada: o enviado some do aparelho
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 120
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
