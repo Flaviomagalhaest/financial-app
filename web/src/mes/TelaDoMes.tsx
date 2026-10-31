@@ -139,7 +139,7 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
   }
 
   const usadas = new Set(itens.map((i) => i.categoria_id));
-  const disponiveis = categorias.filter((c) => c.tipo === "despesa" && !c.arquivada && !usadas.has(c.id));
+  const disponiveis = categorias.filter((c) => !c.arquivada && !usadas.has(c.id));
 
   return (
     <section aria-label="Itens do planejamento">
