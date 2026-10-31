@@ -3,7 +3,7 @@
 // service worker também envia.
 import type { components } from "../api/schema";
 import { config } from "../config";
-import { hoje } from "../lancamentos/datas";
+import { diaEmSaoPaulo, hoje } from "../lancamentos/datas";
 import {
   comTrava,
   deLancamento,
@@ -260,7 +260,10 @@ export const esperaAPessoa = (item: ItemDaFila) => !!(item.recusa || (deLancamen
 function acoesDo(item: ItemDaFila): Acao[] {
   // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
   const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
-  if (item.acao === "criar_recorrencia") return [{ acao: "criar_recorrencia", recorrencia: item.recorrencia }];
+  // O dia em que o casal lançou a regra: a fila pode subir no dia seguinte, e "antes de hoje" se
+  // conta dele no servidor (ticket 127). A regra não se edita na fila, então `desde` é o lançamento.
+  const dia_do_lancamento = diaEmSaoPaulo(new Date(item.desde));
+  if (item.acao === "criar_recorrencia") return [{ acao: "criar_recorrencia", recorrencia: { ...item.recorrencia, dia_do_lancamento } }];
   if (item.acao === "alterar_recorrencia") {
     // Reenviada depois de um envio sem resposta, ela talvez já valha lá, e uma mudança seguinte no
     // mesmo campo também: comparar com o que a tela mostrava recusaria à toa.
@@ -268,7 +271,7 @@ function acoesDo(item: ItemDaFila): Acao[] {
     return [{ acao: "alterar_recorrencia", id: item.recorrencia_id, alteracao: item.alteracao, antes }];
   }
   if (item.acao === "excluir_recorrencia") return [{ acao: "excluir_recorrencia", id: item.id }];
-  if (item.acao === "criar_parcelamento") return [{ acao: "criar_parcelamento", parcelamento: item.parcelamento }];
+  if (item.acao === "criar_parcelamento") return [{ acao: "criar_parcelamento", parcelamento: { ...item.parcelamento, dia_do_lancamento } }];
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
   if (item.acao === "confirmar") {
     // Só os ajustes que a pessoa fez, sobre a versão que a tela mostrava, como na rota de confirmar.

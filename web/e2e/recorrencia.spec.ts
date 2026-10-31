@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
+import { diaEmSaoPaulo } from "../src/lancamentos/datas";
 
 /** Entra e cadastra uma conta e uma categoria de despesa, guardadas no aparelho. */
 async function prepararCasal(page: Page) {
@@ -138,4 +139,37 @@ test("recorrência recusada fica 'não enviado: <motivo>' até ser descartada", 
   await aba(page, "Hoje");
   await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
+test("lançada sem internet ontem e enviada hoje, a ocorrência de ontem chega realizada", async ({ page, context }) => {
+  // O aparelho está no dia anterior ao do servidor; a fila só sobe depois que o dia vira.
+  const [ano, mes, dia] = diaEmSaoPaulo(new Date()).split("-").map(Number);
+  const ontem = new Date(Date.UTC(ano, mes - 1, dia - 1, 15)); // 12h em São Paulo
+  await page.clock.install({ time: ontem });
+  const { s, conta, casa } = await prepararCasal(page);
+
+  await context.setOffline(true);
+  await comecarRecorrente(page, { teclas: ["9", "00"], conta, categoria: casa, descricao: `Feira ${s}` });
+  await page.getByRole("group", { name: "Termina" }).getByRole("button", { name: "Depois de" }).click();
+  await page.getByLabel("Vezes").fill("2");
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("region", { name: "Recorrências não enviadas" })).toContainText(`Feira ${s}`);
+
+  await page.clock.fastForward("24:00:00");
+  await context.setOffline(false);
+  await aba(page, "Hoje");
+  await page.getByRole("button", { name: "Enviar agora" }).click();
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+
+  const api = await apiDaPagina(page);
+  const ontemIso = diaEmSaoPaulo(ontem);
+  const [regra] = (await api.ler("/api/recorrencias")).filter((r: { descricao: string }) => r.descricao === `Feira ${s}`);
+  expect(regra).toMatchObject({ inicio: ontemIso, dia_do_lancamento: ontemIso, vezes: 2 });
+  const gerados = (await api.ler("/api/lancamentos"))
+    .filter((l: { recorrencia_id: string }) => l.recorrencia_id === regra.id)
+    .map((l: { data: string; situacao: string }) => [l.data, l.situacao])
+    .sort();
+  expect(gerados[0]).toEqual([ontemIso, "realizado"]);
+  expect(gerados).toHaveLength(2);
 });

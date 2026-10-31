@@ -58,6 +58,10 @@ class NovaRecorrencia(BaseModel):
     # A escolha do item do planejamento, pela categoria dele, com que os previstos nascem
     # (ADR 0006); vale em qualquer mês, como a do lançamento.
     item_categoria_id: UUID | None = None
+    # O dia (São Paulo) em que o casal lançou a regra no aparelho; sem ele, o dia da chegada. A
+    # fila pode subir no dia seguinte: "antes de hoje" se conta a partir dele (ticket 127), e a
+    # ocorrência desse dia nasce realizada. Depois de hoje não vale: o relógio estava adiantado.
+    dia_do_lancamento: date | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
@@ -180,7 +184,8 @@ def _mudou_depois(
 
 _GRAVADAS = (
     "id, tipo, valor_centavos, tipo_do_valor, automatico, descricao, conta_id, inicio, a_cada, unidade,"
-    " ate, vezes, criado_por, criado_em, alterado_por, alterado_em, pessoa, item_id"
+    " ate, vezes, criado_por, criado_em, alterado_por, alterado_em, pessoa, item_id,"
+    " dia_do_lancamento"
 )
 # Recorrência de antes do ticket 45 não tem a ocorrência do início: é a 1ª.
 _COLUNAS = f"{_GRAVADAS}, COALESCE(ocorrencia_do_inicio, 1)"
@@ -211,11 +216,24 @@ def data_da_ocorrencia(regra: Recorrencia, n: int) -> date:
     return _depois_do_inicio(regra, n - regra.ocorrencia_do_inicio)
 
 
-def _termina_antes_de_hoje(nova: NovaRecorrencia) -> bool:
-    """Nenhuma ocorrência de hoje em diante cabe no fim: a regra inteira está no passado."""
+def dia_do_lancamento(pedido: date | None) -> date:
+    """O dia em que o casal lançou a regra: o do pedido, nunca depois de hoje."""
+    dia_de_hoje = lancamentos.hoje()
+    return min(pedido, dia_de_hoje) if pedido else dia_de_hoje
+
+
+def lancada_em(regra: Recorrencia) -> date | None:
+    """O dia de onde a geração conta o "antes de hoje" além de hoje: o do lançamento, enquanto a
+    regra é a que o casal lançou. Mudada a regra, nada mais se gera para trás (ticket 125)."""
+    return regra.dia_do_lancamento if regra.alterado_em == regra.criado_em else None
+
+
+def _termina_antes_do_lancamento(nova: NovaRecorrencia, lancada: date) -> bool:
+    """Nenhuma ocorrência do dia do lançamento em diante cabe no fim: a regra inteira está no
+    passado."""
     if nova.ate is not None:
-        return nova.ate < lancamentos.hoje()
-    return nova.vezes is not None and _depois_do_inicio(nova, nova.vezes - 1) < lancamentos.hoje()
+        return nova.ate < lancada
+    return nova.vezes is not None and _depois_do_inicio(nova, nova.vezes - 1) < lancada
 
 
 def horizonte() -> date:
@@ -254,15 +272,16 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Recorrencia]:
     ]
 
 
-def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
+def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas ocorrências até o horizonte, quantas cabem numa transação, e devolve se
     pode faltar alguma. O id de cada previsto vem da regra e do número da ocorrência: gerar de
     novo não duplica, e o previsto que o casal excluiu (o mês pulado) não volta. O que o fim ou o
     horizonte tirou (`excluido_pela_regra`) volta quando a regra chega a ele: `geradas` recua até
     lá. A ocorrência de antes de hoje não vira lançamento (ticket 87; não é o mês pulado, que
-    existe excluído): `geradas` passa por ela,
-    e ela segue contando no calendário e nas `vezes`. A de hoje nasce realizada `na_criacao`
-    (o casal está registrando o que aconteceu) e, depois, só a automática."""
+    existe excluído): `geradas` passa por ela, e ela segue contando no calendário e nas `vezes`.
+    Enquanto a regra é a que o casal lançou, o "hoje" é o dia do lançamento (`lancada_em`), e a
+    ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu); fora dela,
+    só a automática que chegou."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -270,6 +289,8 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     # O DSQL aceita até 3.000 linhas por transação: a mesma folga da restauração.
     por_lote = max(1, LINHAS_POR_LOTE // (1 + len(categorias) + len(tags)))
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
+    lancada = lancada_em(regra)
+    desde = min(lancada, dia_de_hoje) if lancada else dia_de_hoje
     proximas: list[tuple[int, date]] = []
     ultima, n = geradas, geradas
     while len(proximas) < por_lote:
@@ -278,7 +299,7 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
         if _fora_do_fim(regra, n, dia) or dia > ultimo_dia:
             break
         ultima = n
-        if dia >= dia_de_hoje:
+        if dia >= desde:
             proximas.append((n, dia))
     if ultima == geradas:
         return False
@@ -296,7 +317,9 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     for n, dia in proximas:
         lancamento_id = uuid5(id, str(n))
         situacao = (
-            "realizado" if dia == dia_de_hoje and (regra.automatico or na_criacao) else "previsto"
+            "realizado"
+            if dia == lancada or (regra.automatico and dia <= dia_de_hoje)
+            else "previsto"
         )
         mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia)
         if n in excluidos:
@@ -381,10 +404,10 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     return len(proximas) == por_lote
 
 
-def gerar_ate_o_horizonte(url: str | None, id: UUID, na_criacao: bool = False) -> None:
+def gerar_ate_o_horizonte(url: str | None, id: UUID) -> None:
     """Gera, em lotes de uma transação cada, o que falta até o horizonte. Se parar no meio, a
     próxima chamada (ou a tarefa diária) continua de onde parou."""
-    while em_transacao(url, lambda conn: _gerar_um_lote(conn, id, na_criacao)):
+    while em_transacao(url, lambda conn: _gerar_um_lote(conn, id)):
         pass
 
 
@@ -436,14 +459,15 @@ def _gravar(conn, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, boo
     não edita a recorrência não enviada, e quem muda a regra é o PATCH (ticket 86)."""
     if ja := _ler(conn, "id = %s", (nova.id,)):
         return ja[0], False
-    if _termina_antes_de_hoje(nova):
+    nova = nova.model_copy(update={"dia_do_lancamento": dia_do_lancamento(nova.dia_do_lancamento)})
+    if _termina_antes_do_lancamento(nova, nova.dia_do_lancamento):
         raise recusar("a recorrência termina antes de hoje")
     conferir_ligacoes(conn, nova)
     tags = ids_das_tags(conn, nova.tags, usuario, set())
     gravada = conn.execute(
         f"INSERT INTO recorrencias ({_GRAVADAS}, geradas)"
         " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, %s,"
-        " 0)"
+        " %s, 0)"
         # Dois reenvios ao mesmo tempo: o segundo fica com a regra que o primeiro gravou.
         " ON CONFLICT (id) DO NOTHING",
         (
@@ -463,6 +487,7 @@ def _gravar(conn, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, boo
             usuario,
             nova.pessoa,
             nova.item_categoria_id,
+            nova.dia_do_lancamento,
         ),
     ).rowcount
     if not gravada:
@@ -483,7 +508,7 @@ def _gravar(conn, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, boo
 def criar(url: str | None, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, bool]:
     """Grava a regra e gera os previstos até o horizonte; serve à rota e ao lote da fila."""
     criada, gravada = em_transacao(url, lambda conn: _gravar(conn, nova, usuario))
-    gerar_ate_o_horizonte(url, nova.id, na_criacao=True)
+    gerar_ate_o_horizonte(url, nova.id)
     return criada, gravada
 
 

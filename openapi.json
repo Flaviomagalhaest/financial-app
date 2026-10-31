@@ -7156,6 +7156,18 @@
               }
             ],
             "title": "Item Categoria Id"
+          },
+          "dia_do_lancamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Do Lancamento"
           }
         },
         "type": "object",
@@ -7709,6 +7721,18 @@
             ],
             "title": "Item Categoria Id"
           },
+          "dia_do_lancamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Do Lancamento"
+          },
           "valor_total_centavos": {
             "anyOf": [
               {
@@ -7927,6 +7951,18 @@
               }
             ],
             "title": "Item Categoria Id"
+          },
+          "dia_do_lancamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Do Lancamento"
           },
           "valor_total_centavos": {
             "type": "integer",
@@ -8676,6 +8712,18 @@
               }
             ],
             "title": "Item Categoria Id"
+          },
+          "dia_do_lancamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Do Lancamento"
           },
           "ocorrencia_do_inicio": {
             "type": "integer",
