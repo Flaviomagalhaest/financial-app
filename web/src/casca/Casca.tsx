@@ -9,6 +9,7 @@ import { TelaDeContasECategorias } from "../contas-e-categorias/TelaDeContasECat
 import { TelaDeConflito } from "../lancamentos/TelaDeConflito";
 import { TelaDeLancamento } from "../lancamentos/TelaDeLancamento";
 import { TelaDoParcelamento } from "../lancamentos/TelaDoParcelamento";
+import { TelaDaRecorrencia } from "../lancamentos/TelaDaRecorrencia";
 import { TelaDeCartoes } from "../cartoes/TelaDeCartoes";
 import { TelaDaFatura } from "../cartoes/TelaDaFatura";
 import { TelaDaEvolucao } from "../historico/TelaDaEvolucao";
@@ -66,6 +67,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "favoritos" && <TelaDeFavoritos />}
         {rota === "conflito" && id && <TelaDeConflito key={id} id={id} />}
         {rota === "parcelamento" && id && <TelaDoParcelamento key={id} id={id} />}
+        {rota === "recorrencia" && id && <TelaDaRecorrencia key={id} id={id} />}
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}
         {rota === "historico" && <ListaDeLancamentos topo={<TelaDaEvolucao />} />}

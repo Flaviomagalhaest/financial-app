@@ -3,6 +3,7 @@
 // precisa, conferido pelas mesmas tabelas (`tabelas-de-teste/`).
 import type { components } from "../api/schema";
 import { mesDepois } from "../lancamentos/datas";
+import { formatarCentavos } from "../lancamentos/dinheiro";
 
 /**
  * A categoria cujo item conta o lançamento (ou nenhuma) e se ele está "a escolher", dadas as
@@ -148,6 +149,31 @@ function trocar(p: Planejamento, antes?: Contagem | null, depois?: Contagem | nu
 
 /** Uma mudança do aparelho que o servidor ainda não tem: a versão que ele tem e a do aparelho. */
 export type Mudanca = { antes?: Contagem | null; depois?: Contagem | null };
+
+/**
+ * A mudança de um criar enviado sem resposta: o servidor talvez já o tenha (`jaNoServidor`, o que
+ * foi enviado) e, se o planejamento foi lido depois do envio (`tentadoEm`), já o contou.
+ */
+export type MudancaTalvezJaContada = Mudanca & { talvez?: { tentadoEm: number; jaNoServidor: Contagem } };
+
+/**
+ * As mudanças sem contar duas vezes o criar que talvez já esteja no servidor: se o planejamento
+ * foi lido (`lidoEm`) depois do envio, ele já traz o que foi enviado, e a fila só troca essa versão
+ * pela do aparelho. É um palpite: se o envio nem chegou, o aviso fica um lançamento a menos até a fila subir.
+ */
+export function semContarDeNovo(mudancas: MudancaTalvezJaContada[], lidoEm: number): Mudanca[] {
+  return mudancas.map(({ talvez, ...m }) => (talvez && lidoEm >= talvez.tentadoEm ? { ...m, antes: talvez.jaNoServidor } : m));
+}
+
+/** "Ainda dá para gastar R$ 180,00" ou "Passa R$ 50,00 do planejado"; na receita, o que falta receber. */
+export function oQueSobra(tipo: "despesa" | "receita", centavos: number): string {
+  if (tipo === "receita") {
+    if (centavos > 0) return `Faltam ${formatarCentavos(centavos)} para o planejado`;
+    return centavos === 0 ? "Chega ao planejado" : `${formatarCentavos(-centavos)} acima do planejado`;
+  }
+  if (centavos > 0) return `Ainda dá para gastar ${formatarCentavos(centavos)}`;
+  return centavos === 0 ? "Chega ao limite do planejado" : `Passa ${formatarCentavos(-centavos)} do planejado`;
+}
 
 /** O planejamento do servidor com as mudanças não enviadas por cima, na ordem. */
 export function comAFila(p: Planejamento, mudancas: Mudanca[]): Planejamento {

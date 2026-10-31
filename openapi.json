@@ -632,29 +632,6 @@
         }
       }
     },
-    "/api/contas-da-semana": {
-      "get": {
-        "summary": "Contas Da Semana",
-        "operationId": "contas_da_semana",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContasDaSemana"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/lancamentos/{id}/confirmar": {
       "post": {
         "summary": "Confirmar Lancamento",
@@ -3262,6 +3239,40 @@
         "title": "AEscolher",
         "description": "Lançamento com duas ou mais categorias com item no mês e sem escolha explícita."
       },
+      "AcaoAlterarRecorrencia": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "alterar_recorrencia",
+            "title": "Acao"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "alteracao": {
+            "$ref": "#/components/schemas/AlteracaoDeRecorrencia"
+          },
+          "antes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CamposDaRecorrencia"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "id",
+          "alteracao"
+        ],
+        "title": "AcaoAlterarRecorrencia"
+      },
       "AcaoConfirmar": {
         "properties": {
           "acao": {
@@ -3406,6 +3417,26 @@
           "id"
         ],
         "title": "AcaoExcluir"
+      },
+      "AcaoExcluirRecorrencia": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "excluir_recorrencia",
+            "title": "Acao"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "id"
+        ],
+        "title": "AcaoExcluirRecorrencia"
       },
       "AlteracaoDeCategoria": {
         "properties": {
@@ -3743,11 +3774,6 @@
       },
       "AlteracaoDeRecorrencia": {
         "properties": {
-          "a_partir_da_ocorrencia": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "A Partir Da Ocorrencia"
-          },
           "tipo": {
             "type": "string",
             "enum": [
@@ -3862,6 +3888,11 @@
               }
             ],
             "title": "Vezes"
+          },
+          "a_partir_da_ocorrencia": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Partir Da Ocorrencia"
           }
         },
         "type": "object",
@@ -4055,6 +4086,128 @@
         ],
         "title": "CampoEmConflito",
         "description": "Um campo que o outro lado mudou depois da versão do pedido; o valor dele está no\nlançamento que acompanha o conflito."
+      },
+      "CamposDaRecorrencia": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "despesa",
+              "receita"
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "tipo_do_valor": {
+            "type": "string",
+            "enum": [
+              "fixo",
+              "estimado"
+            ],
+            "title": "Tipo Do Valor"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
+          "a_cada": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "A Cada"
+          },
+          "unidade": {
+            "type": "string",
+            "enum": [
+              "semanas",
+              "meses"
+            ],
+            "title": "Unidade"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "title": "Inicio"
+          },
+          "ate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "vezes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vezes"
+          }
+        },
+        "type": "object",
+        "title": "CamposDaRecorrencia",
+        "description": "Os campos da regra que uma mudança pode trazer; o que não vem fica como está."
       },
       "Cartao": {
         "properties": {
@@ -4357,23 +4510,6 @@
           "arquivada"
         ],
         "title": "Conta"
-      },
-      "ContasDaSemana": {
-        "properties": {
-          "lancamentos": {
-            "items": {
-              "$ref": "#/components/schemas/Lancamento"
-            },
-            "type": "array",
-            "title": "Lancamentos"
-          }
-        },
-        "type": "object",
-        "required": [
-          "lancamentos"
-        ],
-        "title": "ContasDaSemana",
-        "description": "Previstos a confirmar: os atrasados e os dos próximos dias, do mais antigo ao mais novo. O\nautomático fica de fora: não pede confirmação."
       },
       "CopiaDeMes": {
         "properties": {
@@ -6007,17 +6143,25 @@
                 },
                 {
                   "$ref": "#/components/schemas/AcaoCriarRecorrencia"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoAlterarRecorrencia"
+                },
+                {
+                  "$ref": "#/components/schemas/AcaoExcluirRecorrencia"
                 }
               ],
               "discriminator": {
                 "propertyName": "acao",
                 "mapping": {
+                  "alterar_recorrencia": "#/components/schemas/AcaoAlterarRecorrencia",
                   "confirmar": "#/components/schemas/AcaoConfirmar",
                   "criar": "#/components/schemas/AcaoCriar",
                   "criar_parcelamento": "#/components/schemas/AcaoCriarParcelamento",
                   "criar_recorrencia": "#/components/schemas/AcaoCriarRecorrencia",
                   "editar": "#/components/schemas/AcaoEditar",
-                  "excluir": "#/components/schemas/AcaoExcluir"
+                  "excluir": "#/components/schemas/AcaoExcluir",
+                  "excluir_recorrencia": "#/components/schemas/AcaoExcluirRecorrencia"
                 }
               }
             },

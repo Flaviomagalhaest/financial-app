@@ -13,9 +13,11 @@ import {
   type Base,
   type Guardada,
   type ItemDaFila,
+  type AlteracaoDeRecorrencia,
   type ItemDeLancamento,
   type Lancamento,
   type NovaRecorrencia,
+  type Recorrencia,
   type NovoLancamento,
   type NovoParcelamento,
 } from "./armazem";
@@ -34,15 +36,25 @@ export const ETIQUETA_DO_ENVIO = "enviar-fila";
 export const LISTA = "/api/lancamentos";
 /** A leitura da Hoje guardada: o resultado do envio acerta as contas da semana dela. */
 export const HOJE = "/api/hoje";
+/**
+ * Nas respostas guardadas, o último lançamento aceito de cada mudança que saiu da fila: a tela que
+ * abriu a mudança ainda "não enviada" edita sobre a versão que ela gerou (ticket 113).
+ */
+const ACEITOS = "fila/aceitos";
+/** Quantos aceitos ficam guardados; os mais antigos saem. */
+const MAXIMO_DE_ACEITOS = 100;
+type Aceitos = Record<string, { base: Base; em: number }>;
 /** O mesmo limite do servidor (`LIMITE_DO_LOTE`). */
 const LIMITE_DO_LOTE = 100;
 /**
- * As parcelas que os parcelamentos de um lote geram, juntas: o servidor gera todas antes de
- * responder, e um lote cheio de parcelamentos longos passaria do tempo limite da Lambda (29 s).
- * Um parcelamento do tamanho máximo vai sozinho; se mesmo assim faltar tempo, o reenvio continua
- * a geração de onde parou.
+ * Os lançamentos que as regras de um lote geram ou refazem, juntos: o servidor faz todos antes de
+ * responder, e um lote cheio de parcelamentos longos ou de recorrências semanais passaria do tempo
+ * limite da Lambda (29 s). Um parcelamento do tamanho máximo vai sozinho; se mesmo assim faltar
+ * tempo, o reenvio continua de onde parou.
  */
-const PARCELAS_POR_LOTE = config.maximoDeParcelas;
+const GERADOS_POR_LOTE = config.maximoDeParcelas;
+/** As leituras que uma regra aceita muda: os previstos e as parcelas que o servidor fez só vêm nelas. */
+export const RELIDAS_DEPOIS_DE_REGRA = [LISTA, HOJE, "/api/recorrencias", "/api/parcelamentos"] as const;
 /** Os campos que o servidor versiona um a um (`CAMPOS` em `lancamentos.py`). */
 export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags", "pessoa", "fatura_mes", "item_categoria_id"];
 
@@ -50,11 +62,15 @@ export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "d
 type SemControle<I> = I extends ItemDaFila ? Omit<I, "id" | "desde" | "revisao"> : never;
 type Proximo = SemControle<ItemDaFila> | null;
 
-/** `proximo` recebe a mudança de lançamento que já está na fila (a regra não se edita). */
-async function mudar(id: string, proximo: (atual: ItemDeLancamento | undefined) => Proximo) {
-  await emTransacao("readwrite", async (fila) => {
+/**
+ * `proximo` recebe a mudança de lançamento que já está na fila (a regra não se edita) e, para a
+ * tela que não tinha a versão do servidor, a do último aceito deste lançamento.
+ */
+async function mudar(id: string, proximo: (atual: ItemDeLancamento | undefined, aceito: Base | undefined) => Proximo) {
+  await emTransacao("readwrite", async (fila, respostas) => {
     const atual: ItemDaFila | undefined = await pedido(fila.get(id));
-    const item = proximo(atual && deLancamento(atual) ? atual : undefined);
+    const aceitos: Aceitos | undefined = await pedido(respostas.get(ACEITOS));
+    const item = proximo(atual && deLancamento(atual) ? atual : undefined, aceitos?.[id]?.base);
     if (!item) await pedido(fila.delete(id));
     else await pedido(fila.put({ ...item, id, desde: atual?.desde ?? Date.now(), feitoEm: Date.now(), revisao: (atual?.revisao ?? 0) + 1 }));
   });
@@ -97,17 +113,18 @@ function pedidoDeSalvar(atual: ItemDeLancamento | undefined, mudado: NovoLancame
   const ficaASituacao = !mudado.situacao && antes?.situacao && antes.data === mudado.data;
   const lancamento = ficaASituacao ? { ...mudado, situacao: antes.situacao } : mudado;
   return atual?.acao === "criar" || novo
-    ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, base: atual?.base }
+    ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, tentadoEm: atual?.tentadoEm, base: atual?.base }
     : // Sobre um conflito, a tela já mostrava a versão do servidor.
       { acao: "editar", lancamento, base: atual?.conflito?.lancamento ?? atual?.base ?? base };
 }
 
 /**
  * Criar (`novo`) ou editar; editar o que ainda não subiu muda o pedido de criar. Tira a recusa e o
- * conflito. `base` é a versão do servidor que a tela mostrava; a primeira mudança a guarda.
+ * conflito. `base` é a versão do servidor que a tela mostrava; a primeira mudança a guarda. Sem
+ * ela (a tela mostrava a mudança não enviada, que subiu depois), vale a versão que a mudança gerou.
  */
 export function enfileirarSalvar(lancamento: NovoLancamento, novo: boolean, base?: Base): Promise<void> {
-  return mudar(lancamento.id, (atual) => pedidoDeSalvar(atual, lancamento, novo, base));
+  return mudar(lancamento.id, (atual, aceito) => pedidoDeSalvar(atual, lancamento, novo, base ?? aceito));
 }
 
 const AJUSTAVEIS = ["valor_centavos", "data", "conta_id"] as const;
@@ -120,7 +137,8 @@ export type Ajustes = Partial<Pick<NovoLancamento, (typeof AJUSTAVEIS)[number]>>
  * sobre a versão `base`.
  */
 export function enfileirarConfirmar(mostrado: NovoLancamento, ajustes: Ajustes, base?: Base): Promise<void> {
-  return mudar(mostrado.id, (atual) => {
+  return mudar(mostrado.id, (atual, aceito) => {
+    base ??= aceito;
     const antes = atual?.lancamento && !atual.conflito ? atual.lancamento : comoNovo(mostrado);
     const lancamento: NovoLancamento = { ...antes, ...ajustes, situacao: "realizado" };
     return !atual || (atual.acao === "confirmar" && !atual.conflito)
@@ -134,6 +152,41 @@ export function enfileirarRecorrencia(recorrencia: NovaRecorrencia): Promise<voi
   return mudar(recorrencia.id, () => ({ acao: "criar_recorrencia", recorrencia }));
 }
 
+/**
+ * Mudar a recorrência "daqui para frente" ou encerrá-la: cada mudança é um pedido, na ordem, sobre
+ * `base`, a regra como a tela a mostrava (com as mudanças anteriores ainda não enviadas por cima).
+ */
+export function enfileirarMudancaDaRecorrencia(base: Recorrencia, alteracao: AlteracaoDeRecorrencia): Promise<void> {
+  const agora = Date.now();
+  const item: ItemDaFila = { id: crypto.randomUUID(), acao: "alterar_recorrencia", recorrencia_id: base.id, base, alteracao, desde: agora, feitoEm: agora, revisao: 1 };
+  return emTransacao("readwrite", async (fila) => void (await pedido(fila.put(item))));
+}
+
+/**
+ * Excluir a recorrência inteira. As mudanças dela que não subiram saem (a exclusão vale mais), e a
+ * criada no aparelho que com certeza não chegou ao servidor só sai da fila; a que talvez tenha
+ * chegado vira a exclusão, que no servidor não faz nada se ela não estiver lá.
+ */
+export function enfileirarExcluirRecorrencia(recorrencia: NovaRecorrencia): Promise<void> {
+  return emTransacao("readwrite", async (fila) => {
+    for (const item of (await pedido(fila.getAll())) as ItemDaFila[])
+      if (item.acao === "alterar_recorrencia" && item.recorrencia_id === recorrencia.id) await pedido(fila.delete(item.id));
+    const atual: ItemDaFila | undefined = await pedido(fila.get(recorrencia.id));
+    if (atual?.acao === "criar_recorrencia" && (atual.recusa || atual.talvezNoServidor === undefined)) return void (await pedido(fila.delete(recorrencia.id)));
+    const agora = Date.now();
+    const exclusao: ItemDaFila = {
+      id: recorrencia.id,
+      acao: "excluir_recorrencia",
+      recorrencia,
+      desde: atual?.desde ?? agora,
+      feitoEm: agora,
+      revisao: (atual?.revisao ?? 0) + 1,
+      talvezNoServidor: atual?.talvezNoServidor,
+    };
+    await pedido(fila.put(exclusao));
+  });
+}
+
 /** O parcelamento sobe como um pedido só; as parcelas o servidor gera ao receber. */
 export function enfileirarParcelamento(parcelamento: NovoParcelamento): Promise<void> {
   return mudar(parcelamento.id, () => ({ acao: "criar_parcelamento", parcelamento }));
@@ -141,10 +194,10 @@ export function enfileirarParcelamento(parcelamento: NovoParcelamento): Promise<
 
 /** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
 export function enfileirarExcluir(id: string, base?: Base): Promise<void> {
-  return mudar(id, (atual) =>
+  return mudar(id, (atual, aceito) =>
     atual?.acao === "criar" && atual.talvezNoServidor === undefined
       ? null
-      : { acao: "excluir", base: atual?.conflito?.lancamento ?? atual?.base ?? base },
+      : { acao: "excluir", base: atual?.conflito?.lancamento ?? atual?.base ?? base ?? aceito },
   );
 }
 
@@ -204,6 +257,13 @@ function acoesDo(item: ItemDaFila): Acao[] {
   // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
   const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
   if (item.acao === "criar_recorrencia") return [{ acao: "criar_recorrencia", recorrencia: item.recorrencia }];
+  if (item.acao === "alterar_recorrencia") {
+    // Reenviada depois de um envio sem resposta, ela talvez já valha lá, e uma mudança seguinte no
+    // mesmo campo também: comparar com o que a tela mostrava recusaria à toa.
+    const antes = item.talvezNoServidor === undefined ? comoAntes(item) : undefined;
+    return [{ acao: "alterar_recorrencia", id: item.recorrencia_id, alteracao: item.alteracao, antes }];
+  }
+  if (item.acao === "excluir_recorrencia") return [{ acao: "excluir_recorrencia", id: item.id }];
   if (item.acao === "criar_parcelamento") return [{ acao: "criar_parcelamento", parcelamento: item.parcelamento }];
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
   if (item.acao === "confirmar") {
@@ -217,6 +277,16 @@ function acoesDo(item: ItemDaFila): Acao[] {
   if (item.acao === "editar") return [editar];
   const comEdicao = item.talvezNoServidor !== undefined && item.talvezNoServidor !== item.revisao;
   return comEdicao ? [{ acao: "criar", lancamento }, editar] : [{ acao: "criar", lancamento }];
+}
+
+/**
+ * Os campos que a mudança traz, como a tela os mostrava: o servidor recusa se a outra pessoa mexeu
+ * neles depois. O fim é um campo só (a data e as vezes), porque um tira o outro.
+ */
+function comoAntes({ base, alteracao }: { base: Recorrencia; alteracao: AlteracaoDeRecorrencia }) {
+  const campos = new Set(Object.keys(alteracao).filter((campo) => campo !== "a_partir_da_ocorrencia") as (keyof AlteracaoDeRecorrencia & keyof Recorrencia)[]);
+  if (campos.has("ate") || campos.has("vezes")) ["ate", "vezes"].forEach((campo) => campos.add(campo as "ate" | "vezes"));
+  return Object.fromEntries([...campos].map((campo) => [campo, base[campo] ?? null]));
 }
 
 /** Previsto que pede confirmação, atrasado ou até `contasDaSemanaDias` dias depois de hoje (`contas_da_semana_de_hoje`). */
@@ -236,6 +306,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
     let lista = guardada?.dados ?? [];
     const daHoje: Guardada<LeituraDaHoje> | undefined = await pedido(respostas.get(HOJE));
     let previstos = daHoje?.dados.contas_da_semana ?? [];
+    const aceitos: Aceitos = (await pedido(respostas.get(ACEITOS))) ?? {};
     for (const [i, enviado] of enviados.entries()) {
       const { resultado, motivo, lancamento, campos, exclusao } = resultados[i];
       // Nas contas da semana, vale a versão do servidor: o confirmado ou excluído sai, e o conflito
@@ -247,10 +318,13 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       const guardado: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       const intacto = guardado?.revisao === enviado.revisao;
       // A regra não muda no caminho: aceita, sai da fila (as parcelas e os previstos vêm na
-      // leitura dos lançamentos); recusada, espera ser descartada. Descartada no caminho, já saiu.
+      // leitura dos lançamentos); recusada, espera ser descartada. Descartada no caminho, já saiu,
+      // mas a recorrência que chegou ao servidor assim mesmo sai de lá também.
       if (!deLancamento(enviado)) {
         if (intacto && resultado === "recusada") await pedido(fila.put({ ...guardado, recusa: motivo ?? "recusado" }));
         else if (intacto) await pedido(fila.delete(enviado.id));
+        else if (!guardado && enviado.acao === "criar_recorrencia" && resultado === "aceita")
+          await pedido(fila.put({ id: enviado.id, acao: "excluir_recorrencia", recorrencia: enviado.recorrencia, desde: enviado.desde, revisao: 1 }));
         continue;
       }
       const atual = guardado && deLancamento(guardado) ? guardado : undefined;
@@ -273,13 +347,16 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       // Excluído no aparelho enquanto subia: agora que existe no servidor, sai de lá também.
       const excluidoNoCaminho = !atual && enviado.acao === "criar";
       if (lancamento && !excluidoNoCaminho) lista.push(lancamento);
+      if (lancamento) aceitos[enviado.id] = { base: lancamento, em: Date.now() };
       if (excluidoNoCaminho) await pedido(fila.put({ id: enviado.id, acao: "excluir", base: lancamento, desde: enviado.desde, revisao: 1 }));
       else if (intacto) await pedido(fila.delete(enviado.id));
       // Mudou no caminho: a mudança nova sobe sobre a versão que acabou de ser aceita (o que era
       // criar já existe lá e sobe como edição).
       else if (atual)
-        await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, base: lancamento ?? atual.base }));
+        await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, tentadoEm: undefined, base: lancamento ?? atual.base }));
     }
+    const recentes = Object.entries(aceitos).sort(([, a], [, b]) => b.em - a.em).slice(0, MAXIMO_DE_ACEITOS);
+    await pedido(respostas.put(Object.fromEntries(recentes), ACEITOS));
     if (guardada) await pedido(respostas.put({ dados: ordenar(lista), em: guardada.em }, LISTA));
     if (daHoje) await pedido(respostas.put({ dados: { ...daHoje.dados, contas_da_semana: previstos }, em: daHoje.em }, HOJE));
   });
@@ -290,16 +367,21 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
  * chegado, e o que ela levava como base da edição seguinte: uma tentativa depois, sem rede, não
  * prova que a anterior não chegou.
  */
-async function marcarSemResposta(enviados: ItemDaFila[]) {
+async function marcarSemResposta(enviados: ItemDaFila[], saiuEm: number) {
   await emTransacao("readwrite", async (fila) => {
     for (const enviado of enviados) {
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       if (enviado.acao === "criar" && atual?.acao === "criar" && atual.talvezNoServidor === undefined)
-        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, base: { ...enviado.lancamento!, versao: 1 } }));
+        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, tentadoEm: saiuEm, base: { ...enviado.lancamento!, versao: 1 } }));
       // A regra talvez gravada não se descarta mais no aparelho: os previstos e as parcelas viriam
       // mesmo assim. Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
       if (atual && !deLancamento(atual) && atual.talvezNoServidor === undefined && navigator.onLine)
         await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao }));
+      // A recorrência descartada enquanto subia talvez tenha chegado: a exclusão a tira de lá, se estiver.
+      if (!atual && enviado.acao === "criar_recorrencia" && navigator.onLine)
+        await pedido(
+          fila.put({ id: enviado.id, acao: "excluir_recorrencia", recorrencia: enviado.recorrencia, desde: enviado.desde, revisao: 1, talvezNoServidor: enviado.revisao }),
+        );
     }
   });
 }
@@ -320,6 +402,8 @@ const NOME_DO_PEDIDO: Record<ItemDaFila["acao"], string> = {
   confirmar: "este lançamento",
   criar_recorrencia: "esta recorrência",
   criar_parcelamento: "este parcelamento",
+  alterar_recorrencia: "esta mudança da recorrência",
+  excluir_recorrencia: "esta exclusão da recorrência",
 };
 
 /** Resultados de um lote; se o servidor recusa o formato do lote inteiro, manda um a um. */
@@ -338,19 +422,36 @@ async function remeterLote(remeter: Remessa, itens: ItemDaFila[]): Promise<Resul
   return resultados;
 }
 
-/** Os primeiros itens cujas ações e parcelas cabem num lote; o primeiro vai sempre. */
+/** Os previstos que uma recorrência tem até o horizonte, no máximo: os que criar, mudar ou excluir mexe. */
+function previstosAteOHorizonte({ a_cada, unidade }: Pick<NovaRecorrencia, "a_cada" | "unidade">): number {
+  const meses = config.horizonteDaRecorrenciaMeses;
+  return Math.ceil((unidade === "semanas" ? (meses * 31) / 7 : meses) / a_cada) + 1;
+}
+
+/** Quantos lançamentos o servidor gera, refaz ou exclui ao receber o pedido; o de um lançamento, nenhum. */
+function lancamentosDaRegra(item: ItemDaFila): number {
+  if (item.acao === "criar_parcelamento") return item.parcelamento.parcelas;
+  if (item.acao === "criar_recorrencia" || item.acao === "excluir_recorrencia") return previstosAteOHorizonte(item.recorrencia);
+  if (item.acao === "alterar_recorrencia") return previstosAteOHorizonte({ ...item.base, ...item.alteracao });
+  return 0;
+}
+
+/** Os primeiros itens cujas ações e lançamentos gerados cabem num lote; o primeiro vai sempre. */
 function ateOLimite(itens: ItemDaFila[]): ItemDaFila[] {
   let acoes = 0;
-  let parcelas = 0;
+  let gerados = 0;
   const lote: ItemDaFila[] = [];
   for (const item of itens) {
     acoes += acoesDo(item).length;
-    if (item.acao === "criar_parcelamento") parcelas += item.parcelamento.parcelas;
-    if (lote.length > 0 && (acoes > LIMITE_DO_LOTE || parcelas > PARCELAS_POR_LOTE)) break;
+    gerados += lancamentosDaRegra(item);
+    if (lote.length > 0 && (acoes > LIMITE_DO_LOTE || gerados > GERADOS_POR_LOTE)) break;
     lote.push(item);
   }
   return lote;
 }
+
+/** Se o lote teve uma regra aceita: as leituras de `RELIDAS_DEPOIS_DE_REGRA` ficaram velhas. */
+export const regraAceita = (acoes: Acao[], resultados: Resultado[]) => acoes.some((acao, i) => !deLancamento(acao) && resultados[i]?.resultado === "aceita");
 
 /**
  * Sobe a fila em lotes, na ordem. Devolve `true` quando não sobrou nada para subir (o que espera
@@ -361,9 +462,11 @@ export function enviarFila(remeter: Remessa): Promise<boolean> {
     for (;;) {
       const lote = ateOLimite((await lerFila()).filter((item) => !esperaAPessoa(item)));
       if (lote.length === 0) return true;
+      // A hora em que o pedido saiu, não a da falha: o planejamento lido no meio já pode ter o criar.
+      const saiuEm = Date.now();
       const resultados = await remeterLote(remeter, lote).catch(() => null);
       if (!resultados) {
-        await marcarSemResposta(lote);
+        await marcarSemResposta(lote, saiuEm);
         return false;
       }
       await aplicar(lote, resultados);
