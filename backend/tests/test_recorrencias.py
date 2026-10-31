@@ -763,6 +763,55 @@ def test_reabrir_o_fim_traz_de_volta_o_que_o_fim_tirou_e_nao_o_mes_que_o_casal_p
     assert len({l["id"] for l in previstos}) == len(previstos)
 
 
+def test_o_mes_pulado_no_trecho_que_o_fim_tirou_segue_pulado_ao_reabrir(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{gerados(casal, nova['id'])[11]['id']}")
+    mudar(casal, nova["id"], 1, vezes=10)
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == list(range(1, 11))
+
+    mudar(casal, nova["id"], 1, vezes=None)
+
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [
+        *range(1, 12),
+        *range(13, 25),
+    ]
+
+
+def test_excluir_o_que_o_fim_ja_tirou_conta_como_pular_o_mes(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    doze = gerados(casal, nova["id"])[11]["id"]
+    mudar(casal, nova["id"], 1, vezes=10)
+
+    # A exclusão do aparelho chega depois de o fim já ter tirado a 12ª.
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{doze}")
+    mudar(casal, nova["id"], 1, vezes=None)
+
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [
+        *range(1, 12),
+        *range(13, 25),
+    ]
+
+
+def test_o_mes_pulado_que_o_horizonte_tirou_segue_pulado_quando_ele_chega(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{gerados(casal, nova['id'])[14]['id']}")
+
+    # De 3 em 3 meses a 15ª (10/11/2029) passa do horizonte e a 8ª é a última dentro dele.
+    mudar(casal, nova["id"], 1, a_cada=3)
+    no_dia(monkeypatch, "2028-12-01")
+    fazer_tarefa_diaria(database_url)
+
+    assert [l["ocorrencia"] for l in gerados(casal, nova["id"])] == [*range(1, 15), *range(16, 18)]
+
+
 def test_adiar_o_fim_para_uma_data_mais_tarde_gera_as_ocorrencias_do_meio(casal: Casal):
     conta, luz = casal.conta(), casal.categoria("Luz")
     nova = recorrencia(conta, [luz], inicio="2026-11-10", ate="2027-04-10")

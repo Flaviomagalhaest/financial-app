@@ -16,7 +16,7 @@ from pathlib import Path
 
 import psycopg
 
-VERSAO_FORMATO = 20
+VERSAO_FORMATO = 21
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -416,7 +416,19 @@ def _da_versao_18_para_a_19(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
 
 
 def _da_versao_19_para_a_20(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 20 (ticket 61) traz as edições em lote, com o que cada lançamento e cada
+    """A versão 20 (ticket 110) marca no lançamento se a exclusão foi da regra da recorrência
+    (o fim ou o horizonte) e não de uma pessoa. Antes dela nenhuma exclusão era da regra."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "excluido_pela_regra" not in colunas:
+        tabelas["lancamentos"] = (
+            [*colunas, "excluido_pela_regra"],
+            [[*linha, "false"] for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
+def _da_versao_20_para_a_21(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 21 (ticket 61) traz as edições em lote, com o que cada lançamento e cada
     parcelamento tinha antes, para o desfazer. Backup antigo entra sem nenhuma."""
     novas = {
         "edicoes_em_lote": (
@@ -489,6 +501,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     17: _da_versao_17_para_a_18,
     18: _da_versao_18_para_a_19,
     19: _da_versao_19_para_a_20,
+    20: _da_versao_20_para_a_21,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

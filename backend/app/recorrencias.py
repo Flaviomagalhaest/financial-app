@@ -186,8 +186,9 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Recorrencia]:
 def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas ocorrências até o horizonte, quantas cabem numa transação, e devolve se
     pode faltar alguma. O id de cada previsto vem da regra e do número da ocorrência: gerar de
-    novo não duplica, e o previsto excluído de um número já gerado (o mês pulado) não volta. O que
-    o fim ou o horizonte tirou volta quando a regra chega a ele: `geradas` recua até lá."""
+    novo não duplica, e o previsto que o casal excluiu (o mês pulado) não volta. O que o fim ou o
+    horizonte tirou (`excluido_pela_regra`) volta quando a regra chega a ele: `geradas` recua até
+    lá."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -203,14 +204,14 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         proximas.append((n, dia))
     if not proximas:
         return False
-    # O que está excluído com número acima de `geradas` saiu do fim ou do horizonte, nunca de um
-    # mês pulado (esse tem número já gerado): volta, com a regra de hoje. Quem uma pessoa excluiu
-    # depois de realizado também fica de fora.
+    # Volta, com a regra de hoje, o que o fim ou o horizonte excluiu, nunca o mês que uma pessoa
+    # pulou. Quem uma pessoa excluiu depois de realizado também fica de fora.
     excluidos = {
         n: versao
         for n, versao in conn.execute(
             f"SELECT ocorrencia, {lancamentos.VERSAO} FROM lancamentos WHERE recorrencia_id = %s"
-            " AND ocorrencia = ANY(%s) AND situacao = 'previsto' AND excluido_em IS NOT NULL",
+            " AND ocorrencia = ANY(%s) AND situacao = 'previsto' AND excluido_em IS NOT NULL"
+            " AND excluido_pela_regra",
             (id, [n for n, _ in proximas]),
         )
     }
@@ -227,7 +228,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 "tipo = %s, situacao = %s, valor_centavos = %s, data = %s, descricao = %s,"
                 " conta_id = %s, pessoa = %s, automatico = %s, mes = %s, fatura_a_mao = NULL,"
                 " item_categoria_id = %s, item_atual_categoria_id = NULL, excluido_em = NULL,"
-                " excluido_por = NULL, alterado_por = %s, alterado_em = now()",
+                " excluido_por = NULL, excluido_pela_regra = false, alterado_por = %s,"
+                " alterado_em = now()",
                 (
                     regra.tipo,
                     situacao,
@@ -522,6 +524,10 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     for item in trabalho[:por_lote]:
         if isinstance(item, _Retirada):
             excluir(conn, item.id, None, usuario)
+            # A marca de quem excluiu: só o que a regra tirou volta, não o que o casal pulou.
+            conn.execute(
+                "UPDATE lancamentos SET excluido_pela_regra = true WHERE id = %s", (item.id,)
+            )
             conn.execute(
                 "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
                 (item.ocorrencia - 1, id),
