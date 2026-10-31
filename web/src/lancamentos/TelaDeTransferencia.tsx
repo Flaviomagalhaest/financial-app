@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { criarTransferencia, useCadastro, useConexao } from "../dados";
+import { criarTransferencia, useAvisoDePlanejamento, useCadastro, useConexao } from "../dados";
+import { nomePorId } from "./apresentacao";
+import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDaData } from "./EscolhaDaData";
@@ -46,6 +48,11 @@ export function TelaDeTransferencia({ centavosIniciais, onTipo }: Props) {
   const [enviando, setEnviando] = useState(false);
 
   const categoriasDeTransferencia = categorias.filter((c) => c.tipo === "transferencia" && !c.arquivada);
+  // A transferência com categoria conta no item dela (história 67); a futura nasce prevista.
+  const planejamento = useAvisoDePlanejamento(
+    { id, valor_centavos: centavos, categoria_ids: categoria ? [categoria] : [], conta_id: origem ?? "", data, fatura_mes: null, situacao: data > hoje() ? "previsto" : "realizado" },
+    null,
+  );
   const podeSalvar = online && centavos > 0 && !!origem && !!destino && origem !== destino && !enviando;
 
   function marcarOrigem(conta: string) {
@@ -89,6 +96,7 @@ export function TelaDeTransferencia({ centavosIniciais, onTipo }: Props) {
           onMarcar={(c) => setCategoria(categoria === c ? null : c)}
         />
       )}
+      {categoria && <AvisoDePlanejamento {...planejamento} tipo="despesa" nomeDaCategoria={(c) => nomePorId(categorias, c)} onEscolher={() => {}} />}
       <label htmlFor="descricao">Descrição</label>
       <input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} autoComplete="off" />
       <h3>Data</h3>

@@ -84,7 +84,7 @@ function pedidoDeSalvar(atual: ItemDaFila | undefined, mudado: NovoLancamento, n
   const ficaASituacao = !mudado.situacao && antes?.situacao && antes.data === mudado.data;
   const lancamento = ficaASituacao ? { ...mudado, situacao: antes.situacao } : mudado;
   return atual?.acao === "criar" || novo
-    ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, base: atual?.base }
+    ? { acao: "criar", lancamento, talvezNoServidor: atual?.talvezNoServidor, tentadoEm: atual?.tentadoEm, base: atual?.base }
     : // Sobre um conflito, a tela já mostrava a versão do servidor.
       { acao: "editar", lancamento, base: atual?.conflito?.lancamento ?? atual?.base ?? base };
 }
@@ -251,7 +251,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       // Mudou no caminho: a mudança nova sobe sobre a versão que acabou de ser aceita (o que era
       // criar já existe lá e sobe como edição).
       else if (atual)
-        await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, base: lancamento ?? atual.base }));
+        await pedido(fila.put({ ...atual, acao: atual.acao === "criar" ? "editar" : atual.acao, talvezNoServidor: undefined, tentadoEm: undefined, base: lancamento ?? atual.base }));
     }
     if (guardada) await pedido(respostas.put({ dados: ordenar(lista), em: guardada.em }, LISTA));
     if (daHoje) await pedido(respostas.put({ dados: { ...daHoje.dados, contas_da_semana: previstos }, em: daHoje.em }, HOJE));
@@ -268,7 +268,7 @@ async function marcarSemResposta(enviados: ItemDaFila[]) {
     for (const enviado of enviados) {
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
       if (enviado.acao === "criar" && atual?.acao === "criar" && atual.talvezNoServidor === undefined)
-        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, base: { ...enviado.lancamento!, versao: 1 } }));
+        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, tentadoEm: Date.now(), base: { ...enviado.lancamento!, versao: 1 } }));
       // A recorrência talvez gravada não se descarta mais no aparelho: os previstos viriam mesmo assim.
       // Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
       if (atual?.acao === "criar_recorrencia" && atual.talvezNoServidor === undefined && navigator.onLine)

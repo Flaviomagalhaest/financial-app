@@ -33,6 +33,8 @@ export interface ItemDaFila {
   recusa?: string;
   /** No criar (ou na recorrência) enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
   talvezNoServidor?: number;
+  /** Quando o envio que talvez gravou o criar saiu (ms): o planejamento lido depois dele já pode contá-lo. */
+  tentadoEm?: number;
   /**
    * A versão do servidor sobre a qual a mudança foi feita: a edição sobe só os campos que
    * mudaram desde ela, e a exclusão leva a versão. No criar talvez gravado, o que foi enviado.
