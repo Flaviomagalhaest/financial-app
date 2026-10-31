@@ -59,6 +59,7 @@ export function Casca({ email, onSair, hoje }: Props) {
           </section>
         )}
         {rota === "novo" && (id ? <TelaDeLancamento key={id} id={id} /> : <NovoLancamento />)}
+        {rota === "estornar" && id && <TelaDeLancamento key={id} estornoDe={id} />}
         {rota === "favorito" && id && <NovoLancamento key={id} favoritoId={id} />}
         {rota === "favoritos" && <TelaDeFavoritos />}
         {rota === "conflito" && id && <TelaDeConflito key={id} id={id} />}

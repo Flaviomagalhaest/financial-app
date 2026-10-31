@@ -16,6 +16,8 @@ type Props = {
   tags: string[];
   /** As tags que se pode escolher; as marcadas aparecem mesmo fora dela. */
   opcoesDeTags: string[];
+  /** No estorno, as tags são as da compra e não mudam. */
+  tagsTravadas?: boolean;
   onTags: (tags: string[]) => void;
   pessoas: Pessoa[];
   pessoa: string | null;
@@ -52,7 +54,7 @@ export function FolhaDeDetalhes(props: Props) {
   const recorrencia = props.recorrencia?.valor ?? null;
   const mudarRecorrencia = (mudanca: Partial<RecorrenciaNaFolha>) => recorrencia && props.recorrencia?.onMudar({ ...recorrencia, ...mudanca });
   // As marcadas vêm primeiro: a fileira rola de lado, e a tag recém-criada fica à vista.
-  const opcoes = [...props.tags, ...props.opcoesDeTags.filter((o) => !marcada(o))];
+  const opcoes = [...props.tags, ...(props.tagsTravadas ? [] : props.opcoesDeTags.filter((o) => !marcada(o)))];
 
   function alternar(tag: string) {
     props.onTags(marcada(tag) ? props.tags.filter((t) => !mesmaTag(t, tag)) : [...props.tags, tag]);
@@ -101,31 +103,33 @@ export function FolhaDeDetalhes(props: Props) {
       {opcoes.length > 0 && (
         <div className="fileira rolavel">
           {opcoes.map((tag) => (
-            <button type="button" key={tag} className={`ficha${marcada(tag) ? " marcada" : ""}`} aria-pressed={marcada(tag)} onClick={() => alternar(tag)}>
+            <button type="button" key={tag} className={`ficha${marcada(tag) ? " marcada" : ""}`} aria-pressed={marcada(tag)} disabled={props.tagsTravadas} onClick={() => alternar(tag)}>
               #{tag}
             </button>
           ))}
         </div>
       )}
-      <div className="linha">
-        <label className="oculto" htmlFor="nova-tag">
-          Nova tag
-        </label>
-        <input
-          id="nova-tag"
-          value={novaTag}
-          placeholder="Nova tag"
-          onChange={(e) => setNovaTag(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            criarTag();
-          }}
-        />
-        <button type="button" className="secundario" onClick={criarTag}>
-          Criar tag
-        </button>
-      </div>
+      {!props.tagsTravadas && (
+        <div className="linha">
+          <label className="oculto" htmlFor="nova-tag">
+            Nova tag
+          </label>
+          <input
+            id="nova-tag"
+            value={novaTag}
+            placeholder="Nova tag"
+            onChange={(e) => setNovaTag(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              criarTag();
+            }}
+          />
+          <button type="button" className="secundario" onClick={criarTag}>
+            Criar tag
+          </button>
+        </div>
+      )}
 
       <h4>Pessoa</h4>
       <div className={`alternancia${props.pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">

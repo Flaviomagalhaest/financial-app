@@ -1,4 +1,5 @@
 import type { Fatura } from "../dados";
+import { formatarCentavos } from "../lancamentos/dinheiro";
 
 export const SITUACAO: Record<Fatura["situacao"], string> = { aberta: "Aberta", fechada: "Fechada", paga: "Paga" };
 
@@ -17,4 +18,9 @@ export function faturasDaLinha(faturas: Fatura[]): { rotulo: "Anterior" | "Atual
     { rotulo: "Atual" as const, fatura: faturas[atual] },
     { rotulo: "Próxima" as const, fatura: faturas[atual + 1] },
   ].filter((linha) => linha.fatura);
+}
+
+/** "+ R$ 5,00" ou "− R$ 5,00"; o zero fica sem sinal. */
+export function comSinal(centavos: number): string {
+  return centavos === 0 ? formatarCentavos(0) : `${centavos > 0 ? "+" : "−"} ${formatarCentavos(Math.abs(centavos))}`;
 }
