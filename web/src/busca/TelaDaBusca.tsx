@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   criteriosDoEndereco,
+  criteriosDoLote,
   enderecoDaBusca,
   useBusca,
   useCadastro,
+  useConexao,
   usePessoas,
   type Criterios,
+  type EdicaoEmLote,
   type LancamentoNaTela,
   type ParcelamentoNaTela,
   type Transferencia,
@@ -17,8 +20,22 @@ import { mesPorExtenso } from "../cartoes/apresentacao";
 import { SITUACOES, TIPOS } from "./apresentacao";
 import { FiltrosSalvos } from "./FiltrosSalvos";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";
+import { contagem, FolhaDaEdicaoEmLote } from "./FolhaDaEdicaoEmLote";
 
 type Cadastro = ReturnType<typeof useCadastro>;
+
+/** A caixa de marcar uma linha para a edição em lote; sem ela, a linha não se marca. */
+type Marcacao = { marcada: boolean; travada: boolean; onAlternar: () => void };
+
+function CaixaDeMarcar({ titulo, marcacao }: { titulo: string; marcacao?: Marcacao }) {
+  if (!marcacao) return null;
+  return (
+    <label className="caixa">
+      <input type="checkbox" checked={marcacao.marcada} disabled={marcacao.travada} onChange={marcacao.onAlternar} />
+      <span className="oculto">Marcar {titulo}</span>
+    </label>
+  );
+}
 
 /** `3` de `10` vira `03/10`, como a fatura mostra a parcela. */
 const numeroDaParcela = (parcela: number, parcelas: number) => `${String(parcela).padStart(2, "0")}/${String(parcelas).padStart(2, "0")}`;
@@ -68,12 +85,13 @@ function Detalhes({ l, cadastro, parcela = false }: { l: LancamentoNaTela; cadas
   );
 }
 
-function LinhaDoLancamento({ l, cadastro }: { l: LancamentoNaTela; cadastro: Cadastro }) {
+function LinhaDoLancamento({ l, cadastro, marcacao }: { l: LancamentoNaTela; cadastro: Cadastro; marcacao?: Marcacao }) {
   const titulo = tituloDoLancamento(l, cadastro.categorias);
   return (
     <li>
       <div>
-        <strong>
+        <CaixaDeMarcar titulo={titulo} marcacao={marcacao} />
+        <strong className="titulo-da-linha">
           {titulo}
           {l.parcela && l.parcelas ? ` ${numeroDaParcela(l.parcela, l.parcelas)}` : ""}
         </strong>
@@ -88,13 +106,14 @@ function LinhaDoLancamento({ l, cadastro }: { l: LancamentoNaTela; cadastro: Cad
 }
 
 /** O parcelamento numa linha, com o total; tocar abre as parcelas (ADR 0013). */
-function LinhaDoParcelamento({ parcelamento, cadastro }: { parcelamento: ParcelamentoNaTela<LancamentoNaTela>; cadastro: Cadastro }) {
+function LinhaDoParcelamento({ parcelamento, cadastro, marcacao }: { parcelamento: ParcelamentoNaTela<LancamentoNaTela>; cadastro: Cadastro; marcacao?: Marcacao }) {
   const [aberta, setAberta] = useState(false);
   const titulo = parcelamento.descricao || tituloDoLancamento(parcelamento.lancamentos[0], cadastro.categorias);
   return (
     <li>
       <div>
-        <button className="linha-que-abre" aria-expanded={aberta} onClick={() => setAberta(!aberta)}>
+        <CaixaDeMarcar titulo={titulo} marcacao={marcacao} />
+        <button className="linha-que-abre titulo-da-linha" aria-expanded={aberta} onClick={() => setAberta(!aberta)}>
           <strong>{titulo}</strong> · {parcelamento.parcelas}x
         </button>
         <ValorComSinal l={{ ...parcelamento.lancamentos[0], valor_centavos: parcelamento.valor_centavos }} />
@@ -148,7 +167,22 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
   const [filtrando, setFiltrando] = useState(false);
   const cadastro = useCadastro();
   const { nomeDe } = usePessoas();
-  const { resultado, parcial, carregando, temMais, carregarMais } = useBusca(criterios);
+  const { resultado, parcial, carregando, temMais, carregarMais, buscarDeNovo } = useBusca(criterios);
+  const online = useConexao();
+  // A edição em lote (ticket 61): os marcados, ou todos do resultado.
+  const [selecionando, setSelecionando] = useState(false);
+  const [marcados, setMarcados] = useState<string[]>([]);
+  const [todos, setTodos] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [aplicada, setAplicada] = useState<EdicaoEmLote | null>(null);
+  const limparSelecao = () => {
+    setMarcados([]);
+    setTodos(false);
+  };
+  const marcacao = (id: string): Marcacao | undefined =>
+    selecionando && !parcial
+      ? { marcada: todos || marcados.includes(id), travada: todos, onAlternar: () => setMarcados((m) => (m.includes(id) ? m.filter((v) => v !== id) : [...m, id])) }
+      : undefined;
 
   // O texto vai para a busca quando a pessoa para de digitar.
   useEffect(() => {
@@ -156,12 +190,15 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
     return () => clearTimeout(espera);
   }, [texto]);
 
-  // O endereço acompanha o que se escolheu, sem nova entrada no histórico do navegador.
+  // O endereço acompanha o que se escolheu, sem nova entrada no histórico do navegador. Outros
+  // critérios são outro resultado: a seleção sai.
   useEffect(() => {
     history.replaceState(null, "", enderecoDaBusca(criterios));
+    limparSelecao();
   }, [criterios]);
 
   const fichas = fichasDos(criterios, cadastro, nomeDe);
+  const parcelamentos = new Set(resultado?.linhas.flatMap((linha) => ("parcelamento" in linha ? [linha.parcelamento.parcelamento_id] : [])));
   const totais = resultado?.totais;
   const previstos = totais && (totais.despesas.previsto_centavos !== 0 || totais.receitas.previsto_centavos !== 0);
 
@@ -205,6 +242,46 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
           );
         })}
       </div>
+      <div className="acoes-em-linha">
+        <button
+          type="button"
+          className="secundario"
+          aria-pressed={selecionando}
+          disabled={parcial}
+          onClick={() => {
+            setSelecionando(!selecionando);
+            limparSelecao();
+          }}
+        >
+          {selecionando ? "Parar de selecionar" : "Selecionar para editar em lote"}
+        </button>
+        <a href="#/edicoes-em-lote">Edições em lote</a>
+      </div>
+      {selecionando && !parcial && (
+        <div className="selecao-do-lote" role="group" aria-label="Seleção">
+          <p>{todos ? `Todos do resultado (${totais?.quantidade ?? 0})` : contagem(marcados.length, "marcado", "marcados")}</p>
+          <div className="acoes-em-linha">
+            <button type="button" className="secundario" disabled={todos || !resultado?.linhas.length} onClick={() => setTodos(true)}>
+              Todos do resultado
+            </button>
+            <button type="button" className="secundario" disabled={!todos && !marcados.length} onClick={limparSelecao}>
+              Limpar seleção
+            </button>
+            <button type="button" disabled={!online || (!todos && !marcados.length)} onClick={() => setEditando(true)}>
+              Editar em lote
+            </button>
+          </div>
+          {!online && <p className="vazio">A edição em lote precisa de internet.</p>}
+        </div>
+      )}
+      {aplicada && (
+        <p role="status">
+          {aplicada.situacao === "aplicando"
+            ? "A gravação dessa edição parou no meio. "
+            : `Edição aplicada em ${contagem(aplicada.lancamentos, "lançamento", "lançamentos")}: ${aplicada.resumo}. `}
+          <a href="#/edicoes-em-lote">Desfazer</a>
+        </p>
+      )}
       {!criterios.fatura && <p className="vazio">Período pela data da compra; a aba Mês conta pelo mês da fatura.</p>}
       {parcial && (
         <p role="status" className="erro">
@@ -243,11 +320,16 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
       <ul className="lista" aria-label="Resultado da busca">
         {resultado?.linhas.map((linha) =>
           "parcelamento" in linha ? (
-            <LinhaDoParcelamento key={linha.parcelamento.parcelamento_id} parcelamento={linha.parcelamento} cadastro={cadastro} />
+            <LinhaDoParcelamento
+              key={linha.parcelamento.parcelamento_id}
+              parcelamento={linha.parcelamento}
+              cadastro={cadastro}
+              marcacao={marcacao(linha.parcelamento.parcelamento_id)}
+            />
           ) : "transferencia" in linha ? (
             <LinhaDaTransferencia key={linha.transferencia.id} t={linha.transferencia} cadastro={cadastro} />
           ) : (
-            <LinhaDoLancamento key={linha.lancamento.id} l={linha.lancamento} cadastro={cadastro} />
+            <LinhaDoLancamento key={linha.lancamento.id} l={linha.lancamento} cadastro={cadastro} marcacao={marcacao(linha.lancamento.id)} />
           ),
         )}
       </ul>
@@ -255,6 +337,24 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
         <button type="button" className="secundario" disabled={carregando} onClick={carregarMais}>
           Carregar mais
         </button>
+      )}
+      {editando && (
+        <FolhaDaEdicaoEmLote
+          selecao={
+            todos
+              ? { busca: criteriosDoLote(criterios), lancamento_ids: [], parcelamento_ids: [] }
+              : { lancamento_ids: marcados.filter((id) => !parcelamentos.has(id)), parcelamento_ids: marcados.filter((id) => parcelamentos.has(id)) }
+          }
+          marcados={todos ? "Todos do resultado" : contagem(marcados.length, "marcado", "marcados")}
+          onAplicada={(lote) => {
+            setEditando(false);
+            setSelecionando(false);
+            limparSelecao();
+            setAplicada(lote);
+            buscarDeNovo();
+          }}
+          onFechar={() => setEditando(false)}
+        />
       )}
       {filtrando && <FolhaDeFiltros criterios={criterios} onMudar={setCriterios} onFechar={() => setFiltrando(false)} />}
     </section>

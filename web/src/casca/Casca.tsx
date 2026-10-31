@@ -15,6 +15,7 @@ import { TelaDoFuturo } from "../futuro/TelaDoFuturo";
 import { TelaDoMes } from "../mes/TelaDoMes";
 import { TelaDoModelo } from "../mes/TelaDoModelo";
 import { TelaDaBusca } from "../busca/TelaDaBusca";
+import { TelaDasEdicoesEmLote } from "../busca/TelaDasEdicoesEmLote";
 import { ABAS, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
@@ -22,8 +23,8 @@ type Props = { email: string; onSair: () => void; hoje: ReactNode };
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
   const { rota, id, mes, consulta } = useRota();
-  // A busca é da aba Histórico (ticket 24), e a lupa a abre de qualquer aba.
-  const aba = rota === "busca" ? "historico" : rota;
+  // A busca é da aba Histórico (ticket 24), e a lupa a abre de qualquer aba; as edições em lote saem dela.
+  const aba = rota === "busca" || rota === "edicoes-em-lote" ? "historico" : rota;
 
   return (
     <div className="casca">
@@ -67,6 +68,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "configuracoes" && <Configuracoes />}
         {rota === "historico" && <ListaDeLancamentos topo={<TelaDaEvolucao />} />}
         {rota === "busca" && <TelaDaBusca key={consulta} consulta={consulta ?? ""} />}
+        {rota === "edicoes-em-lote" && <TelaDasEdicoesEmLote />}
         {rota === "mes" && <TelaDoMes key={mes ?? "atual"} mes={mes} />}
         {rota === "modelo-do-planejamento" && <TelaDoModelo />}
         {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}
