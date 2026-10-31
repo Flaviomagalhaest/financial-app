@@ -43,7 +43,7 @@ router = APIRouter(prefix="/api")
 # parcelamento dele, uma vez por lote, grava as dele.
 LINHAS_POR_LANCAMENTO = 20
 POR_TRANSACAO = max(1, LINHAS_POR_LOTE // LINHAS_POR_LANCAMENTO)
-# Uma gravação que passa disto (o tempo máximo da Lambda, com folga) parou no meio: a tarefa
+# Uma gravação que passa disto (a Lambda da API tem 29 s, então é folga) parou no meio: a tarefa
 # diária e o reenvio desfazem o lote.
 PARADO_HA = timedelta(minutes=5)
 PRAZO_EM_DIAS: int = valores_iniciais()["desfazerEdicaoEmLoteDias"]
