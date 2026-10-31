@@ -199,6 +199,7 @@ def mais_meses(dia: date, meses: int) -> date:
 
 
 def _depois_do_inicio(regra: NovaRecorrencia, periodos: int) -> date:
+    """A data `periodos` vezes N semanas ou N meses depois do início da regra."""
     if regra.unidade == "semanas":
         return regra.inicio + timedelta(weeks=periodos * regra.a_cada)
     return mais_meses(regra.inicio, periodos * regra.a_cada)
@@ -258,7 +259,8 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     pode faltar alguma. O id de cada previsto vem da regra e do número da ocorrência: gerar de
     novo não duplica, e o previsto que o casal excluiu (o mês pulado) não volta. O que o fim ou o
     horizonte tirou (`excluido_pela_regra`) volta quando a regra chega a ele: `geradas` recua até
-    lá. A ocorrência de antes de hoje não vira lançamento (ticket 87): `geradas` passa por ela,
+    lá. A ocorrência de antes de hoje não vira lançamento (ticket 87; não é o mês pulado, que
+    existe excluído): `geradas` passa por ela,
     e ela segue contando no calendário e nas `vezes`. A de hoje nasce realizada `na_criacao`
     (o casal está registrando o que aconteceu) e, depois, só a automática."""
     [regra] = _ler(conn, "id = %s", (id,))
@@ -269,16 +271,16 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     por_lote = max(1, LINHAS_POR_LOTE // (1 + len(categorias) + len(tags)))
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     proximas: list[tuple[int, date]] = []
-    ate, n = geradas, geradas
+    ultima, n = geradas, geradas
     while len(proximas) < por_lote:
         n += 1
         dia = data_da_ocorrencia(regra, n)
         if _fora_do_fim(regra, n, dia) or dia > ultimo_dia:
             break
-        ate = n
+        ultima = n
         if dia >= dia_de_hoje:
             proximas.append((n, dia))
-    if ate == geradas:
+    if ultima == geradas:
         return False
     # Volta, com a regra de hoje, o que o fim ou o horizonte excluiu, nunca o mês que uma pessoa
     # pulou. Quem uma pessoa excluiu depois de realizado também fica de fora.
@@ -371,7 +373,8 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
                 (lancamento_id, tag),
             )
     if not conn.execute(
-        "UPDATE recorrencias SET geradas = %s WHERE id = %s AND geradas = %s", (ate, id, geradas)
+        "UPDATE recorrencias SET geradas = %s WHERE id = %s AND geradas = %s",
+        (ultima, id, geradas),
     ).rowcount:
         # Outra geração andou junto: a transação recomeça e parte do que ela gravou.
         raise psycopg.errors.SerializationFailure("a recorrência mudou durante a geração")

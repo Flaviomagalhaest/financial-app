@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app import automaticos, lancamentos
+from app import lancamentos
 from app.tarefa_diaria import fazer_tarefa_diaria
 from tests.conftest import Casal
 
@@ -604,10 +604,10 @@ def criar_geladeira(casal: Casal, conta: str, lancada_em: str | None = None, **c
     )
     with pytest.MonkeyPatch.context() as naquele_dia:
         if lancada_em:
-            naquele_dia.setattr(lancamentos, "hoje", lambda: date.fromisoformat(lancada_em))
+            no_dia(naquele_dia, lancada_em)
         assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
     if lancada_em:
-        automaticos.realizar_automaticos(casal.client.app.state.url, UUID(novo["id"]))
+        fazer_tarefa_diaria(casal.client.app.state.url)
     return novo
 
 

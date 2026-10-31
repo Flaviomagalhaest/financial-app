@@ -101,7 +101,7 @@ Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o h
 _Avoid_: job, cron, rotina noturna
 
 **Parcelamento**:
-Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela. No boleto com a data no passado, as parcelas de antes de hoje são puladas (`parcelas_puladas` na resposta): não viram lançamento, mas contam na numeração e no total, e a de hoje nasce realizada; o boleto que já venceu inteiro é recusado. O cartão gera todas.
+Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela. No boleto com a data no passado, as parcelas de antes de hoje são puladas (`parcelas_puladas` na resposta; não é a parcela que o casal excluiu, que existe excluída): não viram lançamento, mas contam na numeração e no total, e a de hoje nasce realizada; o boleto que já venceu inteiro é recusado. O cartão gera todas.
 _Avoid_: compra parcelada, financiamento
 
 **Parcela**:

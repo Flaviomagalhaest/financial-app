@@ -184,7 +184,7 @@ async function prepararParcelamento(page: Page, total = 60000) {
   const categoria = (await api.ler("/api/categorias")).find((c: { nome: string }) => c.nome === eletro);
   const contaId = (await api.ler("/api/contas")).find((c: { nome: string }) => c.nome === conta).id;
   // A parcela de antes de hoje não vira lançamento (ticket 125): o boleto começa hoje, em São Paulo.
-  const hoje = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const id = crypto.randomUUID();
   const descricao = `TV ${s}`;
   await api.criar("/api/parcelamentos", {
