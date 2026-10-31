@@ -126,3 +126,32 @@ test("o mês vazio copia o planejamento do anterior ou aplica o modelo padrão",
   await itens.getByRole("button", { name: "Aplicar modelo padrão" }).click();
   await expect(itens.getByRole("row").filter({ hasText: `Lazer ${s}` })).toContainText("R$ 250,50");
 });
+
+test("o casal cria um item avulso, muda o valor e exclui, sem passar pelo modelo padrão", async ({ page }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/#/configuracoes");
+  await entrar(page);
+  await expect(page.getByRole("heading", { name: "Configurações" })).toBeVisible();
+  const api = await apiDaPagina(page);
+  const { criar } = api;
+  const ano = await anoVazio(api, (a) => [`${a}-07`]);
+  await criar("/api/categorias", { nome: `Casa ${s}`, tipo: "despesa" });
+
+  await page.goto(`/#/mes/${ano}-07`);
+  const itens = page.getByRole("region", { name: "Itens do planejamento" });
+  await expect(itens).toContainText("Nenhum item planejado neste mês.");
+  await itens.getByLabel("Categoria do novo item").selectOption({ label: `Casa ${s}` });
+  await itens.getByLabel("Valor do novo item").fill("300,00");
+  await itens.getByRole("button", { name: "Adicionar item" }).click();
+  const linha = itens.getByRole("row").filter({ hasText: `Casa ${s}` });
+  await expect(linha).toContainText("R$ 300,00");
+
+  await linha.getByRole("button", { name: `Mudar valor de Casa ${s}` }).click();
+  await itens.getByLabel(`Novo valor de Casa ${s}`).fill("450,50");
+  await itens.getByRole("button", { name: "Salvar valor" }).click();
+  await expect(linha).toContainText("R$ 450,50");
+
+  await linha.getByRole("button", { name: `Excluir Casa ${s}` }).click();
+  await expect(itens.getByRole("row").filter({ hasText: `Casa ${s}` })).toHaveCount(0);
+  await expect(itens).toContainText("Nenhum item planejado neste mês.");
+});

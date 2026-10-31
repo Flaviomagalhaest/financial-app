@@ -915,6 +915,26 @@ export function aplicarModeloPadrao(mes: string): Promise<string | null> {
   return recusaDe(() => api.POST("/api/planejamento/{mes}/aplicar-modelo", { params: { path: { mes } } }), "o servidor recusou o modelo padrão");
 }
 
+/** Cria um item avulso no mês; o id vem do aparelho e reenviar devolve o gravado (409 se a categoria já tem item). */
+export function criarItemDoPlanejamento(mes: string, categoria_id: string, valor_centavos: number): Promise<string | null> {
+  return recusaDe(() => api.POST("/api/planejamento/{mes}/itens", { params: { path: { mes } }, body: { id: crypto.randomUUID(), categoria_id, valor_centavos } }), "o servidor recusou o item");
+}
+
+export function mudarItemDoPlanejamento(id: string, valor_centavos: number): Promise<string | null> {
+  return recusaDe(() => api.PATCH("/api/planejamento/itens/{id}", { params: { path: { id } }, body: { valor_centavos } }), "o servidor recusou o novo valor");
+}
+
+/** Os lançamentos ficam como estão: só deixam de contar no item. O 204 não tem corpo, então `recusaDe` (que exige `data`) não serve. */
+export async function excluirItemDoPlanejamento(id: string): Promise<string | null> {
+  try {
+    const { error } = await api.DELETE("/api/planejamento/itens/{id}", { params: { path: { id } } });
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return error ? (typeof detalhe === "string" ? detalhe : "o servidor recusou excluir o item") : null;
+  } catch {
+    return "sem resposta do servidor";
+  }
+}
+
 /** Troca o modelo padrão inteiro pelos itens enviados. */
 export function definirModeloPadrao(itens: ItemDoModelo[]): Promise<string | null> {
   return recusaDe(() => api.PUT("/api/planejamento/modelo", { body: { itens } }), "o servidor recusou o modelo padrão");
