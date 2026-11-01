@@ -1,7 +1,7 @@
 # A edição perde o que se digita antes de o lançamento carregar
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
