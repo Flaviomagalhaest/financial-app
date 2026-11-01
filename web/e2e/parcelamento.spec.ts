@@ -287,6 +287,18 @@ test("muda uma parcela com alcance: esta e as próximas, todas com a realizada c
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   expect((await doParcelamento()).map((l) => l.valor_centavos)).toEqual([12000, 12000, 12000, 12000, 12000, 12000]);
   await expect(parcela("01/06")).toContainText("R$ 120,00");
+
+  // "Só esta" é a edição de sempre, pela fila: só a parcela muda, e fica alterada à mão.
+  await expect(parcela("02/06")).not.toContainText("alterada à mão");
+  await parcela("02/06").getByRole("link", { name: `Editar ${descricao}` }).click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(`${descricao} entrada`);
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await page.getByRole("group", { name: "Mudar quais parcelas?" }).getByRole("button", { name: "Só esta" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: `${descricao} entrada 02/06` })).toContainText("alterada à mão");
+  expect((await doParcelamento()).map((l) => l.descricao)).toEqual([descricao, `${descricao} entrada`, novaDescricao, `${descricao} da sala`, novaDescricao, novaDescricao]);
 });
 
 test("exclui o parcelamento inteiro pela tela; sem internet, corrigir e excluir esperam a rede", async ({ page, context }) => {

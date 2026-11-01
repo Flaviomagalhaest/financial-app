@@ -18,3 +18,9 @@ O `PATCH /api/parcelas/{id}` muda, na transação da parcela mudada, o parcelame
 - [ ] Guardar no parcelamento o que falta mudar parcela a parcela (campos, valores e a partir de qual parcela)
 - [ ] A tarefa diária termina o que ficou, como faz com a correção (`completar_todos`)
 - [ ] Teste de API com o pedido interrompido no meio
+- [ ] Uma recusa num lote seguinte (fatura paga, por exemplo) responde 422 com a parcela mudada e o primeiro lote já gravados: conferir as recusas de todas as parcelas antes de gravar, ou dizer na resposta o que ficou
+- [ ] Classificação pendente desde a 1ª (correção que parou no meio) junta-se à de "esta e as próximas" desde a parcela N valendo desde a 1ª (`_juntar`), e leva o valor novo às parcelas de antes; guardar o pendente com o valor, ou recusar o alcance enquanto houver pendente
+
+## Notas
+
+- Os dois casos só acontecem num pedido que cai no meio ou num parcelamento com mais de um lote (perto de 80 parcelas); achados na revisão do ticket 136.

@@ -648,8 +648,10 @@ class _Correcao:
         )
 
 
-# O que vale para todas as parcelas quando o pedido o traz, as editadas à mão também.
+# O que vale para as parcelas quando o pedido o traz, menos onde uma pessoa o mudou à mão.
 CLASSIFICACAO = frozenset({"descricao", "categoria_ids", "tags", "pessoa", "item_categoria_id"})
+# Os campos da parcela que o valor, o número de parcelas e a data do parcelamento dão.
+CRONOGRAMA = frozenset({"valor_centavos", "data", "conta_id", "fatura_mes"})
 
 
 def _correcoes(
@@ -659,10 +661,12 @@ def _correcoes(
     classificacao: Classificacao,
     dia_da_correcao: date | None = None,
     mantidas: set[int] | None = None,
+    cronograma_pedido: frozenset[str] = frozenset(),
 ) -> list[_Correcao]:
     """As parcelas que não estão como o parcelamento manda, na ordem do número. A que uma pessoa
     mudou à mão fica como está nos campos que mudou (a conta segura também a data e a fatura), e
-    o número dela entra em `mantidas` quando o parcelamento a mudaria (ticket 136). A
+    o número dela entra em `mantidas` quando o pedido a mudaria: na classificação pedida, e no
+    valor e na data se estão em `cronograma_pedido` (ticket 136). A
     classificação só se refaz no que o pedido trouxe (`classificacao`, cada campo a partir de
     uma parcela), para a descrição corrigida numa parcela só não voltar a cada correção de valor,
     e para a de "esta e as próximas" não chegar às de antes. A parcela que saiu antes, quando o
@@ -734,7 +738,8 @@ def _correcoes(
                 continue
             acao = "reviver"
         elif n > regra.parcelas:
-            if maos:
+            # Só valor, data, conta e fatura mudados à mão seguram a parcela que sobra.
+            if maos & CRONOGRAMA:
                 continue
             acao = "excluir"
         tem = {
@@ -759,11 +764,11 @@ def _correcoes(
             no_dia = regra.data if no_cartao else mais_meses(regra.data, n - 1)
             if "valor_centavos" not in maos:
                 valor = pela_regra
-            elif pela_regra != valor_antes:
+            elif pela_regra != valor_antes and "valor_centavos" in cronograma_pedido:
                 mantidas.add(n)
             if not maos & {"data", "conta_id"}:
                 dia = no_dia
-            elif no_dia != dia_antes:
+            elif no_dia != dia_antes and "data" in cronograma_pedido:
                 mantidas.add(n)
             if (dia != dia_antes or acao == "reviver") and not maos & {"fatura_mes", "conta_id"}:
                 mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia, n)
@@ -848,14 +853,21 @@ def gravar_correcao(
     except ValidationError as erro:
         raise recusar("; ".join(e["msg"] for e in erro.errors())) from erro
     conferir_ligacoes(conn, nova, atual.conta_id, frozenset(atual.categoria_ids))
-    (a_mao,) = conn.execute(
-        f"SELECT max(parcela) FROM lancamentos WHERE parcelamento_id = %s"
-        f" AND excluido_em IS NULL AND {lancamentos.ALTERADA_A_MAO}",
-        (id,),
-    ).fetchone()
-    if a_mao and a_mao > nova.parcelas:
+    sobram = dict(
+        conn.execute(
+            "SELECT id, parcela FROM lancamentos WHERE parcelamento_id = %s"
+            " AND excluido_em IS NULL AND parcela > %s",
+            (id, nova.parcelas),
+        ).fetchall()
+    )
+    a_mao = [
+        sobram[lancamento_id]
+        for lancamento_id, campos in lancamentos.campos_a_mao(conn, list(sobram)).items()
+        if campos & CRONOGRAMA
+    ]
+    if a_mao:
         raise recusar(
-            f"a parcela {a_mao} foi editada à mão: exclua-a antes de tirá-la do parcelamento"
+            f"a parcela {max(a_mao)} foi editada à mão: exclua-a antes de tirá-la do parcelamento"
         )
     geradas_depois = min(geradas, nova.parcelas)
     # Junto com o que correções anteriores deixaram pendente: o refazer deste pedido leva tudo.
@@ -870,7 +882,13 @@ def gravar_correcao(
         *(
             t.aviso
             for t in _correcoes(
-                conn, nova, geradas_depois, classificacao, lancamentos.hoje(), mantidas
+                conn,
+                nova,
+                geradas_depois,
+                classificacao,
+                lancamentos.hoje(),
+                mantidas,
+                _cronograma_pedido(alteracao),
             )
             # A que sai pulada sendo realizada já estava excluída (o encolher a tirou): nada muda.
             if t.realizada
@@ -929,6 +947,17 @@ def gravar_correcao(
                 (id, tag),
             )
     return CorrecaoGravada(classificacao, mantidas)
+
+
+def _cronograma_pedido(alteracao: AlteracaoDeParcelamento) -> frozenset[str]:
+    """O valor e a data das parcelas que a correção pede para refazer."""
+    pedidos = alteracao.model_fields_set
+    campos = set()
+    if pedidos & {"valor_total_centavos", "valor_da_parcela_centavos", "parcelas"}:
+        campos.add("valor_centavos")
+    if "data" in pedidos:
+        campos.add("data")
+    return frozenset(campos)
 
 
 # O campo pedido ao parcelamento e os da parcela que ele refaz.

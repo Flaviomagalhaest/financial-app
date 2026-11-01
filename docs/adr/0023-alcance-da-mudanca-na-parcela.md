@@ -9,13 +9,14 @@ Ao mudar uma parcela, a pessoa escolhe "Só esta", "Esta e as próximas" ou "Tod
 ## Considered Options
 
 - **"Esta e as próximas" e "todas" pela fila, como a mudança da recorrência ([ADR 0020](0020-mudanca-da-recorrencia-vai-pela-fila.md))**: o aparelho teria de mostrar as parcelas mudadas sem repetir as regras do parcelamento, e o pedido levaria o aviso das realizadas para depois do envio. Ficou com a internet, como a correção do parcelamento (ticket 98); "só esta" já cobre a mudança feita na hora de pagar.
-- **Gravar no parcelamento um trecho (valor e data a partir da parcela N)**: o valor e a data "daqui para frente" seguiriam a regra, e a parcela nova de um crescer viria com eles. Muda o cálculo de todas as correções e da geração; fica para o dono decidir (ticket 142).
+- **Gravar no parcelamento um trecho (valor e data a partir da parcela N)**: o valor e a data "daqui para frente" seguiriam a regra, e a parcela nova de um crescer viria com eles. Muda o cálculo de todas as correções e da geração; fica para o dono decidir (ticket 144).
 - **Mudar as outras parcelas sem marca e sem mudar o parcelamento**: a tarefa diária, que põe as parcelas como o parcelamento manda, desfaria o valor e a data no dia seguinte.
 
 ## Consequences
 
-- A marca de "alterada à mão" passa a ser por campo, e a correção do parcelamento também preserva a descrição, as categorias, as tags, a pessoa e o item que uma pessoa mudou numa parcela só (antes, só valor, data, conta e fatura). A conta mudada à mão segura também a data e a fatura.
-- A edição em lote leva o parcelamento inteiro e grava as parcelas com a origem dele: não as marca como alteradas à mão.
+- A marca de "alterada à mão" passa a ser por campo, e a correção do parcelamento também preserva a descrição, as categorias, as tags, a pessoa e o item que uma pessoa mudou numa parcela só (antes, só valor, data, conta e fatura). A conta mudada à mão segura também a data e a fatura. Só o valor, a data, a conta e a fatura mudados à mão impedem o parcelamento de encolher e tirar a parcela.
+- A edição em lote leva o parcelamento inteiro e grava as parcelas com a origem dele: não as marca como alteradas à mão. A migration 0059 tira a marca que o lote de antes deixou.
+- A parcela com uma mudança ainda na fila ou em conflito não pergunta o alcance: a mudança dela é "só esta", como antes.
 - A mudança de uma realizada que não é a parcela mudada (valor, data, conta ou fatura) pede a mesma confirmação da correção.
 - O conflito da versão, nos dois alcances que mudam o parcelamento, recusa o pedido (422) em vez de abrir a tela de conflito: a pessoa está com internet, confere e muda de novo.
-- A conta mudada em "todas" não muda a do parcelamento, e a mudança parcela a parcela que para no meio não é retomada pela tarefa diária (tickets 142 e 143).
+- A conta mudada em "todas" não muda a do parcelamento, e a mudança parcela a parcela que para no meio não é retomada pela tarefa diária (tickets 144 e 145).

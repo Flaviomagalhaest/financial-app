@@ -222,3 +222,31 @@ def test_mudanca_com_alcance_recusada(casal: Casal):
         "Geladeria",
         "Geladeria",
     ]
+
+
+def test_so_conta_como_mantida_a_parcela_do_alcance_no_campo_pedido(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", parcelas=4)
+    [primeira, _, terceira, _] = parcelas(casal, novo["id"])
+    # O valor da 1ª, mudado à mão, não é o que o pedido muda, e ela está fora do alcance.
+    editar_so_nela(casal, primeira, valor_centavos=1234)
+
+    resposta = mudar_parcela(casal, terceira, "esta_e_as_proximas", descricao="Geladeira")
+
+    assert resposta.json()["parcelas_mantidas"] == 0
+    corrigido = casal.pedir(
+        "flavio", "PATCH", f"/api/parcelamentos/{novo['id']}", json={"descricao": "Geladeira"}
+    )
+    assert corrigido.json()["parcelas_mantidas"] == 0
+
+
+def test_encolher_tira_a_parcela_que_so_teve_a_classificacao_mudada_a_mao(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", parcelas=4)
+    quarta = parcelas(casal, novo["id"])[3]
+    editar_so_nela(casal, quarta, tags=["extra"])
+
+    resposta = casal.pedir(
+        "flavio", "PATCH", f"/api/parcelamentos/{novo['id']}", json={"parcelas": 3}
+    )
+
+    assert resposta.status_code == 200
+    assert [l["parcela"] for l in parcelas(casal, novo["id"])] == [1, 2, 3]
