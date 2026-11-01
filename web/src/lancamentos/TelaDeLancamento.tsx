@@ -170,6 +170,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   const situacao: Situacao =
     situacaoEscolhida ??
     (existente && data === existente.data ? existente.situacao : data > hoje() ? "previsto" : "realizado");
+  // Editando, o formulário só vale depois de o lançamento carregar: o preenchimento apagaria o que se digitasse antes.
+  const aCarregar = !!id && !existente;
   const estornoPronto = estornando && (!estornoDe || estornoAplicado);
   const problemaDaRecorrencia = recorrencia && problemaDa(recorrencia, data);
   const problemaDoParcelamento = parcelamento && problemaDo(parcelamento, centavos);
@@ -428,7 +430,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   return (
     <section className="lancamento">
       <h2>{estornando ? (id ? "Editar estorno" : "Estornar compra") : id ? "Editar lançamento" : "Novo lançamento"}</h2>
-      {!estornando && <EscolhaDoTipo tipo={tipo} comTransferencia={!!onTransferencia} onMudar={(t) => (t === "transferencia" ? onTransferencia?.(centavos) : trocarTipo(t))} />}
+      {!estornando && <EscolhaDoTipo tipo={tipo} comTransferencia={!!onTransferencia} onMudar={(t) => aCarregar || (t === "transferencia" ? onTransferencia?.(centavos) : trocarTipo(t))} />}
       <p className="valor" data-testid="valor" aria-live="polite">
         {formatarCentavos(centavos)}
       </p>
@@ -441,7 +443,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
         <p className="vazio">O cartão da compra está arquivado: marque o cartão que recebe o estorno.</p>
       )}
       {estornoPronto && cartaoDoEstorno && <FaturaDoEstorno cartaoId={cartaoDoEstorno} data={data} faturaMes={faturaMes} />}
-      <button type="button" className="resumo" onClick={() => setDetalhesAbertos(true)}>
+      <button type="button" className="resumo" disabled={aCarregar} onClick={() => setDetalhesAbertos(true)}>
         Detalhes: {resumo || "+ descrição, tags, pessoa, data"}
       </button>
       {mostraRepetir && (
@@ -475,12 +477,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
       <h3>{estornando ? "Cartão" : "Conta ou cartão"}</h3>
       <div className="fileira rolavel">
         {!estornando && contas.map((c) => (
-          <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} onClick={() => trocarConta(c.id)}>
+          <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} disabled={aCarregar} onClick={() => trocarConta(c.id)}>
             {c.nome}
           </button>
         ))}
         {cartoes.map((c) => (
-          <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} onClick={() => trocarConta(c.id)}>
+          <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} disabled={aCarregar} onClick={() => trocarConta(c.id)}>
             <span aria-hidden="true">💳 </span>
             {c.nome}
           </button>
@@ -494,7 +496,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
       <h3>Categorias</h3>
       <div className="fileira rolavel">
         {categoriasDoTipo.map((c) => (
-          <button type="button" key={c.id} className={`ficha${categoriaIds.includes(c.id) ? " marcada" : ""}`} aria-pressed={categoriaIds.includes(c.id)} disabled={estornando} onClick={() => alternar(c.id)}>
+          <button type="button" key={c.id} className={`ficha${categoriaIds.includes(c.id) ? " marcada" : ""}`} aria-pressed={categoriaIds.includes(c.id)} disabled={estornando || aCarregar} onClick={() => alternar(c.id)}>
             {c.nome}
           </button>
         ))}
@@ -516,7 +518,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
         <AvisoDaFaturaPaga cartaoId={titularDaCompra} mes={planejamento.mes} />
       )}
       {/* Editando, o valor só vale depois de o lançamento carregar: a hidratação apagaria o toque. */}
-      <Teclado centavos={centavos} onMudar={setCentavos} desativado={!!id && !existente} />
+      <Teclado centavos={centavos} onMudar={setCentavos} desativado={aCarregar} />
       {detalhesAbertos && (
         <FolhaDeDetalhes
           descricao={descricao}

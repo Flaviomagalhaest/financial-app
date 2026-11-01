@@ -1,7 +1,7 @@
 # A edição perde o que se digita antes de o lançamento carregar
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ Em `web/src/lancamentos/TelaDeLancamento.tsx`, editar um lançamento (`#/novo/<i
 
 ## Checklist
 
-- [ ] Reproduzir num teste de navegador: abrir a edição antes de a lista carregar e digitar a descrição
-- [ ] "Detalhes" (e o resto do formulário) só vale depois de o lançamento carregar, como o teclado, ou o preenchimento não apaga o que já foi digitado
+- [x] Reproduzir num teste de navegador: abrir a edição antes de a lista carregar e digitar a descrição
+- [x] "Detalhes" (e o resto do formulário) só vale depois de o lançamento carregar, como o teclado, ou o preenchimento não apaga o que já foi digitado
 - [ ] Verificações do projeto e PR para `main`
