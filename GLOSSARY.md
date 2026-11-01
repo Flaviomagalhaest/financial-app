@@ -302,6 +302,10 @@ _Avoid_: download, relatório
 Carga de um backup num banco vazio, tudo ou nada (em lotes que se desfazem se algo falhar), conferida contra o manifesto, que recusa banco com dados e versão de formato desconhecida; é também o caminho da carga do histórico do Mobills.
 _Avoid_: importação do backup, merge
 
+**Refazer a importação**:
+Trocar, até a virada, a importação do Mobills gravada por uma nova: esvazia o banco e faz a restauração do zip novo. Recusa, sem apagar nada, se o banco ou o zip tiver **uso pelo app**: alguma linha com quem criou, alterou, excluiu ou desfez diferente da autoria da importação. A preparação da virada (saldo de abertura, limite, titular, datas das faturas) se perde e é informada de novo.
+_Avoid_: reimportar, mesclar a importação
+
 ### Importação do Mobills
 
 **Virada**:

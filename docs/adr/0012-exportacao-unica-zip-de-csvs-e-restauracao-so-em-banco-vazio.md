@@ -16,6 +16,7 @@ O backup diário, o "exportar tudo" do app e a carga do histórico do Mobills us
 ## Consequences
 
 - O importador do Mobills ([ADR 0007](0007-historico-do-mobills-cruzado-e-sem-saldo.md)) gera um backup válido, e a restauração o grava.
+- Refazer a importação do Mobills até a virada esvazia o banco e restaura o zip novo, travado pelo uso no app: recusa se o banco ou o zip tiver uma linha com autoria que não seja a da importação ([ticket 91](../../.scratch/v1-substituir-mobills/issues/91-importador-do-mobills-gravar-e-refazer.md)).
 - Mudar o esquema exige subir `versao_formato` e manter um conversor da versão anterior; o CI restaura um backup de exemplo atual e outro de versão antiga e exige ida e volta idêntica. Dado real nunca vai ao CI.
 - O DSQL aceita até 3.000 linhas por transação, então a restauração grava em lotes e, se falhar no meio ou o banco não bater com o manifesto, apaga o que gravou: o tudo ou nada vale para o resultado, não para uma transação só. Tudo o que dá para conferir sem gravar (versão, banco vazio, esquema, contagens dos CSVs) é conferido antes do primeiro lote.
 - Ficam de fora usuários e senhas do Cognito e a fila offline; guarda-se só o identificador da pessoa.
