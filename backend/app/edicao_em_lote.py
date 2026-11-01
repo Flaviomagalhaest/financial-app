@@ -25,6 +25,7 @@ from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import (
     Lancamento,
+    acompanhar_estornos_do_parcelamento,
     gravar_categorias,
     ids_das_tags,
     ler_por_ids,
@@ -564,6 +565,7 @@ def _mudar_parcelamento(
         conn, "parcelamento_categorias", "parcelamento_id", "categoria_id", id, novas_categorias
     )
     _religar(conn, "parcelamento_tags", "parcelamento_id", "tag_id", id, tag_ids)
+    acompanhar_estornos_do_parcelamento(conn, id)
     conn.execute(
         "UPDATE parcelamentos SET item_categoria_id = %s, alterado_por = %s, alterado_em = %s"
         " WHERE id = %s",
@@ -699,6 +701,7 @@ def _desfazer_parcelamento(conn, registro: tuple) -> str:
         return "saiu"
     _religar(conn, "parcelamento_categorias", "parcelamento_id", "categoria_id", id, categorias)
     _religar(conn, "parcelamento_tags", "parcelamento_id", "tag_id", id, tags)
+    acompanhar_estornos_do_parcelamento(conn, id)
     conn.execute("UPDATE parcelamentos SET item_categoria_id = %s WHERE id = %s", (escolhida, id))
     return "desfeito"
 
