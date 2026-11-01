@@ -1,7 +1,7 @@
 # Recusa da mudança parcela a parcela que a conferência antes de gravar não prevê
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
