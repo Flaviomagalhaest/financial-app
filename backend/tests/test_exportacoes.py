@@ -299,7 +299,7 @@ def test_planilha_traz_uma_linha_por_ajuste_de_fatura_diferente_de_zero_e_fecha_
     )
 
     linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")[1:-1]
-    ajustes = [l for l in linhas if ";Ajuste de fatura " in l]
+    ajustes = [linha for linha in linhas if ";Ajuste de fatura " in linha]
     assert ajustes == [
         f"2026-04-01;Ajuste de fatura {nome} 2026-04;-23,50;{nome};2026-04;;;;efetivado;;",
         f"2026-05-01;Ajuste de fatura {nome} 2026-05;5,00;{nome};2026-05;;;;efetivado;;",
