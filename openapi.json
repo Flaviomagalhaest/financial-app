@@ -6510,9 +6510,15 @@
             "title": "Estorno De"
           },
           "estorno_avulso": {
-            "type": "boolean",
-            "title": "Estorno Avulso",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Avulso"
           },
           "item_categoria_id": {
             "anyOf": [
@@ -7930,9 +7936,15 @@
             "title": "Estorno De"
           },
           "estorno_avulso": {
-            "type": "boolean",
-            "title": "Estorno Avulso",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Avulso"
           },
           "item_categoria_id": {
             "anyOf": [

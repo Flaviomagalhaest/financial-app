@@ -707,6 +707,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
       // O estorno não muda de compra, nem a parcela de número: vale o que o servidor tem. Sem
       // escolha do item (a confirmação não a leva), fica a do servidor, como em `alteracao`.
       estorno_de: l.estorno_de ?? antes?.estorno_de,
+      estorno_avulso: l.estorno_avulso ?? antes?.estorno_avulso,
       parcela: antes?.parcela,
       item_categoria_id: l.item_categoria_id || antes?.item_categoria_id,
       situacao: situacaoNoAparelho(l, antes),

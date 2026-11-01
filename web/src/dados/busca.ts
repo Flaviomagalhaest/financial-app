@@ -24,6 +24,7 @@ export type LancamentoDaBusca = {
   fatura_mes?: string | null;
   mes?: string;
   estorno_de?: string | null;
+  estorno_avulso?: boolean | null;
   parcelamento_id?: string | null;
   parcela?: number | null;
   parcelas?: number | null;
@@ -122,7 +123,7 @@ export function semAcento(texto: string): string {
 }
 
 /** O valor com o sinal de quem soma despesas: o estorno diminui (ADR 0016). */
-const comSinal = (l: LancamentoDaBusca) => (l.estorno_de ? -l.valor_centavos : l.valor_centavos);
+const comSinal = (l: LancamentoDaBusca) => (l.estorno_de || l.estorno_avulso ? -l.valor_centavos : l.valor_centavos);
 
 /** O mês em que o lançamento conta: o da fatura no cartão, o da data no resto (ADR 0003). */
 const mesEmQueConta = (l: LancamentoDaBusca) => l.mes ?? l.fatura_mes ?? `${l.data.slice(0, 7)}-01`;

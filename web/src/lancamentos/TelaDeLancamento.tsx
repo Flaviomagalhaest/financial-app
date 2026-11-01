@@ -58,12 +58,14 @@ type Props = {
   centavosIniciais?: number;
   /** O estorno da compra `estornoDe`: abre com o que ela tem, e categorias e tags não mudam (ADR 0016). */
   estornoDe?: string;
+  /** O estorno avulso novo no cartão `creditoNoCartao`: crédito sem compra ligada, com categoria, tags e pessoa opcionais (ticket 135). */
+  creditoNoCartao?: string;
   /** No lançamento novo, a troca para a tela de transferência, levando o valor digitado. */
   onTransferencia?: (centavos: number) => void;
 };
 
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
-export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
+export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
   const { contas, cartoes, contasECartoes, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
@@ -103,6 +105,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   const [favoritarAoSalvar, setFavoritarAoSalvar] = useState(false);
   const [favoritoAplicado, setFavoritoAplicado] = useState(false);
   const [estornoAplicado, setEstornoAplicado] = useState(false);
+  const [creditoAplicado, setCreditoAplicado] = useState(false);
   // A parcela que muda pergunta o alcance ao salvar (ticket 136); "só esta" é a edição de sempre.
   const [escolhendoAlcance, setEscolhendoAlcance] = useState(false);
   // O alcance pedido que muda parcelas já realizadas: nada foi gravado até confirmar.
@@ -137,6 +140,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra.
   const compraId = estornoDe ?? existente?.estorno_de ?? undefined;
   const estornando = !!compraId;
+  // O estorno avulso (novo ou o que se edita) não tem compra: leva cartão, valor e data, e o resto é opcional.
+  const avulso = !!creditoNoCartao || !!existente?.estorno_avulso;
   const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
   const compra = compraId ? indice.compras.get(compraId) : undefined;
   // O que ainda cabe: o valor da compra menos os outros estornos dela.
@@ -161,9 +166,17 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     setData(hoje());
   }, [estornoDe, estornoAplicado, compra, indice, lancamentos, semDados, novoId]);
 
+  // O crédito avulso novo abre no cartão da fatura de onde se veio. Preenche uma vez só.
+  useEffect(() => {
+    if (!creditoNoCartao || creditoAplicado) return;
+    setCreditoAplicado(true);
+    setTipo("despesa");
+    setContaId(creditoNoCartao);
+  }, [creditoNoCartao, creditoAplicado]);
+
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
   // O estorno novo só vai para um cartão ativo: o da compra reemitida (arquivado) fica sem escolha até a pessoa marcar o novo.
-  const conta = estornoDe ? (cartoes.some((c) => c.id === contaId) ? contaId : "") : contaId || contas[0]?.id || "";
+  const conta = estornoDe || avulso ? (cartoes.some((c) => c.id === contaId) ? contaId : "") : contaId || contas[0]?.id || "";
   /** As categorias que ainda se pode escolher, das que um lançamento anterior traz. */
   const escolhiveis = (ids: string[]) => categorias.filter((c) => !c.arquivada && ids.includes(c.id));
   const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo && (!estornando || categoriaIds.includes(c.id)) && (!c.arquivada || categoriaIds.includes(c.id) || !!existente?.categoria_ids.includes(c.id)));
@@ -175,7 +188,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   const problemaDoParcelamento = parcelamento && problemaDo(parcelamento, centavos);
   const podeSalvar =
     centavos > 0 &&
-    categoriaIds.length > 0 &&
+    (categoriaIds.length > 0 || avulso) &&
     conta !== "" &&
     !enviando &&
     (!id || existente !== null) &&
@@ -208,8 +221,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
 
   const ultimo = useMemo(() => (id ? undefined : ultimoCriado(lancamentos ?? [], euId)), [id, lancamentos, euId]);
   const vazio = centavos === 0 && categoriaIds.length === 0;
-  const mostraRepetir = !!ultimo && vazio && !estornando;
-  const mostraFavoritos = !id && vazio && favoritos.length > 0 && !estornando;
+  const mostraRepetir = !!ultimo && vazio && !estornando && !avulso;
+  const mostraFavoritos = !id && vazio && favoritos.length > 0 && !estornando && !avulso;
 
   /** Preenche com o último lançamento, com a data de hoje e a situação que ela dá. */
   function repetirUltimo(u: LancamentoNaTela) {
@@ -262,7 +275,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     setSugerindo(false);
   }
 
-  const sugestoes: SugestaoNaFolha[] = sugerindo && !estornando
+  const sugestoes: SugestaoNaFolha[] = sugerindo && !estornando && !avulso
     ? sugerir(descricao, { tipo, valor_centavos: centavos, conta_id: conta, data }).map((s) => ({
         descricao: s.descricao.trim(),
         // A conta ou categoria que não se pode mais escolher fica de fora, como ao escolher.
@@ -281,7 +294,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   // O titular das faturas da compra no cartão, para avisar da fatura paga.
   const cartaoDaCompra = cartoes.find((c) => c.id === conta);
   const titularDaCompra = cartaoDaCompra ? (cartaoDaCompra.titular_id ?? cartaoDaCompra.id) : "";
-  const cartaoDoEstorno = estornando ? titularDaCompra || conta : "";
+  const cartaoDoEstorno = estornando || avulso ? titularDaCompra || conta : "";
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
 
@@ -300,7 +313,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   );
   // Sem duas categorias com item, a escolha que o lançamento já tem fica, se a categoria dela ficou.
   // O estorno diminui o item em que a compra conta (o servidor o escolhe): a tela não pergunta nem troca.
-  const itemEscolhido = estornando
+  const itemEscolhido = estornando || avulso
     ? (existente?.item_categoria_id ?? null)
     : (planejamento.escolha ?? (existente?.item_categoria_id && categoriaIds.includes(existente.item_categoria_id) ? existente.item_categoria_id : null));
 
@@ -343,6 +356,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     pessoa,
     fatura_mes: noCartao ? faturaMes : null,
     ...(compraId && { estorno_de: compraId }),
+    ...(avulso && { estorno_avulso: true }),
     item_categoria_id: itemEscolhido,
     ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
     tags,
@@ -402,7 +416,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           ...regraDa(recorrencia, data),
         });
       else await salvarLancamento(daTela(), !existente, existente ?? undefined);
-      if (!existente && !estornando) {
+      if (!existente && !estornando && !avulso) {
         // Favoritar precisa de internet (ADR 0011): sem ela, nem a ⭐ vale nem se oferece.
         const modelo = { id: crypto.randomUUID(), descricao: descricao.trim(), tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa, valor_centavos: centavos };
         if (favoritarAoSalvar && !eFavorito) void favoritar(modelo).then((motivo) => motivo && oferecerFavoritar(modelo));
@@ -427,8 +441,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
 
   return (
     <section className="lancamento">
-      <h2>{estornando ? (id ? "Editar estorno" : "Estornar compra") : id ? "Editar lançamento" : "Novo lançamento"}</h2>
-      {!estornando && <EscolhaDoTipo tipo={tipo} comTransferencia={!!onTransferencia} onMudar={(t) => (t === "transferencia" ? onTransferencia?.(centavos) : trocarTipo(t))} />}
+      <h2>{avulso ? (id ? "Editar crédito" : "Lançar crédito") : estornando ? (id ? "Editar estorno" : "Estornar compra") : id ? "Editar lançamento" : "Novo lançamento"}</h2>
+      {!estornando && !avulso && <EscolhaDoTipo tipo={tipo} comTransferencia={!!onTransferencia} onMudar={(t) => (t === "transferencia" ? onTransferencia?.(centavos) : trocarTipo(t))} />}
       <p className="valor" data-testid="valor" aria-live="polite">
         {formatarCentavos(centavos)}
       </p>
@@ -440,7 +454,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
       {estornoPronto && estornoDe && conta === "" && cartoes.length > 0 && (
         <p className="vazio">O cartão da compra está arquivado: marque o cartão que recebe o estorno.</p>
       )}
-      {estornoPronto && cartaoDoEstorno && <FaturaDoEstorno cartaoId={cartaoDoEstorno} data={data} faturaMes={faturaMes} />}
+      {avulso && <p className="vazio">Crédito que aparece na fatura sem uma compra: diminui a fatura e o mês. A categoria, as tags e a pessoa são opcionais.</p>}
+      {(estornoPronto || avulso) && cartaoDoEstorno && <FaturaDoEstorno cartaoId={cartaoDoEstorno} data={data} faturaMes={faturaMes} />}
       <button type="button" className="resumo" onClick={() => setDetalhesAbertos(true)}>
         Detalhes: {resumo || "+ descrição, tags, pessoa, data"}
       </button>
@@ -460,7 +475,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           ))}
         </div>
       )}
-      {!id && !estornando && categoriaIds.length > 0 && (
+      {!id && !estornando && !avulso && categoriaIds.length > 0 && (
         <button
           type="button"
           className="estrela"
@@ -471,10 +486,10 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           {jaEFavorito ? "⭐ É favorito" : favoritarAoSalvar ? "⭐ Será favorito" : "☆ Marcar como favorito"}
         </button>
       )}
-      {!id && !estornando && !online && categoriaIds.length > 0 && <p className="vazio">Favoritar precisa de internet.</p>}
-      <h3>{estornando ? "Cartão" : "Conta ou cartão"}</h3>
+      {!id && !estornando && !avulso && !online && categoriaIds.length > 0 && <p className="vazio">Favoritar precisa de internet.</p>}
+      <h3>{estornando || avulso ? "Cartão" : "Conta ou cartão"}</h3>
       <div className="fileira rolavel">
-        {!estornando && contas.map((c) => (
+        {!estornando && !avulso && contas.map((c) => (
           <button type="button" key={c.id} className={`ficha${c.id === conta ? " marcada" : ""}`} aria-pressed={c.id === conta} onClick={() => trocarConta(c.id)}>
             {c.nome}
           </button>
@@ -485,13 +500,13 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
             {c.nome}
           </button>
         ))}
-        {carregado && !estornando && contas.length === 0 && (
+        {carregado && !estornando && !avulso && contas.length === 0 && (
           <p className="vazio">
             Nenhuma conta. <a href="#/contas-e-categorias">Cadastrar</a>
           </p>
         )}
       </div>
-      <h3>Categorias</h3>
+      <h3>{avulso ? "Categorias (opcional)" : "Categorias"}</h3>
       <div className="fileira rolavel">
         {categoriasDoTipo.map((c) => (
           <button type="button" key={c.id} className={`ficha${categoriaIds.includes(c.id) ? " marcada" : ""}`} aria-pressed={categoriaIds.includes(c.id)} disabled={estornando} onClick={() => alternar(c.id)}>
@@ -504,7 +519,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           </p>
         )}
       </div>
-      {categoriaIds.length > 0 && !estornando && (
+      {categoriaIds.length > 0 && !estornando && !avulso && (
         <AvisoDePlanejamento
           {...planejamento}
           tipo={tipo}
@@ -537,9 +552,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
-          recorrencia={id || estornando ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
+          recorrencia={id || estornando || avulso ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
           parcelamento={
-            id || estornando || tipo !== "despesa"
+            id || estornando || avulso || tipo !== "despesa"
               ? undefined
               : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, aviso: avisoDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
           }

@@ -2273,11 +2273,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Estorno De */
             estorno_de?: string | null;
-            /**
-             * Estorno Avulso
-             * @default false
-             */
-            estorno_avulso: boolean;
+            /** Estorno Avulso */
+            estorno_avulso?: boolean | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /**
@@ -2800,11 +2797,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Estorno De */
             estorno_de?: string | null;
-            /**
-             * Estorno Avulso
-             * @default false
-             */
-            estorno_avulso: boolean;
+            /** Estorno Avulso */
+            estorno_avulso?: boolean | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /** Acao Em */

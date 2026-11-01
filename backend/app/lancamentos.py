@@ -113,7 +113,7 @@ class DadosDoLancamento(BaseModel):
     # O estorno avulso (ticket 135, ADR 0016): crédito no cartão sem compra ligada, para o que a
     # fatura traz sem compra identificável. Diminui a fatura e o mês como o estorno, mas não tem o
     # limite do valor de uma compra, e a categoria, as tags e a pessoa são opcionais.
-    estorno_avulso: bool = False
+    estorno_avulso: bool | None = None
     # A escolha do casal do item do planejamento em que o lançamento conta, pela categoria dele
     # que tem o item; sem ela, conta sozinho quando só uma das categorias tem item no mês
     # (ADR 0006). Escolha explícita nunca muda sozinha.
@@ -921,7 +921,7 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             a_mao,
             novo.estorno_de,
             escolhida,
-            novo.estorno_avulso,
+            bool(novo.estorno_avulso),
         ),
     ).rowcount
     if gravados and novo.estorno_de:
