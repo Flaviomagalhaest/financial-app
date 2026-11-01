@@ -84,6 +84,15 @@ _POR_PARCELA = {
 }
 
 
+# Como ler de volta cada campo que vai parcela a parcela.
+_TIPOS = {
+    "valor_centavos": int,
+    "data": date.fromisoformat,
+    "conta_id": UUID,
+    "fatura_mes": date.fromisoformat,
+}
+
+
 @dataclass
 class _PorParcela:
     """A parte da mudança que vai parcela a parcela, guardada no parcelamento até a última
@@ -119,13 +128,12 @@ class _PorParcela:
         if not texto:
             return None
         lido = json.loads(texto)
-        tipos = {"valor_centavos": int, "data": date.fromisoformat, "conta_id": UUID}
         return cls(
             editada=UUID(lido["editada"]),
             parcela=lido["parcela"],
             mes=date.fromisoformat(lido["mes"]),
             no_cartao=lido["no_cartao"],
-            valores={c: tipos.get(c, date.fromisoformat)(v) for c, v in lido["valores"].items()},
+            valores={c: _TIPOS[c](v) for c, v in lido["valores"].items()},
             desde=lido["desde"],
             usuario=lido["usuario"],
         )
@@ -393,9 +401,9 @@ def terminar_o_pendente(url: str | None, parcelamento_id: UUID) -> bool:
     return feito
 
 
-def completar_todas(url: str | None) -> int:
+def terminar_as_mudancas_pendentes(url: str | None) -> int:
     """A tarefa diária termina a parte parcela a parcela das mudanças que pararam no meio.
-    Devolve quantos parcelamentos tinham alguma; a que uma recusa trava sai do pendente."""
+    Devolve quantas terminou; a que uma recusa trava sai do pendente e fica como parou."""
     with conectar(url) as conn:
         ids = [
             id
@@ -405,11 +413,11 @@ def completar_todas(url: str | None) -> int:
         ]
     terminadas = 0
     for id in ids:
-        terminadas += 1
         try:
             terminar_o_pendente(url, id)
         except HTTPException:
-            pass  # ficou como estava: a pessoa vê as parcelas e muda de novo
+            continue  # ficou como estava: a pessoa vê as parcelas e muda de novo
+        terminadas += 1
     return terminadas
 
 
@@ -474,19 +482,24 @@ def mudar_parcela(
         raise _motivo_do_conflito(e)
     except RealizadasMudam as e:
         return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
+    recusa = None
     if mudanca.falta_por_parcela:
-        # As que não couberam na transação da parcela mudada, em lotes do mesmo tamanho.
+        # As que não couberam na transação da parcela mudada, em lotes do mesmo tamanho. A
+        # recusa de um lote (a conferência antes de gravar não prevê todas) não para a
+        # classificação, já gravada no parcelamento.
         try:
             terminar_o_pendente(url, mudanca.parcelamento_id)
         except HTTPException as e:
-            raise recusar(
-                f"{e.detail}. A parcela e as primeiras das outras mudaram; as demais ficaram"
-                " como estavam"
-            ) from e
+            recusa = e
     if mudanca.classificacao is not None:
         parcelamentos.refazer_as_parcelas(
             url, mudanca.parcelamento_id, usuario, mudanca.classificacao
         )
+    if recusa:
+        raise recusar(
+            f"{recusa.detail}. A parcela, a classificação e as primeiras das outras parcelas"
+            " mudaram; as demais ficaram como estavam"
+        ) from recusa
     with conectar(url) as conn:
         [parcela] = lancamentos.ler_por_ids(conn, [id]) or [None]
     if parcela is None:

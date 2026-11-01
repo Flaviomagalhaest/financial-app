@@ -104,7 +104,7 @@ Até onde a recorrência gera previstos: 24 meses à frente de hoje, estendido t
 _Avoid_: janela, limite
 
 **Tarefa diária**:
-Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o horizonte das recorrências e completa os parcelamentos, realiza os automáticos do dia e desfaz as edições em lote que pararam no meio. Rodar de novo no mesmo dia não muda nada.
+Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o horizonte das recorrências, termina as mudanças com alcance e completa os parcelamentos que pararam no meio, realiza os automáticos do dia e desfaz as edições em lote que pararam no meio. Rodar de novo no mesmo dia não muda nada.
 _Avoid_: job, cron, rotina noturna
 
 **Parcelamento**:

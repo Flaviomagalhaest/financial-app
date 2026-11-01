@@ -1,7 +1,7 @@
 # Retomar a mudança parcela a parcela que parou no meio
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -15,12 +15,23 @@ O `PATCH /api/parcelas/{id}` muda, na transação da parcela mudada, o parcelame
 
 ## Checklist
 
-- [ ] Guardar no parcelamento o que falta mudar parcela a parcela (campos, valores e a partir de qual parcela)
-- [ ] A tarefa diária termina o que ficou, como faz com a correção (`completar_todos`)
-- [ ] Teste de API com o pedido interrompido no meio
-- [ ] Uma recusa num lote seguinte (fatura paga, por exemplo) responde 422 com a parcela mudada e o primeiro lote já gravados: conferir as recusas de todas as parcelas antes de gravar, ou dizer na resposta o que ficou
-- [ ] Classificação pendente desde a 1ª (correção que parou no meio) junta-se à de "esta e as próximas" desde a parcela N valendo desde a 1ª (`_juntar`), e leva o valor novo às parcelas de antes; guardar o pendente com o valor, ou recusar o alcance enquanto houver pendente
+- [x] Guardar no parcelamento o que falta mudar parcela a parcela (campos, valores e a partir de qual parcela)
+- [x] A tarefa diária termina o que ficou, como faz com a correção (`completar_todos`)
+- [x] Teste de API com o pedido interrompido no meio
+- [x] Uma recusa num lote seguinte (fatura paga, por exemplo) responde 422 com a parcela mudada e o primeiro lote já gravados: conferir as recusas de todas as parcelas antes de gravar, ou dizer na resposta o que ficou
+- [x] Classificação pendente desde a 1ª (correção que parou no meio) junta-se à de "esta e as próximas" desde a parcela N valendo desde a 1ª (`_juntar`), e leva o valor novo às parcelas de antes; guardar o pendente com o valor, ou recusar o alcance enquanto houver pendente
 
 ## Notas
 
 - Os dois casos só acontecem num pedido que cai no meio ou num parcelamento com mais de um lote (perto de 80 parcelas); achados na revisão do ticket 136.
+
+## Answer
+
+Feito ([ADR 0023](../../../docs/adr/0023-alcance-da-mudanca-na-parcela.md), consequências):
+
+- **Pendente no parcelamento**: a coluna `mudanca_pendente` (migration 0060, formato do backup 25) guarda a parte parcela a parcela: a parcela mudada (id, número e fatura de antes), os campos com os valores pedidos e a parcela a partir da qual falta. Cada lote muda as próximas e anda o `desde`; o último tira o pendente.
+- **Tarefa diária**: `terminar_as_mudancas_pendentes` termina o que ficou, antes do conserto dos parcelamentos (a mesma ordem da rota), e conta em `mudancas_na_parcela`.
+- **Recusa num lote seguinte**: antes de gravar, o pedido confere todas as parcelas que vai mudar, e a que sairia de uma fatura paga ou entraria numa recusa o pedido inteiro (422, nada gravado). Se mesmo assim um lote seguinte for recusado, a classificação ainda se refaz e o 422 diz que a parcela, a classificação e as primeiras das outras já mudaram.
+- **Classificação pendente e "esta e as próximas"**: o pedido com alcance termina antes o que outro deixou pela metade no parcelamento (a classificação e a parte parcela a parcela) e recusa (422) se ainda houver pendência. A classificação desde a parcela N não se junta mais à pendente desde a 1ª.
+- **Testes de API**: pedido interrompido depois do primeiro lote e terminado pela tarefa diária; fatura paga num lote seguinte; classificação pendente com "esta e as próximas"; restauração do backup do formato 24.
+- **Pendência**: [149](149-recusa-da-mudanca-parcela-a-parcela-nao-prevista.md) (as outras recusas da fatura paga que a conferência não prevê, a recusa na tarefa diária sem aviso e a escolha da fatura repetida).
