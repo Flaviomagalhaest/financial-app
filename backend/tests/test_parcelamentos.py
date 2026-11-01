@@ -1391,3 +1391,46 @@ def test_a_tarefa_diaria_e_os_automaticos_com_o_parcelamento_excluido_nao_fazem_
     assert automaticos.realizar_automaticos(database_url, UUID(novo["id"])) == 0
     assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
     assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []
+
+
+def test_a_correcao_que_para_no_meio_pula_as_mesmas_parcelas_quando_a_tarefa_a_retoma_noutro_dia(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    # A 1ª está em 30/10: hoje (28/10) ela ainda não chegou, mas no dia 31 já passou.
+    novo = criar_geladeira(casal, casal.conta(), data="2026-10-30")
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], data="2026-08-30")
+
+    no_dia(monkeypatch, "2026-10-31")
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 1
+
+    # Como se terminasse no dia do pedido: nenhuma prevista fica atrasada na data nova.
+    assert valores(casal, novo["id"]) == []
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
+
+
+def test_a_busca_das_puladas_nao_le_as_parcelas_do_boleto_que_nao_pulou_nenhuma(
+    casal: Casal, database_url: str
+):
+    from app import parcelamentos
+
+    criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    original = parcelamentos._puladas_que_chegaram
+    with parcelamentos.conectar(database_url) as conn:
+        [(id,)] = conn.execute("SELECT id FROM parcelamentos").fetchall()
+        regra = parcelamentos._ler(conn, "id = %s", (id,))[0]
+        executadas = []
+        executar = conn.execute
+
+        class Espia:
+            def __getattr__(self, nome):
+                return getattr(conn, nome)
+
+            def execute(self, sql, *args, **kw):
+                executadas.append(sql)
+                return executar(sql, *args, **kw)
+
+        assert original(Espia(), regra, 3) == []
+    assert not any("SELECT parcela FROM lancamentos" in sql for sql in executadas)

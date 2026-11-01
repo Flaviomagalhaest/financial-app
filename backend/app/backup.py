@@ -18,7 +18,7 @@ import psycopg
 
 from app.faturas import datas_padrao, ler_cartao
 
-VERSAO_FORMATO = 22
+VERSAO_FORMATO = 23
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -493,6 +493,18 @@ def _da_versao_21_para_a_22(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_22_para_a_23(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 23 (ticket 131) guarda no parcelamento o dia da última correção, para a que
+    parou no meio terminar igual noutro dia. Antes dela o dia não era gravado."""
+    colunas, linhas = tabelas["parcelamentos"]
+    if "corrigido_em" not in colunas:
+        tabelas["parcelamentos"] = (
+            [*colunas, "corrigido_em"],
+            [[*linha, None] for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -517,6 +529,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     19: _da_versao_19_para_a_20,
     20: _da_versao_20_para_a_21,
     21: _da_versao_21_para_a_22,
+    22: _da_versao_22_para_a_23,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
