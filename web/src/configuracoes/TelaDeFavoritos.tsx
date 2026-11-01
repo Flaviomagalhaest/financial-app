@@ -45,7 +45,7 @@ export function TelaDeFavoritos() {
                 <span>{formatarCentavos(f.valor_padrao_centavos)}</span>
               </div>
               <p className="vazio">
-                {f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {nomePorId(contasECartoes, f.conta_id)}
+                {f.partes.length ? `${f.partes.length} partes: ${f.partes.map((p) => `${p.descricao || "Parte"} (${p.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")})`).join(", ")}` : f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {nomePorId(contasECartoes, f.conta_id)}
               </p>
               <div className="acoes">
                 <button type="button" className="secundario" disabled={!online || i === 0} aria-label={`Subir ${titulo}`} onClick={() => mover(i, -1)}>
