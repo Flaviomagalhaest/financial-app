@@ -106,6 +106,8 @@ def test_backup_do_importador_restaura_num_banco_vazio_e_exporta_de_novo_o_mesmo
     # Salário 2x, Mercado, TV 1 a 4, Faculdade 4 a 7, Luz de setembro, Bônus 2x, Taxa, Curso 2x
     # e o Café.
     assert contagens["lancamentos"] == 18
+    # O Mobills não tem partes da compra (ADR 0022): cada lançamento importado é uma compra só.
+    assert contagens["lancamento_partes"] == 0
 
 
 def test_historico_restaurado_tem_as_faturas_pagas_os_parcelamentos_e_os_previstos(

@@ -49,6 +49,30 @@ def guardar_item_atual(conn, filtro: str, parametros: tuple) -> None:
             conn.execute(
                 "UPDATE lancamentos SET item_atual_categoria_id = %s WHERE id = %s", (conta_em, id)
             )
+    guardar_item_atual_das_partes(conn, filtro, parametros)
+
+
+def guardar_item_atual_das_partes(conn, filtro: str, parametros: tuple) -> None:
+    """`guardar_item_atual` das partes (ADR 0022) dos lançamentos que `filtro` pega; a condição
+    pode usar também `p`, a parte. Cada parte conta num item, como um lançamento."""
+    por_parte: dict[UUID, tuple[UUID | None, UUID | None, set[UUID]]] = {}
+    for id, escolhida, atual, categoria_id in conn.execute(
+        "SELECT p.id, p.item_categoria_id, p.item_atual_categoria_id, pc.categoria_id"
+        " FROM lancamento_partes p JOIN lancamentos l ON l.id = p.lancamento_id"
+        " JOIN parte_categorias pc ON pc.parte_id = p.id"
+        " JOIN itens_do_planejamento i"
+        f" ON i.categoria_id = pc.categoria_id AND i.mes = {_MES}"
+        f" WHERE l.excluido_em IS NULL AND {filtro}",
+        parametros,
+    ):
+        por_parte.setdefault(id, (escolhida, atual, set()))[2].add(categoria_id)
+    for id, (escolhida, atual, com_item) in por_parte.items():
+        conta_em, _ = onde_conta(com_item, escolhida, atual)
+        if conta_em and conta_em not in (escolhida, atual):
+            conn.execute(
+                "UPDATE lancamento_partes SET item_atual_categoria_id = %s WHERE id = %s",
+                (conta_em, id),
+            )
 
 
 def guardar_item_atual_do_lancamento(conn, id: UUID) -> None:

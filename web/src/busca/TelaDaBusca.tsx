@@ -17,6 +17,7 @@ import { nomePorId, numeroDaParcela, tituloDoLancamento, ValorComSinal } from ".
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 import { mesPorExtenso } from "../lancamentos/datas";
+import { PartesDaCompra } from "../lancamentos/partes";
 import { contagem, SITUACOES, TIPOS } from "./apresentacao";
 import { FiltrosSalvos } from "./FiltrosSalvos";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";
@@ -73,7 +74,8 @@ function Detalhes({ l, cadastro, parcela = false }: { l: LancamentoNaTela; cadas
   return (
     <p className="vazio">
       {!parcela && `${dataPorExtenso(l.data)} · `}
-      {nomePorId(cadastro.contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nomePorId(cadastro.categorias, c)).join(", ")}
+      {nomePorId(cadastro.contasECartoes, l.conta_id)}
+      {!l.partes?.length && ` · ${l.categoria_ids.map((c) => nomePorId(cadastro.categorias, c)).join(", ")}`}
       {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
       {l.fatura_mes && ` · fatura de ${mesPorExtenso(l.fatura_mes)}`}
       {l.situacao === "previsto" ? (l.atrasado ? " · previsto, atrasado" : " · previsto") : parcela && " · realizado"}
@@ -82,8 +84,11 @@ function Detalhes({ l, cadastro, parcela = false }: { l: LancamentoNaTela; cadas
   );
 }
 
-function LinhaDoLancamento({ l, cadastro, marcacao }: { l: LancamentoNaTela; cadastro: Cadastro; marcacao?: Marcacao }) {
+/** `achadas`: com filtro de categoria, tag ou pessoa, as partes da compra que batem (ADR 0022). */
+function LinhaDoLancamento({ l, achadas, cadastro, marcacao }: { l: LancamentoNaTela; achadas?: string[] | null; cadastro: Cadastro; marcacao?: Marcacao }) {
   const titulo = tituloDoLancamento(l, cadastro.categorias);
+  const { nomeDe } = usePessoas();
+  const so = achadas ? (l.partes ?? []).filter((p) => achadas.includes(p.id)) : null;
   return (
     <li>
       <div>
@@ -92,9 +97,10 @@ function LinhaDoLancamento({ l, cadastro, marcacao }: { l: LancamentoNaTela; cad
           {titulo}
           {l.parcela && l.parcelas ? ` ${numeroDaParcela(l.parcela, l.parcelas)}` : ""}
         </strong>
-        <ValorComSinal l={l} />
+        <ValorComSinal l={so ? { ...l, valor_centavos: so.reduce((soma, p) => soma + p.valor_centavos, 0) } : l} />
       </div>
       <Detalhes l={l} cadastro={cadastro} />
+      {!!l.partes?.length && <PartesDaCompra partes={l.partes} so={so} categorias={cadastro.categorias} nomeDe={nomeDe} titulo={titulo} />}
       <a href={`#/novo/${l.id}`} aria-label={`Editar ${titulo}`}>
         Editar
       </a>
@@ -327,7 +333,7 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
           ) : "transferencia" in linha ? (
             <LinhaDaTransferencia key={linha.transferencia.id} t={linha.transferencia} cadastro={cadastro} />
           ) : (
-            <LinhaDoLancamento key={linha.lancamento.id} l={linha.lancamento} cadastro={cadastro} marcacao={marcacao(linha.lancamento.id)} />
+            <LinhaDoLancamento key={linha.lancamento.id} l={linha.lancamento} achadas={linha.partes_achadas} cadastro={cadastro} marcacao={marcacao(linha.lancamento.id)} />
           ),
         )}
       </ul>

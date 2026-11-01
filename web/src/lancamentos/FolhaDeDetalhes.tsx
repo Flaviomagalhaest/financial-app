@@ -24,6 +24,8 @@ type Props = {
   pessoas: Pessoa[];
   pessoa: string | null;
   onPessoa: (pessoa: string | null) => void;
+  /** A compra com partes: tags e pessoa são de cada parte, não dela (ADR 0022). */
+  comPartes?: boolean;
   data: string;
   onData: (data: string) => void;
   situacao: Situacao;
@@ -105,17 +107,23 @@ export function FolhaDeDetalhes(props: Props) {
         </ul>
       )}
 
-      <h4>Tags</h4>
-      <SeletorDeTags tags={props.tags} opcoes={props.opcoesDeTags} onTags={props.onTags} travadas={props.tagsTravadas} />
+      {props.comPartes ? (
+        <p className="vazio">Com partes, as tags e a pessoa ficam em cada parte.</p>
+      ) : (
+        <>
+          <h4>Tags</h4>
+          <SeletorDeTags tags={props.tags} opcoes={props.opcoesDeTags} onTags={props.onTags} travadas={props.tagsTravadas} />
 
-      <h4>Pessoa</h4>
-      <div className={`alternancia${props.pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
-        {[{ id: null, nome: "Conjunto" }, ...props.pessoas].map((pessoa) => (
-          <button type="button" key={pessoa.id ?? "conjunto"} className={props.pessoa === pessoa.id ? "" : "secundario"} aria-pressed={props.pessoa === pessoa.id} onClick={() => props.onPessoa(pessoa.id)}>
-            {pessoa.nome}
-          </button>
-        ))}
-      </div>
+          <h4>Pessoa</h4>
+          <div className={`alternancia${props.pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
+            {[{ id: null, nome: "Conjunto" }, ...props.pessoas].map((pessoa) => (
+              <button type="button" key={pessoa.id ?? "conjunto"} className={props.pessoa === pessoa.id ? "" : "secundario"} aria-pressed={props.pessoa === pessoa.id} onClick={() => props.onPessoa(pessoa.id)}>
+                {pessoa.nome}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <h4>{tituloDaData}</h4>
       <EscolhaDaData data={props.data} onMudar={props.onData} />

@@ -415,3 +415,50 @@ def test_planilha_traz_o_estorno_avulso_como_credito_mesmo_sem_categoria(
         "2026-03-28;Centavos;0,37;Nubank;2026-04;;;;efetivado;Flávio;Flávio",
         "",
     ]
+
+
+def test_planilha_traz_uma_linha_por_parte_da_compra(
+    database_url: str, emissor: Emissor, casal: Casal
+):
+    # ADR 0022: quem lê a planilha soma por categoria e pessoa, então cada parte é uma linha.
+    conta = casal.conta()
+    roupa, casa = casal.categoria("Roupa"), casal.categoria("Casa")
+    criada = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(
+            conta, [], valor_centavos=75000, descricao="Mercado Livre", data="2026-10-02"
+        )
+        | {
+            "partes": [
+                {
+                    "id": str(uuid.uuid4()),
+                    "descricao": "Vestido",
+                    "valor_centavos": 50000,
+                    "categoria_ids": [roupa],
+                    "tags": ["presente"],
+                    "pessoa": "esposa",
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "descricao": "Cortina",
+                    "valor_centavos": 25000,
+                    "categoria_ids": [casa],
+                },
+            ]
+        },
+    )
+    assert criada.status_code == 201, criada.text
+    s3 = S3Falso()
+
+    _cliente(database_url, emissor, s3).post(
+        "/api/exportacoes", json={"formato": "planilha"}, headers=emissor.cabecalho("flavio")
+    )
+
+    linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")
+    assert linhas[1:] == [
+        "2026-10-02;Mercado Livre — Vestido;-500,00;Conta corrente;;Roupa;presente;Fulana;efetivado;Flávio;Flávio",
+        "2026-10-02;Mercado Livre — Cortina;-250,00;Conta corrente;;Casa;;;efetivado;Flávio;Flávio",
+        "",
+    ]

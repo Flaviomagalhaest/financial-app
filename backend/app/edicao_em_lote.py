@@ -145,6 +145,8 @@ class PreviaDaEdicaoEmLote(BaseModel):
     trocam_de_item: int
     # Estornos marcados sem a compra: o estorno segue a compra (ADR 0016) e fica de fora.
     estornos_fora: int
+    # Compras com partes: a classificação é de cada parte (ADR 0022), e o lote ainda não as muda.
+    com_partes_fora: int = 0
     # Os primeiros que mudam, na ordem da busca.
     amostra: list[AntesEDepois]
     # Por que aplicar recusaria o lote inteiro; sem ela, aplica.
@@ -376,6 +378,7 @@ class _Plano:
     mudancas: _Mudancas
     lancamentos: list[Lancamento]
     estornos_fora: int
+    com_partes_fora: int
     # Os que mudam, com as categorias e as tags de depois.
     mudam: list[tuple[Lancamento, list[UUID], list[str]]]
     ja_estao_como_pedido: int
@@ -390,6 +393,8 @@ class _Plano:
 def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
     mudancas = _Mudancas(conn, pedido)
     lancamentos, estornos_fora = _selecionados(conn, pedido.selecao)
+    com_partes = [l for l in lancamentos if l.partes]
+    lancamentos = [l for l in lancamentos if not l.partes]
     mudam, ja_estao, de_outro_tipo, sem_categoria = [], 0, 0, 0
     for l in lancamentos:
         categorias, tags, outro_tipo = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
@@ -400,7 +405,14 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
         else:
             ja_estao += not outro_tipo
     return _Plano(
-        mudancas, lancamentos, estornos_fora, mudam, ja_estao, de_outro_tipo, sem_categoria
+        mudancas,
+        lancamentos,
+        estornos_fora,
+        len(com_partes),
+        mudam,
+        ja_estao,
+        de_outro_tipo,
+        sem_categoria,
     )
 
 
@@ -427,6 +439,7 @@ def previa(conn, pedido: PedidoDeEdicaoEmLote) -> PreviaDaEdicaoEmLote:
         de_outro_tipo=plano.de_outro_tipo,
         trocam_de_item=_trocam_de_item(conn, plano),
         estornos_fora=plano.estornos_fora,
+        com_partes_fora=plano.com_partes_fora,
         amostra=[
             AntesEDepois(lancamento=l, categoria_ids=categorias, tags=tags)
             for l, categorias, tags in plano.mudam[:TAMANHO_DA_AMOSTRA]

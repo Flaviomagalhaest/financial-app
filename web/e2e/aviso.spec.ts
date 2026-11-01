@@ -1,7 +1,7 @@
 // O cálculo puro do aviso de planejamento (ticket 52), por tabela e sem navegador: o mesmo que a
 // tela de lançar roda sobre o planejamento guardado e a fila.
 import { expect, test } from "@playwright/test";
-import { avisoDePlanejamento, comAFila, mesEmQueConta, oQueSobra, semContarDeNovo, ultimaEscolha, type Contagem, type Planejamento } from "../src/dados/aviso";
+import { avisoDePlanejamento, avisosDasPartes, comAFila, mesEmQueConta, oQueSobra, semContarDeNovo, ultimaEscolha, type Contagem, type Planejamento } from "../src/dados/aviso";
 
 const OUT = "2026-10-01";
 const NOV = "2026-11-01";
@@ -229,4 +229,30 @@ test.describe("o que sobra, na despesa, na receita e na transferência", () => {
       expect(oQueSobra(c.tipo, c.centavos)).toBe(c.texto);
     });
   }
+});
+
+test.describe("aviso de planejamento da compra com partes (ADR 0022)", () => {
+  // R$ 300 no Mercado e R$ 200 na Casa, numa compra só de R$ 500.
+  const comPartes = lancamento({
+    id: "compra",
+    valor_centavos: 50000,
+    categoria_ids: [],
+    partes: [
+      { id: "feira", valor_centavos: 30000, categoria_ids: ["mercado"] },
+      { id: "panela", valor_centavos: 20000, categoria_ids: ["casa"] },
+    ],
+  });
+
+  test("uma linha por parte, cada uma no item dela", () => {
+    const [feira, panela] = avisosDasPartes(outubro, null, comPartes);
+    expect(feira).toMatchObject({ parte_id: "feira", item: { categoria_id: "mercado", antes: estado(82, 18000), depois: estado(112, -12000) } });
+    expect(panela).toMatchObject({ parte_id: "panela", item: { categoria_id: "casa", antes: estado(30, 35000), depois: estado(70, 15000) } });
+  });
+
+  test("a fila conta cada parte no item dela, e a parte com dois itens fica a escolher sozinha", () => {
+    const ambigua = { ...comPartes, partes: [{ id: "feira", valor_centavos: 30000, categoria_ids: ["mercado", "casa"] }, comPartes.partes![1]] };
+    const depois = comAFila(outubro, [{ depois: ambigua }]);
+    expect(depois.itens.map((i) => i.realizado_centavos)).toEqual([82000, 30000]);
+    expect(depois.a_escolher).toEqual([{ lancamento_id: "compra", parte_id: "feira", item_categoria_id: null, categorias_com_item: ["casa", "mercado"] }]);
+  });
 });

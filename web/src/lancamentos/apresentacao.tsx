@@ -10,8 +10,11 @@ export const plural = (n: number, um: string, varios: string) => `${n} ${n === 1
 export const nomePorId = (lista: ComNome[], id: string) => lista.find((i) => i.id === id)?.nome ?? "?";
 
 /** A descrição, ou as categorias quando não há descrição. */
-export function tituloDoLancamento(l: Pick<NovoLancamento, "descricao" | "categoria_ids">, categorias: ComNome[]): string {
-  return l.descricao || l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ") || "Crédito";
+export function tituloDoLancamento(l: Pick<NovoLancamento, "descricao" | "categoria_ids"> & Partial<Pick<NovoLancamento, "partes">>, categorias: ComNome[]): string {
+  const dasCategorias = (ids: string[]) => ids.map((c) => nomePorId(categorias, c)).join(", ");
+  // A compra com partes sem descrição se nomeia pelas partes (ADR 0022).
+  if (!l.descricao && l.partes?.length) return l.partes.map((p) => p.descricao || dasCategorias(p.categoria_ids)).join(" + ");
+  return l.descricao || dasCategorias(l.categoria_ids) || "Crédito";
 }
 
 /** `3` de `10` vira `03/10`, como a fatura mostra a parcela. */
@@ -31,7 +34,7 @@ export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_c
   );
 }
 
-type ParaEstorno = Pick<NovoLancamento, "id" | "tipo" | "valor_centavos" | "data" | "estorno_de" | "estorno_avulso" | "descricao" | "categoria_ids">;
+type ParaEstorno = Pick<NovoLancamento, "id" | "tipo" | "valor_centavos" | "data" | "estorno_de" | "estorno_avulso" | "descricao" | "categoria_ids"> & Partial<Pick<NovoLancamento, "partes">>;
 
 /** Os estornos de cada compra, pelo id da compra, e as compras pelo id, para ligar uma ponta à outra. */
 export function indiceDeEstornos<L extends ParaEstorno>(lancamentos: L[]) {
@@ -70,6 +73,8 @@ export function podeEstornar(l: ParaEstorno & { conta_id: string; naoEnviado?: b
   return (
     l.tipo === "despesa" &&
     !eEstorno(l) &&
+    // O estorno de uma parte da compra é do ticket 138 (ADR 0022).
+    !l.partes?.length &&
     !l.naoEnviado &&
     !l.conflito &&
     !l.exclusao &&
