@@ -30,7 +30,7 @@ O estorno passa a ser de uma parte da compra e, na compra parcelada, de uma parc
 
 - **Parte**: `estorno_parte_id` (com `estorno_de` na compra). Na compra com partes a parte é obrigatória; o estorno herda categorias, tags e item dela (`acompanhar_estornos` segue a parte) e vai até o valor dela, sem passar do total da compra. A parte com estorno não some, não encolhe abaixo do estornado e as partes só se juntam sem estorno de parte. Dividir compra que já tem estorno passou a valer.
 - **Todas as parcelas**: `estorno_parcelamento_id` (sem `estorno_de`), um estorno só, até `valor_total_centavos` menos o já estornado (de cada parcela e de todas), com a classificação do parcelamento (acompanhada na correção e na edição em lote). Conta inteiro no mês da fatura em que aparece e trava a exclusão do parcelamento. A antecipação seguida de estorno é a quitação mais o estorno de todas, sem atalho.
-- Backup na versão 29 (migration 0067), `e_estorno()` em `app/partes.py` para quem soma, OpenAPI e tipos regenerados.
+- Backup na versão 29 (migrations 0067 e 0068), `e_estorno()` em `app/partes.py` para quem soma, OpenAPI e tipos regenerados.
 - Telas: "Parte estornada" (escolha da parte) e "Só esta parcela" / "Todas as parcelas" ao estornar; o restante vem do aparelho (lançamentos e parcelamentos guardados), também sem internet.
 - Testes: `test_estorno_de_parte_e_de_parcelas.py`, `test_restauracao.py` (versão 27) e `e2e/estorno-de-parte-e-parcelas.spec.ts`.
 - Pendência: [ticket 153](153-estorno-de-parte-e-de-parcelas-pendencias.md) (decisões provisórias, ready-for-human).
