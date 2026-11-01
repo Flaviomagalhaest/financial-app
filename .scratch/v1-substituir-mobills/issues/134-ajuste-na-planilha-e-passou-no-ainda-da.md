@@ -1,7 +1,7 @@
 # Ajuste de fatura na planilha e "passou" no ainda dá para gastar
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Sonnet
@@ -15,11 +15,12 @@ A planilha de exportação passa a fechar com o total do mês do app, e o "ainda
 
 ## Checklist
 
-- [ ] Planilha (CSV de lançamentos): uma linha por ajuste de fatura diferente de zero, "Ajuste de fatura <cartão> <mês>", sem categoria, no mês da fatura
-- [ ] "Ainda dá para gastar" negativo mostra "passou R$ X" (na Hoje e na aba Mês), no lugar de 0
-- [ ] Testes; verificações do projeto e PR para `main`
+- [x] Planilha (CSV de lançamentos): uma linha por ajuste de fatura diferente de zero, "Ajuste de fatura <cartão> <mês>", sem categoria, no mês da fatura
+- [x] "Ainda dá para gastar" negativo mostra "passou R$ X" (na Hoje e na aba Mês), no lugar de 0
+- [x] Testes; verificações do projeto e PR para `main`
 
 ## Notas
 
 - Decisões Q13 e Q18 do ticket 94.
 - O backup (zip de CSVs) não muda: o ajuste já vai na tabela `faturas`.
+- Texto "passou R$ X" na Hoje e na aba Mês sem teste de tela: o e2e `hoje.spec.ts` já falha na `main` (fora do escopo); a conta do servidor e a do aviso offline estão cobertas por pytest e `aviso.spec.ts`.

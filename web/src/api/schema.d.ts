@@ -804,7 +804,9 @@ export interface paths {
          * Excluir Parcelamento
          * @description Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
          *     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
-         *     recebe o aviso de excluído).
+         *     recebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou alterada à mão,
+         *     responde 409 com quantas de cada tipo e não apaga nada até o pedido vir com
+         *     `confirmar_realizadas` (ticket 142).
          */
         delete: operations["excluir_parcelamento"];
         options?: never;
@@ -1460,6 +1462,24 @@ export interface components {
             categoria_ids: string[];
             /** Tags */
             tags: string[];
+        };
+        /**
+         * AvisoDeExclusao
+         * @description Excluir o parcelamento apagaria parcelas já pagas ou alteradas à mão; nada foi apagado.
+         *     Repetir o pedido com `confirmar_realizadas` apaga. As alteradas à mão também entram nas
+         *     outras contas quando são de fatura paga ou realizadas.
+         */
+        AvisoDeExclusao: {
+            /** Motivo */
+            motivo: string;
+            /** Parcelas */
+            parcelas: number;
+            /** De Fatura Paga */
+            de_fatura_paga: number;
+            /** Realizadas */
+            realizadas: number;
+            /** Alteradas A Mao */
+            alteradas_a_mao: number;
         };
         /**
          * AvisoDeRealizadas
@@ -5350,7 +5370,9 @@ export interface operations {
     };
     excluir_parcelamento: {
         parameters: {
-            query?: never;
+            query?: {
+                confirmar_realizadas?: boolean;
+            };
             header?: never;
             path: {
                 id: string;
@@ -5365,6 +5387,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description A exclusão apaga parcelas pagas ou alteradas à mão */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvisoDeExclusao"];
+                };
             };
             /** @description Validation Error */
             422: {

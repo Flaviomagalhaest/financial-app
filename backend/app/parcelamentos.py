@@ -21,6 +21,7 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import (
     conferir_ligacoes,
+    conferir_sem_estorno,
     excluir,
     gravar_categorias,
     ids_das_tags,
@@ -1035,6 +1036,7 @@ def _aplicar(
                 "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
                 (correcao.id, tag),
             )
+    lancamentos.acompanhar_estornos(conn, correcao.id)
 
 
 def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: Classificacao) -> bool:
@@ -1123,19 +1125,113 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
     return len(a_excluir) > por_lote
 
 
-@router.delete("/parcelamentos/{id}", status_code=204, operation_id="excluir_parcelamento")
-def excluir_parcelamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
+class AvisoDeExclusao(BaseModel):
+    """Excluir o parcelamento apagaria parcelas já pagas ou alteradas à mão; nada foi apagado.
+    Repetir o pedido com `confirmar_realizadas` apaga. As alteradas à mão também entram nas
+    outras contas quando são de fatura paga ou realizadas."""
+
+    motivo: str
+    # Quantas parcelas saem, de qualquer tipo.
+    parcelas: int
+    # No cartão, as da fatura paga (a importada do Mobills também).
+    de_fatura_paga: int
+    # As realizadas fora da fatura paga: no cartão, as da fatura aberta ou fechada sem
+    # pagamento; no boleto, as pagas.
+    realizadas: int
+    alteradas_a_mao: int
+
+
+class ExclusaoPedeConfirmacao(Exception):
+    """A exclusão pede confirmação: apaga parcelas pagas ou alteradas à mão."""
+
+    def __init__(self, aviso: AvisoDeExclusao):
+        self.aviso = aviso
+
+
+def _aviso_de_exclusao(conn, id: UUID) -> AvisoDeExclusao | None:
+    """O que a exclusão apagaria de já pago ou alterado à mão; `None` se só há previstas."""
+    linhas = conn.execute(
+        f"SELECT conta_id, {lancamentos.MES_EM_QUE_CONTA}, situacao, {lancamentos.ALTERADA_A_MAO}"
+        " FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL",
+        (id,),
+    ).fetchall()
+    pagas: dict[UUID, set[date]] = {}
+    for conta_id in {linha[0] for linha in linhas}:
+        cartao = faturas.ler_cartao(conn, conta_id)
+        pagas[conta_id] = (
+            {
+                f.mes
+                for f in cartoes.faturas_do_titular(conn, cartao.titular.id)
+                if f.situacao == "paga"
+            }
+            if cartao
+            else set()
+        )
+    de_fatura_paga = sum(1 for conta_id, mes, *_ in linhas if mes in pagas[conta_id])
+    realizadas = sum(
+        1
+        for conta_id, mes, situacao, _ in linhas
+        if situacao == "realizado" and mes not in pagas[conta_id]
+    )
+    alteradas = sum(1 for *_, a_mao in linhas if a_mao)
+    if not (de_fatura_paga or realizadas or alteradas):
+        return None
+    return AvisoDeExclusao(
+        motivo="isto apaga lançamentos já pagos e pode desconfigurar o histórico",
+        parcelas=len(linhas),
+        de_fatura_paga=de_fatura_paga,
+        realizadas=realizadas,
+        alteradas_a_mao=alteradas,
+    )
+
+
+@router.delete(
+    "/parcelamentos/{id}",
+    status_code=204,
+    operation_id="excluir_parcelamento",
+    responses={
+        409: {
+            "model": AvisoDeExclusao,
+            "description": "A exclusão apaga parcelas pagas ou alteradas à mão",
+        }
+    },
+)
+def excluir_parcelamento(
+    id: UUID, usuario: UsuarioLogado, request: Request, confirmar_realizadas: bool = False
+) -> Response:
     """Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
-    recebe o aviso de excluído)."""
+    recebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou alterada à mão,
+    responde 409 com quantas de cada tipo e não apaga nada até o pedido vir com
+    `confirmar_realizadas` (ticket 142)."""
     url = url_do_banco(request)
 
+    def conferir(conn) -> None:
+        # Antes de fechar o parcelamento: a parcela com estorno impediria a exclusão no meio dela.
+        conferir_sem_estorno(
+            conn,
+            [
+                parcela
+                for (parcela,) in conn.execute(
+                    "SELECT id FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL",
+                    (id,),
+                )
+            ],
+        )
+
+    em_transacao(url, conferir)
+
     def fechar(conn) -> None:
+        if not confirmar_realizadas and (aviso := _aviso_de_exclusao(conn, id)):
+            raise ExclusaoPedeConfirmacao(aviso)
         # Com todas as parcelas dadas por geradas, a tarefa diária não gera novas enquanto as de
         # agora saem.
         conn.execute("UPDATE parcelamentos SET geradas = parcelas WHERE id = %s", (id,))
 
-    em_transacao(url, fechar)
+    try:
+        em_transacao(url, fechar)
+    except ExclusaoPedeConfirmacao as e:
+        return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
     while em_transacao(url, lambda conn: _excluir_um_lote(conn, id, usuario)):
         pass
 

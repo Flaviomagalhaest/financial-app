@@ -8,6 +8,7 @@ import {
   manterOsDois,
   situacaoDaFatura,
   useCadastro,
+  useCartoesComArquivados,
   useLancamentos,
   useMudancasDaRecorrenciaNaoEnviadas,
   useParcelamentosNaoEnviados,
@@ -18,6 +19,7 @@ import {
   type NovoLancamento,
 } from "../dados";
 import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, numeroDaParcela, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
+import { formatarCentavos } from "./dinheiro";
 import { mesPorExtenso } from "./datas";
 import { dataPorExtenso, quando } from "./datas";
 import { divisao, rotuloDasParcelas } from "./parcelamento";
@@ -91,7 +93,9 @@ function RegrasNaoEnviadas(props: {
 
 /** Lançamentos do casal, do mais recente ao mais antigo, com editar e excluir em cada linha. */
 export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
-  const { cartoes, contasECartoes, categorias } = useCadastro();
+  const { contasECartoes, categorias } = useCadastro();
+  // Os arquivados também: a compra de um cartão reemitido ainda se estorna.
+  const { cartoes } = useCartoesComArquivados();
   const { lancamentos, atualizadoEm, semDados } = useLancamentos();
   const recorrencias = useRecorrenciasNaoEnviadas();
   const mudancasDeRecorrencia = useMudancasDaRecorrenciaNaoEnviadas();
@@ -102,10 +106,15 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   const [informacoes, setInformacoes] = useState<string | null>(null);
   // A compra de fatura já fechada que se pediu para excluir: a tela sugere o estorno antes.
   const [sugerindoEstorno, setSugerindoEstorno] = useState<string | null>(null);
+  // A compra com estorno que se pediu para excluir: o servidor a recusa, e a tela mostra o porquê antes.
+  const [comEstorno, setComEstorno] = useState<string | null>(null);
   const estornos = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
+  const estornosDe = (id: string) => (estornos.estornos.get(id) ?? []).filter((e) => !e.exclusao);
 
   async function excluir(l: LancamentoNaTela, mesmoFechada = false) {
     setSugerindoEstorno(null);
+    setComEstorno(null);
+    if (estornosDe(l.id).length > 0) return setComEstorno(l.id);
     // Cancelar a compra de uma fatura aberta é excluir; depois do fechamento o valor já foi cobrado e o certo é estornar.
     const cartao = cartoes.find((c) => c.id === l.conta_id);
     if (!mesmoFechada && cartao && l.mes && !l.naoEnviado) {
@@ -225,7 +234,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
           const titulo = tituloDoLancamento(l, categorias);
           const ligacao = ligacaoDoEstorno(l, estornos, categorias);
           return (
-            <li key={l.id}>
+            <li key={l.id} id={`lancamento-${l.id}`}>
               <div>
                 <strong>
                   {titulo}
@@ -251,6 +260,31 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                     </button>
                     <button type="button" className="secundario" aria-label={`Excluir este ${titulo}`} onClick={() => void excluir(l)}>
                       Excluir este
+                    </button>
+                  </div>
+                </div>
+              )}
+              {comEstorno === l.id && (
+                <div className="aviso" role="group" aria-label="Compra com estorno">
+                  <p className="erro">A compra tem estorno; exclua o estorno antes.</p>
+                  <ul>
+                    {estornosDe(l.id).map((e) => (
+                      <li key={e.id}>
+                        <a
+                          href={`#lancamento-${e.id}`}
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            document.getElementById(`lancamento-${e.id}`)?.scrollIntoView({ block: "center" });
+                          }}
+                        >
+                          Estorno de {formatarCentavos(e.valor_centavos)} em {dataPorExtenso(e.data)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="acoes">
+                    <button type="button" className="secundario" onClick={() => setComEstorno(null)}>
+                      Voltar
                     </button>
                   </div>
                 </div>

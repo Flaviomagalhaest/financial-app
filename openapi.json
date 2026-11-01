@@ -2585,7 +2585,7 @@
       },
       "delete": {
         "summary": "Excluir Parcelamento",
-        "description": "Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as\nque uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois\nrecebe o aviso de excluído).",
+        "description": "Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as\nque uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois\nrecebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou alterada à mão,\nresponde 409 com quantas de cada tipo e não apaga nada até o pedido vir com\n`confirmar_realizadas` (ticket 142).",
         "operationId": "excluir_parcelamento",
         "security": [
           {
@@ -2602,11 +2602,31 @@
               "format": "uuid",
               "title": "Id"
             }
+          },
+          {
+            "name": "confirmar_realizadas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Confirmar Realizadas"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "A exclusão apaga parcelas pagas ou alteradas à mão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvisoDeExclusao"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4405,6 +4425,40 @@
           "tags"
         ],
         "title": "AntesEDepois"
+      },
+      "AvisoDeExclusao": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          },
+          "parcelas": {
+            "type": "integer",
+            "title": "Parcelas"
+          },
+          "de_fatura_paga": {
+            "type": "integer",
+            "title": "De Fatura Paga"
+          },
+          "realizadas": {
+            "type": "integer",
+            "title": "Realizadas"
+          },
+          "alteradas_a_mao": {
+            "type": "integer",
+            "title": "Alteradas A Mao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivo",
+          "parcelas",
+          "de_fatura_paga",
+          "realizadas",
+          "alteradas_a_mao"
+        ],
+        "title": "AvisoDeExclusao",
+        "description": "Excluir o parcelamento apagaria parcelas já pagas ou alteradas à mão; nada foi apagado.\nRepetir o pedido com `confirmar_realizadas` apaga. As alteradas à mão também entram nas\noutras contas quando são de fatura paga ou realizadas."
       },
       "AvisoDeRealizadas": {
         "properties": {

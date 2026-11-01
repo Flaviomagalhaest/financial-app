@@ -185,6 +185,29 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             " LEFT JOIN categorias c ON c.id = t.categoria_id",
         )
     ]
+    # O ajuste de fatura entra no total do mês do app (ADR 0008): uma linha por ajuste, no mês da
+    # fatura e sem categoria. Positivo aumenta a fatura, então sai como despesa.
+    for f in _dicionarios(
+        conn,
+        "SELECT cartao_id, mes, ajuste_centavos, criado_em FROM faturas"
+        " WHERE COALESCE(ajuste_centavos, 0) <> 0",
+    ):
+        linhas.append(
+            linha(
+                f["mes"],
+                f["criado_em"],
+                "realizado",
+                None,
+                None,
+                descricao=f"Ajuste de fatura {contas.get(f['cartao_id'], '')} {f['mes']:%Y-%m}",
+                valor=_reais(-f["ajuste_centavos"]),
+                conta_ou_cartao=contas.get(f["cartao_id"], ""),
+                fatura=f["mes"].strftime("%Y-%m"),
+                categorias=[],
+                tags=[],
+                pessoa="",
+            )
+        )
     return [colunas for *_, colunas in sorted(linhas, key=lambda linha: linha[:2])]
 
 

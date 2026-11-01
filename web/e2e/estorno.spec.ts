@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Dialog, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { digitar } from "./lancar";
@@ -223,4 +223,89 @@ test("um segundo estorno começa no que ainda resta da compra e não deixa passa
   await expect(page.getByRole("button", { name: /^Vestuário/ })).toHaveCount(1);
   await page.getByRole("button", { name: /^Detalhes/ }).click();
   await expect(page.getByRole("button", { name: `#${tag}`, exact: true })).toBeDisabled();
+});
+
+/** Um estorno de `centavos` da compra, criado pela API. */
+async function estornarPelaApi(api: Awaited<ReturnType<typeof prepararCompra>>["api"], p: Awaited<ReturnType<typeof prepararCompra>>, centavos: number) {
+  return api.criar("/api/lancamentos", {
+    id: randomUUID(),
+    tipo: "despesa",
+    valor_centavos: centavos,
+    data: dia(0),
+    descricao: `Estorno ${p.compraNome}`,
+    conta_id: p.cartao.id,
+    categoria_ids: [p.categoria.id],
+    estorno_de: p.compra.id,
+  });
+}
+
+test("a compra com estorno não se exclui: o Excluir segue ativo, explica o porquê e leva ao estorno; sem o estorno, exclui", async ({ page }) => {
+  const p = await prepararCompra(page);
+  const estorno = await estornarPelaApi(p.api, p, 4000);
+  await page.reload();
+
+  let perguntou = false;
+  const naoDevePerguntar = (dialogo: Dialog) => {
+    perguntou = true;
+    void dialogo.dismiss();
+  };
+  page.on("dialog", naoDevePerguntar);
+  const naCompra = page.getByRole("listitem").filter({ hasText: p.compraNome }).filter({ hasText: "estornada em" });
+  await expect(naCompra.getByRole("button", { name: `Excluir ${p.compraNome}` })).toBeEnabled();
+  await naCompra.getByRole("button", { name: `Excluir ${p.compraNome}` }).click();
+
+  const aviso = naCompra.getByRole("group", { name: "Compra com estorno" });
+  await expect(aviso).toContainText("A compra tem estorno; exclua o estorno antes.");
+  expect(perguntou).toBe(false);
+  await aviso.getByRole("link", { name: /^Estorno de R\$ 40,00/ }).click();
+  await expect(page.locator(`[id="lancamento-${estorno.id}"]`)).toBeInViewport();
+  page.off("dialog", naoDevePerguntar);
+
+  // Excluído o estorno, a compra se exclui.
+  const doEstorno = page.getByRole("listitem").filter({ hasText: `estorno de ${p.compraNome}` });
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await doEstorno.getByRole("button", { name: `Excluir Estorno ${p.compraNome}` }).click();
+  await expect(doEstorno).toHaveCount(0);
+  const compra = page.getByRole("listitem").filter({ hasText: p.compraNome });
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await compra.getByRole("button", { name: `Excluir ${p.compraNome}` }).click();
+  await expect(compra).toHaveCount(0);
+});
+
+test("a exclusão que o servidor recusa depois (estorno feito em outro aparelho) volta como recusada, com o motivo", async ({ page, context }) => {
+  const p = await prepararCompra(page);
+  // A lista do aparelho ainda não sabe do estorno.
+  const naCompra = page.getByRole("listitem").filter({ hasText: p.compraNome }).filter({ hasNotText: "estorno de" });
+  await expect(naCompra).toHaveCount(1);
+  await context.setOffline(true);
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await naCompra.getByRole("button", { name: `Excluir ${p.compraNome}` }).click();
+  await expect(naCompra).toHaveCount(0);
+
+  await estornarPelaApi(p.api, p, 4000);
+  await context.setOffline(false);
+
+  await expect(naCompra).toContainText("⏳ não enviado: a compra tem estorno; exclua o estorno antes");
+  await expect(naCompra.getByRole("button", { name: `Descartar ${p.compraNome}` })).toBeVisible();
+});
+
+test("a compra de um cartão arquivado (reemitido) ainda se estorna, e o cartão do estorno é escolhido entre os ativos", async ({ page }) => {
+  const p = await prepararCompra(page);
+  const novo = await p.api.criar("/api/cartoes", { nome: `Reemitido ${p.s}`, dia_fechamento: 10, dia_vencimento: 20 });
+  await p.api.substituir(`/api/cartoes/${p.cartao.id}`, { nome: p.cartaoNome, dia_fechamento: 10, dia_vencimento: 20, arquivado: true });
+  await page.reload();
+
+  await page.getByRole("listitem").filter({ hasText: p.compraNome }).getByRole("link", { name: `Estornar ${p.compraNome}` }).click();
+  await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
+  // O cartão arquivado não é opção; sem escolher o novo, não salva.
+  await expect(page.getByRole("button", { name: p.cartaoNome })).toHaveCount(0);
+  await expect(page.getByText("O cartão da compra está arquivado")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Salvar" })).toBeDisabled();
+  await page.getByRole("button", { name: novo.nome }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+
+  const estorno = page.getByRole("listitem").filter({ hasText: `estorno de ${p.compraNome}` });
+  await expect(estorno).toContainText("+ R$ 100,00");
+  await expect(estorno).toContainText(novo.nome);
 });

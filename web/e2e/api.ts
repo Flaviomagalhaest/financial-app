@@ -9,7 +9,7 @@ export async function tokenDaPagina(page: Page): Promise<string> {
   return (await pedido).headers().authorization;
 }
 
-/** `criar(caminho, corpo)` faz o POST com o token da página e exige sucesso; `mudar`, o PATCH; `ler(caminho)`, o GET. */
+/** `criar(caminho, corpo)` faz o POST com o token da página e exige sucesso; `mudar`, o PATCH; `substituir`, o PUT; `ler(caminho)`, o GET. */
 export async function apiDaPagina(page: Page) {
   const headers = { authorization: await tokenDaPagina(page) };
   return {
@@ -20,6 +20,11 @@ export async function apiDaPagina(page: Page) {
     },
     async mudar(caminho: string, data: object) {
       const resposta = await page.request.patch(caminho, { headers, data });
+      expect(resposta.ok(), await resposta.text()).toBe(true);
+      return resposta.json();
+    },
+    async substituir(caminho: string, data: object) {
+      const resposta = await page.request.put(caminho, { headers, data });
       expect(resposta.ok(), await resposta.text()).toBe(true);
       return resposta.json();
     },

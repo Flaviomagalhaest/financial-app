@@ -144,7 +144,7 @@ function trocar(p: Planejamento, antes?: Contagem | null, depois?: Contagem | nu
   });
   // Como no servidor: o item estourado não abate a sobra dos outros, e o ajuste de fatura sim.
   const sobra = itens.reduce((total, i) => total + Math.max(i.ainda_da_para_gastar_centavos, 0), 0);
-  return { ...p, itens, a_escolher: aEscolher, ainda_da_para_gastar_centavos: Math.max(sobra - p.ajustes_de_fatura_centavos, 0) };
+  return { ...p, itens, a_escolher: aEscolher, ainda_da_para_gastar_centavos: sobra - p.ajustes_de_fatura_centavos };
 }
 
 /** Uma mudança do aparelho que o servidor ainda não tem: a versão que ele tem e a do aparelho. */

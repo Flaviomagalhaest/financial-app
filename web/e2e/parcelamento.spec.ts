@@ -321,6 +321,12 @@ test("exclui o parcelamento inteiro pela tela; sem internet, corrigir e excluir 
 
   page.once("dialog", (d) => void d.accept());
   await page.getByRole("button", { name: "Excluir parcelamento" }).click();
+  // A 1ª já foi realizada: nada sai antes do aviso forte.
+  const aviso = page.getByRole("alertdialog", { name: "Excluir parcelas já pagas" });
+  await expect(aviso).toContainText("Isto apaga lançamentos já pagos e pode desconfigurar o histórico. Confirma?");
+  await expect(aviso).toContainText("Saem as 6 parcelas");
+  await expect(aviso.getByRole("listitem")).toHaveText(["1 realizada"]);
+  await aviso.getByRole("button", { name: "Excluir mesmo assim" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(0);
 });
