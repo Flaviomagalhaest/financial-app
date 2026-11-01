@@ -9,13 +9,13 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import conferir_ligacoes, hoje, url_do_banco
 from app.login import UsuarioLogado
-from app.sugestao import chave
+from app.sugestao import ParteDoModelo, chave, identidade_da_parte
 
 router = APIRouter(prefix="/api")
 
@@ -24,10 +24,29 @@ class DadosDoFavorito(BaseModel):
     descricao: str = ""
     tipo: Literal["despesa", "receita"]
     conta_id: UUID
-    categoria_ids: list[UUID] = Field(min_length=1)
+    # Vazias, com as partes: a compra com partes classifica em cada parte.
+    categoria_ids: list[UUID] = []
     tags: list[str] = []
     pessoa: str | None = None
     valor_centavos: int = Field(gt=0)
+    partes: list[ParteDoModelo] = []
+
+    @model_validator(mode="after")
+    def _com_ou_sem_partes(self):
+        if not self.partes:
+            if not self.categoria_ids:
+                raise ValueError("o favorito precisa de uma categoria ou de partes")
+            return self
+        if len(self.partes) < 2:
+            raise ValueError("a compra tem duas partes ou mais")
+        if self.tipo != "despesa":
+            raise ValueError("partes só na despesa")
+        if self.categoria_ids or self.tags or self.pessoa:
+            raise ValueError("a compra com partes não tem categoria, tag nem pessoa próprias")
+        soma = sum(p.valor_centavos for p in self.partes)
+        if soma != self.valor_centavos:
+            raise ValueError(f"as partes somam {soma} centavos e o valor é {self.valor_centavos}")
+        return self
 
 
 class NovoFavorito(DadosDoFavorito):
@@ -40,23 +59,35 @@ class Favorito(NovoFavorito):
     valor_padrao_centavos: int
 
 
-def identidade_de(descricao, tipo, conta_id, categoria_ids, tags, pessoa) -> str:
-    """O que faz dois lançamentos serem "o mesmo": a base dos usos e do valor padrão."""
-    return json.dumps(
-        [
-            chave(descricao),
-            tipo,
-            str(conta_id),
-            sorted(str(c) for c in categoria_ids),
-            sorted(t.casefold() for t in tags),
-            pessoa,
-        ]
-    )
+def identidade_de(
+    descricao, tipo, conta_id, categoria_ids, tags, pessoa, partes=(), valor_centavos=0
+) -> str:
+    """O que faz dois lançamentos serem "o mesmo": a base dos usos e do valor padrão. Com partes,
+    entram também a descrição, as categorias, as tags, a pessoa e a proporção de cada uma, na
+    ordem; sem partes, a identidade é a de antes (ADR 0022)."""
+    base = [
+        chave(descricao),
+        tipo,
+        str(conta_id),
+        sorted(str(c) for c in categoria_ids),
+        sorted(t.casefold() for t in tags),
+        pessoa,
+    ]
+    if partes:
+        base.append([identidade_da_parte(p, valor_centavos) for p in partes])
+    return json.dumps(base)
 
 
 def identidade(dados: DadosDoFavorito) -> str:
     return identidade_de(
-        dados.descricao, dados.tipo, dados.conta_id, dados.categoria_ids, dados.tags, dados.pessoa
+        dados.descricao,
+        dados.tipo,
+        dados.conta_id,
+        dados.categoria_ids,
+        dados.tags,
+        dados.pessoa,
+        dados.partes,
+        dados.valor_centavos,
     )
 
 
@@ -65,6 +96,39 @@ class _Grupo(BaseModel):
 
     dados: DadosDoFavorito
     usos: int
+
+
+def _partes_dos_lancamentos(conn) -> dict[UUID, list[ParteDoModelo]]:
+    """As partes de cada compra, na ordem delas. A categoria e a tag arquivadas contam, como na
+    compra sem partes."""
+    categorias: dict[UUID, list[UUID]] = {}
+    for parte_id, categoria_id in conn.execute(
+        "SELECT parte_id, categoria_id FROM parte_categorias ORDER BY categoria_id"
+    ):
+        categorias.setdefault(parte_id, []).append(categoria_id)
+    tags: dict[UUID, list[str]] = {}
+    for parte_id, nome in conn.execute(
+        "SELECT pt.parte_id, t.nome FROM parte_tags pt JOIN tags t ON t.id = pt.tag_id"
+        " ORDER BY t.nome"
+    ):
+        tags.setdefault(parte_id, []).append(nome)
+    partes: dict[UUID, list[ParteDoModelo]] = {}
+    for id, lancamento_id, descricao, valor, pessoa in conn.execute(
+        "SELECT id, lancamento_id, descricao, valor_centavos, pessoa FROM lancamento_partes"
+        " ORDER BY lancamento_id, ordem"
+    ):
+        if id not in categorias:
+            continue
+        partes.setdefault(lancamento_id, []).append(
+            ParteDoModelo(
+                descricao=descricao,
+                valor_centavos=valor,
+                categoria_ids=categorias[id],
+                tags=tags.get(id, []),
+                pessoa=pessoa,
+            )
+        )
+    return partes
 
 
 def _grupos(conn) -> dict[str, _Grupo]:
@@ -82,6 +146,7 @@ def _grupos(conn) -> dict[str, _Grupo]:
         " ORDER BY t.nome"
     ):
         tags.setdefault(lancamento_id, []).append(nome)
+    partes = _partes_dos_lancamentos(conn)
     grupos: dict[str, _Grupo] = {}
     for id, descricao, tipo, conta_id, pessoa, valor in conn.execute(
         "SELECT id, descricao, tipo, conta_id, pessoa, valor_centavos FROM lancamentos"
@@ -89,17 +154,31 @@ def _grupos(conn) -> dict[str, _Grupo]:
         " ORDER BY data DESC, criado_em DESC, id",
         (hoje(),),
     ):
-        if id not in categorias:
+        if id in partes:
+            # A compra com partes não tem classificação própria: vale a das partes. A que não
+            # fecha (dado antigo, parte sem categoria) fica de fora em vez de derrubar a lista.
+            try:
+                dados = DadosDoFavorito(
+                    descricao=descricao or "",
+                    tipo=tipo,
+                    conta_id=conta_id,
+                    valor_centavos=valor,
+                    partes=partes[id],
+                )
+            except ValidationError:
+                continue
+        elif id in categorias:
+            dados = DadosDoFavorito(
+                descricao=descricao or "",
+                tipo=tipo,
+                conta_id=conta_id,
+                categoria_ids=categorias[id],
+                tags=tags.get(id, []),
+                pessoa=pessoa,
+                valor_centavos=valor,
+            )
+        else:
             continue
-        dados = DadosDoFavorito(
-            descricao=descricao or "",
-            tipo=tipo,
-            conta_id=conta_id,
-            categoria_ids=categorias[id],
-            tags=tags.get(id, []),
-            pessoa=pessoa,
-            valor_centavos=valor,
-        )
         chave_ = identidade(dados)
         if chave_ in grupos:
             grupos[chave_].usos += 1
@@ -112,7 +191,7 @@ def _favoritos(conn) -> list[Favorito]:
     grupos = _grupos(conn)
     linhas = conn.execute(
         "SELECT id, descricao, tipo, conta_id, categoria_ids, tags, pessoa, valor_centavos, ordem,"
-        " identidade FROM favoritos WHERE estado = 'favorito' ORDER BY ordem, id"
+        " identidade, partes FROM favoritos WHERE estado = 'favorito' ORDER BY ordem, id"
     ).fetchall()
     return [
         Favorito(
@@ -125,11 +204,12 @@ def _favoritos(conn) -> list[Favorito]:
             pessoa=pessoa,
             valor_centavos=valor,
             ordem=ordem,
+            partes=json.loads(partes) if partes else [],
             valor_padrao_centavos=grupos[identidade_].dados.valor_centavos
             if identidade_ in grupos
             else valor,
         )
-        for id, descricao, tipo, conta_id, categorias, tags, pessoa, valor, ordem, identidade_ in linhas
+        for id, descricao, tipo, conta_id, categorias, tags, pessoa, valor, ordem, identidade_, partes in linhas
     ]
 
 
@@ -159,6 +239,7 @@ def _sugeridos(conn, favoritos: list[Favorito]) -> list[Sugerido]:
         if chave_ not in fora
         and grupo.usos >= config["usosMinimos"]
         and not arquivadas.intersection(grupo.dados.categoria_ids)
+        and not any(arquivadas.intersection(p.categoria_ids) for p in grupo.dados.partes)
     ]
     # Mais usados primeiro; o empate fica com o que foi lançado por último (a ordem dos grupos).
     candidatos.sort(key=lambda c: -c[1].usos)
@@ -206,8 +287,8 @@ def criar_favorito(
 def _inserir(conn, id: UUID, estado: str, chave_: str, dados: DadosDoFavorito, ordem, usuario):
     conn.execute(
         "INSERT INTO favoritos (id, estado, identidade, descricao, tipo, conta_id,"
-        " categoria_ids, tags, pessoa, valor_centavos, ordem, criado_por)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        " categoria_ids, tags, pessoa, valor_centavos, ordem, criado_por, partes)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (
             id,
             estado,
@@ -221,6 +302,7 @@ def _inserir(conn, id: UUID, estado: str, chave_: str, dados: DadosDoFavorito, o
             dados.valor_centavos,
             ordem,
             usuario,
+            json.dumps([p.model_dump(mode="json") for p in dados.partes]),
         ),
     )
 

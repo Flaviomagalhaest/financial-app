@@ -3,32 +3,14 @@
 // com cada favorito, mesmo o que ainda não subiu.
 import { useSyncExternalStore } from "react";
 import type { components } from "../api/schema";
-import { chaveDaDescricao } from "./sugestao";
+import { identidadeDe, type Identificavel } from "./identidade";
+
+export { identidadeDe };
 
 export type Favorito = components["schemas"]["Favorito"];
 export type Sugerido = components["schemas"]["Sugerido"];
 export type NovoFavorito = components["schemas"]["NovoFavorito"];
 export type DadosDoFavorito = Omit<NovoFavorito, "id">;
-
-type Identificavel = {
-  descricao?: string | null;
-  tipo: string;
-  conta_id: string;
-  categoria_ids: string[];
-  tags?: string[] | null;
-  pessoa?: string | null;
-};
-
-/** O que faz dois lançamentos serem "o mesmo" (`identidade_de` em `app/favoritos.py`). */
-export const identidadeDe = (l: Identificavel) =>
-  JSON.stringify([
-    chaveDaDescricao(l.descricao ?? ""),
-    l.tipo,
-    l.conta_id,
-    [...l.categoria_ids].sort(),
-    (l.tags ?? []).map((t) => t.toLowerCase()).sort(),
-    l.pessoa ?? null,
-  ]);
 
 /**
  * O valor padrão de cada favorito: o do último lançamento com a mesma identidade entre os que a

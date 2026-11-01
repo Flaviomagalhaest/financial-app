@@ -871,7 +871,7 @@ def test_backup_da_versao_20_sem_pendencia_restaura_parcelamento_sem_classificac
                 conteudo = (
                     # Sem a classificação pendente, o dia da correção (versão 23), o dia do
                     # lançamento (versão 24), a mudança pendente (versão 25) e a recusada
-                    # (versão 28), as últimas.
+                    # (versão 29), as últimas.
                     "\r\n".join(linha.rsplit(",", 5)[0] for linha in linhas).encode() + b"\r\n"
                 )
             if nome == "manifesto.json":
@@ -911,7 +911,7 @@ def test_backup_da_versao_22_sem_o_dia_da_correcao_restaura_parcelamento_sem_cor
                 linhas = conteudo.decode().strip("\r\n").splitlines()
                 conteudo = (
                     # Sem o dia da correção, o dia do lançamento (versão 24), a mudança
-                    # pendente (versão 25) e a recusada (versão 28), as últimas.
+                    # pendente (versão 25) e a recusada (versão 29), as últimas.
                     "\r\n".join(linha.rsplit(",", 4)[0] for linha in linhas).encode() + b"\r\n"
                 )
             if nome == "manifesto.json":
@@ -955,7 +955,7 @@ def test_backup_da_versao_23_restaura_recorrencia_e_parcelamento_sem_o_dia_do_la
             conteudo = origem.read(nome)
             if nome in ("recorrencias.csv", "parcelamentos.csv"):
                 # Sem o dia do lançamento; no parcelamento, também sem a mudança pendente
-                # (versão 25) e a recusada (versão 28), as últimas.
+                # (versão 25) e a recusada (versão 29), as últimas.
                 ultimas = 3 if nome == "parcelamentos.csv" else 1
                 linhas = conteudo.decode().strip("\r\n").splitlines()
                 conteudo = (
@@ -999,7 +999,7 @@ def test_backup_da_versao_24_restaura_parcelamento_sem_mudanca_pendente(database
             if nome == "parcelamentos.csv":
                 linhas = conteudo.decode().strip("\r\n").splitlines()
                 conteudo = (
-                    # Sem a mudança pendente e a recusada (versão 28), as últimas.
+                    # Sem a mudança pendente e a recusada (versão 29), as últimas.
                     "\r\n".join(linha.rsplit(",", 2)[0] for linha in linhas).encode() + b"\r\n"
                 )
             if nome == "manifesto.json":
@@ -1017,8 +1017,8 @@ def test_backup_da_versao_24_restaura_parcelamento_sem_mudanca_pendente(database
         ).fetchall() == [(3000, "")]
 
 
-def test_backup_da_versao_27_restaura_parcelamento_sem_mudanca_recusada(database_url):
-    # O formato 27, anterior ao ticket 149: o parcelamento não guardava a recusa da mudança.
+def test_backup_da_versao_28_restaura_parcelamento_sem_mudanca_recusada(database_url):
+    # O formato 28, anterior ao ticket 149: o parcelamento não guardava a recusa da mudança.
     aplicar_migrations(database_url)
     with psycopg.connect(database_url, autocommit=True) as conn:
         conn.execute(
@@ -1040,7 +1040,7 @@ def test_backup_da_versao_27_restaura_parcelamento_sem_mudanca_recusada(database
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
-                manifesto["versao_formato"] = 27
+                manifesto["versao_formato"] = 28
                 conteudo = json.dumps(manifesto).encode()
             destino.writestr(nome, conteudo)
 
@@ -1195,6 +1195,40 @@ def test_backup_da_versao_26_sem_partes_restaura_sem_nenhuma(database_url):
 
         assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
         assert conn.execute("SELECT count(*) FROM lancamento_partes").fetchone() == (0,)
+
+
+def test_backup_da_versao_27_sem_partes_no_favorito_restaura_com_a_lista_vazia(database_url):
+    # O formato 27, anterior ao ticket 141: o favorito era de uma compra só.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO favoritos (id, estado, identidade, tipo, conta_id, categoria_ids, tags,"
+            " valor_centavos, ordem, criado_por, partes) VALUES"
+            " ('00000000-0000-0000-0000-000000000001', 'favorito', 'x', 'despesa',"
+            " '00000000-0000-0000-0000-000000000002', '[]', '[]', 1000, 1, 'flavio', '[]')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM favoritos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "favoritos.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-1]) if linha else linha
+                    for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 27
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT partes FROM favoritos").fetchall() == [("[]",)]
 
 
 def test_as_partes_da_compra_voltam_do_backup_com_as_categorias_e_as_tags(database_url):
