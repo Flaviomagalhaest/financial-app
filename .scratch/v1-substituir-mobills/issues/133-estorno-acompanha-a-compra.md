@@ -1,7 +1,7 @@
 # O estorno acompanha a compra e trava a exclusão
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Sonnet
