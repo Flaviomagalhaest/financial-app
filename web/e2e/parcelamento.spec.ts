@@ -254,6 +254,8 @@ test("muda uma parcela com alcance: esta e as próximas, todas com a realizada c
   const novaDescricao = `${descricao} nova`;
 
   await parcela("03/06").getByRole("link", { name: `Editar ${descricao}` }).click();
+  // A tela preenche com o lançamento quando ele carrega: o que se digitar antes se perde.
+  await expect(page.getByTestId("valor")).toHaveText("R$ 100,00");
   await page.getByRole("button", { name: /^Detalhes/ }).click();
   await page.getByLabel("Descrição").fill(novaDescricao);
   await page.getByRole("button", { name: "Pronto" }).click();
@@ -291,6 +293,7 @@ test("muda uma parcela com alcance: esta e as próximas, todas com a realizada c
   // "Só esta" é a edição de sempre, pela fila: só a parcela muda, e fica alterada à mão.
   await expect(parcela("02/06")).not.toContainText("alterada à mão");
   await parcela("02/06").getByRole("link", { name: `Editar ${descricao}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 120,00");
   await page.getByRole("button", { name: /^Detalhes/ }).click();
   await page.getByLabel("Descrição").fill(`${descricao} entrada`);
   await page.getByRole("button", { name: "Pronto" }).click();
