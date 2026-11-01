@@ -55,6 +55,7 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
         "pessoa": None,
         "fonte": "app",
         "parece_repetido_de": None,
+        "proporcao_das_partes": [],
     }
 
 

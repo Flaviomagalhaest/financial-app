@@ -257,7 +257,7 @@ def _mudar_a_parcela(conn, id: UUID, alteracao: AlteracaoDaParcela, usuario: str
     if alteracao.alcance != "so_esta" and "tipo" in mudou:
         raise recusar("a parcela é uma despesa")
     # As partes só divididas pelo valor novo não mudam a proporção: não vão para o parcelamento.
-    lancamentos.redivide(conn, antes, mudou)
+    lancamentos.so_redivide_as_partes(conn, antes, mudou)
     # A parcela mudada primeiro, com a edição de sempre: conflito, recusas e fatura paga.
     editar(conn, id, so_nela, usuario)
     mudanca = _Mudanca(antes.parcelamento_id)
@@ -330,7 +330,7 @@ def _mudar_a_parcela(conn, id: UUID, alteracao: AlteracaoDaParcela, usuario: str
         )
     mudanca.mantidas.discard(antes.parcela)
     mudanca.falta_por_parcela = _mudar_o_lote(
-        conn, regra.id, pendente, falta, parcelamentos.parcelas_por_lote(regra)
+        conn, regra.id, pendente, falta, parcelamentos.parcelas_por_lote(conn, regra)
     )
     return mudanca
 
@@ -379,7 +379,12 @@ def _mudar_um_lote(conn, parcelamento_id: UUID) -> bool:
         return False
     falta, _ = _falta(conn, parcelamento_id, pendente)
     return _mudar_o_lote(
-        conn, parcelamento_id, pendente, falta, parcelamentos.parcelas_por_lote(regra), linha[0]
+        conn,
+        parcelamento_id,
+        pendente,
+        falta,
+        parcelamentos.parcelas_por_lote(conn, regra),
+        linha[0],
     )
 
 

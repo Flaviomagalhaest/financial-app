@@ -136,3 +136,24 @@ test("a parcela que muda de valor se redivide na proporção, e mudar as partes 
   await expect(daRegra.getByRole("listitem").nth(0)).toContainText("50%");
   await expect(page.getByRole("heading", { name: "Categorias" })).toHaveCount(0);
 });
+
+test("o parcelado não salva se a menor parcela não dá um centavo a cada parte", async ({ page }) => {
+  const { nomes } = await preparar(page);
+  await aba(page, "Hoje");
+  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+
+  // R$ 3,00 em 3x: R$ 2,99 e R$ 0,01 dariam zero à segunda parte numa parcela de R$ 1,00.
+  await digitar(page, "3", "00");
+  await page.getByRole("button", { name: nomes.conta }).click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByRole("group", { name: "Repete?" }).getByRole("button", { name: "Parcelado" }).click();
+  await page.getByLabel("Parcelas").fill("3");
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Dividir em partes" }).click();
+  await parte(page, 1).getByLabel("Valor da parte").fill("2,99");
+  await parte(page, 1).getByRole("button", { name: nomes.roupa }).click();
+  await parte(page, 2).getByRole("button", { name: nomes.casa }).click();
+
+  await expect(page.getByText("A parcela não chega a um centavo por parte.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Salvar" })).toBeDisabled();
+});

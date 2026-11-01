@@ -434,3 +434,29 @@ def test_o_parcelado_com_partes_sobe_pela_fila_como_um_pedido_so(casal: Casal, c
     assert aceita["resultado"] == "aceita", aceita
     assert [p["valor_centavos"] for p in aceita["parcelamento"]["partes"]] == [20000, 10000]
     assert [divisao(l) for l in parcelas(casal, novo["id"])] == [[6667, 3333]] * 3
+
+
+def test_correcao_recusa_antes_de_gravar_se_uma_parcela_ficaria_sem_centavo_numa_parte(
+    casal: Casal, categorias
+):
+    roupa, casa, _ = categorias
+    criado = parcelado(
+        casal,
+        casal.conta(),
+        [parte([roupa], 15000), parte([casa], 15000)],
+    ).json()
+    [_, _, terceira] = parcelas(casal, criado["id"])
+    # Partes próprias só nela, de 99,99 e 0,01.
+    editar_so_nela(casal, terceira, partes=[parte([roupa], 9999), parte([casa], 1)])
+
+    resposta = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/parcelamentos/{criado['id']}",
+        json={"valor_da_parcela_centavos": 5000},
+    )
+
+    assert resposta.status_code == 422
+    assert "não chega a um centavo por parte" in resposta.text
+    assert regra(casal, criado["id"])["valor_total_centavos"] == 30000
+    assert [l["valor_centavos"] for l in parcelas(casal, criado["id"])] == [10000] * 3

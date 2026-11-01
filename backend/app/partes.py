@@ -44,14 +44,14 @@ def com_sinal(apelido: str) -> str:
     )
 
 
-def dividir(valor: int, pesos: list[int]) -> list[int]:
-    """O valor de uma parcela dividido pelas partes, na proporção dos `pesos` (ADR 0022): cada
+def dividir(valor: int, proporcao: list[int]) -> list[int]:
+    """O valor de uma parcela dividido pelas partes, na `proporcao` delas (ADR 0022): cada
     parte fica com a sua fatia, sem os centavos, e os centavos que sobram vão para a maior parte
     (a primeira, no empate). A soma é sempre o valor."""
-    if not pesos:
+    if not proporcao:
         return []
-    total = sum(pesos)
-    valores = [valor * peso // total for peso in pesos]
-    maior = max(range(len(pesos)), key=lambda i: (pesos[i], -i))
+    total = sum(proporcao)
+    valores = [valor * fatia // total for fatia in proporcao]
+    maior = max(range(len(proporcao)), key=lambda i: (proporcao[i], -i))
     valores[maior] += valor - sum(valores)
     return valores

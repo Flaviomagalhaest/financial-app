@@ -20,6 +20,7 @@ from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import (
+    SEM_CENTAVO_POR_PARTE,
     SEM_CLASSIFICACAO_PROPRIA,
     Parte,
     conferir_ligacoes,
@@ -39,8 +40,6 @@ from app.partes import dividir as dividir_pela_proporcao
 from app.recorrencias import com_o_dia_do_lancamento, mais_meses
 
 router = APIRouter(prefix="/api")
-
-SEM_CENTAVO_POR_PARTE = "a parcela não chega a um centavo por parte"
 
 # 35 anos de prestações da casa; o limite só protege a geração de um número sem sentido.
 MAXIMO_DE_PARCELAS = valores_iniciais()["maximoDeParcelas"]
@@ -123,8 +122,8 @@ class NovoParcelamento(DadosDoParcelamento):
         soma = sum(p.valor_centavos for p in self.partes)
         if soma != informado:
             raise ValueError(f"as partes somam {soma} centavos e a compra, {informado}")
-        pesos = [p.valor_centavos for p in self.partes]
-        if min(dividir_pela_proporcao(self.total // self.parcelas, pesos)) <= 0:
+        proporcao = [p.valor_centavos for p in self.partes]
+        if min(dividir_pela_proporcao(self.total // self.parcelas, proporcao)) <= 0:
             raise ValueError(SEM_CENTAVO_POR_PARTE)
         return self
 
@@ -397,28 +396,28 @@ def _apagar_partes(conn, id: UUID) -> None:
 class PartesDaParcela:
     """As partes do parcelamento numa parcela: cada uma com o id dela na parcela (vem da parcela e
     da parte, e gerar de novo não duplica), o valor da parcela dividido na proporção e os ids das
-    tags; `pesos` é a proporção, que a parcela guarda para se dividir de novo."""
+    tags; a `proporcao`, que a parcela guarda para se dividir de novo."""
 
     partes: list[tuple[Parte, list[UUID]]]
-    pesos: list[int]
+    proporcao: list[int]
 
-    def sem_ids(self) -> list[tuple]:
-        return [lancamentos.parte_normalizada(p)[1:] for p, _ in self.partes]
+    def sem_ids(self) -> list[lancamentos.ParteNormalizada]:
+        return [lancamentos.parte_sem_id(p) for p, _ in self.partes]
 
 
 def partes_da_parcela(
     regra: Parcelamento, tags: dict[UUID, list[UUID]], lancamento_id: UUID, valor: int
 ) -> PartesDaParcela:
-    pesos = [p.valor_centavos for p in regra.partes]
+    proporcao = [p.valor_centavos for p in regra.partes]
     return PartesDaParcela(
         [
             (
                 p.model_copy(update={"id": uuid5(lancamento_id, str(p.id)), "valor_centavos": v}),
                 tags.get(p.id, []),
             )
-            for p, v in zip(regra.partes, dividir_pela_proporcao(valor, pesos))
+            for p, v in zip(regra.partes, dividir_pela_proporcao(valor, proporcao))
         ],
-        pesos,
+        proporcao,
     )
 
 
@@ -542,7 +541,9 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
                 lancamento_id,
                 valor_da_parcela(regra.valor_total_centavos, regra.parcelas, n),
             )
-            lancamentos.gravar_partes_por_id(conn, lancamento_id, divididas.partes, divididas.pesos)
+            lancamentos.gravar_partes_por_id(
+                conn, lancamento_id, divididas.partes, divididas.proporcao
+            )
     if puladas:
         return True  # as próximas vêm no lote seguinte
     if not conn.execute(
@@ -818,13 +819,27 @@ def _tags_do_parcelamento(conn, id: UUID) -> list[UUID]:
     ]
 
 
-def parcelas_por_lote(regra: Parcelamento) -> int:
+def parcelas_por_lote(conn, regra: Parcelamento) -> int:
     """Quantas parcelas cabem numa transação, pelas linhas que cada uma mexe (a folga do DSQL é
-    a mesma da geração)."""
+    a mesma da geração): as partes do parcelamento que entram e as que a parcela tem, que saem,
+    porque a de partes próprias pode ter mais que ele, e ele pode não ter mais nenhuma."""
+    (gravadas,) = conn.execute(
+        "SELECT COALESCE(max(linhas), 0) FROM (SELECT p.lancamento_id, count(*)"
+        " + sum((SELECT count(*) FROM parte_categorias c WHERE c.parte_id = p.id)"
+        " + (SELECT count(*) FROM parte_tags t WHERE t.parte_id = p.id)) AS linhas"
+        " FROM lancamento_partes p JOIN lancamentos l ON l.id = p.lancamento_id"
+        " WHERE l.parcelamento_id = %s GROUP BY p.lancamento_id) AS por_parcela",
+        (regra.id,),
+    ).fetchone()
     return max(
         1,
         LINHAS_POR_LOTE
-        // (10 + 2 * (len(regra.categoria_ids) + len(regra.tags) + _linhas_das_partes(regra))),
+        // (
+            10
+            + 2 * (len(regra.categoria_ids) + len(regra.tags))
+            + _linhas_das_partes(regra)
+            + int(gravadas)
+        ),
     )
 
 
@@ -1009,7 +1024,7 @@ def _correcoes(
         novas_partes = None
         if "partes" in pedidos_aqui and acao != "excluir":
             novas_partes = partes_da_parcela(regra, tags_das_partes, lancamento_id, valor)
-            if novas_partes.sem_ids() != [lancamentos.parte_normalizada(p)[1:] for p in tem_partes]:
+            if novas_partes.sem_ids() != list(map(lancamentos.parte_sem_id, tem_partes)):
                 mudou.append("partes")
         da_compra = [c for c in mudou if c in DA_COMPRA]
         if regra.partes or tem_partes:
@@ -1151,19 +1166,21 @@ def gravar_correcao(
     if editada:
         _seguir_o_parcelamento(conn, editada, nova, alteracao.model_fields_set | pedidas.keys())
     mantidas: set[int] = set()
+    correcoes = _correcoes(
+        conn,
+        nova,
+        geradas_depois,
+        classificacao,
+        lancamentos.hoje(),
+        mantidas,
+        _cronograma_pedido(alteracao),
+    )
+    _conferir_as_divisoes(conn, correcoes)
     realizadas = [
         *tambem_mudam,
         *(
             t.aviso
-            for t in _correcoes(
-                conn,
-                nova,
-                geradas_depois,
-                classificacao,
-                lancamentos.hoje(),
-                mantidas,
-                _cronograma_pedido(alteracao),
-            )
+            for t in correcoes
             # A que sai pulada sendo realizada já estava excluída (o encolher a tirou): nada muda.
             if t.realizada
             and t.acao not in ("reviver", "pular")
@@ -1224,6 +1241,20 @@ def gravar_correcao(
     if "partes" in pedidas and not lancamentos.iguais("partes", nova.partes, atual.partes):
         _gravar_partes(conn, id, nova.partes, usuario)
     return CorrecaoGravada(classificacao, mantidas)
+
+
+def _conferir_as_divisoes(conn, correcoes: list[_Correcao]) -> None:
+    """Cada parcela que a correção divide de novo fica com um centavo ou mais por parte, na
+    proporção do parcelamento ou na que ela já tem. Conferido antes de gravar: o refazer em lotes
+    não volta atrás, e a recusa no meio dele deixaria a correção pela metade."""
+    redivididas = [t for t in correcoes if "partes" in t.mudou and t.acao != "excluir"]
+    proporcoes = lancamentos.proporcao_das_partes(conn, [t.id for t in redivididas])
+    for t in redivididas:
+        if t.partes is not None:
+            if any(p.valor_centavos <= 0 for p, _ in t.partes.partes):
+                raise recusar(lancamentos.SEM_CENTAVO_POR_PARTE)
+        else:
+            lancamentos.conferir_divisao(t.valor, proporcoes.get(t.id, []))
 
 
 def _cronograma_pedido(alteracao: AlteracaoDeParcelamento) -> frozenset[str]:
@@ -1305,7 +1336,7 @@ def _aplicar(
     if "partes" in correcao.mudou:
         if correcao.partes is not None:
             lancamentos.gravar_partes_por_id(
-                conn, correcao.id, correcao.partes.partes, correcao.partes.pesos
+                conn, correcao.id, correcao.partes.partes, correcao.partes.proporcao
             )
         else:
             lancamentos.redividir_partes(conn, correcao.id, correcao.valor)
@@ -1331,7 +1362,7 @@ def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: Classificaca
     trabalho = _correcoes(conn, regra, geradas, classificacao)
     tags = _tags_do_parcelamento(conn, id)
     agora = datetime.now(UTC)
-    por_lote = parcelas_por_lote(regra)
+    por_lote = parcelas_por_lote(conn, regra)
     for correcao in trabalho[:por_lote]:
         _aplicar(conn, regra, correcao, tags, usuario, agora)
     return len(trabalho) > por_lote
@@ -1393,7 +1424,7 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
     faltar alguma."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False
-    por_lote = parcelas_por_lote(lidos[0])
+    por_lote = parcelas_por_lote(conn, lidos[0])
     a_excluir = [
         lancamento_id
         for (lancamento_id,) in conn.execute(

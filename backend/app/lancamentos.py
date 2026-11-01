@@ -3,7 +3,7 @@ DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no apare
 
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
-from typing import Literal, get_args
+from typing import Literal, NamedTuple, get_args
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -122,7 +122,8 @@ class Parte(BaseModel):
         return self
 
 
-SO_A_VISTA = "por enquanto, a recorrência não tem partes"
+SEM_PARTES_NA_RECORRENCIA = "por enquanto, a recorrência não tem partes"
+SEM_CENTAVO_POR_PARTE = "a parcela não chega a um centavo por parte"
 SEM_CLASSIFICACAO_PROPRIA = "a compra com partes não tem categoria, tag nem pessoa próprias"
 DUAS_PARTES_OU_MAIS = "a compra tem duas partes ou mais"
 
@@ -722,11 +723,11 @@ def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
 
 
 def gravar_partes_por_id(
-    conn, id: UUID, partes: list[tuple[Parte, list[UUID]]], pesos: list[int] | None = None
+    conn, id: UUID, partes: list[tuple[Parte, list[UUID]]], proporcao: list[int] | None = None
 ) -> None:
     """Troca as partes do lançamento pela lista, cada uma com os ids das tags; a parte que fica (o
     mesmo id) mantém o item em que contava, se a categoria dele continua nela
-    (`item_em_que_conta`). Os `pesos` são a proporção da parcela que segue a do parcelamento
+    (`item_em_que_conta`). A `proporcao` é a da parcela que segue a do parcelamento
     (ticket 139); sem eles, a proporção é o valor de cada parte."""
     guardar_item_atual_das_partes(conn, "p.lancamento_id = %s", (id,))
     item_atual = dict(
@@ -751,7 +752,7 @@ def gravar_partes_por_id(
                 parte.pessoa,
                 parte.item_categoria_id,
                 atual if atual in parte.categoria_ids else None,
-                pesos[ordem] if pesos else None,
+                proporcao[ordem] if proporcao else None,
             ),
         )
         for categoria in parte.categoria_ids:
@@ -765,43 +766,43 @@ def gravar_partes_por_id(
             )
 
 
-def pesos_das_partes(conn, ids: list[UUID]) -> dict[UUID, list[int]]:
+def proporcao_das_partes(conn, ids: list[UUID]) -> dict[UUID, list[int]]:
     """A proporção das partes de cada lançamento, na ordem delas: a que a parcela recebeu do
     parcelamento ou, sem ela, o valor de cada parte (ticket 139)."""
-    pesos: dict[UUID, list[int]] = {}
-    for lancamento_id, peso in conn.execute(
+    proporcao: dict[UUID, list[int]] = {}
+    for lancamento_id, fatia in conn.execute(
         "SELECT lancamento_id, COALESCE(proporcao, valor_centavos) FROM lancamento_partes"
         " WHERE lancamento_id = ANY(%s) ORDER BY lancamento_id, ordem",
         (ids,),
     ):
-        pesos.setdefault(lancamento_id, []).append(peso)
-    return pesos
+        proporcao.setdefault(lancamento_id, []).append(fatia)
+    return proporcao
 
 
 def redividir_partes(conn, id: UUID, valor: int) -> None:
     """A parcela com partes que muda de valor se divide de novo na mesma proporção (ticket 139):
     a proporção fica gravada, para a próxima divisão não carregar o arredondamento desta."""
-    pesos = pesos_das_partes(conn, [id]).get(id)
-    if not pesos:
+    proporcao = proporcao_das_partes(conn, [id]).get(id)
+    if not proporcao:
         return
-    conferir_divisao(valor, pesos)
+    conferir_divisao(valor, proporcao)
     ids = [
         p
         for (p,) in conn.execute(
             "SELECT id FROM lancamento_partes WHERE lancamento_id = %s ORDER BY ordem", (id,)
         )
     ]
-    for parte_id, peso, novo in zip(ids, pesos, dividir_pela_proporcao(valor, pesos)):
+    for parte_id, fatia, novo in zip(ids, proporcao, dividir_pela_proporcao(valor, proporcao)):
         conn.execute(
             "UPDATE lancamento_partes SET valor_centavos = %s, proporcao = %s WHERE id = %s",
-            (novo, peso, parte_id),
+            (novo, fatia, parte_id),
         )
 
 
-def conferir_divisao(valor: int, pesos: list[int]) -> None:
+def conferir_divisao(valor: int, proporcao: list[int]) -> None:
     """Cada parte fica com um centavo ou mais na parcela de `valor`."""
-    if pesos and min(dividir_pela_proporcao(valor, pesos)) <= 0:
-        raise recusar("a parcela não chega a um centavo por parte")
+    if proporcao and min(dividir_pela_proporcao(valor, proporcao)) <= 0:
+        raise recusar(SEM_CENTAVO_POR_PARTE)
 
 
 def apagar_partes(conn, ids: list[UUID], so_as_ligacoes: bool = False) -> None:
@@ -1226,7 +1227,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if "item_categoria_id" not in mudancas and atual.item_categoria_id not in (None, *categorias):
         # A escolha explícita sai com a categoria dela.
         mudancas["item_categoria_id"] = None
-    redividir = redivide(conn, atual, mudancas)
+    redividir = so_redivide_as_partes(conn, atual, mudancas)
     if not mudancas:
         return atual
     editado = _com_mudancas(atual, mudancas)
@@ -1293,32 +1294,32 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
 def _redivididas(conn, atual: Lancamento, valor: int) -> list[Parte]:
     """As partes do lançamento com o `valor` dividido na proporção delas; recusa se uma parte
     ficaria sem um centavo."""
-    pesos = pesos_das_partes(conn, [atual.id])[atual.id]
-    conferir_divisao(valor, pesos)
+    proporcao = proporcao_das_partes(conn, [atual.id])[atual.id]
+    conferir_divisao(valor, proporcao)
     return [
         p.model_copy(update={"valor_centavos": v})
-        for p, v in zip(atual.partes, dividir_pela_proporcao(valor, pesos))
+        for p, v in zip(atual.partes, dividir_pela_proporcao(valor, proporcao))
     ]
 
 
-def redivide(conn, atual: Lancamento, mudancas: dict) -> bool:
+def so_redivide_as_partes(conn, atual: Lancamento, mudancas: dict) -> bool:
     """Se a parcela com partes que muda de valor se divide de novo na mesma proporção (ticket
     139): quando o pedido não traz as partes ou as traz só divididas pelo valor novo, na proporção
     gravada ou na dos valores de antes. Assim a parcela não fica alterada à mão nas partes, e a
-    mudança delas em "todas" ou "esta e as próximas" continua chegando a ela."""
+    mudança delas em "todas" ou "esta e as próximas" continua chegando a ela. As partes que só se
+    redividem saem de `mudancas`."""
     if not (atual.parcelamento_id and atual.partes and "valor_centavos" in mudancas):
         return False
     if "partes" not in mudancas:
         return True
     pedidas = mudancas["partes"]
     valor = mudancas["valor_centavos"]
-    pesos = pesos_das_partes(conn, [atual.id])[atual.id]
-    sem_valor = [parte_normalizada(p)[:2] + parte_normalizada(p)[3:] for p in pedidas]
-    if sem_valor != [parte_normalizada(p)[:2] + parte_normalizada(p)[3:] for p in atual.partes]:
+    proporcao = proporcao_das_partes(conn, [atual.id])[atual.id]
+    if list(map(parte_sem_valor, pedidas)) != list(map(parte_sem_valor, atual.partes)):
         return False
-    valores = [parte_normalizada(p)[2] for p in pedidas]
+    valores = [parte_normalizada(p).valor for p in pedidas]
     divisoes = (
-        dividir_pela_proporcao(valor, pesos),
+        dividir_pela_proporcao(valor, proporcao),
         dividir_pela_proporcao(valor, [p.valor_centavos for p in atual.partes]),
     )
     if valores not in divisoes:
@@ -1367,7 +1368,7 @@ def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancame
     except ValueError as e:
         raise recusar(str(e))
     if atual.recorrencia_id:
-        raise recusar(SO_A_VISTA)
+        raise recusar(SEM_PARTES_NA_RECORRENCIA)
     if atual.estorno_de or atual.estorno_avulso:
         raise recusar("estorno não tem partes")
     if conn.execute(
@@ -1377,9 +1378,21 @@ def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancame
         raise recusar("a compra tem estorno; exclua o estorno antes de dividi-la em partes")
 
 
-def parte_normalizada(parte) -> tuple:
+class ParteNormalizada(NamedTuple):
+    """A parte como se compara: sem distinguir a ordem das categorias nem maiúsculas nas tags."""
+
+    id: str
+    descricao: str
+    valor: int
+    categorias: frozenset
+    tags: frozenset
+    pessoa: str | None
+    item: str | None
+
+
+def parte_normalizada(parte) -> ParteNormalizada:
     p = parte if isinstance(parte, Parte) else Parte.model_construct(**parte)
-    return (
+    return ParteNormalizada(
         str(p.id),
         p.descricao,
         p.valor_centavos,
@@ -1388,6 +1401,16 @@ def parte_normalizada(parte) -> tuple:
         p.pessoa or None,
         p.item_categoria_id and str(p.item_categoria_id),
     )
+
+
+def parte_sem_valor(parte) -> ParteNormalizada:
+    """A parte para saber se só o valor mudou."""
+    return parte_normalizada(parte)._replace(valor=0)
+
+
+def parte_sem_id(parte) -> ParteNormalizada:
+    """A parte para comparar a do parcelamento numa parcela, que tem outro id, com a da parcela."""
+    return parte_normalizada(parte)._replace(id="")
 
 
 def conferir_sem_estorno(conn, ids: list[UUID]) -> None:
@@ -1501,7 +1524,7 @@ def _todos(
     ):
         tags.setdefault(lancamento_id, []).append(nome)
     partes = ler_partes(conn, ids if filtro else None)
-    pesos = pesos_das_partes(conn, list(partes))
+    proporcoes = proporcao_das_partes(conn, list(partes))
     dia = hoje()
     return [
         Lancamento(
@@ -1536,7 +1559,7 @@ def _todos(
             alterada_a_mao=l[25],
             estorno_avulso=l[26],
             partes=partes.get(l[0], []),
-            proporcao_das_partes=pesos.get(l[0], []),
+            proporcao_das_partes=proporcoes.get(l[0], []),
         )
         for l in linhas
     ]
@@ -1659,9 +1682,10 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
         _conferir_conta_ou_cartao(
             conn, confirmacao.conta_id, confirmacao.conta_id == atual.conta_id
         )
-    if atual.partes and "valor_centavos" in ajustes:
-        # A compra com partes confirmada com outro valor se divide de novo na mesma proporção.
-        _redivididas(conn, atual, ajustes["valor_centavos"])
+    redividir = bool(atual.parcelamento_id and atual.partes and "valor_centavos" in ajustes)
+    if redividir:
+        # A parcela com partes confirmada com outro valor se divide de novo na mesma proporção.
+        conferir_divisao(ajustes["valor_centavos"], proporcao_das_partes(conn, [id])[id])
     mes, a_mao = _fatura_depois(conn, atual, _com_mudancas(atual, ajustes), ajustes)
     if mes != atual.mes:
         guardar_item_atual_do_lancamento(conn, id)  # no mês novo, fica no item em que estava
@@ -1684,7 +1708,7 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
         ),
     )
     registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
-    if atual.partes and "valor_centavos" in ajustes:
+    if redividir:
         redividir_partes(conn, id, ajustes["valor_centavos"])
     return _um(conn, id)
 
