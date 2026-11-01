@@ -17,6 +17,7 @@ import psycopg
 from psycopg import IsolationLevel
 from psycopg.rows import dict_row
 
+from app import lancamentos
 from app.backup import conferir_backup, gerar_backup
 from app.banco import conectar, em_transacao
 from app.lancamentos import MES_EM_QUE_CONTA, NO_CARTAO, PARCELAS
@@ -131,28 +132,50 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             | colunas,
         )
 
-    linhas = [
-        linha(
-            l["data"],
-            l["criado_em"],
-            l["situacao"],
-            l["criado_por"],
-            l["alterado_por"],
-            # A parcela como o Mobills a escreve: "Geladeira (3/10)".
-            descricao=(
-                f"{l['descricao']} ({l['parcela']}/{l['parcelas']})".lstrip()
-                if l["parcela"]
-                else l["descricao"]
-            ),
-            valor=_reais(
-                -l["valor"] if l["tipo"] == "despesa" and not l["estorno_de"] else l["valor"]
-            ),
-            conta_ou_cartao=contas.get(l["conta_id"], ""),
-            fatura=l["mes"].strftime("%Y-%m") if l["no_cartao"] else "",
-            categorias=categorias.get(l["id"], []),
-            tags=tags.get(l["id"], []),
-            pessoa=nome(l["pessoa"]),
+    partes = lancamentos.ler_partes(conn)
+    nomes_das_categorias = dict(conn.execute("SELECT id, nome FROM categorias").fetchall())
+
+    def linhas_do_lancamento(l: dict) -> list[tuple]:
+        """Uma linha por lançamento; a compra com partes, uma por parte, "<compra> — <parte>",
+        com o valor e a classificação dela (ADR 0022)."""
+        # A parcela como o Mobills a escreve: "Geladeira (3/10)".
+        descricao = (
+            f"{l['descricao']} ({l['parcela']}/{l['parcelas']})".lstrip()
+            if l["parcela"]
+            else l["descricao"]
         )
+        pedacos = [
+            (
+                " — ".join(d for d in (descricao, p.descricao) if d),
+                p.valor_centavos,
+                sorted(nomes_das_categorias.get(c, "") for c in p.categoria_ids),
+                p.tags,
+                p.pessoa,
+            )
+            for p in partes.get(l["id"], [])
+        ] or [
+            (descricao, l["valor"], categorias.get(l["id"], []), tags.get(l["id"], []), l["pessoa"])
+        ]
+        return [
+            linha(
+                l["data"],
+                l["criado_em"],
+                l["situacao"],
+                l["criado_por"],
+                l["alterado_por"],
+                descricao=descricao_do_pedaco,
+                valor=_reais(-valor if l["tipo"] == "despesa" and not l["estorno_de"] else valor),
+                conta_ou_cartao=contas.get(l["conta_id"], ""),
+                fatura=l["mes"].strftime("%Y-%m") if l["no_cartao"] else "",
+                categorias=categorias_do_pedaco,
+                tags=tags_do_pedaco,
+                pessoa=nome(pessoa),
+            )
+            for descricao_do_pedaco, valor, categorias_do_pedaco, tags_do_pedaco, pessoa in pedacos
+        ]
+
+    linhas = [
+        linha_do_lancamento
         for l in _dicionarios(
             conn,
             "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id, estorno_de,"
@@ -161,6 +184,7 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
             # As parcelas no cartão têm a mesma data: a ordem delas fica a do número.
             " FROM lancamentos WHERE excluido_em IS NULL ORDER BY parcela",
         )
+        for linha_do_lancamento in linhas_do_lancamento(l)
     ] + [
         linha(
             t["data"],

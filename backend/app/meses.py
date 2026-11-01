@@ -13,6 +13,7 @@ from app import faturas, lancamentos, planejamento
 from app.banco import conectar
 from app.lancamentos import MES_EM_QUE_CONTA, VALOR_COM_SINAL, url_do_banco
 from app.login import UsuarioLogado
+from app.partes import CATEGORIAS_QUE_CONTAM, PESSOAS_QUE_CONTAM, TAGS_QUE_CONTAM, com_sinal
 from app.planejamento import Mes, Planejamento, primeiro_dia
 from app.recorrencias import mais_meses
 
@@ -53,17 +54,18 @@ def _totais(conn, mes: str) -> TotaisDoMes:
         f"SELECT COALESCE(SUM({VALOR_COM_SINAL}), 0)::bigint {_DESPESAS_DO_MES}", (dia,)
     ).fetchone()
     ajustes = faturas.ajustes_do_mes(conn, dia)
+    # Por categoria e por tag, a compra com partes conta cada parte (ADR 0022).
     por_categoria = conn.execute(
-        f"SELECT lc.categoria_id, SUM({VALOR_COM_SINAL})::bigint AS centavos"
-        f" FROM lancamento_categorias lc JOIN lancamentos ON lancamentos.id = lc.lancamento_id"
+        f"SELECT lc.categoria_id, SUM({com_sinal('lc')})::bigint AS centavos"
+        f" FROM {CATEGORIAS_QUE_CONTAM} lc JOIN lancamentos ON lancamentos.id = lc.lancamento_id"
         f" WHERE lancamentos.excluido_em IS NULL AND lancamentos.tipo = 'despesa'"
         f" AND {MES_EM_QUE_CONTA} = %s GROUP BY lc.categoria_id"
         f" ORDER BY centavos DESC, lc.categoria_id",
         (dia,),
     ).fetchall()
     por_tag = conn.execute(
-        f"SELECT t.nome, SUM({VALOR_COM_SINAL})::bigint AS centavos"
-        f" FROM lancamento_tags lt JOIN lancamentos ON lancamentos.id = lt.lancamento_id"
+        f"SELECT t.nome, SUM({com_sinal('lt')})::bigint AS centavos"
+        f" FROM {TAGS_QUE_CONTAM} lt JOIN lancamentos ON lancamentos.id = lt.lancamento_id"
         f" JOIN tags t ON t.id = lt.tag_id"
         f" WHERE lancamentos.excluido_em IS NULL AND lancamentos.tipo = 'despesa'"
         f" AND {MES_EM_QUE_CONTA} = %s GROUP BY t.nome ORDER BY centavos DESC, t.nome",
@@ -129,6 +131,9 @@ class LinhaDoRanking(BaseModel):
     centavos: int
     # Os lançamentos da linha, por data, para a folha que a linha abre.
     lancamento_ids: list[UUID]
+    # Das compras com partes, só as partes que contam na linha (ADR 0022): a folha mostra cada
+    # uma com o valor dela.
+    parte_ids: list[UUID] = []
 
 
 class Ranking(BaseModel):
@@ -242,52 +247,49 @@ def _comparacao(conn, dia: date) -> Comparacao:
     )
 
 
-def _linhas_do_ranking(grupos: dict[str | None, list[tuple[UUID, int]]]) -> list[LinhaDoRanking]:
+Grupos = dict[str | None, list[tuple[UUID, UUID | None, int]]]
+
+
+def _linhas_do_ranking(grupos: Grupos) -> list[LinhaDoRanking]:
     linhas = [
         LinhaDoRanking(
             chave=chave,
-            centavos=sum(valor for _, valor in lancamentos_da_linha),
-            lancamento_ids=[id for id, _ in lancamentos_da_linha],
+            centavos=sum(valor for _, _, valor in da_linha),
+            lancamento_ids=list(dict.fromkeys(id for id, _, _ in da_linha)),
+            parte_ids=[parte for _, parte, _ in da_linha if parte],
         )
-        for chave, lancamentos_da_linha in grupos.items()
+        for chave, da_linha in grupos.items()
     ]
     return sorted(linhas, key=lambda linha: (-linha.centavos, linha.chave or ""))
 
 
 def _ranking(conn, dia: date) -> Ranking:
-    despesas = conn.execute(
-        f"SELECT lancamentos.id, {VALOR_COM_SINAL}, lancamentos.pessoa {_DESPESAS_DO_MES}"
-        " ORDER BY lancamentos.data, lancamentos.criado_em, lancamentos.id",
-        (dia,),
-    ).fetchall()
-    ids = [id for id, _, _ in despesas]
-    categorias: dict[UUID, list[UUID]] = {}
-    for lancamento_id, categoria_id in conn.execute(
-        "SELECT lancamento_id, categoria_id FROM lancamento_categorias"
-        " WHERE lancamento_id = ANY(%s)",
-        (ids,),
-    ):
-        categorias.setdefault(lancamento_id, []).append(categoria_id)
-    tags: dict[UUID, list[str]] = {}
-    for lancamento_id, nome in conn.execute(
-        "SELECT lt.lancamento_id, t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
-        " WHERE lt.lancamento_id = ANY(%s)",
-        (ids,),
-    ):
-        tags.setdefault(lancamento_id, []).append(nome)
-    por_categoria: dict[str | None, list[tuple[UUID, int]]] = {}
-    por_tag: dict[str | None, list[tuple[UUID, int]]] = {}
-    por_pessoa: dict[str | None, list[tuple[UUID, int]]] = {}
-    for id, valor, pessoa in despesas:
-        for categoria_id in categorias.get(id, []):
-            por_categoria.setdefault(str(categoria_id), []).append((id, valor))
-        for nome in tags.get(id, []):
-            por_tag.setdefault(nome, []).append((id, valor))
-        por_pessoa.setdefault(pessoa, []).append((id, valor))
+    """A compra com partes entra em cada linha pelas partes que contam nela, com o valor delas."""
+    do_mes = (
+        "lancamentos.excluido_em IS NULL AND lancamentos.tipo = 'despesa'"
+        f" AND {MES_EM_QUE_CONTA} = %s"
+    )
+    ordem = "lancamentos.data, lancamentos.criado_em, lancamentos.id, x.ordem NULLS FIRST"
+
+    def agrupar(chave: str, de: str, junta: str = "") -> Grupos:
+        grupos: Grupos = {}
+        for valor_da_chave, id, parte, valor in conn.execute(
+            f"SELECT {chave}, lancamentos.id, x.parte_id, {com_sinal('x')} FROM {de} x"
+            f" JOIN lancamentos ON lancamentos.id = x.lancamento_id {junta}"
+            f" WHERE {do_mes} ORDER BY {ordem}",
+            (dia,),
+        ):
+            grupos.setdefault(None if valor_da_chave is None else str(valor_da_chave), []).append(
+                (id, parte, valor)
+            )
+        return grupos
+
     return Ranking(
-        por_categoria=_linhas_do_ranking(por_categoria),
-        por_tag=_linhas_do_ranking(por_tag),
-        por_pessoa=_linhas_do_ranking(por_pessoa),
+        por_categoria=_linhas_do_ranking(agrupar("x.categoria_id", CATEGORIAS_QUE_CONTAM)),
+        por_tag=_linhas_do_ranking(
+            agrupar("t.nome", TAGS_QUE_CONTAM, "JOIN tags t ON t.id = x.tag_id")
+        ),
+        por_pessoa=_linhas_do_ranking(agrupar("x.pessoa", PESSOAS_QUE_CONTAM)),
     )
 
 

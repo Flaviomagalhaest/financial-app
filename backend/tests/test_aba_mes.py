@@ -150,18 +150,33 @@ def test_ranking_por_categoria_tag_e_pessoa_traz_os_lancamentos_de_cada_linha(ca
     ranking = ler_mes(casal, "2026-10")["ranking"]
 
     assert ranking["por_categoria"] == [
-        {"chave": viagem, "centavos": 55000, "lancamento_ids": [jantar["id"], hotel["id"]]},
-        {"chave": mercado, "centavos": 23000, "lancamento_ids": [feira["id"], jantar["id"]]},
+        {
+            "chave": viagem,
+            "centavos": 55000,
+            "lancamento_ids": [jantar["id"], hotel["id"]],
+            "parte_ids": [],
+        },
+        {
+            "chave": mercado,
+            "centavos": 23000,
+            "lancamento_ids": [feira["id"], jantar["id"]],
+            "parte_ids": [],
+        },
     ]
     assert ranking["por_tag"] == [
-        {"chave": "ilhabela", "centavos": 55000, "lancamento_ids": [jantar["id"], hotel["id"]]},
-        {"chave": "férias", "centavos": 15000, "lancamento_ids": [jantar["id"]]},
+        {
+            "chave": "ilhabela",
+            "centavos": 55000,
+            "lancamento_ids": [jantar["id"], hotel["id"]],
+            "parte_ids": [],
+        },
+        {"chave": "férias", "centavos": 15000, "lancamento_ids": [jantar["id"]], "parte_ids": []},
     ]
     # Sem pessoa, o lançamento é do conjunto (`chave` vazia).
     assert ranking["por_pessoa"] == [
-        {"chave": None, "centavos": 40000, "lancamento_ids": [hotel["id"]]},
-        {"chave": "flavio", "centavos": 15000, "lancamento_ids": [jantar["id"]]},
-        {"chave": "esposa", "centavos": 8000, "lancamento_ids": [feira["id"]]},
+        {"chave": None, "centavos": 40000, "lancamento_ids": [hotel["id"]], "parte_ids": []},
+        {"chave": "flavio", "centavos": 15000, "lancamento_ids": [jantar["id"]], "parte_ids": []},
+        {"chave": "esposa", "centavos": 8000, "lancamento_ids": [feira["id"]], "parte_ids": []},
     ]
 
 

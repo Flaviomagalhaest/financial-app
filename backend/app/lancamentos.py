@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app import faturas
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
-from app.item_em_que_conta import guardar_item_atual_do_lancamento
+from app.item_em_que_conta import guardar_item_atual_das_partes, guardar_item_atual_do_lancamento
 from app.login import UsuarioLogado
 from app.pessoas import configuradas
 
@@ -88,6 +88,57 @@ def _primeiro_dia(mes: date | None) -> date | None:
     return mes and faturas.mes_de(mes)
 
 
+ITEM_FORA_DAS_CATEGORIAS = "o item escolhido não é de uma categoria do lançamento"
+
+
+class Parte(BaseModel):
+    """Um pedaço da compra que junta coisas diferentes, com classificação própria (ADR 0022). Quem
+    soma por categoria, tag, pessoa ou item lê a parte; a fatura, o mês e o saldo leem a compra."""
+
+    # Nasce no aparelho, como o do lançamento, e fica enquanto a parte existir.
+    id: UUID
+    descricao: str = ""
+    valor_centavos: int = Field(gt=0)
+    categoria_ids: list[UUID] = Field(min_length=1)
+    tags: list[str] = []
+    # O id de uma pessoa do casal; sem ela, a parte é do conjunto.
+    pessoa: str | None = None
+    # A escolha do item do planejamento em que a parte conta, como no lançamento (ADR 0006).
+    item_categoria_id: UUID | None = None
+
+    _tags = field_validator("tags")(tags_limpas)
+    _categorias = field_validator("categoria_ids")(sem_repetidas)
+
+    @field_validator("pessoa")
+    @classmethod
+    def _conjunto(cls, pessoa: str | None) -> str | None:
+        return pessoa or None
+
+    @model_validator(mode="after")
+    def _item_de_uma_das_categorias(self):
+        if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
+            raise ValueError(ITEM_FORA_DAS_CATEGORIAS)
+        return self
+
+
+SEM_CLASSIFICACAO_PROPRIA = "a compra com partes não tem categoria, tag nem pessoa próprias"
+DUAS_PARTES_OU_MAIS = "a compra tem duas partes ou mais"
+
+
+def conferir_partes(partes: list[Parte], valor_centavos: int, tipo: str) -> None:
+    """As regras das partes que não dependem do banco: duas ou mais, ids diferentes, só na
+    despesa, e a soma é o valor da compra."""
+    if len(partes) < 2:
+        raise ValueError(DUAS_PARTES_OU_MAIS)
+    if len({p.id for p in partes}) != len(partes):
+        raise ValueError("parte repetida")
+    if tipo != "despesa":
+        raise ValueError("partes só na despesa")
+    soma = sum(p.valor_centavos for p in partes)
+    if soma != valor_centavos:
+        raise ValueError(f"as partes somam {soma} centavos e a compra, {valor_centavos}")
+
+
 class DadosDoLancamento(BaseModel):
     id: UUID
     tipo: Literal["despesa", "receita"]
@@ -96,7 +147,8 @@ class DadosDoLancamento(BaseModel):
     descricao: str = ""
     # A conta ou o cartão; no cartão, `data` é a data da compra.
     conta_id: UUID
-    categoria_ids: list[UUID] = Field(min_length=1)
+    # Vazia só na compra com partes, que não tem classificação própria.
+    categoria_ids: list[UUID]
     # Sem situação, a data decide: futura nasce prevista, de hoje ou do passado, realizada.
     situacao: Literal["previsto", "realizado"] | None = None
     # Pelo nome: a tag que ainda não existe nasce junto com o lançamento.
@@ -113,13 +165,13 @@ class DadosDoLancamento(BaseModel):
     # que tem o item; sem ela, conta sozinho quando só uma das categorias tem item no mês
     # (ADR 0006). Escolha explícita nunca muda sozinha.
     item_categoria_id: UUID | None = None
+    # As partes da compra à vista que junta coisas diferentes (ADR 0022): duas ou mais, somando o
+    # valor dela. Com partes, a compra não tem categoria, tag, pessoa nem item próprios.
+    partes: list[Parte] = []
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
     _fatura = field_validator("fatura_mes")(_primeiro_dia)
-
-
-ITEM_FORA_DAS_CATEGORIAS = "o item escolhido não é de uma categoria do lançamento"
 
 
 class NovoLancamento(DadosDoLancamento):
@@ -127,7 +179,16 @@ class NovoLancamento(DadosDoLancamento):
     acao_em: datetime | None = None
 
     @model_validator(mode="after")
-    def _item_de_uma_das_categorias(self):
+    def _classificacao(self):
+        if self.partes:
+            if self.categoria_ids or self.tags or self.pessoa or self.item_categoria_id:
+                raise ValueError(SEM_CLASSIFICACAO_PROPRIA)
+            if self.estorno_de:
+                raise ValueError("estorno não tem partes")
+            conferir_partes(self.partes, self.valor_centavos, self.tipo)
+            return self
+        if not self.categoria_ids:
+            raise ValueError("lançamento sem categoria")
         if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
             raise ValueError(ITEM_FORA_DAS_CATEGORIAS)
         return self
@@ -179,6 +240,8 @@ Campo = Literal[
     "pessoa",
     "fatura_mes",
     "item_categoria_id",
+    # As partes são um campo só no conflito: quem decide escolhe a lista inteira (ADR 0022).
+    "partes",
 ]
 CAMPOS: tuple[Campo, ...] = get_args(Campo)
 
@@ -203,6 +266,9 @@ class AlteracaoDeLancamento(BaseModel):
     fatura_mes: date | None = None
     # Escolhe o item em que o lançamento conta; a escolha sai com a categoria dela.
     item_categoria_id: UUID | None = None
+    # A lista inteira de partes. Duas ou mais dividem a compra (que perde a classificação
+    # própria); uma só é tirar a penúltima: a compra volta a ser uma, com a classificação dela.
+    partes: list[Parte] | None = None
     acao_em: datetime | None = None
 
     _tags = field_validator("tags")(tags_limpas)
@@ -511,25 +577,39 @@ def conferir_ligacoes(
     """Conta, cartão e categoria arquivados só valem num lançamento que já os tinha. Serve a quem
     tem `tipo`, `conta_id`, `categoria_ids` e `pessoa`: o lançamento e a regra que gera
     lançamentos."""
-    pessoas = configuradas()
-    if lancamento.pessoa and pessoas and lancamento.pessoa not in pessoas:
-        raise recusar("pessoa não encontrada")
     _conferir_conta_ou_cartao(conn, lancamento.conta_id, lancamento.conta_id == conta_atual)
+    # A compra com partes classifica em cada parte (ADR 0022).
+    for classificado in [lancamento, *getattr(lancamento, "partes", [])]:
+        _conferir_classificacao(
+            conn,
+            lancamento.tipo,
+            classificado.categoria_ids,
+            classificado.pessoa,
+            categorias_atuais,
+        )
+
+
+def _conferir_classificacao(
+    conn, tipo: str, categoria_ids: list[UUID], pessoa: str | None, atuais: frozenset[UUID]
+) -> None:
+    pessoas = configuradas()
+    if pessoa and pessoas and pessoa not in pessoas:
+        raise recusar("pessoa não encontrada")
     tipos = {}
     arquivadas = set()
-    for id, tipo, arquivada in conn.execute(
+    for id, tipo_da_categoria, arquivada in conn.execute(
         "SELECT id, tipo, arquivada_em IS NOT NULL FROM categorias WHERE id = ANY(%s)",
-        (lancamento.categoria_ids,),
+        (categoria_ids,),
     ):
-        tipos[id] = tipo
+        tipos[id] = tipo_da_categoria
         if arquivada:
             arquivadas.add(id)
-    for categoria in lancamento.categoria_ids:
+    for categoria in categoria_ids:
         if categoria not in tipos:
             raise recusar("categoria não encontrada")
-        if tipos[categoria] != lancamento.tipo:
-            raise recusar(f"categoria de {tipos[categoria]} num lançamento de {lancamento.tipo}")
-        if categoria in arquivadas and categoria not in categorias_atuais:
+        if tipos[categoria] != tipo:
+            raise recusar(f"categoria de {tipos[categoria]} num lançamento de {tipo}")
+        if categoria in arquivadas and categoria not in atuais:
             raise recusar("categoria arquivada")
 
 
@@ -563,7 +643,7 @@ def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
         for linha in conn.execute(
             "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
         )
-    }
+    } | categorias_e_tags_das_partes(conn, id)[1]
     ids = ids_das_tags(conn, nomes, usuario, ja_tinha)
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
     for tag in ids:
@@ -579,6 +659,90 @@ def gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
             "INSERT INTO lancamento_categorias (lancamento_id, categoria_id) VALUES (%s, %s)",
             (id, categoria),
         )
+
+
+def categorias_e_tags_das_partes(conn, id: UUID) -> tuple[frozenset[UUID], set[UUID]]:
+    """As categorias e as tags que as partes de um lançamento já têm: a arquivada segue valendo
+    para quem já a tinha."""
+    categorias = frozenset(
+        c
+        for (c,) in conn.execute(
+            "SELECT pc.categoria_id FROM parte_categorias pc"
+            " JOIN lancamento_partes p ON p.id = pc.parte_id WHERE p.lancamento_id = %s",
+            (id,),
+        )
+    )
+    tags = {
+        t
+        for (t,) in conn.execute(
+            "SELECT pt.tag_id FROM parte_tags pt"
+            " JOIN lancamento_partes p ON p.id = pt.parte_id WHERE p.lancamento_id = %s",
+            (id,),
+        )
+    }
+    return categorias, tags
+
+
+def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
+    """Troca as partes do lançamento pela lista; a parte que fica (o mesmo id) mantém o item em
+    que contava, se a categoria dele continua nela (`item_em_que_conta`)."""
+    guardar_item_atual_das_partes(conn, "p.lancamento_id = %s", (id,))
+    item_atual = dict(
+        conn.execute(
+            "SELECT id, item_atual_categoria_id FROM lancamento_partes WHERE lancamento_id = %s",
+            (id,),
+        ).fetchall()
+    )
+    _, ja_tinha = categorias_e_tags_das_partes(conn, id)
+    ja_tinha |= {
+        t
+        for (t,) in conn.execute(
+            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
+        )
+    }
+    tags_de_cada = [ids_das_tags(conn, p.tags, usuario, ja_tinha) for p in partes]
+    apagar_partes(conn, [id])
+    for ordem, (parte, tags) in enumerate(zip(partes, tags_de_cada)):
+        atual = item_atual.get(parte.id)
+        conn.execute(
+            "INSERT INTO lancamento_partes (id, lancamento_id, ordem, descricao, valor_centavos,"
+            " pessoa, item_categoria_id, item_atual_categoria_id)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                parte.id,
+                id,
+                ordem,
+                parte.descricao,
+                parte.valor_centavos,
+                parte.pessoa,
+                parte.item_categoria_id,
+                atual if atual in parte.categoria_ids else None,
+            ),
+        )
+        for categoria in parte.categoria_ids:
+            conn.execute(
+                "INSERT INTO parte_categorias (parte_id, categoria_id) VALUES (%s, %s)",
+                (parte.id, categoria),
+            )
+        for tag in tags:
+            conn.execute(
+                "INSERT INTO parte_tags (parte_id, tag_id) VALUES (%s, %s)", (parte.id, tag)
+            )
+
+
+def apagar_partes(conn, ids: list[UUID]) -> None:
+    """Tira as partes dos lançamentos, com as ligações delas."""
+    partes = [
+        p
+        for (p,) in conn.execute(
+            "SELECT id FROM lancamento_partes WHERE lancamento_id = ANY(%s)", (ids,)
+        )
+    ]
+    if not partes:
+        return
+    conn.execute("DELETE FROM parte_categorias WHERE parte_id = ANY(%s)", (partes,))
+    conn.execute("DELETE FROM parte_tags WHERE parte_id = ANY(%s)", (partes,))
+    conn.execute("DELETE FROM lancamento_partes WHERE id = ANY(%s)", (partes,))
 
 
 def acompanhar_estornos(conn, compra_id: UUID) -> None:
@@ -813,6 +977,8 @@ def _item_atual_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None
 
 
 def iguais(campo: Campo, pedido, gravado) -> bool:
+    if campo == "partes":
+        return list(map(_parte_normalizada, pedido)) == list(map(_parte_normalizada, gravado))
     if campo == "categoria_ids":
         return set(pedido) == set(gravado)
     if campo == "tags":
@@ -838,6 +1004,10 @@ def _conferir_estorno(
     tipo, valor, conta, estorno_de = original
     if estorno_de:
         raise recusar("estorno de estorno")
+    if conn.execute(
+        "SELECT 1 FROM lancamento_partes WHERE lancamento_id = %s LIMIT 1", (original_id,)
+    ).fetchone():
+        raise recusar("o estorno de uma parte da compra ainda não existe")
     if tipo != "despesa" or not faturas.ler_cartao(conn, conta):
         raise recusar("só compra no cartão tem estorno")
     (outros,) = conn.execute(
@@ -859,12 +1029,15 @@ def _conferir_estorno(
 def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, sem criar de novo."""
     # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
-    ja_ligadas = frozenset(
-        categoria
-        for (categoria,) in conn.execute(
-            "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
-            (novo.id,),
+    ja_ligadas = (
+        frozenset(
+            categoria
+            for (categoria,) in conn.execute(
+                "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
+                (novo.id,),
+            )
         )
+        | categorias_e_tags_das_partes(conn, novo.id)[0]
     )
     if (
         novo.estorno_de
@@ -910,6 +1083,8 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     elif gravados:
         gravar_categorias(conn, novo.id, novo.categoria_ids)
         _gravar_tags(conn, novo.id, novo.tags, usuario)
+        if novo.partes:
+            gravar_partes(conn, novo.id, novo.partes, usuario)
     return _atual(conn, novo.id, usuario), bool(gravados)
 
 
@@ -922,6 +1097,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     pedidas = alteracao.model_dump(exclude={"versao", "acao_em"}, exclude_none=True)
     if "pessoa" in pedidas:
         pedidas["pessoa"] = pedidas["pessoa"] or None
+    if alteracao.partes is not None:
+        pedidas |= _o_que_as_partes_mudam(alteracao.partes, pedidas)
     mudancas = {}
     conflitos: list[Campo] = []
     for campo, valor in pedidas.items():
@@ -955,6 +1132,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if not mudancas:
         return atual
     editado = _com_mudancas(atual, mudancas)
+    if editado.partes:
+        _conferir_compra_com_partes(conn, atual, editado)
     if atual.estorno_de:
         if "tipo" in mudancas:
             raise recusar("estorno é um crédito no cartão")
@@ -965,7 +1144,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             _conferir_estorno(conn, id, editado, atual.estorno_de)
     momento = _momento(alteracao.acao_em)
-    conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
+    ja_ligadas = frozenset(atual.categoria_ids) | categorias_e_tags_das_partes(conn, id)[0]
+    conferir_ligacoes(conn, editado, atual.conta_id, ja_ligadas)
     mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
     item_atual = _item_atual_depois(conn, id, editado)
     versao = subir_versao(
@@ -996,8 +1176,76 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         gravar_categorias(conn, id, editado.categoria_ids)
     if "tags" in mudancas:
         _gravar_tags(conn, id, editado.tags, usuario)
+    if "partes" in mudancas:
+        gravar_partes(conn, id, editado.partes, usuario)
     acompanhar_estornos(conn, id)
     return _um(conn, id)
+
+
+def _o_que_as_partes_mudam(partes: list[Parte], pedidas: dict) -> dict:
+    """Os campos que mudam com as partes pedidas, para valerem também no conflito: dividir tira a
+    classificação própria da compra; uma parte só (tirar a penúltima) devolve a dela à compra,
+    que volta a ser uma, com o valor dela. Sem partes, a compra volta a ser uma com a
+    classificação que o pedido traz."""
+    if not partes:
+        if not pedidas.get("categoria_ids"):
+            raise recusar("sem as partes, a compra volta a ter categoria: mande as categorias dela")
+        return {"partes": []}
+    if len(partes) == 1:
+        [fica] = partes
+        return {
+            "partes": [],
+            "categoria_ids": fica.categoria_ids,
+            "tags": fica.tags,
+            "pessoa": fica.pessoa,
+            "item_categoria_id": fica.item_categoria_id,
+        }
+    if any(pedidas.get(c) for c in ("categoria_ids", "tags", "pessoa", "item_categoria_id")):
+        raise recusar(SEM_CLASSIFICACAO_PROPRIA)
+    return {
+        "partes": partes,
+        "categoria_ids": [],
+        "tags": [],
+        "pessoa": None,
+        "item_categoria_id": None,
+    }
+
+
+def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancamento) -> None:
+    """A compra com partes depois da mudança: sem classificação própria, com as partes somando o
+    valor dela, à vista (a parcela e a recorrência têm partes nos tickets 139 e 140) e sem estorno
+    (o estorno de uma parte é do ticket 138)."""
+    if editado.categoria_ids or editado.tags or editado.pessoa or editado.item_categoria_id:
+        raise recusar(SEM_CLASSIFICACAO_PROPRIA)
+    try:
+        conferir_partes(editado.partes, editado.valor_centavos, editado.tipo)
+    except ValueError as e:
+        raise recusar(str(e))
+    if atual.parcelamento_id or atual.recorrencia_id:
+        raise recusar(SO_A_VISTA)
+    if atual.estorno_de:
+        raise recusar("estorno não tem partes")
+    if conn.execute(
+        "SELECT 1 FROM lancamentos WHERE estorno_de = %s AND excluido_em IS NULL LIMIT 1",
+        (atual.id,),
+    ).fetchone():
+        raise recusar("a compra tem estorno; exclua o estorno antes de dividi-la em partes")
+
+
+SO_A_VISTA = "por enquanto, só a compra à vista tem partes"
+
+
+def _parte_normalizada(parte) -> tuple:
+    p = parte if isinstance(parte, Parte) else Parte.model_construct(**parte)
+    return (
+        str(p.id),
+        p.descricao,
+        p.valor_centavos,
+        frozenset(map(str, p.categoria_ids)),
+        frozenset(t.casefold() for t in p.tags),
+        p.pessoa or None,
+        p.item_categoria_id and str(p.item_categoria_id),
+    )
 
 
 def conferir_sem_estorno(conn, ids: list[UUID]) -> None:
@@ -1041,6 +1289,20 @@ def excluir(
     # tag não contarem como usadas por ele.
     conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
+    _soltar_ligacoes_das_partes(conn, [id])
+
+
+def _soltar_ligacoes_das_partes(conn, ids: list[UUID]) -> None:
+    """As partes do excluído ficam, mas sem as ligações, como as do lançamento."""
+    partes = [
+        p
+        for (p,) in conn.execute(
+            "SELECT id FROM lancamento_partes WHERE lancamento_id = ANY(%s)", (ids,)
+        )
+    ]
+    if partes:
+        conn.execute("DELETE FROM parte_categorias WHERE parte_id = ANY(%s)", (partes,))
+        conn.execute("DELETE FROM parte_tags WHERE parte_id = ANY(%s)", (partes,))
 
 
 def na_rota[T](
@@ -1109,6 +1371,7 @@ def _todos(
         (ids,) if filtro else (),
     ):
         tags.setdefault(lancamento_id, []).append(nome)
+    partes = ler_partes(conn, ids if filtro else None)
     dia = hoje()
     return [
         Lancamento(
@@ -1141,9 +1404,51 @@ def _todos(
             parcelas=l[23],
             item_categoria_id=l[24],
             alterada_a_mao=l[25],
+            partes=partes.get(l[0], []),
         )
         for l in linhas
     ]
+
+
+def ler_partes(conn, ids: list[UUID] | None = None) -> dict[UUID, list[Parte]]:
+    """As partes de cada lançamento, na ordem; sem `ids`, as de todos."""
+    filtro = "WHERE p.lancamento_id = ANY(%s)" if ids is not None else ""
+    parametros = (ids,) if ids is not None else ()
+    linhas = conn.execute(
+        "SELECT p.id, p.lancamento_id, p.descricao, p.valor_centavos, p.pessoa,"
+        f" p.item_categoria_id FROM lancamento_partes p {filtro} ORDER BY p.lancamento_id, p.ordem",
+        parametros,
+    ).fetchall()
+    if not linhas:
+        return {}
+    categorias: dict[UUID, list[UUID]] = {}
+    for parte_id, categoria_id in conn.execute(
+        "SELECT pc.parte_id, pc.categoria_id FROM parte_categorias pc"
+        f" JOIN lancamento_partes p ON p.id = pc.parte_id {filtro} ORDER BY pc.categoria_id",
+        parametros,
+    ):
+        categorias.setdefault(parte_id, []).append(categoria_id)
+    tags: dict[UUID, list[str]] = {}
+    for parte_id, nome in conn.execute(
+        "SELECT pt.parte_id, t.nome FROM parte_tags pt JOIN tags t ON t.id = pt.tag_id"
+        f" JOIN lancamento_partes p ON p.id = pt.parte_id {filtro} ORDER BY t.nome",
+        parametros,
+    ):
+        tags.setdefault(parte_id, []).append(nome)
+    por_lancamento: dict[UUID, list[Parte]] = {}
+    for id, lancamento_id, descricao, valor, pessoa, item in linhas:
+        por_lancamento.setdefault(lancamento_id, []).append(
+            Parte.model_construct(
+                id=id,
+                descricao=descricao,
+                valor_centavos=valor,
+                categoria_ids=categorias.get(id, []),
+                tags=tags.get(id, []),
+                pessoa=pessoa,
+                item_categoria_id=item,
+            )
+        )
+    return por_lancamento
 
 
 def ler_por_ids(conn, ids: list[UUID]) -> list[Lancamento]:

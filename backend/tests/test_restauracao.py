@@ -198,12 +198,15 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "itens_do_planejamento": 0,
             "lancamento_campos": 0,
             "lancamento_categorias": 0,
+            "lancamento_partes": 0,
             "lancamento_tags": 0,
             "lancamentos": 0,
             "modelo_do_planejamento": 0,
             "parcelamento_categorias": 0,
             "parcelamento_tags": 0,
             "parcelamentos": 0,
+            "parte_categorias": 0,
+            "parte_tags": 0,
             "recorrencias": 0,
             "recorrencia_categorias": 0,
             "recorrencia_tags": 0,
@@ -1053,3 +1056,55 @@ def test_as_edicoes_em_lote_voltam_do_backup_com_o_de_antes(database_url):
         assert conn.execute(
             "SELECT versao, resultado_do_desfazer FROM edicao_em_lote_lancamentos"
         ).fetchall() == [(3, None)]
+
+
+def test_backup_da_versao_24_sem_partes_restaura_sem_nenhuma(database_url):
+    # O formato 24, anterior ao ticket 137: toda compra era uma só.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        atual = gerar_backup(conn)
+    antigo = io.BytesIO()
+    novas = ("lancamento_partes", "parte_categorias", "parte_tags")
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            if nome.removesuffix(".csv") in novas:
+                continue
+            conteudo = origem.read(nome)
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 24
+                for tabela in novas:
+                    del manifesto["tabelas"][tabela]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT count(*) FROM lancamento_partes").fetchone() == (0,)
+
+
+def test_as_partes_da_compra_voltam_do_backup_com_as_categorias_e_as_tags(database_url):
+    aplicar_migrations(database_url)
+    compra, parte, categoria, tag = (f"00000000-0000-0000-0000-00000000000{n}" for n in range(1, 5))
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamento_partes (id, lancamento_id, ordem, descricao, valor_centavos,"
+            " pessoa) VALUES (%s, %s, 0, 'Vestido', 50000, 'esposa')",
+            (parte, compra),
+        )
+        conn.execute("INSERT INTO parte_categorias VALUES (%s, %s)", (parte, categoria))
+        conn.execute("INSERT INTO parte_tags VALUES (%s, %s)", (parte, tag))
+        backup = gerar_backup(conn)
+        for tabela in ("lancamento_partes", "parte_categorias", "parte_tags"):
+            conn.execute(f"DELETE FROM {tabela}")
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        restaurar_backup(conn, backup)
+
+        assert conn.execute(
+            "SELECT p.descricao, p.valor_centavos, p.pessoa, pc.categoria_id::text, pt.tag_id::text"
+            " FROM lancamento_partes p JOIN parte_categorias pc ON pc.parte_id = p.id"
+            " JOIN parte_tags pt ON pt.parte_id = p.id"
+        ).fetchall() == [("Vestido", 50000, "esposa", categoria, tag)]

@@ -9,10 +9,11 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from app import lancamentos
+from app import lancamentos, partes
 from app.banco import conectar
 from app.lancamentos import MES_EM_QUE_CONTA, VALOR_COM_SINAL, url_do_banco
 from app.login import UsuarioLogado
+from app.partes import CATEGORIAS_QUE_CONTAM
 from app.recorrencias import mais_meses
 
 router = APIRouter(prefix="/api")
@@ -99,10 +100,14 @@ def _receitas(conn, ate: date) -> dict[date, int]:
 def _da_categoria(conn, categoria_id: UUID, ate: date) -> dict[date, int]:
     return _somar(
         conn,
-        f"SELECT {MES_EM_QUE_CONTA}, SUM({_VALOR})::bigint {_DO_REALIZADO}"
-        f" AND EXISTS (SELECT FROM lancamento_categorias lc WHERE lc.lancamento_id = lancamentos.id"
-        f" AND lc.categoria_id = %s) GROUP BY 1",
-        (ate, categoria_id),
+        # A compra com partes conta só a parte da categoria (ADR 0022).
+        f"SELECT {MES_EM_QUE_CONTA}, SUM(CASE WHEN lancamentos.tipo = 'receita'"
+        f" THEN {partes.valor('lc')} ELSE {partes.com_sinal('lc')} END)::bigint FROM lancamentos"
+        f" JOIN {CATEGORIAS_QUE_CONTAM} lc"
+        f" ON lc.lancamento_id = lancamentos.id AND lc.categoria_id = %s"
+        f" WHERE lancamentos.excluido_em IS NULL AND lancamentos.situacao = 'realizado'"
+        f" AND {MES_EM_QUE_CONTA} <= %s GROUP BY 1",
+        (categoria_id, ate),
     )
 
 

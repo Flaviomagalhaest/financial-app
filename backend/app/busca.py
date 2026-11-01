@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app import faturas, transferencias
 from app.banco import conectar
 from app.config import valores_iniciais
-from app.lancamentos import MES_EM_QUE_CONTA, VALOR_COM_SINAL, Lancamento, ler_por_ids, url_do_banco
+from app.lancamentos import MES_EM_QUE_CONTA, Lancamento, ler_por_ids, url_do_banco
 from app.login import UsuarioLogado
 from app.transferencias import Transferencia
 
@@ -95,6 +95,9 @@ class LinhaDaBusca(BaseModel):
     """Uma linha do resultado: um lançamento, um parcelamento ou uma transferência."""
 
     lancamento: Lancamento | None = None
+    # Com filtro de categoria, tag ou pessoa, as partes da compra que batem com ele (ADR 0022): a
+    # linha vale a soma delas. Sem filtro, ou sem partes, não há.
+    partes_achadas: list[UUID] | None = None
     parcelamento: ParcelamentoNaBusca | None = None
     transferencia: Transferencia | None = None
 
@@ -147,10 +150,16 @@ def _como_padrao(texto: str) -> str:
 
 
 class _Filtro:
-    """As condições (E) de uma tabela e os parâmetros delas, na ordem."""
+    """As condições (E) de uma tabela e os parâmetros delas, na ordem. `de` é a tabela (com o que
+    se junta a ela, e os parâmetros disso em `parametros_do_de`) e `valor`, o valor de cada linha."""
 
     def __init__(self, *condicoes: str) -> None:
         self.condicoes, self.parametros = list(condicoes), []
+        self.de, self.parametros_do_de, self.valor = "lancamentos", [], "lancamentos.valor_centavos"
+
+    @property
+    def todos_os_parametros(self) -> list:
+        return [*self.parametros_do_de, *self.parametros]
 
     def exigir(self, condicao: str, *parametros) -> None:
         self.condicoes.append(condicao)
@@ -161,54 +170,92 @@ class _Filtro:
         return " AND ".join(self.condicoes)
 
 
-_TEM_TAG = (
-    "EXISTS (SELECT FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
-    " WHERE lt.lancamento_id = lancamentos.id AND lower(t.nome) = ANY(%s))"
-)
-_SEM_TAG = "NOT EXISTS (SELECT FROM lancamento_tags lt WHERE lt.lancamento_id = lancamentos.id)"
-_TEM_CATEGORIA = (
-    "EXISTS (SELECT FROM lancamento_categorias lc WHERE lc.lancamento_id = lancamentos.id"
-    " AND lc.categoria_id = ANY(%s))"
-)
-_SEM_CATEGORIA = (
-    "NOT EXISTS (SELECT FROM lancamento_categorias lc WHERE lc.lancamento_id = lancamentos.id)"
-)
+# A classificação de um lançamento sem partes ou de uma parte (ADR 0022): as tabelas e colunas.
+_DO_LANCAMENTO = {
+    "categorias": "lancamento_categorias x WHERE x.lancamento_id = lancamentos.id",
+    "tags": "lancamento_tags x WHERE x.lancamento_id = lancamentos.id",
+    "pessoa": "lancamentos.pessoa",
+}
+_DA_PARTE = {
+    "categorias": "parte_categorias x WHERE x.parte_id = p.id",
+    "tags": "parte_tags x WHERE x.parte_id = p.id",
+    "pessoa": "p.pessoa",
+}
+_TEM_PARTES = "EXISTS (SELECT FROM lancamento_partes p WHERE p.lancamento_id = lancamentos.id)"
 _DO_CARTAO = "IN (SELECT id FROM cartoes WHERE %s IN (id, titular_id))"
 
 
 def _texto(criterios: CriteriosDaBusca, filtro: _Filtro, tabela: str) -> None:
     if texto := _normalizado(criterios.texto):
+        padrao = f"{_sem_acento(f'{tabela}.descricao')} LIKE %s ESCAPE '\\'"
+        if tabela != "lancamentos":
+            filtro.exigir(padrao, _como_padrao(texto))
+            return
+        # A compra também se acha pela descrição de uma parte dela.
         filtro.exigir(
-            f"{_sem_acento(f'{tabela}.descricao')} LIKE %s ESCAPE '\\'", _como_padrao(texto)
+            f"({padrao} OR EXISTS (SELECT FROM lancamento_partes p"
+            f" WHERE p.lancamento_id = lancamentos.id"
+            f" AND {_sem_acento('p.descricao')} LIKE %s ESCAPE '\\'))",
+            _como_padrao(texto),
+            _como_padrao(texto),
         )
 
 
-def _do_lancamento(criterios: CriteriosDaBusca) -> _Filtro:
-    filtro = _Filtro("lancamentos.excluido_em IS NULL")
-    _texto(criterios, filtro, "lancamentos")
+def _da_classificacao(criterios: CriteriosDaBusca, de: dict[str, str]) -> _Filtro | None:
+    """Os filtros de categoria, tag e pessoa sobre um lançamento sem partes ou uma parte; sem
+    nenhum deles, não há."""
+    filtro = _Filtro()
     if criterios.categoria_ids or criterios.sem_categoria:
         filtro.exigir(
             _qualquer(
-                criterios.categoria_ids and _TEM_CATEGORIA,
-                criterios.sem_categoria and _SEM_CATEGORIA,
+                criterios.categoria_ids
+                and f"EXISTS (SELECT FROM {de['categorias']} AND x.categoria_id = ANY(%s))",
+                criterios.sem_categoria and f"NOT EXISTS (SELECT FROM {de['categorias']})",
             ),
             *[criterios.categoria_ids] * bool(criterios.categoria_ids),
         )
     if criterios.tags or criterios.sem_tag:
         filtro.exigir(
-            _qualquer(criterios.tags and _TEM_TAG, criterios.sem_tag and _SEM_TAG),
+            _qualquer(
+                criterios.tags
+                and f"EXISTS (SELECT FROM {de['tags']} AND x.tag_id IN"
+                " (SELECT id FROM tags WHERE lower(nome) = ANY(%s)))",
+                criterios.sem_tag and f"NOT EXISTS (SELECT FROM {de['tags']})",
+            ),
             *[[t.strip().lower() for t in criterios.tags]] * bool(criterios.tags),
         )
-    if criterios.conta_ids:
-        filtro.exigir("lancamentos.conta_id = ANY(%s)", criterios.conta_ids)
     if criterios.pessoas or criterios.conjunto:
         filtro.exigir(
             _qualquer(
-                criterios.pessoas and "lancamentos.pessoa = ANY(%s)",
-                criterios.conjunto and "lancamentos.pessoa IS NULL",
+                criterios.pessoas and f"{de['pessoa']} = ANY(%s)",
+                criterios.conjunto and f"{de['pessoa']} IS NULL",
             ),
             *[criterios.pessoas] * bool(criterios.pessoas),
         )
+    return filtro if filtro.condicoes else None
+
+
+def _do_lancamento(criterios: CriteriosDaBusca) -> _Filtro:
+    filtro = _Filtro("lancamentos.excluido_em IS NULL")
+    _texto(criterios, filtro, "lancamentos")
+    if do_lancamento := _da_classificacao(criterios, _DO_LANCAMENTO):
+        # A compra com partes bate pelas partes que batem com todos os filtros de classificação,
+        # e vale a soma delas (ADR 0022).
+        da_parte = _da_classificacao(criterios, _DA_PARTE)
+        assert da_parte
+        filtro.de = (
+            "lancamentos LEFT JOIN LATERAL (SELECT sum(p.valor_centavos) AS valor,"
+            " array_agg(p.id ORDER BY p.ordem) AS ids FROM lancamento_partes p"
+            f" WHERE p.lancamento_id = lancamentos.id AND {da_parte.sql}) achadas ON true"
+        )
+        filtro.parametros_do_de = da_parte.parametros
+        filtro.valor = "COALESCE(achadas.valor, lancamentos.valor_centavos)"
+        filtro.exigir(
+            f"(achadas.ids IS NOT NULL OR (NOT {_TEM_PARTES} AND {do_lancamento.sql}))",
+            *do_lancamento.parametros,
+        )
+    if criterios.conta_ids:
+        filtro.exigir("lancamentos.conta_id = ANY(%s)", criterios.conta_ids)
     if criterios.periodo_de:
         filtro.exigir(f"{_data_da_linha(criterios)} >= %s", criterios.periodo_de)
     if criterios.periodo_ate:
@@ -297,8 +344,9 @@ def _qualquer(*condicoes: str | bool) -> str:
     return "(" + " OR ".join(c for c in condicoes if c) + ")"
 
 
-def _soma(tipo: str, situacao: str) -> str:
-    valor = "lancamentos.valor_centavos" if tipo == "receita" else VALOR_COM_SINAL
+def _soma(tipo: str, situacao: str, valor: str) -> str:
+    if tipo == "despesa":
+        valor = f"CASE WHEN lancamentos.estorno_de IS NULL THEN {valor} ELSE -{valor} END"
     return (
         f"COALESCE(sum(CASE WHEN lancamentos.tipo = '{tipo}'"
         f" AND lancamentos.situacao = '{situacao}' THEN {valor} END), 0)"
@@ -314,7 +362,7 @@ def _linhas(criterios: CriteriosDaBusca) -> tuple[str, list]:
     agrupar = _agrupar(criterios)
     chave = "COALESCE(lancamentos.parcelamento_id, lancamentos.id)" if agrupar else "lancamentos.id"
     parcelado = "bool_or(lancamentos.parcelamento_id IS NOT NULL)" if agrupar else "false"
-    somas = ", ".join(f"{_soma(t, s)} AS {t}_{s}" for t, s in _SOMAS)
+    somas = ", ".join(f"{_soma(t, s, do_lancamento.valor)} AS {t}_{s}" for t, s in _SOMAS)
     # A transferência é uma linha, fora das somas.
     transferencias_sql, parametros_das_transferencias = "", []
     if da_transferencia:
@@ -329,13 +377,13 @@ def _linhas(criterios: CriteriosDaBusca) -> tuple[str, list]:
         f"(SELECT * FROM ("
         f" SELECT {chave} AS chave, {parcelado} AS parcelado, false AS transferencia,"
         f" min({_data_da_linha(criterios)}) AS data, max(lancamentos.criado_em) AS criado_em,"
-        f" sum(lancamentos.valor_centavos) AS valor, {somas}"
-        f" FROM lancamentos WHERE {do_lancamento.sql} GROUP BY 1"
+        f" sum({do_lancamento.valor}) AS valor, {somas}"
+        f" FROM {do_lancamento.de} WHERE {do_lancamento.sql} GROUP BY 1"
         f"{transferencias_sql}"
         f") todas WHERE {valor}) linhas"
     )
     return linhas, [
-        *do_lancamento.parametros,
+        *do_lancamento.todos_os_parametros,
         *parametros_das_transferencias,
         *parametros_do_valor,
     ]
@@ -372,6 +420,7 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
     parcelamentos = _parcelamentos(conn, do_lancamento, [c for c, e_parc, _ in pagina if e_parc])
     avulsos = [c for c, e_parc, e_transferencia in pagina if not e_parc and not e_transferencia]
     por_id = {l.id: l for l in ler_por_ids(conn, avulsos)}
+    achadas = _partes_achadas(conn, do_lancamento, [i for i, l in por_id.items() if l.partes])
     das_transferencias = {
         t.id: t for t in transferencias.ler_por_ids(conn, [c for c, _, e in pagina if e])
     }
@@ -392,10 +441,23 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
             if e_parc
             else LinhaDaBusca(transferencia=das_transferencias[c])
             if e_transferencia
-            else LinhaDaBusca(lancamento=por_id[c])
+            else LinhaDaBusca(lancamento=por_id[c], partes_achadas=achadas.get(c))
             for c, e_parc, e_transferencia in pagina
         ],
         tem_mais=tem_mais,
+    )
+
+
+def _partes_achadas(conn, do_lancamento: _Filtro, ids: list[UUID]) -> dict[UUID, list[UUID]]:
+    """Das compras com partes, as partes que batem com os filtros de classificação."""
+    if not ids or do_lancamento.de == "lancamentos":
+        return {}
+    return dict(
+        conn.execute(
+            f"SELECT lancamentos.id, achadas.ids FROM {do_lancamento.de}"
+            " WHERE lancamentos.id = ANY(%s) AND achadas.ids IS NOT NULL",
+            [*do_lancamento.parametros_do_de, ids],
+        ).fetchall()
     )
 
 
@@ -414,9 +476,9 @@ def _parcelamentos(
     achadas = [
         id
         for (id,) in conn.execute(
-            f"SELECT id FROM lancamentos WHERE {do_lancamento.sql}"
+            f"SELECT lancamentos.id FROM {do_lancamento.de} WHERE {do_lancamento.sql}"
             " AND lancamentos.parcelamento_id = ANY(%s)",
-            [*do_lancamento.parametros, ids],
+            [*do_lancamento.todos_os_parametros, ids],
         )
     ]
     parcelas: dict[UUID, list[Lancamento]] = {}

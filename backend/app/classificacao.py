@@ -72,12 +72,16 @@ def _juntar_escolhas_de_item(conn, origem: UUID, destino: UUID) -> None:
     categoria dele."""
     guardar_item_atual(
         conn,
-        "l.id IN (SELECT lancamento_id FROM lancamento_categorias WHERE categoria_id = ANY(%s))",
-        ([origem, destino],),
+        "(l.id IN (SELECT lancamento_id FROM lancamento_categorias WHERE categoria_id = ANY(%s))"
+        " OR l.id IN (SELECT p.lancamento_id FROM lancamento_partes p"
+        " JOIN parte_categorias pc ON pc.parte_id = p.id WHERE pc.categoria_id = ANY(%s)))",
+        ([origem, destino], [origem, destino]),
     )
     for tabela, coluna in (
         ("lancamentos", "item_categoria_id"),
         ("lancamentos", "item_atual_categoria_id"),
+        ("lancamento_partes", "item_categoria_id"),
+        ("lancamento_partes", "item_atual_categoria_id"),
         ("recorrencias", "item_id"),
         ("parcelamentos", "item_categoria_id"),
     ):
@@ -113,6 +117,13 @@ def juntar_categoria(
             (destino.id, origem.id),
         )
         conn.execute("DELETE FROM lancamento_categorias WHERE categoria_id = %s", (origem.id,))
+        conn.execute(
+            "INSERT INTO parte_categorias (parte_id, categoria_id)"
+            " SELECT parte_id, %s FROM parte_categorias WHERE categoria_id = %s"
+            " ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM parte_categorias WHERE categoria_id = %s", (origem.id,))
         # A recorrência e o parcelamento vão junto, para a escolha de item continuar numa
         # categoria deles.
         for regra in ("recorrencia", "parcelamento"):
@@ -141,7 +152,9 @@ def excluir_categoria(id: UUID, usuario: UsuarioLogado, request: Request) -> Res
 
     def trabalho(conn):
         if conn.execute(
-            "SELECT 1 FROM lancamento_categorias WHERE categoria_id = %s LIMIT 1", (id,)
+            "SELECT 1 FROM lancamento_categorias WHERE categoria_id = %s"
+            " UNION ALL SELECT 1 FROM parte_categorias WHERE categoria_id = %s LIMIT 1",
+            (id, id),
         ).fetchone():
             raise HTTPException(status_code=409, detail="categoria com lançamentos")
         if conn.execute(
@@ -261,6 +274,12 @@ def juntar_tag(id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Reques
             (destino.id, origem.id),
         )
         conn.execute("DELETE FROM lancamento_tags WHERE tag_id = %s", (origem.id,))
+        conn.execute(
+            "INSERT INTO parte_tags (parte_id, tag_id)"
+            " SELECT parte_id, %s FROM parte_tags WHERE tag_id = %s ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM parte_tags WHERE tag_id = %s", (origem.id,))
         conn.execute("DELETE FROM tags WHERE id = %s", (origem.id,))
         return destino
 
@@ -273,7 +292,9 @@ def excluir_tag(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
 
     def trabalho(conn):
         if conn.execute(
-            "SELECT 1 FROM lancamento_tags WHERE tag_id = %s LIMIT 1", (id,)
+            "SELECT 1 FROM lancamento_tags WHERE tag_id = %s"
+            " UNION ALL SELECT 1 FROM parte_tags WHERE tag_id = %s LIMIT 1",
+            (id, id),
         ).fetchone():
             raise HTTPException(status_code=409, detail="tag com lançamentos")
         conn.execute("DELETE FROM tags WHERE id = %s", (id,))
