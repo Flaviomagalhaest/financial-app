@@ -338,7 +338,9 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
       continue;
     }
     if (item.acao === "excluir") {
-      porId.delete(item.id);
+      // A exclusão que o servidor recusou (a compra tem estorno) não vale: a linha fica, com o motivo.
+      if (item.recusa && anterior) porId.set(item.id, { ...anterior, naoEnviado: true, recusa: item.recusa, feitoEm: item.feitoEm });
+      else porId.delete(item.id);
       continue;
     }
     const lancamento = item.lancamento!;

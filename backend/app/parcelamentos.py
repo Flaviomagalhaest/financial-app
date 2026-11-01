@@ -21,6 +21,7 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import (
     conferir_ligacoes,
+    conferir_sem_estorno,
     excluir,
     gravar_categorias,
     ids_das_tags,
@@ -1035,6 +1036,7 @@ def _aplicar(
                 "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
                 (correcao.id, tag),
             )
+    lancamentos.acompanhar_estornos(conn, correcao.id)
 
 
 def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: Classificacao) -> bool:
@@ -1129,6 +1131,21 @@ def excluir_parcelamento(id: UUID, usuario: UsuarioLogado, request: Request) -> 
     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
     recebe o aviso de excluído)."""
     url = url_do_banco(request)
+
+    def conferir(conn) -> None:
+        # Antes de fechar o parcelamento: a parcela com estorno impediria a exclusão no meio dela.
+        conferir_sem_estorno(
+            conn,
+            [
+                parcela
+                for (parcela,) in conn.execute(
+                    "SELECT id FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL",
+                    (id,),
+                )
+            ],
+        )
+
+    em_transacao(url, conferir)
 
     def fechar(conn) -> None:
         # Com todas as parcelas dadas por geradas, a tarefa diária não gera novas enquanto as de

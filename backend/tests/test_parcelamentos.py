@@ -1516,3 +1516,32 @@ def test_mudar_so_a_classificacao_nao_tira_a_parcela_do_dia_do_lancamento(
     ]
     [gravado] = casal.pedir("esposa", "GET", "/api/parcelamentos").json()
     assert gravado["parcelas_puladas"] == 0
+
+
+def test_parcelamento_com_parcela_estornada_nao_se_exclui_e_fica_como_estava(casal: Casal):
+    nubank, eletro = cartao(casal), casal.categoria("Eletrodomésticos")
+    novo = parcelamento(nubank, [eletro], descricao="Geladeira", data="2026-10-26", parcelas=3)
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    primeira = parcelas(casal, novo["id"])[0]
+    estorno = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json={
+            "id": str(uuid4()),
+            "tipo": "despesa",
+            "valor_centavos": 1000,
+            "data": "2026-11-02",
+            "conta_id": nubank,
+            "categoria_ids": [eletro],
+            "estorno_de": primeira["id"],
+        },
+    )
+    assert estorno.status_code == 201, estorno.text
+
+    recusada = casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}")
+
+    assert recusada.status_code == 422
+    assert recusada.json()["detail"] == "a compra tem estorno; exclua o estorno antes"
+    assert len(parcelas(casal, novo["id"])) == 3
+    assert casal.pedir("flavio", "GET", "/api/parcelamentos").json()[0]["id"] == novo["id"]

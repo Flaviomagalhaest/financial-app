@@ -269,18 +269,12 @@ def compra_no_cartao(casal: Casal, **campos) -> dict:
 def test_estorno_recusa_o_que_nao_e_devolucao_de_uma_compra_no_cartao(casal: Casal):
     original = compra_no_cartao(casal)
 
-    outra_categoria = estornar(
-        casal, original, "2026-04-26", categoria_ids=[casal.categoria("Lazer")]
-    )
-    sem_tag = estornar(casal, original, "2026-04-26", tags=[])
     inexistente = estornar(
         casal, original, "2026-04-26", estorno_de="00000000-0000-0000-0000-0000000000ff"
     )
     na_conta = estornar(casal, original, "2026-04-26", conta_id=casal.conta())
     como_receita = estornar(casal, original, "2026-04-26", tipo="receita")
 
-    assert outra_categoria.status_code == sem_tag.status_code == 422
-    assert outra_categoria.json()["detail"] == "estorno leva as mesmas categorias e tags da compra"
     assert inexistente.json()["detail"] == "compra original não encontrada"
     assert na_conta.json()["detail"] == "estorno é um crédito no cartão"
     assert como_receita.status_code == 422
@@ -321,11 +315,80 @@ def test_estorno_nao_e_de_estorno_nem_de_compra_na_conta_nem_passa_do_valor(casa
     assert cabe.status_code == 201
 
 
-def test_estorno_reenviado_pela_fila_devolve_o_gravado_mesmo_se_a_compra_sumiu(casal: Casal):
+def test_estorno_acompanha_a_categoria_a_tag_e_o_item_da_compra_quando_ela_muda(casal: Casal):
+    original = compra_no_cartao(casal)
+    estorno = estornar(casal, original, "2026-04-26", valor_centavos=5000).json()
+    lazer = casal.categoria("Lazer")
+    casal.pedir(
+        "flavio",
+        "POST",
+        "/api/planejamento/2026-05/itens",
+        json={
+            "id": "00000000-0000-0000-0000-0000000000b1",
+            "categoria_id": lazer,
+            "valor_centavos": 40000,
+        },
+    )
+
+    mudada = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{original['id']}",
+        json={"versao": 1, "categoria_ids": [lazer], "tags": ["natal"]},
+    )
+
+    assert mudada.status_code == 200, mudada.text
+    [lido] = [
+        l
+        for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()
+        if l["id"] == estorno["id"]
+    ]
+    assert (lido["categoria_ids"], lido["tags"]) == ([lazer], ["natal"])
+    maio = totais(casal, "2026-05")
+    assert maio["por_categoria"] == [{"categoria_id": lazer, "centavos": -5000}]
+    assert maio["por_tag"] == [{"tag": "natal", "centavos": -5000}]
+    [item] = casal.pedir("flavio", "GET", "/api/planejamento/2026-05").json()["itens"]
+    assert item["realizado_centavos"] == -5000
+
+
+def test_estorno_de_compra_com_categoria_e_tag_arquivadas_e_aceito_e_leva_as_dela(
+    casal: Casal,
+):
+    original = compra_no_cartao(casal)
+    [categoria] = original["categoria_ids"]
+    [tag] = [t for t in casal.pedir("flavio", "GET", "/api/tags").json() if t["nome"] == "viagem"]
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{categoria}", json={"arquivada": True})
+    casal.pedir("flavio", "PATCH", f"/api/tags/{tag['id']}", json={"arquivada": True})
+
+    estorno = estornar(casal, original, "2026-04-26", valor_centavos=5000, tags=[])
+
+    assert estorno.status_code == 201, estorno.text
+    assert (estorno.json()["categoria_ids"], estorno.json()["tags"]) == ([categoria], ["viagem"])
+    assert totais(casal, "2026-05")["por_tag"] == [{"tag": "viagem", "centavos": -5000}]
+
+
+def test_estorno_com_outra_classificacao_vale_a_da_compra(casal: Casal):
+    original = compra_no_cartao(casal)
+
+    estorno = estornar(
+        casal,
+        original,
+        "2026-04-26",
+        categoria_ids=[casal.categoria("Lazer")],
+        tags=["natal"],
+    )
+
+    assert estorno.status_code == 201, estorno.text
+    assert (estorno.json()["categoria_ids"], estorno.json()["tags"]) == (
+        original["categoria_ids"],
+        ["viagem"],
+    )
+
+
+def test_estorno_reenviado_pela_fila_devolve_o_gravado(casal: Casal):
     original = compra_no_cartao(casal)
     estorno = estornar(casal, original, "2026-04-26")
     assert estorno.status_code == 201
-    casal.pedir("flavio", "DELETE", f"/api/lancamentos/{original['id']}")
 
     reenvio = casal.pedir("flavio", "POST", "/api/lancamentos", json=estorno.json())
 
@@ -346,6 +409,12 @@ def test_estorno_nao_muda_de_categoria_nem_de_tag_mas_o_valor_respeita_a_compra(
     tags = casal.pedir(
         "flavio", "PATCH", f"/api/lancamentos/{estorno['id']}", json={"versao": 1, "tags": []}
     )
+    item = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{estorno['id']}",
+        json={"versao": 1, "item_categoria_id": original["categoria_ids"][0]},
+    )
     valor_demais = casal.pedir(
         "flavio",
         "PATCH",
@@ -359,15 +428,15 @@ def test_estorno_nao_muda_de_categoria_nem_de_tag_mas_o_valor_respeita_a_compra(
         json={"versao": 1, "valor_centavos": 12000},
     )
 
-    assert categoria.status_code == tags.status_code == valor_demais.status_code == 422
+    assert categoria.status_code == tags.status_code == item.status_code == 422
+    assert valor_demais.status_code == 422
     assert valor_certo.status_code == 200
     assert valor_certo.json()["estorno_de"] == original["id"]
 
 
-def test_estorno_da_compra_que_sumiu_continua_editavel_mas_so_no_cartao(casal: Casal):
+def test_estorno_so_muda_de_valor_e_de_cartao_nunca_para_a_conta(casal: Casal):
     original = compra_no_cartao(casal)
     estorno = estornar(casal, original, "2026-04-26", valor_centavos=5000).json()
-    casal.pedir("flavio", "DELETE", f"/api/lancamentos/{original['id']}")
 
     menor = casal.pedir(
         "flavio",
@@ -385,6 +454,34 @@ def test_estorno_da_compra_que_sumiu_continua_editavel_mas_so_no_cartao(casal: C
     assert menor.status_code == 200
     assert para_a_conta.status_code == 422
     assert para_a_conta.json()["detail"] == "estorno é um crédito no cartão"
+
+
+def test_compra_com_estorno_nao_se_exclui_ate_o_estorno_sair(casal: Casal):
+    original = compra_no_cartao(casal)
+    estorno = estornar(casal, original, "2026-04-26", valor_centavos=5000).json()
+
+    recusada = casal.pedir("flavio", "DELETE", f"/api/lancamentos/{original['id']}")
+
+    assert recusada.status_code == 422
+    assert recusada.json()["detail"] == "a compra tem estorno; exclua o estorno antes"
+    assert casal.pedir("flavio", "DELETE", f"/api/lancamentos/{estorno['id']}").status_code == 204
+    assert casal.pedir("flavio", "DELETE", f"/api/lancamentos/{original['id']}").status_code == 204
+
+
+def test_exclusao_da_compra_com_estorno_pela_fila_volta_recusada_com_o_motivo(casal: Casal):
+    original = compra_no_cartao(casal)
+    estornar(casal, original, "2026-04-26", valor_centavos=5000)
+
+    lote = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json={"acoes": [{"acao": "excluir", "id": original["id"], "versao": original["versao"]}]},
+    )
+
+    assert lote.status_code == 200, lote.text
+    assert lote.json()["resultados"][0]["resultado"] == "recusada"
+    assert lote.json()["resultados"][0]["motivo"] == "a compra tem estorno; exclua o estorno antes"
 
 
 def test_estorno_chega_pelo_lote_da_fila_e_o_reenvio_nao_duplica(casal: Casal):
