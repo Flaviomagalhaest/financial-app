@@ -434,3 +434,46 @@ def test_estorno_avulso_na_fatura_paga_e_recusado_e_o_de_depois_entra(casal: Cas
     assert recusado(em_abril)
     assert em_maio.status_code == 201, em_maio.text
     assert abril(casal, abril_paga) == ABRIL_PAGA
+
+
+def test_correcao_acerta_as_partes_da_compra_junto_com_o_valor(casal: Casal):
+    from tests.test_partes_da_compra import compra_com_partes, parte
+
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(lancamentos, "hoje", lambda: date(2026, 5, 10))
+        conta = nova_conta(casal)["id"]
+        cartao = novo_cartao(casal)["id"]
+        roupa, casa = casal.categoria("Roupa"), casal.categoria("Casa")
+        partes = [parte([roupa], 60000, descricao="Vestido"), parte([casa], 40000)]
+        criada = compra_com_partes(
+            casal, cartao, partes, data="2026-04-10", situacao="realizado"
+        )
+        assert criada.status_code == 201, criada.text
+        compra = criada.json()
+        assert pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02").status_code == 201
+
+        # Só o valor: as partes deixam de somar a compra e a correção é recusada.
+        so_valor = casal.pedir(
+            "flavio",
+            "POST",
+            f"/api/cartoes/{cartao}/faturas/2026-04-01/correcao",
+            json={"compras_editadas": [{"id": compra["id"], "versao": compra["versao"], "valor_centavos": 90000}]},
+        )
+        assert so_valor.status_code == 422
+
+        # Com a diferença na última parte, a correção passa e as partes somam a compra.
+        acertadas = [partes[0], partes[1] | {"valor_centavos": 30000}]
+        resposta = casal.pedir(
+            "flavio",
+            "POST",
+            f"/api/cartoes/{cartao}/faturas/2026-04-01/correcao",
+            json={
+                "compras_editadas": [
+                    {"id": compra["id"], "versao": compra["versao"], "valor_centavos": 90000, "partes": acertadas}
+                ]
+            },
+        )
+        assert resposta.status_code == 200, resposta.text
+        [vista] = [l for l in casal.pedir("esposa", "GET", "/api/lancamentos").json() if l["id"] == compra["id"]]
+        assert vista["valor_centavos"] == 90000
+        assert [p["valor_centavos"] for p in vista["partes"]] == [60000, 30000]
