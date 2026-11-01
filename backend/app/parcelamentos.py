@@ -779,7 +779,8 @@ def _correcoes(
         }
         campos = CLASSIFICACAO if acao == "reviver" else classificacao.da_parcela(n)
         # Com as categorias novas, sai o item da parcela que não é de nenhuma delas.
-        if "categoria_ids" in campos and tem["item_categoria_id"] not in quer["categoria_ids"]:
+        item = tem["item_categoria_id"]
+        if "categoria_ids" in campos and item and item not in quer["categoria_ids"]:
             campos |= {"item_categoria_id"}
         mudou = [campo for campo in quer if campo in campos and quer[campo] != tem[campo]]
         valor, dia, mes = valor_antes, dia_antes, mes_antes
@@ -972,6 +973,7 @@ def _mudar_so_esta(
 
 
 def _aviso_de_realizadas(parcelas: list[ParcelaQueMuda]) -> AvisoDeRealizadas:
+    """O aviso de toda correção que muda parcelas realizadas, em qualquer alcance."""
     return AvisoDeRealizadas(
         motivo="a correção muda parcelas já realizadas, e com elas o histórico do que já aconteceu",
         parcelas=parcelas,
@@ -1082,6 +1084,7 @@ def alterar_parcelamento(
 
 
 def _o_corrigido(url: str | None, id: UUID) -> Parcelamento:
+    """O parcelamento como ficou depois da correção, lido de novo."""
     with conectar(url) as conn:
         if not (lidos := _ler(conn, "id = %s", (id,))):
             # Excluído por outra sessão no meio do refazer: as parcelas saíram com ele.
@@ -1109,27 +1112,30 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
 
 
 class AvisoDeExclusao(BaseModel):
-    """Excluir o parcelamento apagaria parcelas já pagas ou editadas à mão; nada foi apagado.
-    Repetir o pedido com `confirmar_realizadas` apaga. As editadas à mão também entram nas
+    """Excluir o parcelamento apagaria parcelas já pagas ou alteradas à mão; nada foi apagado.
+    Repetir o pedido com `confirmar_realizadas` apaga. As alteradas à mão também entram nas
     outras contas quando são de fatura paga ou realizadas."""
 
     motivo: str
     # Quantas parcelas saem, de qualquer tipo.
     parcelas: int
-    # No cartão, as da fatura que já recebeu pagamento.
+    # No cartão, as da fatura paga (a importada do Mobills também).
     de_fatura_paga: int
-    # As realizadas fora da fatura paga: no cartão, as da fatura aberta; no boleto, as pagas.
+    # As realizadas fora da fatura paga: no cartão, as da fatura aberta ou fechada sem
+    # pagamento; no boleto, as pagas.
     realizadas: int
-    editadas_a_mao: int
+    alteradas_a_mao: int
 
 
 class ExclusaoPedeConfirmacao(Exception):
+    """A exclusão pede confirmação: apaga parcelas pagas ou alteradas à mão."""
+
     def __init__(self, aviso: AvisoDeExclusao):
         self.aviso = aviso
 
 
 def _aviso_de_exclusao(conn, id: UUID) -> AvisoDeExclusao | None:
-    """O que a exclusão apagaria de já pago ou editado à mão; `None` se só há previstas."""
+    """O que a exclusão apagaria de já pago ou alterado à mão; `None` se só há previstas."""
     linhas = conn.execute(
         f"SELECT conta_id, {lancamentos.MES_EM_QUE_CONTA}, situacao, {lancamentos.ALTERADA_A_MAO}"
         " FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL",
@@ -1142,7 +1148,7 @@ def _aviso_de_exclusao(conn, id: UUID) -> AvisoDeExclusao | None:
             {
                 f.mes
                 for f in cartoes.faturas_do_titular(conn, cartao.titular.id)
-                if cartoes.paga_pelo_pagamento(f)
+                if f.situacao == "paga"
             }
             if cartao
             else set()
@@ -1153,15 +1159,15 @@ def _aviso_de_exclusao(conn, id: UUID) -> AvisoDeExclusao | None:
         for conta_id, mes, situacao, _ in linhas
         if situacao == "realizado" and mes not in pagas[conta_id]
     )
-    editadas = sum(1 for *_, a_mao in linhas if a_mao)
-    if not (de_fatura_paga or realizadas or editadas):
+    alteradas = sum(1 for *_, a_mao in linhas if a_mao)
+    if not (de_fatura_paga or realizadas or alteradas):
         return None
     return AvisoDeExclusao(
         motivo="isto apaga lançamentos já pagos e pode desconfigurar o histórico",
         parcelas=len(linhas),
         de_fatura_paga=de_fatura_paga,
         realizadas=realizadas,
-        editadas_a_mao=editadas,
+        alteradas_a_mao=alteradas,
     )
 
 
@@ -1172,7 +1178,7 @@ def _aviso_de_exclusao(conn, id: UUID) -> AvisoDeExclusao | None:
     responses={
         409: {
             "model": AvisoDeExclusao,
-            "description": "A exclusão apaga parcelas pagas ou editadas à mão",
+            "description": "A exclusão apaga parcelas pagas ou alteradas à mão",
         }
     },
 )
@@ -1181,7 +1187,7 @@ def excluir_parcelamento(
 ) -> Response:
     """Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
-    recebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou editada à mão,
+    recebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou alterada à mão,
     responde 409 com quantas de cada tipo e não apaga nada até o pedido vir com
     `confirmar_realizadas` (ticket 142)."""
     url = url_do_banco(request)

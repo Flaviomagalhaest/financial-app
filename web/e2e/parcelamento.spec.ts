@@ -290,12 +290,21 @@ test("aberta de uma parcela, a correção da descrição vale só para ela ou pa
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   expect(await descricoes()).toEqual([descricao, descricao, `${descricao} da sala`, descricao, descricao, descricao]);
 
+  // Aberta da 3ª de novo, a tela mostra a descrição dela, e voltar à do parcelamento só nela é uma mudança.
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}/3`);
+  await expect(page.getByLabel("Descrição")).toHaveValue(`${descricao} da sala`);
+  await page.getByLabel("Descrição").fill(descricao);
+  await alcance.getByRole("button", { name: "Só esta" }).click();
+  await page.getByRole("button", { name: "Salvar correção" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  expect(await descricoes()).toEqual(Array(6).fill(descricao));
+
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}/4`);
   await page.getByLabel("Descrição").fill(`${descricao} do quarto`);
   await alcance.getByRole("button", { name: "Esta e as próximas" }).click();
   await page.getByRole("button", { name: "Salvar correção" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
-  expect(await descricoes()).toEqual([descricao, descricao, `${descricao} da sala`, ...Array(3).fill(`${descricao} do quarto`)]);
+  expect(await descricoes()).toEqual([descricao, descricao, descricao, ...Array(3).fill(`${descricao} do quarto`)]);
 });
 
 test("no modo do valor da parcela, corrigir só a descrição não mexe no total", async ({ page }) => {

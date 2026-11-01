@@ -1527,7 +1527,7 @@ def test_excluir_o_parcelamento_com_parcela_paga_ou_editada_a_mao_pede_confirmac
         "parcelas": 4,
         "de_fatura_paga": 1,
         "realizadas": 1,
-        "editadas_a_mao": 1,
+        "alteradas_a_mao": 1,
     }
     # Nada saiu.
     assert len(parcelas(casal, novo["id"])) == 4

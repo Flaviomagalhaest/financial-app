@@ -121,11 +121,11 @@ _Avoid_: escopo da edição, aplicar em lote
 
 **Correção do parcelamento**:
 Mudança do valor, do número de parcelas ou da data de um parcelamento (só no alcance "todas"), que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje: a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_puladas`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova.
+_Avoid_: regerar, recalcular o parcelamento
 
 **Exclusão do parcelamento**:
 Apaga o parcelamento e todas as parcelas, também as pagas e as alteradas à mão. Quando alguma é de fatura paga, realizada ou alterada à mão, o app avisa que isso apaga lançamentos já pagos e pode desconfigurar o histórico, diz quantas de cada tipo saem e só exclui com a confirmação.
 _Avoid_: desfazer o parcelamento
-_Avoid_: regerar, recalcular o parcelamento
 
 **Antecipação**:
 Pagamento adiantado das últimas parcelas de um parcelamento que ainda não foram pagas, no dia de hoje ou em outro, por um valor editável (o desconto é a diferença para o valor das parcelas). As parcelas viram realizadas na data do pagamento, e no cartão contam na fatura em que foi paga, por troca à mão. **Quitação** é a antecipação de todas as parcelas que faltam.

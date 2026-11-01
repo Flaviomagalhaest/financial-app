@@ -101,13 +101,13 @@ function comoMuda(m: AvisoDeRealizadas["parcelas"][number], parcelas: number): s
   return [numeroDaParcela(m.parcela, parcelas), valor, data, outros.length ? `muda ${outros.join(", ")}` : "", m.sai ? "sai" : ""].filter(Boolean).join(" · ");
 }
 
-/** "1 de fatura paga", "2 realizadas de fatura aberta", "1 editada à mão": só os tipos que saem. */
+/** "1 de fatura paga", "2 realizadas de fatura ainda não paga", "1 alterada à mão": só os tipos que saem. */
 function tiposQueSaem(a: AvisoDeExclusao, noCartao: boolean): string[] {
   const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
   return [
     a.de_fatura_paga ? plural(a.de_fatura_paga, "de fatura paga", "de fatura paga") : "",
-    a.realizadas ? plural(a.realizadas, noCartao ? "realizada de fatura aberta" : "realizada", noCartao ? "realizadas de fatura aberta" : "realizadas") : "",
-    a.editadas_a_mao ? plural(a.editadas_a_mao, "editada à mão", "editadas à mão") : "",
+    a.realizadas ? plural(a.realizadas, noCartao ? "realizada de fatura ainda não paga" : "realizada", noCartao ? "realizadas de fatura ainda não paga" : "realizadas") : "",
+    a.alteradas_a_mao ? plural(a.alteradas_a_mao, "alterada à mão", "alteradas à mão") : "",
   ].filter(Boolean);
 }
 
@@ -127,7 +127,8 @@ export function TelaDoParcelamento({ id, parcela }: { id: string; parcela?: numb
 
 /**
  * O formulário nasce com o parcelamento que a primeira leitura trouxe; a releitura não apaga o que se digita.
- * Aberto de uma parcela (`parcela`), pergunta o alcance da mudança; sem ela, a mudança vale para todas.
+ * Aberto de uma parcela (`parcela`), pergunta o alcance da mudança e a classificação começa com a dela, que
+ * pode ter mudado só nela: o que vai é o que a pessoa mexeu; sem ela, a mudança vale para todas.
  */
 function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parcela?: number }) {
   const id = parcelamento.id;
@@ -136,7 +137,14 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
   const { pessoas } = usePessoas();
   const opcoesDeTags = useTags();
   const online = useConexao();
-  const [form, setForm] = useState<Formulario>(() => formularioDo(parcelamento));
+  // O ponto de partida: o parcelamento, com a classificação da parcela de onde a tela foi aberta.
+  const [base] = useState<Parcelamento>(() => {
+    const daEdicao = parcela ? lancamentos?.find((l) => l.parcelamento_id === id && l.parcela === parcela) : undefined;
+    if (!daEdicao) return parcelamento;
+    const { descricao, categoria_ids, tags, pessoa, item_categoria_id } = daEdicao;
+    return { ...parcelamento, descricao, categoria_ids, tags, pessoa, item_categoria_id };
+  });
+  const [form, setForm] = useState<Formulario>(() => formularioDo(base));
   const [aviso, setAviso] = useState<AvisoDeRealizadas | null>(null);
   const [alcance, setAlcance] = useState<Alcance | null>(parcela ? null : "todas");
   const [avisoDeExclusao, setAvisoDeExclusao] = useState<AvisoDeExclusao | null>(null);
@@ -167,7 +175,7 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
     itemTocado,
   );
   // Sem duas categorias com item, a escolha que o parcelamento já tem fica, se a categoria dela ficou.
-  const itemEscolhido = planejamento.escolha ?? (parcelamento.item_categoria_id && form.categoriaIds.includes(parcelamento.item_categoria_id) ? parcelamento.item_categoria_id : null);
+  const itemEscolhido = planejamento.escolha ?? (base.item_categoria_id && form.categoriaIds.includes(base.item_categoria_id) ? base.item_categoria_id : null);
 
   const mudar = (mudanca: Partial<Formulario>) => {
     setForm({ ...form, ...mudanca });
@@ -176,7 +184,7 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
   async function salvar(confirmarRealizadas: boolean) {
-    const alteracao = alteracaoDo(form, parcelamento, itemEscolhido);
+    const alteracao = alteracaoDo(form, base, itemEscolhido);
     if (!alteracao) return setErro("Digite o valor e o número de parcelas.");
     if (Object.keys(alteracao).length === 0) return setErro("Nada mudou.");
     if (!alcance) return setErro("Escolha a que parcelas a mudança vale: só esta, esta e as próximas ou todas.");
@@ -190,7 +198,7 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
     window.location.hash = "#/historico";
   }
 
-  /** Sem `confirmarRealizadas`, pergunta antes; se o servidor achar parcela paga ou editada à mão, nada sai e a tela mostra o aviso forte. */
+  /** Sem `confirmarRealizadas`, pergunta antes; se o servidor achar parcela paga ou alterada à mão, nada sai e a tela mostra o aviso forte. */
   async function excluir(confirmarRealizadas: boolean) {
     if (!confirmarRealizadas && !window.confirm(`Excluir "${parcelamento.descricao || "este parcelamento"}" inteiro? As ${parcelamento.parcelas} parcelas saem.`)) return;
     setErro("");
@@ -292,11 +300,11 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
             ))}
           </div>
           <p className="vazio">
-            Aberto da parcela {numeroDaParcela(parcela, parcelamento.parcelas)}. Descrição, categorias, tags e pessoa valem para as parcelas escolhidas, também as editadas à mão.
+            Aberto da parcela {numeroDaParcela(parcela, parcelamento.parcelas)}. Descrição, categorias, tags e pessoa valem para as parcelas escolhidas, também as alteradas à mão.
           </p>
         </>
       ) : (
-        <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas e as editadas à mão.</p>
+        <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas e as alteradas à mão.</p>
       )}
 
       {aviso && (
