@@ -1,7 +1,7 @@
 # Conferir as regras de estorno e ajuste de fatura escolhidas no ticket 39
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: 39
 Skills: `grilling`, `domain-modeling` (HITL: decisões do dono)
 Modelo recomendado: Opus
