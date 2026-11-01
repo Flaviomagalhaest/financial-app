@@ -18,3 +18,11 @@ O estorno (crédito de uma compra devolvida) é uma linha de `lancamentos` com `
 - O saldo da conta não muda, porque o estorno só existe no cartão e o saldo do cartão não é de uma conta.
 - A planilha exporta o estorno com o sinal contrário ao da compra (crédito).
 - O backup sobe para a versão 14 (`estorno_de` no lançamento e `ajuste_centavos` na fatura).
+
+## Adendo (ticket 94)
+
+Revisto com o dono no [ticket 94](../../.scratch/v1-substituir-mobills/issues/94-conferir-as-regras-de-estorno-e-ajuste.md):
+
+- As categorias e tags do estorno acompanham as da compra quando ela muda, inclusive as arquivadas. A compra com estorno não pode ser excluída: exclui-se o estorno antes.
+- O **estorno avulso** é um crédito no cartão sem compra ligada (a correção de centavos de uma loja), com categoria, tags e pessoa opcionais e sem o limite do valor da compra. Sem categoria, conta só na fatura e no mês.
+- Na compra com partes ([ADR 0022](0022-partes-da-compra.md)), o estorno é de uma parte e vai até o valor dela. Na compra parcelada, o estorno é de uma parcela ou de todas: o de todas é um estorno só, ligado ao parcelamento (ou à parte dele), até a soma das parcelas menos o já estornado, e conta inteiro no mês da fatura em que aparece.
