@@ -32,3 +32,4 @@ O casal lança, na tela da fatura, um crédito que aparece na fatura sem compra 
 - API: `POST /api/lancamentos` com `estorno_avulso: true` (e `categoria_ids` vazio, se quiser); a edição aceita tirar a categoria só dele. Testes em `backend/tests/test_estorno_e_ajuste.py`, `test_fatura_paga.py`, `test_exportacoes.py` e `test_restauracao.py`.
 - App: "Lançar crédito" na tela da fatura (`#/credito/<cartão>`, a `TelaDeLancamento` em modo avulso); editar pelo Histórico. Teste de navegador em `web/e2e/estorno-avulso.spec.ts`, inclusive sem internet.
 
+- Pendências da revisão: [ticket 149](149-estorno-avulso-pendencias.md).

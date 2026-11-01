@@ -64,6 +64,8 @@ test("lança um crédito na tela da fatura sem categoria: diminui a fatura, apar
   const credito = page.getByRole("listitem").filter({ hasText: nome });
   await expect(credito).toContainText("+ R$ 0,37");
   await expect(credito).toContainText("estorno avulso");
+  // O total da fatura vem do servidor: espera a fila enviar antes de abri-la.
+  await expect(credito).not.toContainText("não enviado");
   await page.goto(`/#/cartoes/${cartao.id}/${compra.mes}`);
   await expect(resumo(page, "Estornos")).toHaveText("− R$ 0,37");
   await expect(resumo(page, "Total")).toHaveText("R$ 99,63");
@@ -79,11 +81,12 @@ test("lança um crédito na tela da fatura sem categoria: diminui a fatura, apar
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: nome })).toContainText("+ R$ 0,35");
+  await expect(page.getByRole("listitem").filter({ hasText: nome })).not.toContainText("não enviado");
   await page.goto(`/#/cartoes/${cartao.id}/${compra.mes}`);
   await expect(resumo(page, "Total")).toHaveText("R$ 99,65");
 });
 
-test("o crédito com categoria e tag desconta nelas, e sem internet entra na fila e sobe quando a rede volta", async ({ page, context }) => {
+test("o crédito com categoria entra na fila sem internet e sobe quando a rede volta, e o Repetir último não o oferece", async ({ page, context }) => {
   const { s, api, cartao, compra, categoriaNome } = await prepararFatura(page);
   const nome = `Crédito ${s}`;
 
@@ -99,6 +102,12 @@ test("o crédito com categoria e tag desconta nelas, e sem internet entra na fil
   await expect(credito).toContainText("+ R$ 25,00");
   await expect(credito).toContainText(categoriaNome);
   await expect(credito).toContainText("⏳ não enviado");
+
+  // O crédito não serve de modelo para o "Repetir último" do lançamento novo.
+  await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
+  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await expect(page.getByRole("button", { name: /^Repetir último/ })).toHaveCount(0);
+  await page.goto("/#/historico");
 
   await context.setOffline(false);
   await expect(credito).not.toContainText("não enviado");

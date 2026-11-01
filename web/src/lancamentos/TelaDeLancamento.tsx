@@ -44,7 +44,7 @@ function ultimoCriado(lancamentos: LancamentoNaTela[], euId?: string): Lancament
   // O criado só no aparelho ainda não tem autor nem hora do servidor: é deste aparelho, e o mais novo.
   const criadoEm = (l: LancamentoNaTela) => (l.criado_em ? Date.parse(l.criado_em) : (l.feitoEm ?? Infinity));
   const meus = lancamentos.filter(
-    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
+    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && !l.estorno_de && !l.estorno_avulso && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
   );
   return meus.reduce<LancamentoNaTela | undefined>((ultimo, l) => (!ultimo || criadoEm(l) > criadoEm(ultimo) ? l : ultimo), undefined);
 }
