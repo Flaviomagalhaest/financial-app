@@ -1,7 +1,7 @@
 # Estorno de uma parte e de todas as parcelas
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 133, 137
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Sonnet
