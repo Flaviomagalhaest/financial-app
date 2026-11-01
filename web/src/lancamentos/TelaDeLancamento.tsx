@@ -151,7 +151,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   }, [estornoDe, estornoAplicado, compra, indice, lancamentos, semDados, novoId]);
 
   // Sem escolha, a primeira conta já vem marcada: lançar é um dedo só.
-  const conta = contaId || contas[0]?.id || "";
+  // O estorno novo só vai para um cartão ativo: o da compra reemitida (arquivado) fica sem escolha até a pessoa marcar o novo.
+  const conta = estornoDe ? (cartoes.some((c) => c.id === contaId) ? contaId : "") : contaId || contas[0]?.id || "";
   /** As categorias que ainda se pode escolher, das que um lançamento anterior traz. */
   const escolhiveis = (ids: string[]) => categorias.filter((c) => !c.arquivada && ids.includes(c.id));
   const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo && (!estornando || categoriaIds.includes(c.id)) && (!c.arquivada || categoriaIds.includes(c.id) || !!existente?.categoria_ids.includes(c.id)));
@@ -396,6 +397,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
         <p className="vazio">
           Compra “{tituloDoLancamento(compra, categorias)}” de {formatarCentavos(compra.valor_centavos)}: ainda dá para estornar até {formatarCentavos(restante)}.
         </p>
+      )}
+      {estornoPronto && estornoDe && conta === "" && cartoes.length > 0 && (
+        <p className="vazio">O cartão da compra está arquivado: marque o cartão que recebe o estorno.</p>
       )}
       {estornoPronto && cartaoDoEstorno && <FaturaDoEstorno cartaoId={cartaoDoEstorno} data={data} faturaMes={faturaMes} />}
       <button type="button" className="resumo" onClick={() => setDetalhesAbertos(true)}>
