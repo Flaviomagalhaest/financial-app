@@ -931,8 +931,10 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if atual.estorno_de:
         if "tipo" in mudancas:
             raise recusar("estorno é um crédito no cartão")
-        if {"categoria_ids", "tags", "item_categoria_id"} & mudancas.keys():
+        if {"categoria_ids", "tags"} & mudancas.keys():
             raise recusar("estorno leva as mesmas categorias e tags da compra")
+        if "item_categoria_id" in mudancas:
+            raise recusar("estorno conta no item do planejamento em que a compra conta")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             _conferir_estorno(conn, id, editado, atual.estorno_de)
     momento = _momento(alteracao.acao_em)
@@ -971,6 +973,15 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     return _um(conn, id)
 
 
+def conferir_sem_estorno(conn, ids: list[UUID]) -> None:
+    """A compra com estorno não se exclui: exclui-se o estorno antes (ticket 133, ADR 0016)."""
+    if conn.execute(
+        "SELECT 1 FROM lancamentos WHERE estorno_de = ANY(%s) AND excluido_em IS NULL LIMIT 1",
+        (ids,),
+    ).fetchone():
+        raise recusar("a compra tem estorno; exclua o estorno antes")
+
+
 def excluir(
     conn, id: UUID, versao: int | None, usuario: str, acao_em: datetime | None = None
 ) -> None:
@@ -981,13 +992,8 @@ def excluir(
     ).fetchone()
     if not linha:
         return
-    if (
-        not linha[1]
-        and conn.execute(
-            "SELECT 1 FROM lancamentos WHERE estorno_de = %s AND excluido_em IS NULL", (id,)
-        ).fetchone()
-    ):
-        raise recusar("a compra tem estorno; exclua o estorno antes")
+    if not linha[1]:
+        conferir_sem_estorno(conn, [id])
     if linha[1]:
         # A pessoa que exclui o que a regra da recorrência já tirou (a exclusão que estava
         # offline) pulou o mês: a geração não o traz de volta.
