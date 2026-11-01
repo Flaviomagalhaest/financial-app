@@ -445,19 +445,23 @@ def test_correcao_acerta_as_partes_da_compra_junto_com_o_valor(casal: Casal):
         cartao = novo_cartao(casal)["id"]
         roupa, casa = casal.categoria("Roupa"), casal.categoria("Casa")
         partes = [parte([roupa], 60000, descricao="Vestido"), parte([casa], 40000)]
-        criada = compra_com_partes(
-            casal, cartao, partes, data="2026-04-10", situacao="realizado"
-        )
+        criada = compra_com_partes(casal, cartao, partes, data="2026-04-10", situacao="realizado")
         assert criada.status_code == 201, criada.text
         compra = criada.json()
-        assert pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02").status_code == 201
+        assert (
+            pagar(casal, conta, cartao, valor_centavos=60000, data="2026-05-02").status_code == 201
+        )
 
         # Só o valor: as partes deixam de somar a compra e a correção é recusada.
         so_valor = casal.pedir(
             "flavio",
             "POST",
             f"/api/cartoes/{cartao}/faturas/2026-04-01/correcao",
-            json={"compras_editadas": [{"id": compra["id"], "versao": compra["versao"], "valor_centavos": 90000}]},
+            json={
+                "compras_editadas": [
+                    {"id": compra["id"], "versao": compra["versao"], "valor_centavos": 90000}
+                ]
+            },
         )
         assert so_valor.status_code == 422
 
@@ -469,11 +473,20 @@ def test_correcao_acerta_as_partes_da_compra_junto_com_o_valor(casal: Casal):
             f"/api/cartoes/{cartao}/faturas/2026-04-01/correcao",
             json={
                 "compras_editadas": [
-                    {"id": compra["id"], "versao": compra["versao"], "valor_centavos": 90000, "partes": acertadas}
+                    {
+                        "id": compra["id"],
+                        "versao": compra["versao"],
+                        "valor_centavos": 90000,
+                        "partes": acertadas,
+                    }
                 ]
             },
         )
         assert resposta.status_code == 200, resposta.text
-        [vista] = [l for l in casal.pedir("esposa", "GET", "/api/lancamentos").json() if l["id"] == compra["id"]]
+        [vista] = [
+            l
+            for l in casal.pedir("esposa", "GET", "/api/lancamentos").json()
+            if l["id"] == compra["id"]
+        ]
         assert vista["valor_centavos"] == 90000
         assert [p["valor_centavos"] for p in vista["partes"]] == [60000, 30000]
