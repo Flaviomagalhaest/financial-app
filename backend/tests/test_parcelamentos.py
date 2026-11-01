@@ -943,19 +943,101 @@ def test_corrigir_a_data_de_um_cartao_com_parcela_realizada_pede_confirmacao(cas
     assert {l["data"] for l in parcelas(casal, novo["id"])} == {"2026-10-20"}
 
 
-def test_corrigir_a_data_para_o_passado_realiza_agora_a_parcela_automatica(casal: Casal):
+def test_corrigir_a_data_para_o_passado_pula_as_parcelas_que_passaram_sem_realizar(casal: Casal):
     novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", automatico=True)
     assert [l["situacao"] for l in parcelas(casal, novo["id"])] == ["previsto"] * 3
 
+    resposta = mudar(casal, novo["id"], data="2026-09-10")
+
+    # Setembro e outubro passaram: saem como puladas, nada vira realizado (ticket 87).
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas_puladas"] == 2
+    assert valores(casal, novo["id"]) == [(3, 33333, "2026-11-10", "previsto")]
+    [conta] = casal.pedir("flavio", "GET", "/api/contas").json()
+    assert conta["saldo_centavos"] == 0
+
+
+def test_a_parcela_que_a_correcao_pulou_volta_quando_a_data_volta_para_hoje_ou_depois(
+    casal: Casal,
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", automatico=True)
     assert mudar(casal, novo["id"], data="2026-09-10").status_code == 200
 
-    assert [(l["data"], l["situacao"]) for l in parcelas(casal, novo["id"])] == [
-        ("2026-09-10", "realizado"),
-        ("2026-10-10", "realizado"),
-        ("2026-11-10", "previsto"),
+    resposta = mudar(casal, novo["id"], data="2026-10-28")
+
+    # A de hoje volta e se realiza hoje, como a automática que chega na data.
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas_puladas"] == 0
+    assert valores(casal, novo["id"]) == [
+        (1, 33334, "2026-10-28", "realizado"),
+        (2, 33333, "2026-11-28", "previsto"),
+        (3, 33333, "2026-12-28", "previsto"),
     ]
-    [conta] = casal.pedir("flavio", "GET", "/api/contas").json()
-    assert conta["saldo_centavos"] == -66667
+
+
+def test_crescer_de_novo_com_a_realizada_que_saiu_no_passado_nao_pede_confirmacao(casal: Casal):
+    novo = criar_geladeira(
+        casal,
+        casal.conta(),
+        lancada_em="2026-08-01",
+        data="2026-08-10",
+        parcelas=4,
+        automatico=True,
+    )
+    assert [l["situacao"] for l in parcelas(casal, novo["id"])] == ["realizado"] * 3 + ["previsto"]
+    encolheu = mudar(
+        casal, novo["id"], parcelas=2, valor_total_centavos=100000, confirmar_realizadas=True
+    )
+    assert encolheu.status_code == 200
+
+    # A 3ª, realizada em 10/10, saiu e continua fora: ela sai pulada, sem aviso.
+    resposta = mudar(casal, novo["id"], parcelas=4, valor_total_centavos=200000)
+
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas_puladas"] == 1
+    assert valores(casal, novo["id"]) == [
+        (1, 50000, "2026-08-10", "realizado"),
+        (2, 50000, "2026-09-10", "realizado"),
+        (4, 50000, "2026-11-10", "previsto"),
+    ]
+
+
+def test_corrigir_a_data_do_boleto_para_frente_cria_as_parcelas_puladas_menos_a_excluida(
+    casal: Casal,
+):
+    # Lançado hoje (28/10) com a 1ª em 10/08: as parcelas 1 a 3 foram puladas.
+    novo = criar_geladeira(casal, casal.conta(), data="2026-08-10", parcelas=6, automatico=True)
+    quinta = parcelas(casal, novo["id"])[1]
+    assert quinta["parcela"] == 5
+    assert (
+        casal.pedir("flavio", "DELETE", f"/api/lancamentos/{quinta['id']}?versao=1").status_code
+        == 204
+    )
+
+    resposta = mudar(casal, novo["id"], data="2026-12-10")
+
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas_puladas"] == 0
+    assert valores(casal, novo["id"]) == [
+        (1, 16670, "2026-12-10", "previsto"),
+        (2, 16666, "2027-01-10", "previsto"),
+        (3, 16666, "2027-02-10", "previsto"),
+        (4, 16666, "2027-03-10", "previsto"),
+        (6, 16666, "2027-05-10", "previsto"),
+    ]
+
+
+def test_a_parcela_atrasada_que_a_correcao_move_continua_prevista(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), lancada_em="2026-09-01", data="2026-09-10")
+
+    assert mudar(casal, novo["id"], data="2026-09-05").status_code == 200
+
+    # Setembro e outubro já estavam atrasados: a data muda, e eles seguem esperando o casal.
+    assert valores(casal, novo["id"]) == [
+        (1, 33334, "2026-09-05", "previsto"),
+        (2, 33333, "2026-10-05", "previsto"),
+        (3, 33333, "2026-11-05", "previsto"),
+    ]
 
 
 def test_a_parcela_excluida_uma_a_uma_nao_volta_com_a_correcao(casal: Casal):
