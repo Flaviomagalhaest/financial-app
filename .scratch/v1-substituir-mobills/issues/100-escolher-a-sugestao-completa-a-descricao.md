@@ -1,7 +1,7 @@
 # Escolher a sugestão completa a descrição?
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling`; HITL (decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Sonnet
