@@ -1,7 +1,7 @@
 # Tabela de casos compartilhada para a conta das puladas
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
