@@ -1,7 +1,7 @@
 # Alcance da mudança na parcela: só esta, esta e as próximas, todas
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Opus
