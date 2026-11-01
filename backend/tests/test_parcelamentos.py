@@ -1191,13 +1191,17 @@ def test_a_correcao_so_refaz_a_classificacao_que_o_pedido_trouxe(casal: Casal):
         ("Geladeria", []),
     ]
 
-    # Corrigir a descrição vale para todas (história 101).
-    assert mudar(casal, novo["id"], descricao="Geladeira").status_code == 200
+    # Corrigir a descrição vale para todas, menos a que uma pessoa mudou só nela (ticket 136),
+    # e a resposta diz quantas ficaram como estavam.
+    corrigido = mudar(casal, novo["id"], descricao="Geladeira", tags=["eletro"])
+    assert corrigido.status_code == 200
+    assert corrigido.json()["parcelas_mantidas"] == 1
     assert [(l["descricao"], l["tags"]) for l in parcelas(casal, novo["id"])] == [
-        ("Geladeira", []),
-        ("Geladeira", ["extra"]),
-        ("Geladeira", []),
+        ("Geladeira", ["eletro"]),
+        ("Geladeira, entrada", ["extra"]),
+        ("Geladeira", ["eletro"]),
     ]
+    assert [l["alterada_a_mao"] for l in parcelas(casal, novo["id"])] == [False, True, False]
 
 
 def test_gerar_as_parcelas_de_um_parcelamento_excluido_no_meio_nao_falha(

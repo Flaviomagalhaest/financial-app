@@ -150,8 +150,9 @@ class Lancamento(DadosDoLancamento):
     parcelamento_id: UUID | None = None
     parcela: int | None = None
     parcelas: int | None = None
-    # Parcela cujo valor, data, conta ou fatura uma pessoa mudou: a correção do parcelamento a
-    # preserva (ticket 47). Só a parcela tem a marca.
+    # Parcela com um campo que uma pessoa mudou só nela ("só esta"): a correção do parcelamento e
+    # a mudança de "esta e as próximas" ou "todas" a preservam nesse campo (tickets 47 e 136). Só
+    # a parcela tem a marca.
     alterada_a_mao: bool = False
     # Sobe a cada mudança aceita; a edição e a exclusão dizem sobre qual versão foram feitas.
     versao: int
@@ -284,14 +285,40 @@ VALOR_NA_CONTA = "CASE l.tipo WHEN 'receita' THEN l.valor_centavos ELSE -l.valor
 NO_CARTAO = "EXISTS (SELECT FROM cartoes WHERE cartoes.id = lancamentos.conta_id)"
 # Quantas parcelas tem o parcelamento da parcela (o 10 de 3/10); o avulso não tem.
 PARCELAS = "(SELECT p.parcelas FROM parcelamentos p WHERE p.id = lancamentos.parcelamento_id)"
-# Uma pessoa mudou (campo sem `origem`) o valor, a data, a conta ou a fatura da parcela, que a
-# correção do parcelamento não toca. A confirmação sem ajuste só registra a situação, e as regras
-# gravam com `origem`: nenhuma conta como edição.
+# Os campos da parcela que se alteram à mão (ticket 136); a situação é sempre só da parcela.
+CAMPOS_DA_PARCELA = (
+    "valor_centavos",
+    "data",
+    "conta_id",
+    "fatura_mes",
+    "descricao",
+    "categoria_ids",
+    "tags",
+    "pessoa",
+    "item_categoria_id",
+)
+# Uma pessoa mudou (campo sem `origem`) um desses campos só na parcela, que a correção do
+# parcelamento não toca. A confirmação sem ajuste só registra a situação, e as regras gravam com
+# `origem`: nenhuma conta como edição.
 ALTERADA_A_MAO = (
     "(parcelamento_id IS NOT NULL AND EXISTS (SELECT FROM lancamento_campos c"
     " WHERE c.lancamento_id = lancamentos.id AND c.origem IS NULL"
-    " AND c.campo IN ('valor_centavos', 'data', 'conta_id', 'fatura_mes')))"
+    f" AND c.campo IN ({', '.join(repr(c) for c in CAMPOS_DA_PARCELA)})))"
 )
+
+
+def campos_a_mao(conn, ids: list[UUID]) -> dict[UUID, set[str]]:
+    """Por parcela, os campos que uma pessoa mudou só nela."""
+    a_mao: dict[UUID, set[str]] = {}
+    for lancamento_id, campo in conn.execute(
+        "SELECT lancamento_id, campo FROM lancamento_campos"
+        " WHERE lancamento_id = ANY(%s) AND origem IS NULL AND campo = ANY(%s)",
+        (ids, list(CAMPOS_DA_PARCELA)),
+    ):
+        a_mao.setdefault(lancamento_id, set()).add(campo)
+    return a_mao
+
+
 _COLUNAS = (
     "id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
@@ -748,7 +775,7 @@ def _item_atual_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None
     return atual if atual in depois.categoria_ids else None
 
 
-def _iguais(campo: Campo, pedido, gravado) -> bool:
+def iguais(campo: Campo, pedido, gravado) -> bool:
     if campo == "categoria_ids":
         return set(pedido) == set(gravado)
     if campo == "tags":
@@ -884,7 +911,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     mudancas = {}
     conflitos: list[Campo] = []
     for campo, valor in pedidas.items():
-        if _iguais(campo, valor, getattr(atual, campo)):
+        if iguais(campo, valor, getattr(atual, campo)):
             continue
         if versoes[campo].versao > alteracao.versao:
             conflitos.append(campo)
