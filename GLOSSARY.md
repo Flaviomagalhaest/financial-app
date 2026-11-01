@@ -31,7 +31,7 @@ Classificação permanente de um lançamento, de uma lista plana que o casal man
 _Avoid_: subcategoria, grupo
 
 **Categoria arquivada**:
-Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada.
+Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada. Arquivar não mexe nas recorrências: a recorrência ativa que a tem segue gerando previstos com ela até o casal trocar a categoria daqui para frente ou encerrar a regra; o app avisa antes de arquivar e lembra, enquanto houver alguma, quais seguem com ela.
 
 **Juntar (categoria ou tag)**:
 Passar todos os lançamentos de uma categoria (ou tag) para outra do mesmo tipo e excluir a primeira; o lançamento que já tinha as duas fica com uma só.
@@ -75,6 +75,9 @@ _Avoid_: motor de sugestão
 **Recorrência**:
 Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz). Só gera de hoje em diante: com o início no passado, as ocorrências de antes de hoje não viram lançamento (nem atrasado, nem realizado), mas o calendário e as `vezes` seguem contados desde o início; a de hoje, lançada junto com a regra, nasce realizada. A tarefa diária e a mudança da regra também não lançam ocorrência que já passou. A regra que termina antes de hoje é recusada.
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
+
+**Recorrência ativa**:
+Recorrência que ainda tem previsto de hoje em diante; a que terminou, ou cujos previstos que viriam o casal pulou, não é ativa, mesmo com atrasado esperando confirmação.
 
 **Ocorrência**:
 Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a que o casal pulou (excluída) não volta. A que o fim ou o horizonte tirou volta quando o fim sai ou o horizonte chega a ela: `geradas` recua até antes dela, e só o excluído marcado como da regra (`excluido_pela_regra`) é trazido de volta; o que o casal pulou nunca volta, esteja o número antes ou depois do fim.
@@ -266,11 +269,11 @@ Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é 
 _Avoid_: saldo inicial, saldo importado
 
 **Conta arquivada**:
-Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve.
+Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve. Como na categoria arquivada, a recorrência ativa nela segue gerando previstos até o casal trocar a conta ou encerrar a regra, com aviso antes de arquivar; o parcelamento segue sem aviso, porque a compra já foi feita.
 _Avoid_: conta excluída, conta inativa
 
 **Cartão arquivado**:
-Cartão que o casal tirou das opções de novo lançamento sem perder o histórico; as compras antigas continuam nele e na fatura delas, e desarquivar o devolve.
+Cartão que o casal tirou das opções de novo lançamento sem perder o histórico; as compras antigas continuam nele e na fatura delas, e desarquivar o devolve. A recorrência ativa e o parcelamento nele seguem como na conta arquivada.
 _Avoid_: cartão cancelado, cartão inativo
 
 **Limite**:

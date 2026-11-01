@@ -6,6 +6,8 @@ import {
   mudarRecorrencia,
   useAvisoDePlanejamento,
   useCadastro,
+  useCartoesComArquivados,
+  useContasComArquivadas,
   useLancamentos,
   useMudancasDaRecorrenciaNaoEnviadas,
   usePessoas,
@@ -95,6 +97,9 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const { recorrencias, semDados } = useRecorrencias();
   const mudancas = useMudancasDaRecorrenciaNaoEnviadas();
   const { contasECartoes, categorias } = useCadastro();
+  // Para dar o nome à conta ou ao cartão arquivado que segue na regra (ticket 97).
+  const { contas: comArquivadas } = useContasComArquivadas();
+  const { cartoes: comArquivados } = useCartoesComArquivados();
   const { pessoas } = usePessoas();
   const opcoesDeTags = useTags();
   const lancamento = lancamentos?.find((l) => l.id === id);
@@ -140,7 +145,10 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   const categoriasDoTipo = categorias.filter((c) => c.tipo === regra.tipo && (!c.arquivada || form.categoriaIds.includes(c.id)));
   // A conta arquivada não está entre as do cadastro, mas segue sendo a da regra até alguém trocar.
-  const contas = contasECartoes.some((c) => c.id === regra.conta_id) ? contasECartoes : [{ id: regra.conta_id, nome: "conta arquivada" }, ...contasECartoes];
+  const arquivada = comArquivadas.find((c) => c.id === regra.conta_id);
+  const arquivado = comArquivados.find((c) => c.id === regra.conta_id);
+  const nomeDaArquivada = arquivada ? `${arquivada.nome} (arquivada)` : arquivado ? `${arquivado.nome} (arquivado)` : "conta arquivada";
+  const contas = contasECartoes.some((c) => c.id === regra.conta_id) ? contasECartoes : [{ id: regra.conta_id, nome: nomeDaArquivada }, ...contasECartoes];
 
   async function enviar(alteracao: AlteracaoDeRecorrencia) {
     setErro("");
@@ -252,6 +260,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
         {categoriasDoTipo.map((c) => (
           <button type="button" key={c.id} className={`ficha${form.categoriaIds.includes(c.id) ? " marcada" : ""}`} aria-pressed={form.categoriaIds.includes(c.id)} onClick={() => mudar({ categoriaIds: alternar(form.categoriaIds, c.id) })}>
             {c.nome}
+            {c.arquivada && " (arquivada)"}
           </button>
         ))}
       </div>

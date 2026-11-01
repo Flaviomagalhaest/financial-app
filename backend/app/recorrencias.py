@@ -75,6 +75,13 @@ class NovaRecorrencia(BaseModel):
         return self
 
 
+class ProximoPrevisto(BaseModel):
+    """O previsto de hoje em diante com que a regra segue: a tela abre a recorrência por ele."""
+
+    id: UUID
+    data: date
+
+
 class Recorrencia(NovaRecorrencia):
     # O número da ocorrência que cai em `inicio`: 1 até a regra mudar de calendário "daqui para
     # frente", quando `inicio` passa a ser a data da ocorrência em que a mudança começou.
@@ -83,6 +90,9 @@ class Recorrencia(NovaRecorrencia):
     criado_em: datetime
     alterado_por: str
     alterado_em: datetime
+    # Sem previsto de hoje em diante (acabou, ou o casal pulou os que viriam), a regra não está
+    # ativa: o aviso de arquivar conta, cartão ou categoria não a conta (ticket 97).
+    proximo_previsto: ProximoPrevisto | None = None
 
 
 class CamposDaRecorrencia(BaseModel):
@@ -223,7 +233,30 @@ def horizonte() -> date:
     return mais_meses(lancamentos.hoje(), valores_iniciais()["horizonteDaRecorrenciaMeses"])
 
 
-def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Recorrencia]:
+def _proximos_previstos(conn, ids: list[UUID]) -> dict[UUID, ProximoPrevisto]:
+    """O primeiro previsto de hoje em diante de cada regra, pela data (o alterado à mão conta
+    na data que tem). O atrasado, o pulado e o confirmado ficam de fora."""
+    filtro = (
+        "{t}recorrencia_id = ANY(%s) AND {t}situacao = 'previsto' AND {t}excluido_em IS NULL"
+        " AND {t}data >= %s"
+    )
+    proximos: dict[UUID, ProximoPrevisto] = {}
+    for recorrencia_id, id, data in conn.execute(
+        "SELECT l.recorrencia_id, l.id, l.data FROM lancamentos l JOIN ("
+        f" SELECT recorrencia_id, min(data) AS data FROM lancamentos WHERE {filtro.format(t='')}"
+        " GROUP BY recorrencia_id) p ON p.recorrencia_id = l.recorrencia_id AND p.data = l.data"
+        f" WHERE {filtro.format(t='l.')} ORDER BY l.ocorrencia",
+        (ids, lancamentos.hoje(), ids, lancamentos.hoje()),
+    ):
+        proximos.setdefault(recorrencia_id, ProximoPrevisto(id=id, data=data))
+    return proximos
+
+
+def _ler(
+    conn, filtro: str = "", parametros: tuple = (), com_proximo: bool = False
+) -> list[Recorrencia]:
+    """As regras gravadas; `com_proximo` acrescenta o próximo previsto, que só a resposta da
+    rota mostra."""
     linhas = conn.execute(
         f"SELECT {_COLUNAS} FROM recorrencias {'WHERE ' + filtro if filtro else ''}"
         " ORDER BY descricao, id",
@@ -244,11 +277,13 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Recorrencia]:
         (ids,),
     ):
         tags.setdefault(recorrencia_id, []).append(nome)
+    proximos = _proximos_previstos(conn, ids) if com_proximo else {}
     return [
         Recorrencia(
             **dict(zip(_NOMES_DAS_COLUNAS, linha)),
             categoria_ids=categorias.get(linha[0], []),
             tags=tags.get(linha[0], []),
+            proximo_previsto=proximos.get(linha[0]),
         )
         for linha in linhas
     ]
@@ -482,9 +517,10 @@ def _gravar(conn, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, boo
 
 def criar(url: str | None, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, bool]:
     """Grava a regra e gera os previstos até o horizonte; serve à rota e ao lote da fila."""
-    criada, gravada = em_transacao(url, lambda conn: _gravar(conn, nova, usuario))
+    _, gravada = em_transacao(url, lambda conn: _gravar(conn, nova, usuario))
     gerar_ate_o_horizonte(url, nova.id, na_criacao=True)
-    return criada, gravada
+    with conectar(url) as conn:
+        return _ler(conn, "id = %s", (nova.id,), com_proximo=True)[0], gravada
 
 
 @router.post(
@@ -506,7 +542,7 @@ def criar_recorrencia(
 @router.get("/recorrencias", response_model=list[Recorrencia], operation_id="listar_recorrencias")
 def listar_recorrencias(usuario: UsuarioLogado, request: Request) -> list[Recorrencia]:
     with conectar(url_do_banco(request)) as conn:
-        return _ler(conn)
+        return _ler(conn, com_proximo=True)
 
 
 def _fora_do_fim(regra: Recorrencia, n: int, dia: date) -> bool:
@@ -801,7 +837,7 @@ def alterar(
         pass
     gerar_ate_o_horizonte(url, id)
     with conectar(url) as conn:
-        return _ler(conn, "id = %s", (id,))[0]
+        return _ler(conn, "id = %s", (id,), com_proximo=True)[0]
 
 
 def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:

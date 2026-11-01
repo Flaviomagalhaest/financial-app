@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
-import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta, type ContaNaTela } from "../dados";
+import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta, type ContaNaTela, type RecorrenciaNaTela } from "../dados";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
+import { AvisoDeArquivar, LembreteDeRecorrencias, useRecorrenciasAtivas } from "./RecorrenciasAtivas";
 import { SecaoDeCartoes } from "./SecaoDeCartoes";
 
 const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: "Carteira" } as const;
@@ -14,6 +15,7 @@ export function TelaDeContasECategorias() {
   const { contas, recarregar: recarregarContas } = useContasComArquivadas();
   const { tags, recarregar: recarregarTags } = useTagsComArquivadas();
   const online = useConexao();
+  const ativasDe = useRecorrenciasAtivas();
   const [erro, setErro] = useState("");
   const recarregar = async () => {
     await Promise.all([recarregarCadastro(), recarregarContas(), recarregarTags()]);
@@ -123,7 +125,7 @@ export function TelaDeContasECategorias() {
       <h3>Contas</h3>
       <ul className="lista">
         {contas.map((c) => (
-          <LinhaDeConta key={c.id} conta={c} aoSalvar={salvarConta} />
+          <LinhaDeConta key={c.id} conta={c} ativas={ativasDe(c.id)} aoSalvar={salvarConta} />
         ))}
       </ul>
       <form
@@ -158,7 +160,7 @@ export function TelaDeContasECategorias() {
         <input id="conta-data" name="data_abertura" type="date" />
         <button type="submit">Cadastrar</button>
       </form>
-      <SecaoDeCartoes executar={executar} setErro={setErro} />
+      <SecaoDeCartoes executar={executar} setErro={setErro} ativasDe={ativasDe} />
       <h3>Categorias</h3>
       {(Object.keys(TIPOS_DE_CATEGORIA) as (keyof typeof TIPOS_DE_CATEGORIA)[]).map((tipo) => (
         <div key={tipo}>
@@ -170,6 +172,7 @@ export function TelaDeContasECategorias() {
                 <LinhaDeItem
                     key={c.id}
                     item={c}
+                    ativas={ativasDe(c.id)}
                     manutencao={dasCategorias}
                     destinos={categorias.filter((d) => d.tipo === c.tipo && d.id !== c.id && !d.arquivada)}
                   />
@@ -220,12 +223,15 @@ export function TelaDeContasECategorias() {
 
 function LinhaDeConta({
   conta,
+  ativas,
   aoSalvar,
 }: {
   conta: ContaNaTela;
+  ativas: RecorrenciaNaTela[];
   aoSalvar: (conta: Conta, mudanca: Partial<Conta>) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
+  const [avisando, setAvisando] = useState(false);
   const [nome, setNome] = useState(conta.nome);
   const [tipo, setTipo] = useState(conta.tipo);
   const [saldo, setSaldo] = useState("");
@@ -293,10 +299,24 @@ function LinhaDeConta({
         >
           Editar {conta.nome}
         </button>
-        <button type="button" className="secundario" onClick={() => void aoSalvar(conta, { arquivada: !conta.arquivada })}>
+        <button
+          type="button"
+          className="secundario"
+          onClick={() => (!conta.arquivada && ativas.length > 0 ? setAvisando(true) : void aoSalvar(conta, { arquivada: !conta.arquivada }))}
+        >
           {conta.arquivada ? "Desarquivar" : "Arquivar"} conta {conta.nome}
         </button>
       </div>
+      {avisando && !conta.arquivada && (
+        <AvisoDeArquivar
+          nome={conta.nome}
+          oQue="a conta"
+          ativas={ativas}
+          aoArquivar={() => void aoSalvar(conta, { arquivada: true }).then((ok) => ok && setAvisando(false))}
+          aoCancelar={() => setAvisando(false)}
+        />
+      )}
+      {conta.arquivada && <LembreteDeRecorrencias nome={conta.nome} ativas={ativas} />}
     </li>
   );
 }
@@ -310,14 +330,18 @@ type Manutencao = {
 /** Uma categoria ou tag: renomear, arquivar, juntar em outra e excluir. */
 function LinhaDeItem({
   item,
+  ativas = [],
   manutencao,
   destinos,
 }: {
   item: { id: string; nome: string; arquivada: boolean };
+  /** As recorrências ativas da categoria; a tag não avisa (ticket 97). */
+  ativas?: RecorrenciaNaTela[];
   manutencao: Manutencao;
   destinos: { id: string; nome: string }[];
 }) {
   const [editando, setEditando] = useState(false);
+  const [avisando, setAvisando] = useState(false);
   const [nome, setNome] = useState(item.nome);
   const [juntando, setJuntando] = useState(false);
   const [destino, setDestino] = useState("");
@@ -359,7 +383,11 @@ function LinhaDeItem({
         >
           Renomear {item.nome}
         </button>
-        <button type="button" className="secundario" onClick={() => void manutencao.alterar(item.id, { arquivada: !item.arquivada })}>
+        <button
+          type="button"
+          className="secundario"
+          onClick={() => (!item.arquivada && ativas.length > 0 ? setAvisando(true) : void manutencao.alterar(item.id, { arquivada: !item.arquivada }))}
+        >
           {item.arquivada ? "Desarquivar" : "Arquivar"} {item.nome}
         </button>
         <button type="button" className="secundario" onClick={() => void manutencao.excluir(item.id)}>
@@ -371,6 +399,16 @@ function LinhaDeItem({
           </button>
         )}
       </div>
+      {avisando && !item.arquivada && (
+        <AvisoDeArquivar
+          nome={item.nome}
+          oQue="a categoria"
+          ativas={ativas}
+          aoArquivar={() => void manutencao.alterar(item.id, { arquivada: true }).then((ok) => ok && setAvisando(false))}
+          aoCancelar={() => setAvisando(false)}
+        />
+      )}
+      {item.arquivada && <LembreteDeRecorrencias nome={item.nome} ativas={ativas} />}
       {juntando && (
         <form
           aria-label={`Juntar ${item.nome}`}

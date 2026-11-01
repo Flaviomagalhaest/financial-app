@@ -184,6 +184,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
 
     assert (primeira.status_code, segunda.status_code) == (201, 200)
     assert segunda.json() == primeira.json()
+    novembro = gerados(casal, nova["id"])[0]
     assert primeira.json() | {"criado_em": None, "alterado_em": None} == nova | {
         "automatico": False,
         "ate": None,
@@ -193,6 +194,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
         "alterado_por": "flavio",
         "criado_em": None,
         "alterado_em": None,
+        "proximo_previsto": {"id": novembro["id"], "data": "2026-11-10"},
     }
     assert casal.pedir("esposa", "GET", "/api/recorrencias").json() == [primeira.json()]
     previstos = gerados(casal, nova["id"])
@@ -229,6 +231,7 @@ def test_sem_internet_a_recorrencia_sobe_no_lote_como_um_pedido_so(casal: Casal)
         "alterado_por": "esposa",
         "criado_em": None,
         "alterado_em": None,
+        "proximo_previsto": {"id": gerados(casal, nova["id"])[0]["id"], "data": "2026-11-10"},
     }
     assert (recusada["resultado"], recusada["motivo"]) == ("recusada", "conta não encontrada")
     assert [r["resultado"] for r in segundo.json()["resultados"]] == ["aceita", "recusada"]
@@ -1213,3 +1216,74 @@ def test_encerrar_pela_fila_numa_data_e_recusado_se_a_outra_pessoa_encerrou_por_
         "a regra mudou depois (fim): confira e mude de novo",
     )
     assert len(gerados(casal, nova["id"])) == 5
+
+
+def proximo(casal: Casal, id: str) -> dict | None:
+    [regra] = [r for r in casal.pedir("flavio", "GET", "/api/recorrencias").json() if r["id"] == id]
+    return regra["proximo_previsto"]
+
+
+def test_a_recorrencia_mostra_o_proximo_previsto_de_hoje_em_diante_e_nenhum_quando_acabou(
+    casal: Casal,
+):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=3)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    novembro, dezembro, janeiro = gerados(casal, nova["id"])
+    assert proximo(casal, nova["id"]) == {"id": novembro["id"], "data": "2026-11-10"}
+
+    # O pulado e o confirmado não contam: a regra só é ativa enquanto tem previsto por vir.
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{novembro['id']}")
+    casal.pedir("flavio", "POST", f"/api/lancamentos/{dezembro['id']}/confirmar", json={})
+    assert proximo(casal, nova["id"]) == {"id": janeiro["id"], "data": "2027-01-10"}
+
+    casal.pedir("esposa", "DELETE", f"/api/lancamentos/{janeiro['id']}")
+    assert proximo(casal, nova["id"]) is None
+
+
+def test_o_atrasado_nao_e_o_proximo_previsto(casal: Casal, monkeypatch: pytest.MonkeyPatch):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10", vezes=2)
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    _, dezembro = gerados(casal, nova["id"])
+
+    no_dia(monkeypatch, "2026-11-20")
+    assert proximo(casal, nova["id"]) == {"id": dezembro["id"], "data": "2026-12-10"}
+    no_dia(monkeypatch, "2026-12-11")
+    assert proximo(casal, nova["id"]) is None
+
+
+def test_arquivar_a_conta_e_a_categoria_nao_mexe_na_recorrencia_ativa(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    conta, luz = casal.conta("Itaú"), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-11-10")
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    casal.pedir(
+        "esposa",
+        "PUT",
+        f"/api/contas/{conta}",
+        json={"nome": "Itaú", "tipo": "corrente", "arquivada": True},
+    )
+    casal.pedir("esposa", "PATCH", f"/api/categorias/{luz}", json={"arquivada": True})
+
+    # A regra segue gerando na conta e na categoria arquivadas até o casal trocar ou encerrar.
+    no_dia(monkeypatch, "2026-12-01")
+    fazer_tarefa_diaria(database_url)
+    previstos = gerados(casal, nova["id"])
+    assert previstos[-1]["data"] == "2028-11-10"
+    assert {(l["conta_id"], tuple(l["categoria_ids"])) for l in previstos} == {(conta, (luz,))}
+    assert proximo(casal, nova["id"])["data"] == "2026-12-10"
+    # Mudar outro campo daqui para frente não pede para trocar o que foi arquivado.
+    assert mudar(casal, nova["id"], 2, valor_centavos=21000).status_code == 200
+
+    # Desarquivar também não mexe: a regra trocada de conta não volta para a desarquivada.
+    nubank = casal.conta("Nubank")
+    assert mudar(casal, nova["id"], 2, conta_id=nubank).status_code == 200
+    casal.pedir(
+        "esposa",
+        "PUT",
+        f"/api/contas/{conta}",
+        json={"nome": "Itaú", "tipo": "corrente", "arquivada": False},
+    )
+    assert casal.pedir("flavio", "GET", "/api/recorrencias").json()[0]["conta_id"] == nubank

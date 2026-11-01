@@ -1,13 +1,22 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { api } from "../api/cliente";
-import { useCartoesComArquivados, useFaturas, type Cartao } from "../dados";
+import { useCartoesComArquivados, useFaturas, type Cartao, type RecorrenciaNaTela } from "../dados";
 import { mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
+import { AvisoDeArquivar, LembreteDeRecorrencias } from "./RecorrenciasAtivas";
 
 type Executar = (acao: string, chamar: () => Promise<{ data?: unknown; response: Response; error?: unknown }>) => Promise<boolean>;
 
 /** Os cartões da configuração: titulares com dias e limite, adicionais ligados a um titular. Tudo exige internet. */
-export function SecaoDeCartoes({ executar, setErro }: { executar: Executar; setErro: (erro: string) => void }) {
+export function SecaoDeCartoes({
+  executar,
+  setErro,
+  ativasDe,
+}: {
+  executar: Executar;
+  setErro: (erro: string) => void;
+  ativasDe: (id: string) => RecorrenciaNaTela[];
+}) {
   const { cartoes, recarregar } = useCartoesComArquivados();
   const titulares = cartoes.filter((c) => !c.titular_id && !c.arquivado);
   const nomeDe = (id: string | null | undefined) => cartoes.find((c) => c.id === id)?.nome ?? "";
@@ -64,7 +73,7 @@ export function SecaoDeCartoes({ executar, setErro }: { executar: Executar; setE
       <h3 id="titulo-cartoes">Cartões</h3>
       <ul className="lista">
         {cartoes.map((c) => (
-          <LinhaDeCartao key={c.id} cartao={c} titular={nomeDe(c.titular_id)} aoSalvar={salvar} setErro={setErro} />
+          <LinhaDeCartao key={c.id} cartao={c} titular={nomeDe(c.titular_id)} ativas={ativasDe(c.id)} aoSalvar={salvar} setErro={setErro} />
         ))}
       </ul>
       <form aria-label="Novo cartão" onSubmit={(e) => void criar(e)}>
@@ -113,11 +122,13 @@ const AVISO_DO_DIA_PADRAO =
 function LinhaDeCartao({
   cartao,
   titular,
+  ativas,
   aoSalvar,
   setErro,
 }: {
   cartao: Cartao;
   titular: string;
+  ativas: RecorrenciaNaTela[];
   aoSalvar: (cartao: Cartao, mudanca: Partial<Cartao>) => Promise<boolean>;
   setErro: (erro: string) => void;
 }) {
@@ -128,6 +139,7 @@ function LinhaDeCartao({
   const [limite, setLimite] = useState("");
   const [mesAnterior, setMesAnterior] = useState(cartao.mes_anterior_ao_fechamento);
   const [acertando, setAcertando] = useState(false);
+  const [avisando, setAvisando] = useState(false);
   const adicional = !!cartao.titular_id;
 
   if (acertando) {
@@ -212,10 +224,24 @@ function LinhaDeCartao({
             Acertar fatura de {cartao.nome}
           </button>
         )}
-        <button type="button" className="secundario" onClick={() => void aoSalvar(cartao, { arquivado: !cartao.arquivado })}>
+        <button
+          type="button"
+          className="secundario"
+          onClick={() => (!cartao.arquivado && ativas.length > 0 ? setAvisando(true) : void aoSalvar(cartao, { arquivado: !cartao.arquivado }))}
+        >
           {cartao.arquivado ? "Desarquivar" : "Arquivar"} cartão {cartao.nome}
         </button>
       </div>
+      {avisando && !cartao.arquivado && (
+        <AvisoDeArquivar
+          nome={cartao.nome}
+          oQue="o cartão"
+          ativas={ativas}
+          aoArquivar={() => void aoSalvar(cartao, { arquivado: true }).then((ok) => ok && setAvisando(false))}
+          aoCancelar={() => setAvisando(false)}
+        />
+      )}
+      {cartao.arquivado && <LembreteDeRecorrencias nome={cartao.nome} ativas={ativas} />}
     </li>
   );
 }
