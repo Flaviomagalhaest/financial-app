@@ -1,7 +1,7 @@
 # Edição em lote no meio de uma geração parada faz o parcelamento perder o dia do lançamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `codebase-design` (como marcar a mudança de calendário)
 Modelo recomendado: Opus
