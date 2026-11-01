@@ -87,7 +87,7 @@ export function FormularioDeCorrecao({
           ? "confira o valor, a data e a conta de cada pagamento"
           : daFatura.some((c) => !c.excluir && !valorOuNada(c.valor))
             ? "confira o valor das compras"
-            : daFatura.some((c) => !c.excluir && c.partes.length > 0 && valorOuNada(c.valor) !== undefined && !partesAcertadas(c.partes, valorOuNada(c.valor) ?? 0))
+            : daFatura.some((c) => !c.excluir && c.partes.length > 0 && valorOuNada(c.valor) !== c.original && !partesAcertadas(c.partes, valorOuNada(c.valor) ?? 0))
               ? "o valor da compra com partes não cobre as outras partes"
             : novas.some((c) => !valorOuNada(c.valor) || !c.data || !c.categoria_id)
               ? "confira o valor, a data e a categoria das compras novas"
