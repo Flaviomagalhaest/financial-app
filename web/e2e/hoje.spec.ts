@@ -48,16 +48,18 @@ test("a Hoje junta ainda dá para gastar, a escolher, atrasados, fatura que venc
   await lancar([catRestaurante, catViagem], 4000, `Jantar ${s}`);
   await lancar([catLuz], 7000, `Boleto atrasado ${s}`, { data: dia(-2), situacao: "previsto" });
   const cartao = await enviar("/api/cartoes", { nome: visa, dia_fechamento: Number(dia(-5).slice(8)), dia_vencimento: Number(dia(2).slice(8)) });
-  await lancar([catLuz], 2500, `Compra no cartão ${s}`, { conta_id: cartao.id, data: dia(-10) });
+  await lancar([catRestaurante], 2500, `Compra no cartão ${s}`, { conta_id: cartao.id, data: dia(-10) });
 
   await page.reload();
   // O destaque.
   await expect(page.getByTestId("ainda-da-para-gastar")).toHaveText(/R\$ \d/);
   await expect(page.getByRole("region", { name: "Ainda dá para gastar este mês" })).toContainText("planejados");
 
-  // Itens acima de 80%: a luz, com o boleto atrasado previsto somando.
+  // Itens acima de 80%: a luz, com o boleto atrasado previsto somando, quando o dia dele cai no mês
+  // de hoje (nos primeiros dias do mês, "dois dias atrás" é do mês anterior e não soma).
+  const percentualDaLuz = dia(-2).startsWith(mes) ? 92 : 85;
   const perto = page.getByRole("region", { name: "Itens em destaque" });
-  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText("94%");
+  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText(`${percentualDaLuz}%`);
   await expect(perto).not.toContainText(restaurante);
 
   // Atrasados na mesma leitura das contas da semana.
@@ -82,5 +84,5 @@ test("a Hoje junta ainda dá para gastar, a escolher, atrasados, fatura que venc
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByText(/Sem internet: atualizado às \d\d:\d\d/)).toBeVisible();
-  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText("94%");
+  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText(`${percentualDaLuz}%`);
 });
