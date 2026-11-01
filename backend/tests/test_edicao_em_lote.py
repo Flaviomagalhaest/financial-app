@@ -705,3 +705,29 @@ def test_desfazer_pula_tambem_o_que_a_propria_pessoa_mudou_depois(casal: Casal):
         ("Feira", "mudou_depois", True)
     ]
     assert classificacao(casal, feira) == [({mercado, casa}, {"À mão"})]
+
+
+def test_a_migration_tira_a_marca_a_mao_que_o_lote_de_antes_deixou_nas_parcelas(
+    casal: Casal, database_url: str
+):
+    from pathlib import Path
+
+    conta, mercado, casa = casal.conta(), casal.categoria("Mercado"), casal.categoria("Casa")
+    emprestimo = parcelar(
+        casal, conta, [mercado], parcelas=2, data="2099-11-10", descricao="Empréstimo"
+    )
+    aplicada(
+        casal,
+        {"parcelamento_ids": [emprestimo]},
+        categorias={"acao": "trocar", "categoria_ids": [mercado], "por": casa},
+    )
+    # O lote de antes do ticket 136 gravava a mudança da parcela sem origem, como à mão.
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute("UPDATE lancamento_campos SET origem = NULL")
+    assert {l["alterada_a_mao"] for l in todos(casal).values()} == {True}
+
+    sql = Path("migrations/0059_lote_nao_marca_a_parcela_a_mao.sql").read_text()
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(sql)
+
+    assert {l["alterada_a_mao"] for l in todos(casal).values()} == {False}

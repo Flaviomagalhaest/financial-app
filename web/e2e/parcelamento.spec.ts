@@ -228,12 +228,80 @@ test("corrige o parcelamento pela tela e confirma antes de mudar as parcelas rea
   await expect(aviso).toContainText("R$ 100,00 → R$ 200,00");
   await page.getByRole("button", { name: "Corrigir mesmo assim" }).click();
 
+  // A 6ª, mudada à mão, ficou como estava, e a tela avisa antes de voltar.
+  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão.");
+  await page.getByRole("link", { name: "Voltar ao Histórico" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await expect(parcela("01/06")).toContainText("R$ 200,00");
   await expect(parcela("05/06")).toContainText("R$ 200,00");
   await expect(parcela("06/06")).toContainText("R$ 150,00");
   const [corrigido] = (await api.ler("/api/parcelamentos")).filter((p: { id: string }) => p.id === id);
   expect(corrigido.valor_total_centavos).toBe(120000);
+});
+
+test("muda uma parcela com alcance: esta e as próximas, todas com a realizada confirmada, e o que foi mudado à mão fica", async ({ page, context }) => {
+  const { api, id, descricao } = await prepararParcelamento(page);
+  const doParcelamento = async () =>
+    ((await api.ler("/api/lancamentos")) as { parcelamento_id: string; parcela: number; id: string; versao: number; descricao: string; valor_centavos: number }[])
+      .filter((l) => l.parcelamento_id === id)
+      .sort((a, b) => a.parcela - b.parcela);
+  // A 4ª, mudada só nela: as mudanças das outras não a tocam.
+  const quarta = (await doParcelamento())[3];
+  await api.mudar(`/api/lancamentos/${quarta.id}`, { versao: quarta.versao, descricao: `${descricao} da sala` });
+  await page.reload();
+  await aba(page, "Histórico");
+  const parcela = (n: string) => page.getByRole("listitem").filter({ hasText: `${descricao} ${n}` });
+  const novaDescricao = `${descricao} nova`;
+
+  await parcela("03/06").getByRole("link", { name: `Editar ${descricao}` }).click();
+  // A tela preenche com o lançamento quando ele carrega: o que se digitar antes se perde.
+  await expect(page.getByTestId("valor")).toHaveText("R$ 100,00");
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(novaDescricao);
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  const alcance = page.getByRole("group", { name: "Mudar quais parcelas?" });
+  await expect(alcance).toContainText("03/06");
+  // Sem internet, só esta parcela muda: as outras pedem a rede.
+  await context.setOffline(true);
+  await expect(alcance.getByRole("button", { name: "Esta e as próximas" })).toBeDisabled();
+  await expect(alcance.getByRole("button", { name: "Só esta" })).toBeEnabled();
+  await context.setOffline(false);
+  await alcance.getByRole("button", { name: "Esta e as próximas" }).click();
+
+  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão.");
+  expect((await doParcelamento()).map((l) => l.descricao)).toEqual([descricao, descricao, novaDescricao, `${descricao} da sala`, novaDescricao, novaDescricao]);
+  await page.getByRole("link", { name: "Voltar ao Histórico" }).click();
+
+  // O valor em todas: a 1ª já foi realizada, e a tela pede confirmação antes de gravar.
+  const novaParcela = (n: string) => page.getByRole("listitem").filter({ hasText: `${novaDescricao} ${n}` });
+  await novaParcela("05/06").getByRole("link", { name: `Editar ${novaDescricao}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 100,00");
+  await digitar(page, "Apagar", "Apagar", "Apagar", "Apagar", "Apagar", "1", "2", "0", "0", "0");
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await page.getByRole("button", { name: "Todas (inclusive as já realizadas)" }).click();
+  const realizadas = page.getByRole("group", { name: "Parcelas realizadas que mudam" });
+  await expect(realizadas).toContainText("01/06");
+  await expect(realizadas).toContainText("R$ 100,00 → R$ 120,00");
+  expect((await doParcelamento()).map((l) => l.valor_centavos)).toEqual([10000, 10000, 10000, 10000, 10000, 10000]);
+  await realizadas.getByRole("button", { name: "Mudar mesmo assim" }).click();
+
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  expect((await doParcelamento()).map((l) => l.valor_centavos)).toEqual([12000, 12000, 12000, 12000, 12000, 12000]);
+  await expect(parcela("01/06")).toContainText("R$ 120,00");
+
+  // "Só esta" é a edição de sempre, pela fila: só a parcela muda, e fica alterada à mão.
+  await expect(parcela("02/06")).not.toContainText("alterada à mão");
+  await parcela("02/06").getByRole("link", { name: `Editar ${descricao}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 120,00");
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(`${descricao} entrada`);
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await page.getByRole("group", { name: "Mudar quais parcelas?" }).getByRole("button", { name: "Só esta" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: `${descricao} entrada 02/06` })).toContainText("alterada à mão");
+  expect((await doParcelamento()).map((l) => l.descricao)).toEqual([descricao, `${descricao} entrada`, novaDescricao, `${descricao} da sala`, novaDescricao, novaDescricao]);
 });
 
 test("exclui o parcelamento inteiro pela tela; sem internet, corrigir e excluir esperam a rede", async ({ page, context }) => {

@@ -36,6 +36,7 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
+from app.parcelamentos import origem
 
 router = APIRouter(prefix="/api")
 _log = logging.getLogger(__name__)
@@ -469,6 +470,17 @@ def _ids(texto: str) -> list[UUID]:
     return [UUID(id) for id in json.loads(texto)]
 
 
+def _origem_da_parcela(conn, lancamento: Lancamento) -> str | None:
+    """O lote leva o parcelamento inteiro: a parcela muda com ele, não à mão só nela (ticket
+    136), e a tela de conflito diz que foi o parcelamento."""
+    if not lancamento.parcelamento_id:
+        return None
+    linha = conn.execute(
+        "SELECT descricao FROM parcelamentos WHERE id = %s", (lancamento.parcelamento_id,)
+    ).fetchone()
+    return origem(linha[0] if linha else lancamento.descricao)
+
+
 def _regravar(
     conn,
     atual: Lancamento,
@@ -491,7 +503,9 @@ def _regravar(
     )
     mudaram = (categorias is not None, tags is not None, escolhida != atual.item_categoria_id)
     campos = [campo for campo, mudou in zip(CAMPOS_DO_LOTE, mudaram) if mudou]
-    registrar_mudancas(conn, atual.id, campos, versao, usuario, momento)
+    registrar_mudancas(
+        conn, atual.id, campos, versao, usuario, momento, origem=_origem_da_parcela(conn, atual)
+    )
     if categorias is not None:
         gravar_categorias(conn, atual.id, categorias)
     if tags is not None:

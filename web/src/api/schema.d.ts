@@ -811,9 +811,10 @@ export interface paths {
         head?: never;
         /**
          * Alterar Parcelamento
-         * @description Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa editou à mão fica como
-         *     está. Se uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o
-         *     pedido vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.
+         * @description Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa mudou à mão fica como
+         *     está nos campos que mudou, e a resposta diz quantas ficaram assim. Se uma parcela realizada
+         *     mudar ou sair, responde 409 com o aviso e não grava nada até o pedido vir com
+         *     `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.
          */
         patch: operations["alterar_parcelamento"];
         trace?: never;
@@ -857,6 +858,29 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/parcelas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Mudar Parcela
+         * @description Muda os campos pedidos da parcela, sobre a versão que o aparelho tinha, só nela, nela e nas
+         *     próximas ou em todas. O campo que o outro lado mudou depois recusa o pedido (422), para a
+         *     pessoa conferir e mudar de novo. Se uma realizada que não é esta mudar, responde 409 com o
+         *     aviso e não grava nada até o pedido vir com `confirmar_realizadas`.
+         */
+        patch: operations["mudar_parcela"];
         trace?: never;
     };
     "/api/sugestoes": {
@@ -1210,6 +1234,49 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /**
+         * AlteracaoDaParcela
+         * @description A edição da parcela, com o alcance. Se uma realizada que não é esta mudar de valor, data,
+         *     conta ou fatura, o pedido só vale com `confirmar_realizadas`.
+         */
+        AlteracaoDaParcela: {
+            /** Versao */
+            versao: number;
+            /** Tipo */
+            tipo?: ("despesa" | "receita") | null;
+            /** Valor Centavos */
+            valor_centavos?: number | null;
+            /** Data */
+            data?: string | null;
+            /** Descricao */
+            descricao?: string | null;
+            /** Conta Id */
+            conta_id?: string | null;
+            /** Categoria Ids */
+            categoria_ids?: string[] | null;
+            /** Situacao */
+            situacao?: ("previsto" | "realizado") | null;
+            /** Tags */
+            tags?: string[] | null;
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Fatura Mes */
+            fatura_mes?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** Acao Em */
+            acao_em?: string | null;
+            /**
+             * Alcance
+             * @enum {string}
+             */
+            alcance: "so_esta" | "esta_e_as_proximas" | "todas";
+            /**
+             * Confirmar Realizadas
+             * @default false
+             */
+            confirmar_realizadas: boolean;
         };
         /**
          * AlteracaoDeCategoria
@@ -2381,6 +2448,12 @@ export interface components {
             /** Itens */
             itens: components["schemas"]["ItemDoModelo"][];
         };
+        /** MudancaDaParcela */
+        MudancaDaParcela: {
+            lancamento: components["schemas"]["Lancamento"];
+            /** Parcelas Mantidas */
+            parcelas_mantidas: number;
+        };
         /** MudancaDeCategorias */
         MudancaDeCategorias: {
             /**
@@ -2876,6 +2949,75 @@ export interface components {
              * @default 0
              */
             parcelas_puladas: number;
+        };
+        /** ParcelamentoCorrigido */
+        ParcelamentoCorrigido: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tipo
+             * @default despesa
+             * @constant
+             */
+            tipo: "despesa";
+            /** Parcelas */
+            parcelas: number;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /**
+             * Conta Id
+             * Format: uuid
+             */
+            conta_id: string;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+            /** Dia Do Lancamento */
+            dia_do_lancamento?: string | null;
+            /** Valor Total Centavos */
+            valor_total_centavos: number;
+            /** Automatico */
+            automatico: boolean;
+            /** Criado Por */
+            criado_por: string;
+            /**
+             * Criado Em
+             * Format: date-time
+             */
+            criado_em: string;
+            /** Alterado Por */
+            alterado_por: string;
+            /**
+             * Alterado Em
+             * Format: date-time
+             */
+            alterado_em: string;
+            /**
+             * Parcelas Puladas
+             * @default 0
+             */
+            parcelas_puladas: number;
+            /** Parcelas Mantidas */
+            parcelas_mantidas: number;
         };
         /** ParcelamentoEmAndamento */
         ParcelamentoEmAndamento: {
@@ -5256,7 +5398,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Parcelamento"];
+                    "application/json": components["schemas"]["ParcelamentoCorrigido"];
                 };
             };
             /** @description A correção muda parcelas realizadas */
@@ -5336,6 +5478,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Lancamento"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mudar_parcela: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlteracaoDaParcela"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MudancaDaParcela"];
+                };
+            };
+            /** @description A mudança muda parcelas realizadas */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvisoDeRealizadas"];
+                };
+            };
+            /** @description A parcela foi excluída */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exclusao"];
                 };
             };
             /** @description Validation Error */

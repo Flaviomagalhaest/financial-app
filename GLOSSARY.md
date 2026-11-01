@@ -119,7 +119,7 @@ _Avoid_: prestação
 O "alterado à mão" da parcela: o campo que uma pessoa mudou só nela, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento e a mudança de "esta e as próximas" ou de "todas" a preservam nesses campos, com o aviso de quantas ficaram como estavam.
 
 **Alcance da mudança na parcela**:
-A escolha, ao mudar qualquer campo de uma parcela, entre "Só esta", "Esta e as próximas" e "Todas (inclusive as já realizadas)"; "só esta" deixa a parcela alterada à mão naquele campo.
+A escolha, ao mudar qualquer campo de uma parcela, entre "Só esta", "Esta e as próximas" e "Todas (inclusive as já realizadas)"; "só esta" deixa a parcela alterada à mão naquele campo e vale sem internet. Os outros dois mudam o parcelamento e precisam de internet: a classificação vai para ele, e o que ele não guarda (o valor e a data daqui para frente, a conta, a fatura) vai à mão em cada parcela ([ADR 0023](docs/adr/0023-alcance-da-mudanca-na-parcela.md)).
 _Avoid_: escopo da edição, aplicar em lote
 
 **Correção do parcelamento**:

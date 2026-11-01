@@ -18,7 +18,7 @@ import { SeletorDeTags } from "./SeletorDeTags";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, rotuloDaFatura } from "./datas";
 import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
-import { divisao, type ValorDigitado } from "./parcelamento";
+import { avisoDasMantidas, comoMuda, divisao, type ValorDigitado } from "./parcelamento";
 
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -68,13 +68,6 @@ function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<
   return mudou;
 }
 
-/** "01/06 · R$ 100,00 → R$ 200,00 · 01/08/2026", ou "· sai". */
-function comoMuda(m: AvisoDeRealizadas["parcelas"][number], parcelas: number): string {
-  const valor = m.valor_novo_centavos != null && m.valor_novo_centavos !== m.valor_centavos ? `${formatarCentavos(m.valor_centavos)} → ${formatarCentavos(m.valor_novo_centavos)}` : formatarCentavos(m.valor_centavos);
-  const data = m.data_nova && m.data_nova !== m.data ? `${dataPorExtenso(m.data)} → ${dataPorExtenso(m.data_nova)}` : dataPorExtenso(m.data);
-  return [numeroDaParcela(m.parcela, parcelas), valor, data, m.sai ? "sai" : ""].filter(Boolean).join(" · ");
-}
-
 /** Corrige ou exclui o parcelamento; as duas mudam a regra e precisam de internet (ADR 0011). */
 export function TelaDoParcelamento({ id }: { id: string }) {
   const { dados: parcelamentos, semDados } = useParcelamentos();
@@ -102,6 +95,8 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [itemTocado, setItemTocado] = useState<string | null>(null);
+  // Gravada a correção, as parcelas que ficaram como estavam porque alguém as mudou à mão.
+  const [mantidas, setMantidas] = useState("");
   const doParcelamento = (lancamentos ?? []).filter((l) => l.parcelamento_id === id).sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
   const primeira = doParcelamento[0];
   const noCartao = !!primeira?.fatura_mes;
@@ -140,10 +135,11 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
     if (Object.keys(alteracao).length === 0) return setErro("Nada mudou.");
     setErro("");
     setEnviando(true);
-    const { aviso: novoAviso, motivo } = await corrigirParcelamento(id, { ...alteracao, confirmar_realizadas: confirmarRealizadas });
+    const { aviso: novoAviso, motivo, mantidas: quantas } = await corrigirParcelamento(id, { ...alteracao, confirmar_realizadas: confirmarRealizadas });
     setEnviando(false);
     if (novoAviso) return setAviso(novoAviso);
     if (motivo) return setErro(`Não foi possível corrigir: ${motivo}.`);
+    if (quantas) return setMantidas(avisoDasMantidas(quantas));
     window.location.hash = "#/historico";
   }
 
@@ -156,6 +152,15 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
     if (motivo) return setErro(`Não foi possível excluir: ${motivo}.`);
     window.location.hash = "#/historico";
   }
+
+  if (mantidas)
+    return (
+      <section className="lancamento">
+        <h2>Parcelamento</h2>
+        <p role="status">Correção gravada. {mantidas}</p>
+        <a href="#/historico">Voltar ao Histórico</a>
+      </section>
+    );
 
   return (
     <section className="lancamento">
@@ -227,7 +232,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
           </button>
         ))}
       </div>
-      <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas.</p>
+      <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas, menos onde alguém mudou à mão.</p>
 
       {aviso && (
         <div className="aviso" role="group" aria-label="Parcelas realizadas que mudam">

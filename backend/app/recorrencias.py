@@ -159,7 +159,7 @@ _NOMES_DOS_CAMPOS = {
 
 
 def _comparavel(campo: str, valor):
-    """Como `_iguais` dos lançamentos: categorias e tags sem ordem, tags sem distinguir
+    """Como `iguais` dos lançamentos: categorias e tags sem ordem, tags sem distinguir
     maiúsculas, pessoa vazia é o conjunto."""
     if campo == "categoria_ids":
         return frozenset(valor or ())

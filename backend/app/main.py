@@ -25,6 +25,7 @@ from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configurac
 from app.lote import router as lote
 from app.meses import router as meses
 from app.migrations import total_aplicadas
+from app.mudanca_na_parcela import router as mudanca_na_parcela
 from app.parcelamentos import router as parcelamentos
 from app.pessoas import router as pessoas
 from app.planejamento import router as planejamento
@@ -108,6 +109,7 @@ def create_app(
     app.include_router(pessoas)
     app.include_router(recorrencias)
     app.include_router(parcelamentos)
+    app.include_router(mudanca_na_parcela)
     app.include_router(sugestao)
     app.include_router(favoritos)
     app.include_router(filtros_salvos)

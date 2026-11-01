@@ -2521,7 +2521,7 @@
     "/api/parcelamentos/{id}": {
       "patch": {
         "summary": "Alterar Parcelamento",
-        "description": "Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa editou à mão fica como\nestá. Se uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o\npedido vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.",
+        "description": "Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa mudou à mão fica como\nestá nos campos que mudou, e a resposta diz quantas ficaram assim. Se uma parcela realizada\nmudar ou sair, responde 409 com o aviso e não grava nada até o pedido vir com\n`confirmar_realizadas`. Se parar no meio, repetir o pedido continua.",
         "operationId": "alterar_parcelamento",
         "security": [
           {
@@ -2556,7 +2556,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Parcelamento"
+                  "$ref": "#/components/schemas/ParcelamentoCorrigido"
                 }
               }
             }
@@ -2724,6 +2724,82 @@
                     "$ref": "#/components/schemas/Lancamento"
                   },
                   "title": "Response Quitar Parcelamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/parcelas/{id}": {
+      "patch": {
+        "summary": "Mudar Parcela",
+        "description": "Muda os campos pedidos da parcela, sobre a versão que o aparelho tinha, só nela, nela e nas\npróximas ou em todas. O campo que o outro lado mudou depois recusa o pedido (422), para a\npessoa conferir e mudar de novo. Se uma realizada que não é esta mudar, responde 409 com o\naviso e não grava nada até o pedido vir com `confirmar_realizadas`.",
+        "operationId": "mudar_parcela",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlteracaoDaParcela"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MudancaDaParcela"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A mudança muda parcelas realizadas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvisoDeRealizadas"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "A parcela foi excluída",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exclusao"
                 }
               }
             }
@@ -3572,6 +3648,190 @@
           "id"
         ],
         "title": "AcaoExcluirRecorrencia"
+      },
+      "AlteracaoDaParcela": {
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Versao"
+          },
+          "tipo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "despesa",
+                  "receita"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo"
+          },
+          "valor_centavos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Centavos"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "descricao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descricao"
+          },
+          "conta_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Ids"
+          },
+          "situacao": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "previsto",
+                  "realizado"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Situacao"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "fatura_mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatura Mes"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
+          "acao_em": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acao Em"
+          },
+          "alcance": {
+            "type": "string",
+            "enum": [
+              "so_esta",
+              "esta_e_as_proximas",
+              "todas"
+            ],
+            "title": "Alcance"
+          },
+          "confirmar_realizadas": {
+            "type": "boolean",
+            "title": "Confirmar Realizadas",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "versao",
+          "alcance"
+        ],
+        "title": "AlteracaoDaParcela",
+        "description": "A edição da parcela, com o alcance. Se uma realizada que não é esta mudar de valor, data,\nconta ou fatura, o pedido só vale com `confirmar_realizadas`."
       },
       "AlteracaoDeCategoria": {
         "properties": {
@@ -6784,6 +7044,23 @@
         ],
         "title": "ModeloPadrao"
       },
+      "MudancaDaParcela": {
+        "properties": {
+          "lancamento": {
+            "$ref": "#/components/schemas/Lancamento"
+          },
+          "parcelas_mantidas": {
+            "type": "integer",
+            "title": "Parcelas Mantidas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lancamento",
+          "parcelas_mantidas"
+        ],
+        "title": "MudancaDaParcela"
+      },
       "MudancaDeCategorias": {
         "properties": {
           "acao": {
@@ -8011,6 +8288,145 @@
           "alterado_em"
         ],
         "title": "Parcelamento"
+      },
+      "ParcelamentoCorrigido": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "const": "despesa",
+            "title": "Tipo",
+            "default": "despesa"
+          },
+          "parcelas": {
+            "type": "integer",
+            "maximum": 420.0,
+            "minimum": 2.0,
+            "title": "Parcelas"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "conta_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conta Id"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          },
+          "item_categoria_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Categoria Id"
+          },
+          "dia_do_lancamento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Do Lancamento"
+          },
+          "valor_total_centavos": {
+            "type": "integer",
+            "title": "Valor Total Centavos"
+          },
+          "automatico": {
+            "type": "boolean",
+            "title": "Automatico"
+          },
+          "criado_por": {
+            "type": "string",
+            "title": "Criado Por"
+          },
+          "criado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Criado Em"
+          },
+          "alterado_por": {
+            "type": "string",
+            "title": "Alterado Por"
+          },
+          "alterado_em": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Alterado Em"
+          },
+          "parcelas_puladas": {
+            "type": "integer",
+            "title": "Parcelas Puladas",
+            "default": 0
+          },
+          "parcelas_mantidas": {
+            "type": "integer",
+            "title": "Parcelas Mantidas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "parcelas",
+          "data",
+          "conta_id",
+          "categoria_ids",
+          "valor_total_centavos",
+          "automatico",
+          "criado_por",
+          "criado_em",
+          "alterado_por",
+          "alterado_em",
+          "parcelas_mantidas"
+        ],
+        "title": "ParcelamentoCorrigido"
       },
       "ParcelamentoEmAndamento": {
         "properties": {
