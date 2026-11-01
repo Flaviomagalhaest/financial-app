@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { apiDaPagina } from "./api";
+import { apiDaPagina, tokenDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { digitar } from "./lancar";
 
@@ -182,4 +182,50 @@ test("tirar a penúltima parte daqui para frente junta a regra com a classifica�
     .poll(async () => (await api.ler("/api/recorrencias")).filter((r: { descricao: string }) => r.descricao === nomes.combo).map((r: { partes: Parte[]; categoria_ids: string[] }) => [r.partes.length, r.categoria_ids]))
     .toEqual([[0, [internet.id]]]);
   await expect(linhas.first().getByText("2 partes")).toHaveCount(0);
+});
+
+test("sem internet, dividir a regra fica na fila e é recusado se a outra pessoa trocou a categoria depois", async ({ page, context, request }) => {
+  const { api, nomes, conta, celular } = await preparar(page);
+  const telefonia = await api.criar("/api/categorias", { nome: `Telefonia ${nomes.combo}`, tipo: "despesa" });
+  const regra = await api.criar("/api/recorrencias", {
+    id: crypto.randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 10000,
+    tipo_do_valor: "fixo",
+    descricao: nomes.combo,
+    conta_id: conta.id,
+    categoria_ids: [celular.id],
+    inicio: daquiA(5),
+    a_cada: 1,
+    unidade: "meses",
+    vezes: 2,
+  });
+  const token = await tokenDaPagina(page);
+  await page.reload();
+  const linhas = linha(page, nomes.combo);
+  await expect(linhas).toHaveCount(2);
+
+  await context.setOffline(true);
+  await abrirRecorrencia(page, linhas.nth(1), nomes.combo);
+  await page.getByRole("button", { name: "Dividir em partes" }).click();
+  await parte(page, 1).getByLabel("Valor da parte").fill("60,00");
+  await parte(page, 2).getByRole("button", { name: nomes.internet }).click();
+  await page.getByRole("button", { name: "Salvar daqui para frente" }).click();
+  await historico(page);
+  const naoEnviadas = page.getByRole("region", { name: "Mudanças de recorrência não enviadas" });
+  await expect(naoEnviadas).toContainText(`${nomes.combo}: partes, não enviado`);
+
+  // A tela da recorrência já mostra a regra dividida, com a mudança por cima.
+  await abrirRecorrencia(page, linhas.nth(1), nomes.combo);
+  await expect(parte(page, 1).getByLabel("Valor da parte")).toHaveValue("60,00");
+  await aba(page, "Histórico");
+
+  // O Flávio, com internet, troca a categoria antes de a divisão subir.
+  const trocada = await request.patch(`/api/recorrencias/${regra.id}`, { headers: { authorization: token }, data: { a_partir_da_ocorrencia: 1, categoria_ids: [telefonia.id] } });
+  expect(trocada.ok(), await trocada.text()).toBe(true);
+
+  await context.setOffline(false);
+  await expect(naoEnviadas).toContainText("a regra mudou depois (categorias): confira e mude de novo");
+  const [gravada] = (await api.ler("/api/recorrencias")).filter((r: { id: string }) => r.id === regra.id);
+  expect([gravada.partes, gravada.categoria_ids]).toEqual([[], [telefonia.id]]);
 });

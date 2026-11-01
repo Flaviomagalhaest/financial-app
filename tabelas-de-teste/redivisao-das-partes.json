@@ -1,5 +1,5 @@
 {
-  "sobre": "Como as partes da regra se dividem de novo pelo valor da ocorrência (backend/app/partes.py, redividir, e web/src/lancamentos/partes.tsx, redividir): cada parte fica com a parte inteira da proporção dela, e os centavos que sobram vão para a maior (a primeira, no empate); a parte que ficaria sem nenhum centavo recusa (resultado null). O app repete a conta para mostrar as partes da ocorrência e da regra antes de o servidor responder (ADR 0018, ADR 0022).",
+  "sobre": "Como as partes da regra se dividem de novo pelo valor da ocorrência (backend/app/partes.py, redividir, e web/src/lancamentos/dinheiro.ts, redividir): cada parte fica com a parte inteira da proporção dela, e os centavos que sobram vão para a maior (a primeira, no empate); a parte que ficaria sem nenhum centavo recusa (resultado null). O app repete a conta para mostrar as partes da ocorrência e da regra antes de o servidor responder (ADR 0018, ADR 0022).",
   "casos": [
     { "caso": "o mesmo valor deixa as partes como estão", "pesos": [6000, 4000], "valor": 10000, "resultado": [6000, 4000] },
     { "caso": "divide na mesma proporção", "pesos": [6000, 4000], "valor": 12000, "resultado": [7200, 4800] },

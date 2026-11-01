@@ -17,6 +17,7 @@ Na correção de fatura paga (`#/cartoes/<cartão>/<mês>`, "Corrigir fatura"), 
 
 - [ ] Decidir na tela como a diferença se divide entre as partes (a última parte, como na tela de lançar)
 - [ ] `compras_editadas` leva as partes acertadas
+- [ ] Confirmar o previsto à vista com partes com outro valor (`confirmar` em `backend/app/lancamentos.py`, também pela fila) acerta as partes do mesmo jeito; hoje a compra fica com partes que não somam o valor
 - [ ] Teste de API e de navegador; verificações do projeto e PR para `main`
 
 ## Notas

@@ -1184,7 +1184,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         and atual.partes
     ):
         # O valor da ocorrência é o que vale: as partes dela se dividem de novo (ADR 0022).
-        mudancas["partes"] = _redivididas(atual.partes, mudancas["valor_centavos"])
+        mudancas["partes"] = redivididas(atual.partes, mudancas["valor_centavos"])
     editado = _com_mudancas(atual, mudancas)
     if editado.partes:
         _conferir_compra_com_partes(conn, atual, editado)
@@ -1242,7 +1242,9 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     return _um(conn, id)
 
 
-def _redivididas(partes: list[Parte], valor_centavos: int) -> list[Parte]:
+def redivididas(partes: list[Parte], valor_centavos: int) -> list[Parte]:
+    """As partes divididas de novo para o valor (`partes.redividir`); a que ficaria sem centavo
+    recusa a mudança (422)."""
     if not partes:
         return []
     try:
@@ -1603,9 +1605,10 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
             momento,
         ),
     )
-    # O valor de verdade (a conta de luz que veio maior) divide as partes de novo (ADR 0022).
-    if "valor_centavos" in ajustes and atual.partes:
-        gravar_partes(conn, id, _redivididas(atual.partes, ajustes["valor_centavos"]), usuario)
+    # O valor de verdade (a conta de luz que veio maior) divide as partes da ocorrência de novo
+    # (ADR 0022); a compra à vista com partes é do ticket 151.
+    if "valor_centavos" in ajustes and atual.partes and atual.recorrencia_id:
+        gravar_partes(conn, id, redivididas(atual.partes, ajustes["valor_centavos"]), usuario)
         ajustes["partes"] = True
     registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
     return _um(conn, id)

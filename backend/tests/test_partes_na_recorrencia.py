@@ -358,3 +358,42 @@ def test_o_estorno_de_uma_ocorrencia_com_partes_espera_o_estorno_de_uma_parte(ca
         422,
         "o estorno de uma parte da compra ainda não existe",
     )
+
+
+def test_dividir_pela_fila_e_recusado_se_a_outra_pessoa_trocou_a_categoria_depois(casal: Casal):
+    conta, celular, internet = (
+        casal.conta(),
+        casal.categoria("Celular"),
+        casal.categoria("Internet"),
+    )
+    telefonia = casal.categoria("Telefonia")
+    nova = recorrencia(conta, [celular], valor_centavos=10000, vezes=2)
+    criada(casal, nova)
+    # O Flávio troca a categoria; a esposa, sem internet, ainda via Celular e dividiu a regra.
+    mudar(casal, nova["id"], 1, categoria_ids=[telefonia])
+
+    [resultado] = lote(
+        casal,
+        "esposa",
+        {
+            "acao": "alterar_recorrencia",
+            "id": nova["id"],
+            "alteracao": {
+                "a_partir_da_ocorrencia": 1,
+                "partes": [parte([celular], 6000), parte([internet], 4000)],
+            },
+            "antes": {
+                "partes": [],
+                "categoria_ids": [celular],
+                "tags": [],
+                "pessoa": None,
+                "item_categoria_id": None,
+            },
+        },
+    )
+
+    assert (resultado["resultado"], resultado["motivo"]) == (
+        "recusada",
+        "a regra mudou depois (categorias): confira e mude de novo",
+    )
+    assert [l["categoria_ids"] for l in gerados(casal, nova["id"])] == [[telefonia], [telefonia]]

@@ -30,6 +30,7 @@ from app.lancamentos import (
     o_que_as_partes_mudam,
     parte_normalizada,
     recusar,
+    redivididas,
     registrar_mudancas,
     sem_repetidas,
     subir_versao,
@@ -37,7 +38,6 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
-from app.partes import NAO_DA_PARA_DIVIDIR, redividir
 
 router = APIRouter(prefix="/api")
 
@@ -376,7 +376,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     categorias = regra.categoria_ids
     tags = _tags_da_regra(conn, id)
     tags_das_partes = partes_da_regra.tags(conn, id)
-    # O DSQL aceita até 3.000 linhas por transação: a mesma folga da restauração.
+    # O DSQL aceita até 3.000 linhas por transação: a mesma folga da restauração. As partes contam
+    # duas vezes: o excluído que volta apaga as que guardava antes de gravar as da regra.
     por_lote = max(
         1,
         LINHAS_POR_LOTE
@@ -646,7 +647,8 @@ def _fora_do_fim(regra: Recorrencia, n: int, dia: date) -> bool:
 
 def _por_lote(regra: Recorrencia) -> int:
     """Quantos previstos cabem numa transação, pelas linhas que cada um mexe (a folga do DSQL é a
-    mesma da geração)."""
+    mesma da geração). As partes contam três vezes: o item em que cada uma conta se guarda, e as
+    de antes saem antes de as da regra entrarem (`gravar_partes`)."""
     return max(
         1,
         LINHAS_POR_LOTE
@@ -880,10 +882,7 @@ def _mudar(
         pedidas |= o_que_as_partes_mudam(alteracao.partes, pedidas)
     elif "valor_centavos" in pedidas and atual.partes:
         # O valor novo divide as partes de novo, na proporção que tinham (ADR 0022).
-        try:
-            pedidas["partes"] = redividir(atual.partes, pedidas["valor_centavos"])
-        except ValueError as erro:
-            raise recusar(NAO_DA_PARA_DIVIDIR) from erro
+        pedidas["partes"] = redivididas(atual.partes, pedidas["valor_centavos"])
     if {"a_cada", "unidade", "inicio"} & pedidas.keys():
         if n < atual.ocorrencia_do_inicio:
             raise recusar("o calendário já mudou depois dessa ocorrência")
@@ -902,7 +901,9 @@ def _mudar(
         frozenset(atual.categoria_ids) | partes_da_regra.categorias(conn, id),
     )
     tags_de_antes = set(_tags_da_regra(conn, id))
-    tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes | partes_da_regra.tags(conn, id))
+    # A tag arquivada só vale para quem já a tinha: a regra ou uma parte dela.
+    ja_tinha = tags_de_antes | partes_da_regra.tags(conn, id)
+    tags = ids_das_tags(conn, nova.tags, usuario, ja_tinha)
     if not conn.execute(
         "UPDATE recorrencias SET tipo = %s, valor_centavos = %s, tipo_do_valor = %s,"
         " automatico = %s, descricao = %s, conta_id = %s, pessoa = %s, item_id = %s,"
@@ -944,9 +945,7 @@ def _mudar(
                 "INSERT INTO recorrencia_tags (recorrencia_id, tag_id) VALUES (%s, %s)", (id, tag)
             )
     if _comparavel("partes", nova.partes) != _comparavel("partes", atual.partes):
-        partes_da_regra.gravar(
-            conn, id, nova.partes, usuario, tags_de_antes | partes_da_regra.tags(conn, id)
-        )
+        partes_da_regra.gravar(conn, id, nova.partes, usuario, ja_tinha)
     return _ler(conn, "id = %s", (id,))[0]
 
 
