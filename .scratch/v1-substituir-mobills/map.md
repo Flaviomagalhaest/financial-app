@@ -76,6 +76,7 @@ Spec escrita: [spec.md](spec.md).
 - [O que o Mobills exporta](issues/01-o-que-o-mobills-exporta.md): o export é XLSX, em dois modos (todas as transações e só cartão), e as faturas trazem a data real da compra. Achados na branch `research/mobills-exportacao`.
 - [Crédito da conta AWS](issues/16-conferir-credito-e-compartilhamento-na-conta-aws.md): saldo de US$ 119,98, válido até 12/04/2027, com o compartilhamento de créditos mantido (o outro projeto consome o mesmo crédito).
 - [Exportação](issues/25-exportacao.md): o backup é um zip de CSVs por tabela com manifesto e versão do formato, restaurado só em banco vazio; o CSV da planilha é um arquivo só de lançamentos. Um gerador atende o backup diário, o "exportar tudo" do app (URL assinada) e a carga do histórico do Mobills, que gera um backup válido; o CI testa a ida e volta. Veja o [ADR 0012](../../docs/adr/0012-exportacao-unica-zip-de-csvs-e-restauracao-so-em-banco-vazio.md).
+- [Conta ou categoria arquivada com recorrência ativa](issues/97-conta-ou-categoria-arquivada-com-recorrencia-ativa.md): arquivar não encerra nem tira previstos; a recorrência ativa segue gerando no item arquivado, e o app avisa antes de arquivar e lembra no item até o casal trocar ou encerrar cada uma. Tag e parcelamento ficam fora.
 
 ## Not yet specified
 

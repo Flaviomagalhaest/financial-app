@@ -3,7 +3,7 @@ import { api } from "../api/cliente";
 import { useCartoesComArquivados, useFaturas, type Cartao, type RecorrenciaNaTela } from "../dados";
 import { mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
-import { AvisoDeArquivar, LembreteDeRecorrencias } from "./RecorrenciasAtivas";
+import { useArquivarComAviso } from "./RecorrenciasAtivas";
 
 type Executar = (acao: string, chamar: () => Promise<{ data?: unknown; response: Response; error?: unknown }>) => Promise<boolean>;
 
@@ -15,7 +15,7 @@ export function SecaoDeCartoes({
 }: {
   executar: Executar;
   setErro: (erro: string) => void;
-  ativasDe: (id: string) => RecorrenciaNaTela[];
+  ativasDe: (id: string) => RecorrenciaNaTela[] | null;
 }) {
   const { cartoes, recarregar } = useCartoesComArquivados();
   const titulares = cartoes.filter((c) => !c.titular_id && !c.arquivado);
@@ -128,7 +128,7 @@ function LinhaDeCartao({
 }: {
   cartao: Cartao;
   titular: string;
-  ativas: RecorrenciaNaTela[];
+  ativas: RecorrenciaNaTela[] | null;
   aoSalvar: (cartao: Cartao, mudanca: Partial<Cartao>) => Promise<boolean>;
   setErro: (erro: string) => void;
 }) {
@@ -139,7 +139,13 @@ function LinhaDeCartao({
   const [limite, setLimite] = useState("");
   const [mesAnterior, setMesAnterior] = useState(cartao.mes_anterior_ao_fechamento);
   const [acertando, setAcertando] = useState(false);
-  const [avisando, setAvisando] = useState(false);
+  const arquivar = useArquivarComAviso({
+    nome: cartao.nome,
+    oQue: "o cartão",
+    arquivado: cartao.arquivado,
+    ativas,
+    alternar: (arquivado) => aoSalvar(cartao, { arquivado }),
+  });
   const adicional = !!cartao.titular_id;
 
   if (acertando) {
@@ -224,24 +230,11 @@ function LinhaDeCartao({
             Acertar fatura de {cartao.nome}
           </button>
         )}
-        <button
-          type="button"
-          className="secundario"
-          onClick={() => (!cartao.arquivado && ativas.length > 0 ? setAvisando(true) : void aoSalvar(cartao, { arquivado: !cartao.arquivado }))}
-        >
+        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
           {cartao.arquivado ? "Desarquivar" : "Arquivar"} cartão {cartao.nome}
         </button>
       </div>
-      {avisando && !cartao.arquivado && (
-        <AvisoDeArquivar
-          nome={cartao.nome}
-          oQue="o cartão"
-          ativas={ativas}
-          aoArquivar={() => void aoSalvar(cartao, { arquivado: true }).then((ok) => ok && setAvisando(false))}
-          aoCancelar={() => setAvisando(false)}
-        />
-      )}
-      {cartao.arquivado && <LembreteDeRecorrencias nome={cartao.nome} ativas={ativas} />}
+      {arquivar.painel}
     </li>
   );
 }

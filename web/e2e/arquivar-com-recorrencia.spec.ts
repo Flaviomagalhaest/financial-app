@@ -75,6 +75,12 @@ test("arquivar conta, cartão ou categoria com recorrência ativa avisa antes e 
   await page.getByRole("group", { name: `Arquivar ${cartao}` }).getByRole("button", { name: "Arquivar mesmo assim" }).click();
   await expect(linha(page, cartao)).toContainText("(arquivado)");
 
+  // Na tela da recorrência, o cartão e a categoria arquivados aparecem pelo nome.
+  await page.getByRole("group", { name: `Recorrências ativas em ${cartao}` }).getByRole("link", { name: new RegExp(streaming) }).click();
+  await expect(page.getByLabel("Conta ou cartão").locator("option:checked")).toHaveText(`${cartao} (arquivado)`);
+  await expect(page.getByRole("button", { name: `${casa} (arquivada)` })).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/#/contas-e-categorias");
+
   // Trocar a conta daqui para frente tira a regra do lembrete; desarquivar não a traz de volta.
   await api.mudar(`/api/recorrencias/${regraDaLuz.id}`, { a_partir_da_ocorrencia: 1, conta_id: await contaId(nubank) });
   await page.reload();

@@ -31,7 +31,7 @@ Classificação permanente de um lançamento, de uma lista plana que o casal man
 _Avoid_: subcategoria, grupo
 
 **Categoria arquivada**:
-Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada. Arquivar não mexe nas recorrências: a recorrência ativa que a tem segue gerando previstos com ela até o casal trocar a categoria daqui para frente ou encerrar a regra; o app avisa antes de arquivar e lembra, enquanto houver alguma, quais seguem com ela.
+Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada. Arquivar não mexe nas recorrências: a recorrência ativa que a tem segue gerando previstos com ela até o casal trocar a categoria daqui para frente ou encerrar a regra, nunca sozinha.
 
 **Juntar (categoria ou tag)**:
 Passar todos os lançamentos de uma categoria (ou tag) para outra do mesmo tipo e excluir a primeira; o lançamento que já tinha as duas fica com uma só.
@@ -269,7 +269,7 @@ Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é 
 _Avoid_: saldo inicial, saldo importado
 
 **Conta arquivada**:
-Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve. Como na categoria arquivada, a recorrência ativa nela segue gerando previstos até o casal trocar a conta ou encerrar a regra, com aviso antes de arquivar; o parcelamento segue sem aviso, porque a compra já foi feita.
+Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve. Como na categoria arquivada, a recorrência ativa nela segue gerando previstos até o casal trocar a conta ou encerrar a regra; o parcelamento também segue, porque a compra já foi feita.
 _Avoid_: conta excluída, conta inativa
 
 **Cartão arquivado**:

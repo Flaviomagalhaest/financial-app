@@ -90,8 +90,9 @@ class Recorrencia(NovaRecorrencia):
     criado_em: datetime
     alterado_por: str
     alterado_em: datetime
-    # Sem previsto de hoje em diante (acabou, ou o casal pulou os que viriam), a regra não está
-    # ativa: o aviso de arquivar conta, cartão ou categoria não a conta (ticket 97).
+    # Na resposta da rota, sem previsto de hoje em diante (acabou, ou o casal pulou os que
+    # viriam) a regra não está ativa: o aviso de arquivar conta, cartão ou categoria não a conta
+    # (ticket 97).
     proximo_previsto: ProximoPrevisto | None = None
 
 
@@ -235,18 +236,17 @@ def horizonte() -> date:
 
 def _proximos_previstos(conn, ids: list[UUID]) -> dict[UUID, ProximoPrevisto]:
     """O primeiro previsto de hoje em diante de cada regra, pela data (o alterado à mão conta
-    na data que tem). O atrasado, o pulado e o confirmado ficam de fora."""
-    filtro = (
-        "{t}recorrencia_id = ANY(%s) AND {t}situacao = 'previsto' AND {t}excluido_em IS NULL"
-        " AND {t}data >= %s"
-    )
+    na data que tem; no empate, a ocorrência menor). O atrasado, o pulado e o confirmado ficam
+    de fora."""
     proximos: dict[UUID, ProximoPrevisto] = {}
     for recorrencia_id, id, data in conn.execute(
-        "SELECT l.recorrencia_id, l.id, l.data FROM lancamentos l JOIN ("
-        f" SELECT recorrencia_id, min(data) AS data FROM lancamentos WHERE {filtro.format(t='')}"
-        " GROUP BY recorrencia_id) p ON p.recorrencia_id = l.recorrencia_id AND p.data = l.data"
-        f" WHERE {filtro.format(t='l.')} ORDER BY l.ocorrencia",
-        (ids, lancamentos.hoje(), ids, lancamentos.hoje()),
+        "SELECT recorrencia_id, id, data FROM lancamentos"
+        " WHERE recorrencia_id = ANY(%s) AND situacao = 'previsto' AND excluido_em IS NULL"
+        " AND data = (SELECT min(p.data) FROM lancamentos p WHERE p.recorrencia_id ="
+        " lancamentos.recorrencia_id AND p.situacao = 'previsto' AND p.excluido_em IS NULL"
+        " AND p.data >= %s)"
+        " ORDER BY ocorrencia",
+        (ids, lancamentos.hoje()),
     ):
         proximos.setdefault(recorrencia_id, ProximoPrevisto(id=id, data=data))
     return proximos
@@ -255,8 +255,8 @@ def _proximos_previstos(conn, ids: list[UUID]) -> dict[UUID, ProximoPrevisto]:
 def _ler(
     conn, filtro: str = "", parametros: tuple = (), com_proximo: bool = False
 ) -> list[Recorrencia]:
-    """As regras gravadas; `com_proximo` acrescenta o próximo previsto, que só a resposta da
-    rota mostra."""
+    """As regras gravadas. Só a resposta da rota pede `com_proximo`: sem ele, `proximo_previsto`
+    fica vazio também na regra ativa, e as regras do próprio servidor não o usam."""
     linhas = conn.execute(
         f"SELECT {_COLUNAS} FROM recorrencias {'WHERE ' + filtro if filtro else ''}"
         " ORDER BY descricao, id",

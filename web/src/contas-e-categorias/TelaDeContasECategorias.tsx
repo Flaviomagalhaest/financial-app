@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
 import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta, type ContaNaTela, type RecorrenciaNaTela } from "../dados";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
-import { AvisoDeArquivar, LembreteDeRecorrencias, useRecorrenciasAtivas } from "./RecorrenciasAtivas";
+import { useArquivarComAviso, useRecorrenciasAtivas } from "./RecorrenciasAtivas";
 import { SecaoDeCartoes } from "./SecaoDeCartoes";
 
 const TIPOS_DE_CONTA = { corrente: "Corrente", poupanca: "Poupança", carteira: "Carteira" } as const;
@@ -227,11 +227,17 @@ function LinhaDeConta({
   aoSalvar,
 }: {
   conta: ContaNaTela;
-  ativas: RecorrenciaNaTela[];
+  ativas: RecorrenciaNaTela[] | null;
   aoSalvar: (conta: Conta, mudanca: Partial<Conta>) => Promise<boolean>;
 }) {
   const [editando, setEditando] = useState(false);
-  const [avisando, setAvisando] = useState(false);
+  const arquivar = useArquivarComAviso({
+    nome: conta.nome,
+    oQue: "a conta",
+    arquivado: conta.arquivada,
+    ativas,
+    alternar: (arquivada) => aoSalvar(conta, { arquivada }),
+  });
   const [nome, setNome] = useState(conta.nome);
   const [tipo, setTipo] = useState(conta.tipo);
   const [saldo, setSaldo] = useState("");
@@ -299,24 +305,11 @@ function LinhaDeConta({
         >
           Editar {conta.nome}
         </button>
-        <button
-          type="button"
-          className="secundario"
-          onClick={() => (!conta.arquivada && ativas.length > 0 ? setAvisando(true) : void aoSalvar(conta, { arquivada: !conta.arquivada }))}
-        >
+        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
           {conta.arquivada ? "Desarquivar" : "Arquivar"} conta {conta.nome}
         </button>
       </div>
-      {avisando && !conta.arquivada && (
-        <AvisoDeArquivar
-          nome={conta.nome}
-          oQue="a conta"
-          ativas={ativas}
-          aoArquivar={() => void aoSalvar(conta, { arquivada: true }).then((ok) => ok && setAvisando(false))}
-          aoCancelar={() => setAvisando(false)}
-        />
-      )}
-      {conta.arquivada && <LembreteDeRecorrencias nome={conta.nome} ativas={ativas} />}
+      {arquivar.painel}
     </li>
   );
 }
@@ -336,12 +329,18 @@ function LinhaDeItem({
 }: {
   item: { id: string; nome: string; arquivada: boolean };
   /** As recorrências ativas da categoria; a tag não avisa (ticket 97). */
-  ativas?: RecorrenciaNaTela[];
+  ativas?: RecorrenciaNaTela[] | null;
   manutencao: Manutencao;
   destinos: { id: string; nome: string }[];
 }) {
   const [editando, setEditando] = useState(false);
-  const [avisando, setAvisando] = useState(false);
+  const arquivar = useArquivarComAviso({
+    nome: item.nome,
+    oQue: "a categoria",
+    arquivado: item.arquivada,
+    ativas,
+    alternar: (arquivada) => manutencao.alterar(item.id, { arquivada }),
+  });
   const [nome, setNome] = useState(item.nome);
   const [juntando, setJuntando] = useState(false);
   const [destino, setDestino] = useState("");
@@ -383,11 +382,7 @@ function LinhaDeItem({
         >
           Renomear {item.nome}
         </button>
-        <button
-          type="button"
-          className="secundario"
-          onClick={() => (!item.arquivada && ativas.length > 0 ? setAvisando(true) : void manutencao.alterar(item.id, { arquivada: !item.arquivada }))}
-        >
+        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
           {item.arquivada ? "Desarquivar" : "Arquivar"} {item.nome}
         </button>
         <button type="button" className="secundario" onClick={() => void manutencao.excluir(item.id)}>
@@ -399,16 +394,7 @@ function LinhaDeItem({
           </button>
         )}
       </div>
-      {avisando && !item.arquivada && (
-        <AvisoDeArquivar
-          nome={item.nome}
-          oQue="a categoria"
-          ativas={ativas}
-          aoArquivar={() => void manutencao.alterar(item.id, { arquivada: true }).then((ok) => ok && setAvisando(false))}
-          aoCancelar={() => setAvisando(false)}
-        />
-      )}
-      {item.arquivada && <LembreteDeRecorrencias nome={item.nome} ativas={ativas} />}
+      {arquivar.painel}
       {juntando && (
         <form
           aria-label={`Juntar ${item.nome}`}

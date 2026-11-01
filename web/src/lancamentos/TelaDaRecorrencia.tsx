@@ -145,9 +145,9 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   const categoriasDoTipo = categorias.filter((c) => c.tipo === regra.tipo && (!c.arquivada || form.categoriaIds.includes(c.id)));
   // A conta arquivada não está entre as do cadastro, mas segue sendo a da regra até alguém trocar.
-  const arquivada = comArquivadas.find((c) => c.id === regra.conta_id);
-  const arquivado = comArquivados.find((c) => c.id === regra.conta_id);
-  const nomeDaArquivada = arquivada ? `${arquivada.nome} (arquivada)` : arquivado ? `${arquivado.nome} (arquivado)` : "conta arquivada";
+  const contaArquivada = comArquivadas.find((c) => c.id === regra.conta_id);
+  const cartaoArquivado = comArquivados.find((c) => c.id === regra.conta_id);
+  const nomeDaArquivada = contaArquivada ? `${contaArquivada.nome} (arquivada)` : cartaoArquivado ? `${cartaoArquivado.nome} (arquivado)` : "conta arquivada";
   const contas = contasECartoes.some((c) => c.id === regra.conta_id) ? contasECartoes : [{ id: regra.conta_id, nome: nomeDaArquivada }, ...contasECartoes];
 
   async function enviar(alteracao: AlteracaoDeRecorrencia) {
