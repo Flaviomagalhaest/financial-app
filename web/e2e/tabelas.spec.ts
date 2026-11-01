@@ -1,14 +1,15 @@
 // As regras que o app repete para o aviso de planejamento sem internet (ticket 52) e para mostrar
-// a divisão do parcelamento (ticket 98), contra as mesmas tabelas que
-// `backend/tests/test_tabelas_compartilhadas.py` roda no servidor. Sem navegador.
+// a divisão do parcelamento (ticket 98) e das partes da recorrência (ticket 140), contra as mesmas
+// tabelas que `backend/tests/test_tabelas_compartilhadas.py` roda no servidor. Sem navegador.
 import { expect, test } from "@playwright/test";
 import ondeContaTabela from "../../tabelas-de-teste/onde-conta.json" with { type: "json" };
 import percentualTabela from "../../tabelas-de-teste/percentual.json" with { type: "json" };
 import mesDaCompraTabela from "../../tabelas-de-teste/mes-da-compra.json" with { type: "json" };
 import divisaoTabela from "../../tabelas-de-teste/divisao-das-parcelas.json" with { type: "json" };
 import puladasTabela from "../../tabelas-de-teste/puladas.json" with { type: "json" };
+import redivisaoTabela from "../../tabelas-de-teste/redivisao-das-partes.json" with { type: "json" };
 import { mesDaCompra, ondeConta, percentual } from "../src/dados/aviso";
-import { dividirEmParcelas } from "../src/lancamentos/dinheiro";
+import { dividirEmParcelas, redividir } from "../src/lancamentos/dinheiro";
 import { ocorrenciasPuladas, parcelasPuladas } from "../src/lancamentos/puladas";
 import type { RecorrenciaNaFolha } from "../src/lancamentos/recorrencia";
 
@@ -32,6 +33,15 @@ test.describe("divisão das parcelas", () => {
   for (const c of divisaoTabela.casos) {
     test(c.caso, () => {
       expect(dividirEmParcelas(c.total, c.parcelas)).toEqual({ primeira: c.primeira, outras: c.outras });
+    });
+  }
+});
+
+test.describe("redivisão das partes", () => {
+  for (const c of redivisaoTabela.casos) {
+    test(c.caso, () => {
+      const divididas = redividir(c.pesos.map((peso, i) => ({ id: i, valor_centavos: peso })), c.valor);
+      expect(divididas && divididas.map((p) => p.valor_centavos)).toEqual(c.resultado);
     });
   }
 });

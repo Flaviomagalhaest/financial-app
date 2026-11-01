@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { components } from "../api/schema";
 import { chaveDaTag, type Categoria, type Pessoa } from "../dados";
 import { nomePorId } from "./apresentacao";
-import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
+import { comoDigitado, dividirNaProporcao, emCentavos, formatarCentavos } from "./dinheiro";
 import { SeletorDeTags } from "./SeletorDeTags";
 
 export type Parte = components["schemas"]["Parte"];
@@ -88,18 +88,6 @@ export type ParteEmEdicao = Omit<Parte, "valor_centavos"> & { valor: string };
 
 export const emEdicao = (p: Parte): ParteEmEdicao => ({ ...p, valor: comoDigitado(p.valor_centavos) });
 
-/**
- * Divide o total na proporção das partes de um favorito ou sugestão (o valor da última compra).
- * Os centavos do arredondamento vão para a maior parte, a primeira no empate (ADR 0022).
- */
-export function dividirNaProporcao(base: number[], total: number): number[] {
-  const soma = base.reduce((a, b) => a + b, 0);
-  const valores = base.map((v) => Math.floor((total * v) / soma));
-  const sobra = total - valores.reduce((a, b) => a + b, 0);
-  valores[base.indexOf(Math.max(...base))] += sobra;
-  return valores;
-}
-
 /** As partes de um favorito ou sugestão como a tela as edita, com novos ids e o total dividido na proporção. */
 export function emEdicaoNaProporcao(modelo: { descricao?: string; valor_centavos: number; categoria_ids: string[]; tags?: string[]; pessoa?: string | null }[], total: number): ParteEmEdicao[] {
   const valores = dividirNaProporcao(modelo.map((p) => p.valor_centavos), total);
@@ -129,6 +117,14 @@ export function partesParaSalvar(partes: ParteEmEdicao[], total: number): Parte[
   const valores = valoresDasPartes(partes, total);
   return partes.map(({ valor: _, ...p }, i) => ({ ...p, valor_centavos: valores[i] }));
 }
+
+/** A parte como o servidor a compara (`parte_normalizada`): categorias e tags sem ordem, tags sem maiúsculas. */
+function comparavel(p: Parte): string {
+  return JSON.stringify([p.id, p.descricao ?? "", p.valor_centavos, [...p.categoria_ids].sort(), (p.tags ?? []).map(chaveDaTag).sort(), p.pessoa ?? null, p.item_categoria_id ?? null]);
+}
+
+/** As duas listas têm as mesmas partes, na mesma ordem. */
+export const mesmasPartes = (a: Parte[], b: Parte[]) => a.length === b.length && a.every((p, i) => comparavel(p) === comparavel(b[i]));
 
 type PropsDoEditor = {
   partes: ParteEmEdicao[];

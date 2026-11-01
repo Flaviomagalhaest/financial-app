@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/cliente";
 import type { components } from "../api/schema";
 import { hoje, mesDepois } from "../lancamentos/datas";
+import { redividir } from "../lancamentos/dinheiro";
 import {
   apagarTudo,
   comTrava,
@@ -508,6 +509,13 @@ export function comAMudanca(regra: Recorrencia, { a_partir_da_ocorrencia, ...mud
   if (mudou.ate) nova.vezes = null;
   if (mudou.vezes) nova.ate = null;
   if ("pessoa" in mudou) nova.pessoa = mudou.pessoa || null;
+  // As partes (ADR 0022): duas ou mais tiram a classificação própria da regra; uma só a devolve.
+  if (mudou.partes?.length === 1) {
+    const [fica] = mudou.partes;
+    Object.assign(nova, { partes: [], categoria_ids: fica.categoria_ids, tags: fica.tags ?? [], pessoa: fica.pessoa ?? null, item_categoria_id: fica.item_categoria_id ?? null });
+  } else if (mudou.partes?.length) Object.assign(nova, { categoria_ids: [], tags: [], pessoa: null, item_categoria_id: null });
+  // Sem partes na mudança, o valor novo as divide de novo, como o servidor.
+  else if (!mudou.partes && mudou.valor_centavos && regra.partes?.length) nova.partes = redividir(regra.partes, mudou.valor_centavos) ?? regra.partes;
   return nova;
 }
 
