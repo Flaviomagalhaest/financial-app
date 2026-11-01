@@ -411,3 +411,26 @@ def test_edicao_em_lote_deixa_de_fora_as_parcelas_do_parcelamento_com_partes(
     assert recusada.status_code == 422
     assert regra(casal, criado["id"])["categoria_ids"] == []
     assert parcelas(casal, criado["id"])[0]["categoria_ids"] == [roupa]
+
+
+def test_o_parcelado_com_partes_sobe_pela_fila_como_um_pedido_so(casal: Casal, categorias):
+    roupa, casa, _ = categorias
+    novo = {
+        "id": str(uuid4()),
+        "valor_total_centavos": 30000,
+        "parcelas": 3,
+        "descricao": "Loja",
+        "conta_id": casal.conta(),
+        "categoria_ids": [],
+        "data": "2026-11-10",
+        "partes": [parte([roupa], 20000), parte([casa], 10000)],
+    }
+    lote = {"acoes": [{"acao": "criar_parcelamento", "parcelamento": novo}]}
+
+    [aceita] = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json=lote).json()[
+        "resultados"
+    ]
+
+    assert aceita["resultado"] == "aceita", aceita
+    assert [p["valor_centavos"] for p in aceita["parcelamento"]["partes"]] == [20000, 10000]
+    assert [divisao(l) for l in parcelas(casal, novo["id"])] == [[6667, 3333]] * 3
