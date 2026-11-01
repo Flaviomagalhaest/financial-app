@@ -554,6 +554,43 @@ def gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
         )
 
 
+def acompanhar_estornos(conn, compra_id: UUID) -> None:
+    """Os estornos de uma compra valem o que ela tem agora: categorias, tags (mesmo arquivadas) e o
+    item do planejamento. O estorno não guarda classificação própria (ticket 133, ADR 0016): esta
+    cópia roda onde a compra muda, e a leitura segue igual para quem soma."""
+    estornos = [
+        id
+        for (id,) in conn.execute(
+            "SELECT id FROM lancamentos WHERE estorno_de = %s AND excluido_em IS NULL", (compra_id,)
+        )
+    ]
+    if not estornos:
+        return
+    conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = ANY(%s)", (estornos,))
+    conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = ANY(%s)", (estornos,))
+    conn.execute(
+        "INSERT INTO lancamento_categorias (lancamento_id, categoria_id)"
+        " SELECT e, categoria_id FROM unnest(%s::uuid[]) AS e,"
+        " (SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s) AS c",
+        (estornos, compra_id),
+    )
+    conn.execute(
+        "INSERT INTO lancamento_tags (lancamento_id, tag_id)"
+        " SELECT e, tag_id FROM unnest(%s::uuid[]) AS e,"
+        " (SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s) AS t",
+        (estornos, compra_id),
+    )
+    conn.execute(
+        # A escolha do estorno é o item em que a compra conta (a escolha dela ou o item em que
+        # contava sozinha): ele diminui o mesmo item e não fica "a escolher" em outro mês.
+        "UPDATE lancamentos e SET"
+        " item_categoria_id = COALESCE(c.item_categoria_id, c.item_atual_categoria_id),"
+        " item_atual_categoria_id = c.item_atual_categoria_id"
+        " FROM lancamentos c WHERE c.id = %s AND e.id = ANY(%s)",
+        (compra_id, estornos),
+    )
+
+
 def _momento(acao_em: datetime | None) -> datetime:
     """A hora da ação no aparelho; a do relógio do aparelho nunca vale mais que a do servidor."""
     agora = datetime.now(UTC)
@@ -757,12 +794,11 @@ def _iguais(campo: Campo, pedido, gravado) -> bool:
 
 
 def _conferir_estorno(
-    conn, id: UUID, dados: DadosDoLancamento, original_id: UUID, edicao: bool = False
+    conn, id: UUID, dados: DadosDoLancamento, original_id: UUID
 ) -> frozenset[UUID]:
-    """O estorno é de uma compra no cartão que ainda existe, vai para um cartão, leva as mesmas
-    categorias e tags dela e, somado aos outros estornos dela, não passa do valor da compra.
-    Devolve as categorias da compra, que valem no estorno mesmo arquivadas. Na edição de valor
-    ou cartão, categorias e tags já foram travadas e a compra que sumiu não impede o ajuste."""
+    """O estorno é de uma compra no cartão que ainda existe, vai para um cartão e, somado aos
+    outros estornos dela, não passa do valor da compra. Devolve as categorias da compra, que valem
+    no estorno mesmo arquivadas (as categorias e tags do estorno são as dela, ticket 133)."""
     if dados.tipo != "despesa" or not faturas.ler_cartao(conn, dados.conta_id):
         raise recusar("estorno é um crédito no cartão")
     original = conn.execute(
@@ -771,33 +807,12 @@ def _conferir_estorno(
         (original_id,),
     ).fetchone()
     if not original:
-        if edicao:
-            return frozenset()
         raise recusar("compra original não encontrada")
     tipo, valor, conta, estorno_de = original
     if estorno_de:
         raise recusar("estorno de estorno")
     if tipo != "despesa" or not faturas.ler_cartao(conn, conta):
         raise recusar("só compra no cartão tem estorno")
-    categorias = frozenset(
-        c
-        for (c,) in conn.execute(
-            "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
-            (original_id,),
-        )
-    )
-    tags = {
-        nome.casefold()
-        for (nome,) in conn.execute(
-            "SELECT t.nome FROM lancamento_tags lt JOIN tags t ON t.id = lt.tag_id"
-            " WHERE lt.lancamento_id = %s",
-            (original_id,),
-        )
-    }
-    if not edicao and (
-        set(dados.categoria_ids) != categorias or {t.casefold() for t in dados.tags} != tags
-    ):
-        raise recusar("estorno leva as mesmas categorias e tags da compra")
     (outros,) = conn.execute(
         "SELECT COALESCE(SUM(valor_centavos), 0) FROM lancamentos"
         " WHERE estorno_de = %s AND excluido_em IS NULL AND id <> %s",
@@ -805,19 +820,13 @@ def _conferir_estorno(
     ).fetchone()
     if outros + dados.valor_centavos > valor:
         raise recusar("estornos somam mais que a compra")
-    return categorias
-
-
-def _item_da_compra(conn, id: UUID) -> UUID | None:
-    """A escolha com que o estorno nasce: a da compra ou o item em que ela conta sozinha, para
-    ele diminuir o mesmo item."""
-    guardar_item_atual_do_lancamento(conn, id)
-    linha = conn.execute(
-        "SELECT COALESCE(item_categoria_id, item_atual_categoria_id) FROM lancamentos"
-        " WHERE id = %s",
-        (id,),
-    ).fetchone()
-    return linha and linha[0]
+    return frozenset(
+        c
+        for (c,) in conn.execute(
+            "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
+            (original_id,),
+        )
+    )
 
 
 def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
@@ -834,13 +843,15 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
         novo.estorno_de
         and not conn.execute("SELECT 1 FROM lancamentos WHERE id = %s", (novo.id,)).fetchone()
     ):
-        ja_ligadas |= _conferir_estorno(conn, novo.id, novo, novo.estorno_de)
+        da_compra = _conferir_estorno(conn, novo.id, novo, novo.estorno_de)
+        # O estorno não tem categoria nem tag próprias: vale o que a compra tem (arquivadas
+        # incluídas), e o que a pessoa mandou nesses campos não conta.
+        novo = novo.model_copy(update={"categoria_ids": sorted(da_compra)})
+        ja_ligadas |= da_compra
     conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
     mes, _, a_mao = _onde_conta(conn, novo)
     momento = _momento(novo.acao_em)
-    escolhida = novo.item_categoria_id
-    if escolhida is None and novo.estorno_de:
-        escolhida = _item_da_compra(conn, novo.estorno_de)
+    escolhida = None if novo.estorno_de else novo.item_categoria_id
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
         " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte,"
@@ -866,7 +877,10 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             escolhida,
         ),
     ).rowcount
-    if gravados:
+    if gravados and novo.estorno_de:
+        guardar_item_atual_do_lancamento(conn, novo.estorno_de)
+        acompanhar_estornos(conn, novo.estorno_de)
+    elif gravados:
         gravar_categorias(conn, novo.id, novo.categoria_ids)
         _gravar_tags(conn, novo.id, novo.tags, usuario)
     return _atual(conn, novo.id, usuario), bool(gravados)
@@ -917,10 +931,10 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if atual.estorno_de:
         if "tipo" in mudancas:
             raise recusar("estorno é um crédito no cartão")
-        if {"categoria_ids", "tags"} & mudancas.keys():
+        if {"categoria_ids", "tags", "item_categoria_id"} & mudancas.keys():
             raise recusar("estorno leva as mesmas categorias e tags da compra")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
-            _conferir_estorno(conn, id, editado, atual.estorno_de, edicao=True)
+            _conferir_estorno(conn, id, editado, atual.estorno_de)
     momento = _momento(alteracao.acao_em)
     conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
     mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
@@ -953,6 +967,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         gravar_categorias(conn, id, editado.categoria_ids)
     if "tags" in mudancas:
         _gravar_tags(conn, id, editado.tags, usuario)
+    acompanhar_estornos(conn, id)
     return _um(conn, id)
 
 
@@ -966,6 +981,13 @@ def excluir(
     ).fetchone()
     if not linha:
         return
+    if (
+        not linha[1]
+        and conn.execute(
+            "SELECT 1 FROM lancamentos WHERE estorno_de = %s AND excluido_em IS NULL", (id,)
+        ).fetchone()
+    ):
+        raise recusar("a compra tem estorno; exclua o estorno antes")
     if linha[1]:
         # A pessoa que exclui o que a regra da recorrência já tirou (a exclusão que estava
         # offline) pulou o mês: a geração não o traz de volta.

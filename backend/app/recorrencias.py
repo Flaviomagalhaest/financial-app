@@ -727,6 +727,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
                     "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
                     (lancamento_id, tag),
                 )
+        lancamentos.acompanhar_estornos(conn, lancamento_id)
     return len(trabalho) > por_lote
 
 

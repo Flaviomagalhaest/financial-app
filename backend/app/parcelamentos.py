@@ -884,6 +884,7 @@ def _aplicar(
                 "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
                 (correcao.id, tag),
             )
+    lancamentos.acompanhar_estornos(conn, correcao.id)
 
 
 def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: frozenset[str]) -> bool:
