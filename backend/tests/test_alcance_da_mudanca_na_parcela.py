@@ -377,3 +377,139 @@ def test_esta_e_as_proximas_nao_leva_o_valor_novo_as_de_antes_da_classificacao_p
         "Geladeira nova",
         "Geladeira nova",
     ]
+
+
+def test_pagamento_que_passaria_do_valor_num_lote_seguinte_recusa_antes_de_gravar(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/06: as parcelas caem em abril, maio e junho; junho está aberta e já recebeu um
+    # pagamento de 100,00, o valor da parcela dela.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    nubank = cartao(casal)
+    novo = criar_geladeira(casal, nubank, data="2026-04-20", parcelas=3, valor_total_centavos=30000)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    assert [l["fatura_mes"] for l in parcelas(casal, novo["id"])] == [
+        "2026-04-01",
+        "2026-05-01",
+        "2026-06-01",
+    ]
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        nubank,
+        fatura_mes="2026-06-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago.status_code == 201, pago.text
+
+    # A 3ª, que viria no lote seguinte, deixaria o pagamento de junho acima da fatura.
+    resposta = mudar_parcela(
+        casal, primeira, "esta_e_as_proximas", valor_centavos=5000, confirmar_realizadas=True
+    )
+
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "o pagamento passa do valor da fatura"
+    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [10000] * 3
+
+
+def parcelamento(casal: Casal, id: str) -> dict:
+    [lido] = [p for p in casal.pedir("esposa", "GET", "/api/parcelamentos").json() if p["id"] == id]
+    return lido
+
+
+def test_a_recusa_na_tarefa_diaria_fica_no_parcelamento_ate_a_proxima_mudanca(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from app.tarefa_diaria import fazer_tarefa_diaria
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/06: as parcelas caem em março, abril e maio, todas fechadas e a pagar.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    nubank = cartao(casal)
+    novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    assert parcelamento(casal, novo["id"])["mudanca_recusada"] is None
+    with monkeypatch.context() as queda:
+        interromper_depois_do_primeiro_lote(queda)
+        with pytest.raises(RuntimeError):
+            mudar_parcela(
+                casal,
+                primeira,
+                "esta_e_as_proximas",
+                valor_centavos=12000,
+                confirmar_realizadas=True,
+            )
+    # Maio é paga entre o pedido que caiu e a tarefa diária.
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        nubank,
+        fatura_mes="2026-05-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago.status_code == 201, pago.text
+
+    assert fazer_tarefa_diaria(casal.client.app.state.url)["mudancas_na_parcela"] == 0
+
+    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [12000, 12000, 10000]
+    assert parcelamento(casal, novo["id"])["mudanca_recusada"] == (
+        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
+        " Da 3ª parcela em diante, as que faltavam mudar ficaram como estavam"
+    )
+
+    # A próxima mudança com alcance tira o aviso.
+    [primeira, *_] = parcelas(casal, novo["id"])
+    resposta = mudar_parcela(casal, primeira, "todas", descricao="Geladeira nova")
+    assert resposta.status_code == 200, resposta.text
+    assert parcelamento(casal, novo["id"])["mudanca_recusada"] is None
+
+
+def test_a_recusa_achada_ao_terminar_o_pedido_anterior_fica_no_parcelamento(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    nubank = cartao(casal)
+    novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    with monkeypatch.context() as queda:
+        interromper_depois_do_primeiro_lote(queda)
+        with pytest.raises(RuntimeError):
+            mudar_parcela(
+                casal,
+                primeira,
+                "esta_e_as_proximas",
+                valor_centavos=12000,
+                confirmar_realizadas=True,
+            )
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        nubank,
+        fatura_mes="2026-05-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago.status_code == 201, pago.text
+
+    # O pedido seguinte, de outro campo, termina antes o anterior e acha a recusa: ela fica.
+    [primeira, *_] = parcelas(casal, novo["id"])
+    resposta = mudar_parcela(casal, primeira, "todas", descricao="Geladeira nova")
+
+    assert resposta.status_code == 200, resposta.text
+    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [12000, 12000, 10000]
+    assert parcelamento(casal, novo["id"])["mudanca_recusada"] == (
+        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
+        " Da 3ª parcela em diante, as que faltavam mudar ficaram como estavam"
+    )

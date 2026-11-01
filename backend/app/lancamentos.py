@@ -355,7 +355,7 @@ VERSAO = "COALESCE(versao, 1)"
 # sobrou dela e o que a API antiga gravar durante o deploy.
 MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
 # O valor com o sinal de quem soma despesas (fatura, mês): a despesa soma, o estorno e a receita
-# (crédito) diminuem.
+# (crédito) diminuem. `valor_com_sinal` repete a regra em Python, para a simulação da fatura.
 VALOR_COM_SINAL = (
     "CASE WHEN lancamentos.tipo = 'despesa' AND NOT "
     + "(lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
@@ -935,13 +935,17 @@ def mes_em_que_conta(conn, conta_id: UUID, data: date, parcela: int | None = Non
 
 
 def _onde_conta(
-    conn, lancamento: DadosDoLancamento, mantida: date | None = None, parcela: int | None = None
+    conn,
+    lancamento: DadosDoLancamento,
+    mantida: date | None = None,
+    parcela: int | None = None,
+    criar: bool = True,
 ) -> tuple[date, date | None, bool]:
     """O mês em que conta, o mês da fatura (só no cartão) e se a fatura foi escolhida à mão.
 
     No cartão, a fatura é a pedida, a `mantida` de uma troca à mão anterior ou a que fecha
     depois da data da compra (a da `parcela` n, n - 1 faturas depois), e nasce aqui se ainda
-    não existe; no resto, o mês da data.
+    não existe (salvo sem `criar`); no resto, o mês da data.
     """
     cartao = faturas.ler_cartao(conn, lancamento.conta_id)
     if cartao is None:
@@ -954,7 +958,8 @@ def _onde_conta(
             raise recusar("a fatura escolhida fechou antes da compra")
     a_mao = lancamento.fatura_mes or mantida
     mes = a_mao or faturas.mes_da_parcela(conn, cartao.titular, lancamento.data, parcela)
-    faturas.garantir_fatura(conn, cartao.titular, mes)
+    if criar:
+        faturas.garantir_fatura(conn, cartao.titular, mes)
     return mes, mes, bool(a_mao)
 
 
@@ -968,7 +973,7 @@ def _com_mudancas(atual: Lancamento, mudancas: dict) -> DadosDoLancamento:
 
 
 def _fatura_depois(
-    conn, atual: Lancamento, depois: DadosDoLancamento, mudancas: dict
+    conn, atual: Lancamento, depois: DadosDoLancamento, mudancas: dict, criar: bool = True
 ) -> tuple[date, bool]:
     """O mês em que conta e a marca da troca à mão de um lançamento que mudou: só a conta (ou o
     cartão), a data e a troca de fatura mexem nela, e a troca à mão fica enquanto o cartão não
@@ -979,29 +984,27 @@ def _fatura_depois(
     if not {"conta_id", "data", "fatura_mes"} & mudancas.keys():
         return atual.mes, a_mao
     mantida = atual.fatura_mes if a_mao and "conta_id" not in mudancas else None
-    mes, fatura_mes, a_mao = _onde_conta(conn, depois, mantida, atual.parcela)
+    mes, fatura_mes, a_mao = _onde_conta(conn, depois, mantida, atual.parcela, criar)
     if fatura_mes != atual.fatura_mes:
         mudancas["fatura_mes"] = fatura_mes
     return mes, a_mao
 
 
-def fatura_em_que_ficaria(conn, atual: Lancamento, mudancas: dict) -> tuple[UUID, date] | None:
-    """O titular e o mês da fatura em que o lançamento ficaria com as `mudancas` (conta, data,
-    fatura), como `_fatura_depois` a escolhe, sem criar a fatura; `None` fora do cartão."""
-    cartao = faturas.ler_cartao(conn, mudancas.get("conta_id", atual.conta_id))
-    if cartao is None:
-        return None
-    if mudancas.get("fatura_mes"):
-        return cartao.titular.id, mudancas["fatura_mes"]
-    if not {"conta_id", "data"} & mudancas.keys():
-        return cartao.titular.id, atual.mes
-    (a_mao,) = conn.execute(
-        "SELECT COALESCE(fatura_a_mao, false) FROM lancamentos WHERE id = %s", (atual.id,)
-    ).fetchone()
-    if a_mao and "conta_id" not in mudancas and atual.fatura_mes:
-        return cartao.titular.id, atual.fatura_mes
-    data = mudancas.get("data", atual.data)
-    return cartao.titular.id, faturas.mes_da_parcela(conn, cartao.titular, data, atual.parcela)
+def onde_ficaria(conn, atual: Lancamento, mudancas: dict) -> tuple[UUID | None, date]:
+    """O titular do cartão (`None` fora dele) e o mês em que o lançamento contaria com as
+    `mudancas`, escolhido como na edição (`_fatura_depois`), sem criar a fatura."""
+    mudancas = dict(mudancas)
+    depois = _com_mudancas(atual, mudancas)
+    mes, _ = _fatura_depois(conn, atual, depois, mudancas, criar=False)
+    cartao = faturas.ler_cartao(conn, depois.conta_id)
+    return (cartao.titular.id if cartao else None), mes
+
+
+def valor_com_sinal(lancamento: DadosDoLancamento, valor: int) -> int:
+    """O `valor` com o sinal de `VALOR_COM_SINAL` no lançamento: a despesa soma, o estorno e a
+    receita diminuem."""
+    estorno = lancamento.estorno_de is not None or bool(lancamento.estorno_avulso)
+    return valor if lancamento.tipo == "despesa" and not estorno else -valor
 
 
 def _item_atual_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None:

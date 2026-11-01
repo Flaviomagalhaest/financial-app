@@ -3020,6 +3020,8 @@ export interface components {
              * @default 0
              */
             parcelas_puladas: number;
+            /** Mudanca Recusada */
+            mudanca_recusada?: string | null;
         };
         /** ParcelamentoCorrigido */
         ParcelamentoCorrigido: {
@@ -3087,6 +3089,8 @@ export interface components {
              * @default 0
              */
             parcelas_puladas: number;
+            /** Mudanca Recusada */
+            mudanca_recusada?: string | null;
             /** Parcelas Mantidas */
             parcelas_mantidas: number;
         };

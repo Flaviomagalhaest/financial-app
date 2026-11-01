@@ -8451,6 +8451,17 @@
             "type": "integer",
             "title": "Parcelas Puladas",
             "default": 0
+          },
+          "mudanca_recusada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mudanca Recusada"
           }
         },
         "type": "object",
@@ -8585,6 +8596,17 @@
             "type": "integer",
             "title": "Parcelas Puladas",
             "default": 0
+          },
+          "mudanca_recusada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mudanca Recusada"
           },
           "parcelas_mantidas": {
             "type": "integer",

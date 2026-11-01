@@ -205,6 +205,7 @@ class _Linhas:
             ("estorno_avulso", False),
             ("classificacao_pendente", ""),
             ("mudanca_pendente", ""),
+            ("mudanca_recusada", None),
             ("corrigido_em", None),
         ):
             if coluna in colunas:

@@ -188,6 +188,9 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
           {parcelamento.parcelas_puladas === 1 ? "1 parcela não foi lançada: vencia" : `${parcelamento.parcelas_puladas} parcelas não foram lançadas: venciam`} antes de hoje, na criação (a numeração segue a do total).
         </p>
       )}
+      {parcelamento.mudanca_recusada && (
+        <p className="aviso">Uma mudança nas parcelas parou no meio: {parcelamento.mudanca_recusada}. Para terminar, mude de novo uma das parcelas que faltaram, em “Esta e as próximas” ou “Todas”.</p>
+      )}
       {!online && <p className="aviso">Sem internet: corrigir e excluir o parcelamento precisam de internet.</p>}
 
       <label htmlFor="descricao-do-parcelamento">Descrição</label>
