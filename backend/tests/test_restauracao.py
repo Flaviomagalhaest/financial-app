@@ -313,10 +313,10 @@ def test_backup_da_versao_6_sem_versao_nem_marca_de_exclusao_restaura_com_tudo_a
                 continue
             if nome == "lancamentos.csv":
                 conteudo = b"\n".join(
-                    # A última é a da versão 19 (ticket 110), as 2 antes, da 17 (ticket 51), as 2 antes, da 16
+                    # As 2 últimas são da versão 28 (ticket 138); as 18 antes: a última é a da versão 19 (ticket 110), as 2 antes, da 17 (ticket 51), as 2 antes, da 16
                     # (ticket 46), a antes, da 14 (ticket 39), as 2 antes, da 12 (ticket 37), as 3
                     # antes, da 11 (ticket 44), as 3 antes, da 9, e as 3 antes, da 7.
-                    b",".join(linha.split(b",")[:-18])
+                    b",".join(linha.split(b",")[:-20])
                     for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
@@ -388,7 +388,7 @@ def test_backup_da_versao_8_sem_pessoa_nem_fonte_restaura_do_conjunto_e_do_app(d
                     # Sem as 3 da versão 9, as 3 da 11 (ticket 44), as 2 da 12 (ticket 37), a da 14
                     # (ticket 39), as 2 da 16 (ticket 46), as 2 da 17 (ticket 51) e a da 19
                     # (ticket 110).
-                    b",".join(linha.split(b",")[:-15])
+                    b",".join(linha.split(b",")[:-17])
                     for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
@@ -458,7 +458,7 @@ def test_backup_da_versao_10_sem_recorrencias_restaura_com_os_lancamentos_avulso
                 # Sem as 3 da versão 11, as 2 da 12 (ticket 37), a da 14 (ticket 39), as 2 da 16
                 # (ticket 46), as 2 da 17 (ticket 51) e a da 19 (ticket 110), que vêm depois.
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-12]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-14]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -502,7 +502,7 @@ def test_backup_da_versao_11_sem_cartoes_restaura_cada_lancamento_no_mes_da_data
                 # Sem as 2 da versão 12, a da 14 (ticket 39) as 2 da 16 (ticket 46), as 2 da 17 (ticket 51) e a da 19 (ticket 110), que vêm
                 # depois.
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-9]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-11]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -672,7 +672,7 @@ def test_backup_da_versao_15_sem_parcelamentos_restaura_com_os_lancamentos_avuls
             if nome == "lancamentos.csv":
                 # As 2 da versão 16 vêm antes das 2 da 17 (ticket 51) e da 19 (ticket 110).
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-6]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-8]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -833,7 +833,7 @@ def test_backup_da_versao_19_sem_marca_da_regra_restaura_com_a_exclusao_de_pesso
             conteudo = origem.read(nome)
             if nome == "lancamentos.csv":
                 conteudo = b"\n".join(
-                    b",".join(linha.split(b",")[:-2]) for linha in conteudo.split(b"\n")
+                    b",".join(linha.split(b",")[:-4]) for linha in conteudo.split(b"\n")
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
