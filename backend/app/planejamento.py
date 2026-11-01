@@ -13,6 +13,7 @@ from app.banco import conectar, em_transacao
 from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import recusar, url_do_banco
 from app.login import UsuarioLogado
+from app.partes import CATEGORIAS_QUE_CONTAM
 
 router = APIRouter(prefix="/api")
 
@@ -335,10 +336,9 @@ def criar_item(
         # O lançamento que já contava em outro item fica nele: o novo só cria a ambiguidade.
         guardar_item_atual(
             conn,
-            f"{_DO_MES} AND (l.id IN (SELECT lancamento_id FROM lancamento_categorias"
-            " WHERE categoria_id = %s) OR l.id IN (SELECT p.lancamento_id FROM lancamento_partes p"
-            " JOIN parte_categorias pc ON pc.parte_id = p.id WHERE pc.categoria_id = %s))",
-            (dia, dia, _proximo_mes(dia), novo.categoria_id, novo.categoria_id),
+            f"{_DO_MES} AND l.id IN (SELECT lancamento_id FROM {CATEGORIAS_QUE_CONTAM} x"
+            " WHERE x.categoria_id = %s)",
+            (dia, dia, _proximo_mes(dia), novo.categoria_id),
         )
         conn.execute(
             "INSERT INTO itens_do_planejamento (id, mes, categoria_id, valor_centavos,"

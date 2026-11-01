@@ -121,6 +121,7 @@ class Parte(BaseModel):
         return self
 
 
+SO_A_VISTA = "por enquanto, só a compra à vista tem partes"
 SEM_CLASSIFICACAO_PROPRIA = "a compra com partes não tem categoria, tag nem pessoa próprias"
 DUAS_PARTES_OU_MAIS = "a compra tem duas partes ou mais"
 
@@ -256,7 +257,8 @@ class AlteracaoDeLancamento(BaseModel):
     data: date | None = None
     descricao: str | None = None
     conta_id: UUID | None = None
-    categoria_ids: list[UUID] | None = Field(default=None, min_length=1)
+    # Vazia só junto com as partes, que tiram a classificação própria da compra (ADR 0022).
+    categoria_ids: list[UUID] | None = None
     # Sem situação, só mudar a data refaz a inferência, se ninguém mudou a situação depois.
     situacao: Literal["previsto", "realizado"] | None = None
     tags: list[str] | None = None
@@ -643,7 +645,7 @@ def _gravar_tags(conn, id: UUID, nomes: list[str], usuario: str) -> None:
         for linha in conn.execute(
             "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
         )
-    } | categorias_e_tags_das_partes(conn, id)[1]
+    } | tags_das_partes(conn, id)
     ids = ids_das_tags(conn, nomes, usuario, ja_tinha)
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
     for tag in ids:
@@ -661,10 +663,10 @@ def gravar_categorias(conn, id: UUID, categorias: list[UUID]) -> None:
         )
 
 
-def categorias_e_tags_das_partes(conn, id: UUID) -> tuple[frozenset[UUID], set[UUID]]:
-    """As categorias e as tags que as partes de um lançamento já têm: a arquivada segue valendo
-    para quem já a tinha."""
-    categorias = frozenset(
+def categorias_das_partes(conn, id: UUID) -> frozenset[UUID]:
+    """As categorias que as partes de um lançamento já têm: a arquivada segue valendo para quem
+    já a tinha."""
+    return frozenset(
         c
         for (c,) in conn.execute(
             "SELECT pc.categoria_id FROM parte_categorias pc"
@@ -672,7 +674,11 @@ def categorias_e_tags_das_partes(conn, id: UUID) -> tuple[frozenset[UUID], set[U
             (id,),
         )
     )
-    tags = {
+
+
+def tags_das_partes(conn, id: UUID) -> set[UUID]:
+    """As tags que as partes de um lançamento já têm, como `categorias_das_partes`."""
+    return {
         t
         for (t,) in conn.execute(
             "SELECT pt.tag_id FROM parte_tags pt"
@@ -680,7 +686,6 @@ def categorias_e_tags_das_partes(conn, id: UUID) -> tuple[frozenset[UUID], set[U
             (id,),
         )
     }
-    return categorias, tags
 
 
 def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
@@ -693,7 +698,7 @@ def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
             (id,),
         ).fetchall()
     )
-    _, ja_tinha = categorias_e_tags_das_partes(conn, id)
+    ja_tinha = tags_das_partes(conn, id)
     ja_tinha |= {
         t
         for (t,) in conn.execute(
@@ -730,8 +735,9 @@ def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
             )
 
 
-def apagar_partes(conn, ids: list[UUID]) -> None:
-    """Tira as partes dos lançamentos, com as ligações delas."""
+def apagar_partes(conn, ids: list[UUID], so_as_ligacoes: bool = False) -> None:
+    """Tira as partes dos lançamentos, com as ligações delas. Com `so_as_ligacoes` (a exclusão),
+    as partes ficam, sem as ligações, como as do lançamento."""
     partes = [
         p
         for (p,) in conn.execute(
@@ -742,7 +748,8 @@ def apagar_partes(conn, ids: list[UUID]) -> None:
         return
     conn.execute("DELETE FROM parte_categorias WHERE parte_id = ANY(%s)", (partes,))
     conn.execute("DELETE FROM parte_tags WHERE parte_id = ANY(%s)", (partes,))
-    conn.execute("DELETE FROM lancamento_partes WHERE id = ANY(%s)", (partes,))
+    if not so_as_ligacoes:
+        conn.execute("DELETE FROM lancamento_partes WHERE id = ANY(%s)", (partes,))
 
 
 def acompanhar_estornos(conn, compra_id: UUID) -> None:
@@ -1029,16 +1036,13 @@ def _conferir_estorno(
 def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, sem criar de novo."""
     # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
-    ja_ligadas = (
-        frozenset(
-            categoria
-            for (categoria,) in conn.execute(
-                "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
-                (novo.id,),
-            )
+    ja_ligadas = frozenset(
+        categoria
+        for (categoria,) in conn.execute(
+            "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
+            (novo.id,),
         )
-        | categorias_e_tags_das_partes(conn, novo.id)[0]
-    )
+    ) | categorias_das_partes(conn, novo.id)
     if (
         novo.estorno_de
         and not conn.execute("SELECT 1 FROM lancamentos WHERE id = %s", (novo.id,)).fetchone()
@@ -1134,6 +1138,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     editado = _com_mudancas(atual, mudancas)
     if editado.partes:
         _conferir_compra_com_partes(conn, atual, editado)
+    elif not editado.categoria_ids:
+        raise recusar("lançamento sem categoria")
     if atual.estorno_de:
         if "tipo" in mudancas:
             raise recusar("estorno é um crédito no cartão")
@@ -1144,7 +1150,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             _conferir_estorno(conn, id, editado, atual.estorno_de)
     momento = _momento(alteracao.acao_em)
-    ja_ligadas = frozenset(atual.categoria_ids) | categorias_e_tags_das_partes(conn, id)[0]
+    ja_ligadas = frozenset(atual.categoria_ids) | categorias_das_partes(conn, id)
     conferir_ligacoes(conn, editado, atual.conta_id, ja_ligadas)
     mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
     item_atual = _item_atual_depois(conn, id, editado)
@@ -1232,9 +1238,6 @@ def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancame
         raise recusar("a compra tem estorno; exclua o estorno antes de dividi-la em partes")
 
 
-SO_A_VISTA = "por enquanto, só a compra à vista tem partes"
-
-
 def _parte_normalizada(parte) -> tuple:
     p = parte if isinstance(parte, Parte) else Parte.model_construct(**parte)
     return (
@@ -1289,20 +1292,7 @@ def excluir(
     # tag não contarem como usadas por ele.
     conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = %s", (id,))
     conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = %s", (id,))
-    _soltar_ligacoes_das_partes(conn, [id])
-
-
-def _soltar_ligacoes_das_partes(conn, ids: list[UUID]) -> None:
-    """As partes do excluído ficam, mas sem as ligações, como as do lançamento."""
-    partes = [
-        p
-        for (p,) in conn.execute(
-            "SELECT id FROM lancamento_partes WHERE lancamento_id = ANY(%s)", (ids,)
-        )
-    ]
-    if partes:
-        conn.execute("DELETE FROM parte_categorias WHERE parte_id = ANY(%s)", (partes,))
-        conn.execute("DELETE FROM parte_tags WHERE parte_id = ANY(%s)", (partes,))
+    apagar_partes(conn, [id], so_as_ligacoes=True)
 
 
 def na_rota[T](

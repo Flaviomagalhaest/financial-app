@@ -3757,8 +3757,7 @@
                   "type": "string",
                   "format": "uuid"
                 },
-                "type": "array",
-                "minItems": 1
+                "type": "array"
               },
               {
                 "type": "null"
@@ -4030,8 +4029,7 @@
                   "type": "string",
                   "format": "uuid"
                 },
-                "type": "array",
-                "minItems": 1
+                "type": "array"
               },
               {
                 "type": "null"
@@ -4921,8 +4919,7 @@
                   "type": "string",
                   "format": "uuid"
                 },
-                "type": "array",
-                "minItems": 1
+                "type": "array"
               },
               {
                 "type": "null"

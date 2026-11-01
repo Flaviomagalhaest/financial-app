@@ -535,3 +535,29 @@ def test_juntar_as_partes_com_a_classificacao_que_o_pedido_traz(casal: Casal):
         [casa],
         "esposa",
     )
+
+
+def test_dividir_como_a_tela_manda_com_a_classificacao_vazia(casal: Casal):
+    # A tela manda os campos que mudaram desde a base: as partes e a classificação esvaziada.
+    conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
+    compra = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(conta, [roupa], valor_centavos=1000, tags=["loja"], pessoa="esposa"),
+    ).json()
+
+    dividida = editar(
+        casal,
+        compra["id"],
+        versao=1,
+        categoria_ids=[],
+        tags=[],
+        pessoa="",
+        partes=[parte([roupa], 600), parte([casa], 400)],
+    )
+    sem_nada = editar(casal, compra["id"], versao=2, partes=[], categoria_ids=[])
+
+    assert dividida.status_code == 200, dividida.text
+    assert len(dividida.json()["partes"]) == 2
+    assert sem_nada.status_code == 422

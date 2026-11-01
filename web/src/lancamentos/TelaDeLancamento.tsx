@@ -319,6 +319,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   /** Tirar a penúltima parte: a compra volta a ser uma, com a classificação da parte que ficou. */
   function juntar(fica: ParteEmEdicao) {
     setPartes(null);
+    // A compra que se nomeava pelas partes fica com o nome da que sobrou.
+    if (!descricao.trim()) setDescricao(fica.descricao);
     setCategoriaIds(fica.categoria_ids);
     setTags(fica.tags);
     setPessoa(fica.pessoa ?? null);

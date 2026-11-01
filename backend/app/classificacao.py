@@ -9,6 +9,7 @@ from app.banco import conectar, em_transacao
 from app.item_em_que_conta import guardar_item_atual
 from app.lancamentos import Categoria, url_do_banco
 from app.login import UsuarioLogado
+from app.partes import CATEGORIAS_QUE_CONTAM
 
 router = APIRouter(prefix="/api")
 
@@ -72,10 +73,9 @@ def _juntar_escolhas_de_item(conn, origem: UUID, destino: UUID) -> None:
     categoria dele."""
     guardar_item_atual(
         conn,
-        "(l.id IN (SELECT lancamento_id FROM lancamento_categorias WHERE categoria_id = ANY(%s))"
-        " OR l.id IN (SELECT p.lancamento_id FROM lancamento_partes p"
-        " JOIN parte_categorias pc ON pc.parte_id = p.id WHERE pc.categoria_id = ANY(%s)))",
-        ([origem, destino], [origem, destino]),
+        f"l.id IN (SELECT lancamento_id FROM {CATEGORIAS_QUE_CONTAM} x"
+        " WHERE x.categoria_id = ANY(%s))",
+        ([origem, destino],),
     )
     for tabela, coluna in (
         ("lancamentos", "item_categoria_id"),

@@ -27,13 +27,13 @@ async function preparar(page: Page) {
   const mesDaFatura = mes.toISOString().slice(0, 7);
   await api.criar(`/api/planejamento/${mesDaFatura}/itens`, { id: crypto.randomUUID(), categoria_id: roupa.id, valor_centavos: 100000 });
   await page.reload();
-  return { s, api, cartao, nomes, mesDaFatura };
+  return { s, api, cartao, nomes, mesDaFatura, roupa };
 }
 
 const parte = (page: Page, n: number) => page.getByRole("group", { name: `Parte ${n}`, exact: true });
 
 test("divide a compra em partes ao lançar: cada parte com a classificação e o aviso dela, e a compra numa linha só que abre as partes", async ({ page }) => {
-  const { nomes, cartao, mesDaFatura } = await preparar(page);
+  const { nomes, cartao, mesDaFatura, roupa } = await preparar(page);
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
   await page.getByRole("link", { name: "+ Novo lançamento" }).click();
 
@@ -93,7 +93,8 @@ test("divide a compra em partes ao lançar: cada parte com a classificação e o
 
   // O planejamento do mês conta só o Vestido no item de Roupa.
   const plano = await (await apiDaPagina(page)).ler(`/api/planejamento/${mesDaFatura}`);
-  expect(plano.itens[0].realizado_centavos + plano.itens[0].previsto_centavos).toBe(50000);
+  const item = plano.itens.find((i: { categoria_id: string }) => i.categoria_id === roupa.id);
+  expect(item.realizado_centavos + item.previsto_centavos).toBe(50000);
 });
 
 test("tirar a penúltima parte devolve a classificação dela à compra", async ({ page }) => {
@@ -134,6 +135,45 @@ test("tirar a penúltima parte devolve a classificação dela à compra", async 
   const [gravada] = (await api.ler("/api/lancamentos")).filter((l: { id: string }) => l.id === compra.id);
   expect(gravada.partes).toEqual([]);
   expect(gravada.valor_centavos).toBe(30000);
+});
+
+test("divide uma compra que já existe: ela perde a classificação própria e as partes ficam com ela", async ({ page }) => {
+  const { api, cartao, nomes } = await preparar(page);
+  const categorias = await api.ler("/api/categorias");
+  const id = (nome: string) => categorias.find((c: { nome: string }) => c.nome === nome).id;
+  const compra = await api.criar("/api/lancamentos", {
+    id: crypto.randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 30000,
+    data: hoje(),
+    descricao: nomes.compra,
+    conta_id: cartao.id,
+    categoria_ids: [id(nomes.roupa)],
+    tags: [`loja ${nomes.compra}`],
+    pessoa: "sub-esposa",
+  });
+  await page.reload();
+
+  await page.getByRole("link", { name: `Editar ${nomes.compra}` }).click();
+  await expect(page.getByRole("button", { name: nomes.roupa })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Dividir em partes" }).click();
+  // A primeira parte começa com o que a compra tinha.
+  await expect(parte(page, 1).getByRole("button", { name: nomes.roupa })).toHaveAttribute("aria-pressed", "true");
+  await parte(page, 1).getByLabel("Valor da parte").fill("200,00");
+  await parte(page, 2).getByRole("button", { name: nomes.casa }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+
+  const linha = page.getByRole("listitem").filter({ hasText: nomes.compra }).first();
+  await expect(linha).toContainText("2 partes");
+  await expect(linha).not.toContainText("não enviado");
+  await expect(linha).not.toContainText("recusad");
+  const [gravada] = (await api.ler("/api/lancamentos")).filter((l: { id: string }) => l.id === compra.id);
+  expect([gravada.categoria_ids, gravada.tags, gravada.pessoa]).toEqual([[], [], null]);
+  expect(gravada.partes.map((p: { valor_centavos: number; pessoa: string | null }) => [p.valor_centavos, p.pessoa])).toEqual([
+    [20000, "sub-esposa"],
+    [10000, null],
+  ]);
 });
 
 test("sem internet, a compra com partes entra na fila como um pedido só e sobe quando a rede volta", async ({ page, context }) => {
