@@ -28,14 +28,14 @@ import { indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaCompra, tituloD
 import { pagaPeloPagamento } from "../cartoes/apresentacao";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
-import { formatarCentavos } from "./dinheiro";
+import { comoDigitado, formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
 import { avisoDasMantidas, comoMuda, divisao, pedidoDo, problemaDo, rotuloDasParcelas, type ParcelamentoNaFolha } from "./parcelamento";
 import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
 import { avisoDasPuladas, ocorrenciasPuladas, parcelasPuladas } from "./puladas";
 import { Teclado } from "./Teclado";
-import { dividirPelaProporcao, EditorDePartes, emEdicao, parteNova, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
+import { dividirNaProporcao, EditorDePartes, emEdicao, emEdicaoNaProporcao, parteNova, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
 
 type Tipo = "despesa" | "receita";
 type Situacao = LancamentoNaTela["situacao"];
@@ -115,9 +115,10 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const [mantidas, setMantidas] = useState("");
   // As partes da compra à vista ou parcelada (ADR 0022); sem elas, a compra é uma só.
   const [partes, setPartes] = useState<ParteEmEdicao[] | null>(null);
-  // Se a pessoa mexeu nas partes. A parcela que só muda de valor se divide de novo na mesma
-  // proporção (ticket 139), e as partes dela continuam as do parcelamento.
-  const [partesTocadas, setPartesTocadas] = useState(false);
+  // As partes que vieram de um favorito ou sugestão dividem o valor na proporção da última compra,
+  // e as da parcela, na proporção que o servidor guardou nela (ticket 139): mudar o valor redivide.
+  // Mexer no valor de uma parte, ou tirar ou pôr uma, solta a proporção.
+  const [proporcao, setProporcao] = useState<number[] | null>(null);
 
   // Um lançamento novo começa sem a oferta "Favoritar" do anterior.
   useEffect(() => oferecerFavoritar(null), []);
@@ -142,23 +143,13 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setPessoa(achado.pessoa ?? null);
     setFaturaMes(achado.fatura_mes ?? null);
     setPartes(achado.partes?.length ? achado.partes.map(emEdicao) : null);
+    // A parcela com partes acompanha o valor digitado na proporção guardada (a do aparelho, sem ela,
+    // é a dos valores), e as partes dela continuam as do parcelamento.
+    if (achado.parcelamento_id && achado.partes?.length) {
+      const guardada = achado.proporcao_das_partes;
+      setProporcao(guardada?.length === achado.partes.length ? guardada : achado.partes.map((p) => p.valor_centavos));
+    }
   }, [id, existente, lancamentos, semDados]);
-
-  // A parcela com partes intocadas acompanha o valor digitado, na proporção que tinha.
-  const partesDaParcela = !partesTocadas && existente?.parcelamento_id && existente.partes?.length ? existente.partes : null;
-  useEffect(() => {
-    if (!partesDaParcela || centavos <= 0) return;
-    // A proporção que o servidor guardou na parcela; a do aparelho (sem ela) é a dos valores.
-    const guardada = existente?.proporcao_das_partes;
-    const pesos = guardada?.length === partesDaParcela.length ? guardada : partesDaParcela.map((p) => p.valor_centavos);
-    const valores = dividirPelaProporcao(centavos, pesos);
-    setPartes(partesDaParcela.map((p, i) => emEdicao({ ...p, valor_centavos: valores[i] })));
-  }, [partesDaParcela, centavos, existente]);
-
-  const mudarPartes = (novas: ParteEmEdicao[]) => {
-    setPartesTocadas(true);
-    setPartes(novas);
-  };
 
   // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra.
   const compraId = estornoDe ?? existente?.estorno_de ?? undefined;
@@ -244,7 +235,10 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     .filter(Boolean)
     .join(" · ");
 
-  const identidadeAtual = identidadeDe({ descricao, tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa });
+  // As partes prontas, como entram no favorito: a classificação de cada uma e o valor, que vale como proporção.
+  const partesDoModelo = partes && centavos > 0 && !problemaDasPartes(partes, centavos) ? partesParaSalvar(partes, centavos).map(({ descricao, valor_centavos, categoria_ids, tags, pessoa }) => ({ descricao, valor_centavos, categoria_ids, tags, pessoa })) : [];
+  const identidadeAtual = identidadeDe({ descricao, tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa, partes: partesDoModelo });
+  const favoritavel = categoriaIds.length > 0 || partesDoModelo.length > 0;
   const jaEFavorito = favoritos.some((f) => identidadeDe(f) === identidadeAtual);
 
   const ultimo = useMemo(() => (id ? undefined : ultimoCriado(lancamentos ?? [], euId)), [id, lancamentos, euId]);
@@ -263,6 +257,22 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setDescricao(u.descricao ?? "");
     setTags(u.tags ?? []);
     setPessoa(u.pessoa ?? null);
+    if (u.partes?.length) usarPartes(u.partes, u.valor_centavos);
+    else {
+      setPartes(null);
+      setProporcao(null);
+    }
+  }
+
+  /** A compra com partes: as partes do modelo dividem o total na proporção, e a compra não tem classificação própria. */
+  function usarPartes(modelo: { descricao?: string; valor_centavos: number; categoria_ids: string[]; tags?: string[]; pessoa?: string | null }[], total: number) {
+    // A categoria que não se pode mais escolher sai; a parte que ficar sem nenhuma pede uma nova.
+    setPartes(emEdicaoNaProporcao(modelo, total).map((p) => ({ ...p, categoria_ids: escolhiveis(p.categoria_ids).map((c) => c.id) })));
+    setProporcao(modelo.map((p) => p.valor_centavos));
+    setCategoriaIds([]);
+    setTags([]);
+    setPessoa(null);
+    setItemTocado(null);
   }
 
   /** Preenche com o favorito, com o valor padrão (só o ponto de partida: "Salvar" confirma) e a data de hoje. */
@@ -272,10 +282,27 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setSituacaoEscolhida(null);
     setCentavos(f.valor_padrao_centavos);
     if (contasECartoes.some((c) => c.id === f.conta_id)) trocarConta(f.conta_id);
-    setCategoriaIds(escolhiveis(f.categoria_ids).map((c) => c.id));
     setDescricao(f.descricao);
+    if (f.partes.length) return usarPartes(f.partes, f.valor_padrao_centavos);
+    setPartes(null);
+    setProporcao(null);
+    setCategoriaIds(escolhiveis(f.categoria_ids).map((c) => c.id));
     setTags(f.tags);
     setPessoa(f.pessoa ?? null);
+  }
+
+  // O valor mudou: as partes que vieram de um favorito ou sugestão se dividem de novo na mesma proporção.
+  useEffect(() => {
+    if (!proporcao || !partes || centavos <= 0 || proporcao.length !== partes.length) return;
+    const valores = dividirNaProporcao(proporcao, centavos).map(comoDigitado);
+    if (partes.every((p, i) => p.valor === valores[i])) return;
+    setPartes(partes.map((p, i) => ({ ...p, valor: valores[i] })));
+  }, [centavos, proporcao, partes]);
+
+  /** O editor mudou as partes: só a classificação mantém a proporção; valor tocado ou parte posta ou tirada a solta. */
+  function mudarPartes(novas: ParteEmEdicao[]) {
+    if (proporcao && (novas.length !== partes?.length || novas.some((p, i) => p.valor !== partes[i].valor))) setProporcao(null);
+    setPartes(novas);
   }
 
   // O favorito que a grade da Hoje abriu preenche uma vez só, quando a lista e o cadastro já chegaram.
@@ -297,10 +324,18 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   function escolher(s: Sugestao) {
     setTipo(s.tipo);
     if (contasECartoes.some((c) => c.id === s.conta_id)) trocarConta(s.conta_id);
+    setSugerindo(false);
+    if (s.partes.length) {
+      // O pacote com partes divide o valor que já está na tela; sem valor, vale o da última compra.
+      const total = s.partes.reduce((soma, p) => soma + p.valor_centavos, 0);
+      if (centavos <= 0) setCentavos(total);
+      return usarPartes(s.partes, centavos > 0 ? centavos : total);
+    }
+    setPartes(null);
+    setProporcao(null);
     setCategoriaIds(escolhiveis(s.categoria_ids).map((c) => c.id));
     setTags(s.tags);
     setPessoa(s.pessoa ?? null);
-    setSugerindo(false);
   }
 
   const sugestoes: SugestaoNaFolha[] = sugerindo && !estornando && !avulso && !partes
@@ -308,7 +343,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
         descricao: s.descricao.trim(),
         // A conta ou categoria que não se pode mais escolher fica de fora, como ao escolher.
         resumo: [
-          escolhiveis(s.categoria_ids).map((c) => c.nome).join(", "),
+          s.partes.length ? s.partes.map((p) => `${p.descricao || "Parte"} ${formatarCentavos(p.valor_centavos)}`).join(" + ") : escolhiveis(s.categoria_ids).map((c) => c.nome).join(", "),
           ...s.tags.map((t) => `#${t}`),
           contasECartoes.find((c) => c.id === s.conta_id)?.nome ?? "",
           s.pessoa ? nomeDe(s.pessoa) : "Conjunto",
@@ -346,7 +381,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
 
   /** A compra se divide em duas partes: a primeira com o que ela tinha, a segunda vazia, com o resto do valor. */
   function dividir() {
-    setPartesTocadas(true);
+    setProporcao(null);
     setPartes([{ ...parteNova(), categoria_ids: categoriaIds, tags, pessoa }, parteNova()]);
     setCategoriaIds([]);
     setTags([]);
@@ -356,8 +391,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
 
   /** Tirar a penúltima parte: a compra volta a ser uma, com a classificação da parte que ficou. */
   function juntar(fica: ParteEmEdicao) {
-    setPartesTocadas(true);
     setPartes(null);
+    setProporcao(null);
     // A compra que se nomeava pelas partes fica com o nome da que sobrou.
     if (!descricao.trim()) setDescricao(fica.descricao);
     setCategoriaIds(fica.categoria_ids);
@@ -385,7 +420,10 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setTipo(novo);
     setCategoriaIds([]);
     // Só a despesa tem partes.
-    if (novo !== "despesa") setPartes(null);
+    if (novo !== "despesa") {
+      setPartes(null);
+      setProporcao(null);
+    }
     // Só a despesa se parcela.
     if (novo !== "despesa") setParcelamento(null);
   }
@@ -482,7 +520,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       else await salvarLancamento(daTela(), !existente, existente ?? undefined);
       if (!existente && !estornando && !avulso) {
         // Favoritar precisa de internet (ADR 0011): sem ela, nem a ⭐ vale nem se oferece.
-        const modelo = { id: crypto.randomUUID(), descricao: descricao.trim(), tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa, valor_centavos: centavos };
+        const modelo = { id: crypto.randomUUID(), descricao: descricao.trim(), tipo, conta_id: conta, categoria_ids: partes ? [] : categoriaIds, tags: partes ? [] : tags, pessoa: partes ? null : pessoa, valor_centavos: centavos, partes: partesDoModelo };
         if (favoritarAoSalvar && !eFavorito) void favoritar(modelo).then((motivo) => motivo && oferecerFavoritar(modelo));
         else oferecerFavoritar(online && !eFavorito ? modelo : null);
       }
@@ -539,7 +577,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           ))}
         </div>
       )}
-      {!id && !estornando && !avulso && categoriaIds.length > 0 && (
+      {!id && !estornando && !avulso && favoritavel && (
         <button
           type="button"
           className="estrela"
@@ -550,7 +588,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           {jaEFavorito ? "⭐ É favorito" : favoritarAoSalvar ? "⭐ Será favorito" : "☆ Marcar como favorito"}
         </button>
       )}
-      {!id && !estornando && !avulso && !online && categoriaIds.length > 0 && <p className="vazio">Favoritar precisa de internet.</p>}
+      {!id && !estornando && !avulso && !online && favoritavel && <p className="vazio">Favoritar precisa de internet.</p>}
       <h3>{estornando || avulso ? "Cartão" : "Conta ou cartão"}</h3>
       <div className="fileira rolavel">
         {!estornando && !avulso && contas.map((c) => (
@@ -728,7 +766,7 @@ type AlcanceComOutras = Exclude<AlcanceDaMudanca, "so_esta">;
 
 /** As partes com `valor` dividido na proporção dos valores delas (a 1ª parcela, no aviso do parcelado). */
 function divididasPor<P extends { valor_centavos: number }>(partes: P[], valor: number): P[] {
-  const valores = dividirPelaProporcao(valor, partes.map((p) => p.valor_centavos));
+  const valores = dividirNaProporcao(partes.map((p) => p.valor_centavos), valor);
   return partes.map((p, i) => ({ ...p, valor_centavos: valores[i] }));
 }
 

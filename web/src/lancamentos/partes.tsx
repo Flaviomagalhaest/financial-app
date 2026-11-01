@@ -83,24 +83,31 @@ export function PartesDaCompra(props: { partes: Parte[]; so?: Parte[] | null; ca
   );
 }
 
-/**
- * O valor dividido pelas partes na proporção dos `pesos`, como no servidor (`app/partes.py`): cada
- * parte com a sua fatia sem os centavos, e os que sobram na maior parte (a primeira, no empate).
- */
-export function dividirPelaProporcao(valor: number, pesos: number[]): number[] {
-  if (!pesos.length) return [];
-  // Em BigInt: o produto do valor pelo peso passa do inteiro exato do número em compras grandes.
-  const total = BigInt(pesos.reduce((soma, p) => soma + p, 0));
-  const valores = pesos.map((p) => Number((BigInt(valor) * BigInt(p)) / total));
-  const maior = pesos.reduce((m, p, i) => (p > pesos[m] ? i : m), 0);
-  valores[maior] += valor - valores.reduce((soma, v) => soma + v, 0);
-  return valores;
-}
-
 /** A parte como a tela a edita: o valor como se digita, e o da última é o que falta (`restoDaUltima`). */
 export type ParteEmEdicao = Omit<Parte, "valor_centavos"> & { valor: string };
 
 export const emEdicao = (p: Parte): ParteEmEdicao => ({ ...p, valor: comoDigitado(p.valor_centavos) });
+
+/**
+ * Divide o total na proporção `base` (as partes de um favorito ou sugestão, ou a proporção guardada
+ * na parcela), como o servidor (`app/partes.py`): cada parte com a sua fatia sem os centavos, e os
+ * que sobram na maior parte, a primeira no empate (ADR 0022).
+ */
+export function dividirNaProporcao(base: number[], total: number): number[] {
+  if (!base.length) return [];
+  // Em BigInt: o produto do total pela fatia passa do inteiro exato do número em compras grandes.
+  const soma = BigInt(base.reduce((a, b) => a + b, 0));
+  const valores = base.map((v) => Number((BigInt(total) * BigInt(v)) / soma));
+  const sobra = total - valores.reduce((a, b) => a + b, 0);
+  valores[base.indexOf(Math.max(...base))] += sobra;
+  return valores;
+}
+
+/** As partes de um favorito ou sugestão como a tela as edita, com novos ids e o total dividido na proporção. */
+export function emEdicaoNaProporcao(modelo: { descricao?: string; valor_centavos: number; categoria_ids: string[]; tags?: string[]; pessoa?: string | null }[], total: number): ParteEmEdicao[] {
+  const valores = dividirNaProporcao(modelo.map((p) => p.valor_centavos), total);
+  return modelo.map((p, i) => emEdicao({ id: crypto.randomUUID(), descricao: p.descricao ?? "", valor_centavos: valores[i], categoria_ids: p.categoria_ids, tags: p.tags ?? [], pessoa: p.pessoa ?? null, item_categoria_id: null }));
+}
 
 /** Uma parte vazia, com o id que nasce no aparelho. */
 export const parteNova = (): ParteEmEdicao => ({ id: crypto.randomUUID(), descricao: "", valor: "", categoria_ids: [], tags: [], pessoa: null, item_categoria_id: null });
@@ -117,7 +124,7 @@ export function problemaDasPartes(partes: ParteEmEdicao[], total: number, menorP
   if (partes.slice(0, -1).some((p) => !emCentavos(p.valor) || emCentavos(p.valor)! <= 0)) return "Cada parte precisa de um valor.";
   if (valores[valores.length - 1] <= 0) return "As partes passam do valor da compra.";
   if (partes.some((p) => p.categoria_ids.length === 0)) return "Cada parte precisa de uma categoria.";
-  if (menorParcela !== undefined && Math.min(...dividirPelaProporcao(menorParcela, valores)) <= 0) return "A parcela não chega a um centavo por parte.";
+  if (menorParcela !== undefined && Math.min(...dividirNaProporcao(valores, menorParcela)) <= 0) return "A parcela não chega a um centavo por parte.";
   return "";
 }
 

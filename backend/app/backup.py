@@ -18,7 +18,7 @@ import psycopg
 
 from app.faturas import datas_padrao, ler_cartao
 
-VERSAO_FORMATO = 28
+VERSAO_FORMATO = 29
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -570,7 +570,16 @@ def _da_versao_26_para_a_27(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
 
 
 def _da_versao_27_para_a_28(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 28 (ticket 139) traz as partes da compra parcelada, guardadas no parcelamento
+    """A versão 28 (ticket 141) guarda no favorito as partes da compra, em JSON (ADR 0022). Antes
+    dela todo favorito era de uma compra só: a lista de partes é vazia."""
+    colunas, linhas = tabelas["favoritos"]
+    if "partes" not in colunas:
+        tabelas["favoritos"] = ([*colunas, "partes"], [[*linha, "[]"] for linha in linhas])
+    return manifesto, tabelas
+
+
+def _da_versao_28_para_a_29(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 29 (ticket 139) traz as partes da compra parcelada, guardadas no parcelamento
     como proporção, e a proporção que cada parte de uma parcela recebeu dele. Backup antigo entra
     sem nenhuma: só a compra à vista tinha partes, e a proporção dela é o valor."""
     colunas, linhas = tabelas["lancamento_partes"]
@@ -633,6 +642,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     25: _da_versao_25_para_a_26,
     26: _da_versao_26_para_a_27,
     27: _da_versao_27_para_a_28,
+    28: _da_versao_28_para_a_29,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

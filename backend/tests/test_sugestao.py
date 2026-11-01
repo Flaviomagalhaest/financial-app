@@ -48,6 +48,7 @@ def test_o_indice_traz_a_sugestao_do_lancamento_com_a_descricao_sem_acento_maius
             "categoria_ids": [mercado],
             "tags": ["Casa"],
             "pessoa": "flavio",
+            "partes": [],
             "em": "2026-10-12T17:32:00Z",
             "origem": "historico",
         }
@@ -173,3 +174,74 @@ def test_a_ocorrencia_que_a_recorrencia_gera_depois_nao_passa_na_frente_da_corre
     fazer_tarefa_diaria(database_url)
 
     assert [p["categoria_ids"] for p in indice(casal)] == [[assinaturas], [lazer]]
+
+
+def test_a_compra_com_partes_entra_no_indice_com_as_partes_na_ordem(casal: Casal):
+    from uuid import uuid4
+
+    conta, roupa, fone = casal.conta(), casal.categoria("Roupa"), casal.categoria("Eletrônico")
+    lancar(
+        casal,
+        conta=conta,
+        categorias=[],
+        descricao="Mercado Livre",
+        valor_centavos=750,
+        partes=[
+            {
+                "id": str(uuid4()),
+                "descricao": "Vestido",
+                "valor_centavos": 500,
+                "categoria_ids": [roupa],
+                "tags": ["Presente"],
+                "pessoa": "esposa",
+            },
+            {
+                "id": str(uuid4()),
+                "descricao": "Fone",
+                "valor_centavos": 250,
+                "categoria_ids": [fone],
+            },
+        ],
+    )
+
+    [sugestao] = indice(casal)
+
+    assert sugestao["chave"] == "mercado livre"
+    assert sugestao["categoria_ids"] == [] and sugestao["tags"] == []
+    assert sugestao["partes"] == [
+        {
+            "descricao": "Vestido",
+            "valor_centavos": 500,
+            "categoria_ids": [roupa],
+            "tags": ["Presente"],
+            "pessoa": "esposa",
+        },
+        {
+            "descricao": "Fone",
+            "valor_centavos": 250,
+            "categoria_ids": [fone],
+            "tags": [],
+            "pessoa": None,
+        },
+    ]
+
+
+def test_a_compra_com_parte_de_categoria_arquivada_nao_e_sugerida(casal: Casal):
+    from uuid import uuid4
+
+    conta, roupa, fone = casal.conta(), casal.categoria("Roupa"), casal.categoria("Eletrônico")
+    lancar(
+        casal,
+        conta=conta,
+        categorias=[],
+        descricao="Mercado Livre",
+        valor_centavos=750,
+        partes=[
+            {"id": str(uuid4()), "valor_centavos": 500, "categoria_ids": [roupa]},
+            {"id": str(uuid4()), "valor_centavos": 250, "categoria_ids": [fone]},
+        ],
+    )
+
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{fone}", json={"arquivada": True})
+
+    assert indice(casal) == []

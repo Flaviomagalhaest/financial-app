@@ -60,10 +60,10 @@ Lançamento que o casal repete muito (os 3 mais repetidos, a partir de 5 usos) e
 _Avoid_: favorito automático
 
 **Identidade do favorito**:
-O que faz dois lançamentos serem "o mesmo": descrição normalizada, tipo, conta, categorias, tags e pessoa. Conta os usos do **Sugerido** e dá o valor padrão do **Favorito**, que é o valor do último lançamento com essa identidade.
+O que faz dois lançamentos serem "o mesmo": descrição normalizada, tipo, conta, categorias, tags e pessoa; na compra com partes, também as partes (descrição, categorias, tags, pessoa e **proporção** de cada uma, a fatia dela no total em percentual inteiro, para 500+250+250 e 1000+500+500 serem a mesma divisão). Conta os usos do **Sugerido** e dá o valor padrão do **Favorito**, que é o valor do último lançamento com essa identidade.
 
 **Sugestão**:
-Categorias, tags, conta e pessoa de um lançamento anterior de descrição parecida, oferecidas enquanto se digita a descrição; escolher uma preenche esses campos e mantém o valor já digitado. Vem da **fonte de sugestão**.
+Categorias, tags, conta e pessoa (ou, na compra com partes, o pacote das partes) de um lançamento anterior de descrição parecida, oferecidas enquanto se digita a descrição; escolher uma preenche esses campos e mantém o valor já digitado (o pacote com partes divide esse valor na proporção da última compra). Vem da **fonte de sugestão**.
 _Avoid_: autocompletar, recomendação
 
 **Fonte de sugestão**:
