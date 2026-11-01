@@ -1,7 +1,7 @@
 # Ajuste de fatura na planilha e "passou" no ainda dá para gastar
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Sonnet
