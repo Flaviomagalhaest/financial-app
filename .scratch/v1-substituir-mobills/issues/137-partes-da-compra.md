@@ -1,7 +1,7 @@
 # Partes da compra à vista
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 133
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Opus
