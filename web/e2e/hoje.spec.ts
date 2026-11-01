@@ -49,18 +49,19 @@ test("a Hoje junta ainda dá para gastar, a escolher, atrasados, fatura que venc
   await lancar([catLuz], 7000, `Boleto atrasado ${s}`, { data: dia(-2), situacao: "previsto" });
   const cartao = await enviar("/api/cartoes", { nome: visa, dia_fechamento: Number(dia(-5).slice(8)), dia_vencimento: Number(dia(2).slice(8)) });
   await lancar([catLuz], 2000, `Compra no cartão ${s}`, { conta_id: cartao.id, data: dia(-10) });
-  // Nos primeiros dias o boleto atrasado e a fatura fechada caem no mês anterior e não somam
-  // no item deste mês (ticket 143): a luz tem 85% e chega a 94% com os dois.
-  const luzPercentual = `${85 + (dia(-2).startsWith(mes) ? 7 : 0) + (dia(-5).startsWith(mes) ? 2 : 0)}%`;
+  // Nos primeiros dias do mês, o boleto atrasado (de 2 dias atrás) e a compra no cartão (na fatura que
+  // fechou 5 dias atrás) caem no mês anterior e não contam no item da luz deste mês.
+  const noMes = (d: string) => d.startsWith(mes);
+  const luzNoMes = `${(85000 + (noMes(dia(-2)) ? 7000 : 0) + (noMes(dia(-5)) ? 2000 : 0)) / 1000}%`;
 
   await page.reload();
   // O destaque.
   await expect(page.getByTestId("ainda-da-para-gastar")).toHaveText(/R\$ \d/);
   await expect(page.getByRole("region", { name: "Ainda dá para gastar este mês" })).toContainText("planejados");
 
-  // Itens acima de 80%: a luz, com o boleto atrasado previsto e o cartão somando.
+  // Itens acima de 80%: a luz, com o boleto atrasado previsto e a compra no cartão somando quando caem neste mês.
   const perto = page.getByRole("region", { name: "Itens em destaque" });
-  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText(luzPercentual);
+  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText(luzNoMes);
   await expect(perto).not.toContainText(restaurante);
 
   // Atrasados na mesma leitura das contas da semana.
@@ -85,5 +86,5 @@ test("a Hoje junta ainda dá para gastar, a escolher, atrasados, fatura que venc
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByText(/Sem internet: atualizado às \d\d:\d\d/)).toBeVisible();
-  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText(luzPercentual);
+  await expect(perto.getByRole("listitem").filter({ hasText: luz })).toContainText(luzNoMes);
 });

@@ -3,11 +3,10 @@ import { atualizadoAs, salvarLancamento, useCadastro, useContasDaSemana, useFila
 import { GradeDeFavoritos } from "./GradeDeFavoritos";
 import { AvisoDaFila } from "../lancamentos/AvisoDaFila";
 import { ContasDaSemana } from "../lancamentos/ContasDaSemana";
-import { nomePorId, tituloDoLancamento } from "../lancamentos/apresentacao";
+import { nomePorId, plural, tituloDoLancamento } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 
-const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /** Escolher o item é uma mudança do lançamento: vai pela fila, sobre o que a tela mostrava. */
 function escolher(l: LancamentoNaTela | LeituraDaHoje["lancamentos_a_escolher"][number], itemCategoriaId: string, mostrado?: LancamentoNaTela) {
