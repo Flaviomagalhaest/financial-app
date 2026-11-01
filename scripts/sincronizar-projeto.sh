@@ -4,6 +4,7 @@
 # Lê o projeto inteiro de uma vez e só muda o que difere: a cota GraphQL é do usuário dono do
 # token e acabava com a sincronização completa da main (ticket 11). Abrir, fechar e o rótulo
 # vão pela API REST, que tem cota à parte.
+# Na main, o card em DOING não volta a TODO/WAITING se o ticket está `claimed` em alguma branch remota.
 # Só a main põe issue no projeto (ticket 12): o ticket de uma branch ainda não mesclada fica de fora.
 #   --so-no-projeto      (branches) só mexe nos tickets cuja issue já está no projeto
 #   --tirar-sem-ticket   (main, sem lista de tickets) tira do projeto as issues deste repositório
@@ -47,6 +48,18 @@ bloqueado() {
     b=$(ls "$dir"/"$n"-*.md 2>/dev/null | head -1) || true
     [ -n "$b" ] && ! fechado "$b" && return 0
   done
+  return 1
+}
+
+# Alguma branch remota (fora da main) tem este ticket em `claimed`? A sessão em andamento marca o
+# `claimed` só na própria branch, e a main ainda lê o ticket como aberto: sem isto a main devolvia
+# o card de DOING para TODO/WAITING no merge seguinte de qualquer outro ticket.
+reivindicado() {
+  local ref
+  while read -r ref; do
+    [ "$ref" = origin/main ] || [ "$ref" = origin/HEAD ] || [ "$ref" = origin ] && continue
+    git show "$ref:$1" 2>/dev/null | sed -n 's/^Status: *//p' | head -1 | grep -q '^claimed' && return 0
+  done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin)
   return 1
 }
 
@@ -129,6 +142,13 @@ for f in "${files[@]}"; do
       --jq .data.addProjectV2ItemById.item.id)
     atual=-
     echo "  entrou no projeto"; mudancas=$((mudancas + 1))
+  fi
+
+  # Na main (--tirar-sem-ticket), o DOING posto por uma sessão numa branch não volta para TODO/WAITING
+  if [ $tirar -eq 1 ] && [ "$atual" = DOING ] && { [ "$col" = TODO ] || [ "$col" = WAITING ]; } \
+    && reivindicado "$f"; then
+    echo "  DOING mantido: ticket reivindicado numa branch em andamento"
+    col=DOING
   fi
 
   if [ "$atual" != "$col" ]; then
