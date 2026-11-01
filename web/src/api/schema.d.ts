@@ -1272,10 +1272,9 @@ export interface components {
         /**
          * AlteracaoDeParcelamento
          * @description O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,
-         *     tags, pessoa e item valem para as parcelas do `alcance`, inclusive as editadas à mão. Valor,
-         *     número de parcelas e data só mudam no alcance "todas" e refazem as parcelas, salvo as que uma
-         *     pessoa editou à mão. Se uma parcela realizada mudar ou sair, o pedido só vale com
-         *     `confirmar_realizadas`.
+         *     tags, pessoa e item valem para todas as parcelas, inclusive as realizadas. Valor, número de
+         *     parcelas e data refazem as parcelas, salvo as que uma pessoa editou à mão; se uma realizada
+         *     mudar ou sair, o pedido só vale com `confirmar_realizadas`.
          */
         AlteracaoDeParcelamento: {
             /** Descricao */
@@ -1304,14 +1303,6 @@ export interface components {
              * @default false
              */
             confirmar_realizadas: boolean;
-            /**
-             * Alcance
-             * @default todas
-             * @enum {string}
-             */
-            alcance: "esta" | "proximas" | "todas";
-            /** Parcela */
-            parcela?: number | null;
         };
         /**
          * AlteracaoDeRecorrencia
@@ -2838,11 +2829,6 @@ export interface components {
             data_nova: string | null;
             /** Sai */
             sai: boolean;
-            /**
-             * Mudou
-             * @default []
-             */
-            mudou: string[];
         };
         /** Parcelamento */
         Parcelamento: {

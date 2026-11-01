@@ -3921,33 +3921,11 @@
             "type": "boolean",
             "title": "Confirmar Realizadas",
             "default": false
-          },
-          "alcance": {
-            "type": "string",
-            "enum": [
-              "esta",
-              "proximas",
-              "todas"
-            ],
-            "title": "Alcance",
-            "default": "todas"
-          },
-          "parcela": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parcela"
           }
         },
         "type": "object",
         "title": "AlteracaoDeParcelamento",
-        "description": "O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,\ntags, pessoa e item valem para as parcelas do `alcance`, inclusive as editadas à mão. Valor,\nnúmero de parcelas e data só mudam no alcance \"todas\" e refazem as parcelas, salvo as que uma\npessoa editou à mão. Se uma parcela realizada mudar ou sair, o pedido só vale com\n`confirmar_realizadas`."
+        "description": "O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,\ntags, pessoa e item valem para todas as parcelas, inclusive as realizadas. Valor, número de\nparcelas e data refazem as parcelas, salvo as que uma pessoa editou à mão; se uma realizada\nmudar ou sair, o pedido só vale com `confirmar_realizadas`."
       },
       "AlteracaoDeRecorrencia": {
         "properties": {
@@ -7939,14 +7917,6 @@
           "sai": {
             "type": "boolean",
             "title": "Sai"
-          },
-          "mudou": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Mudou",
-            "default": []
           }
         },
         "type": "object",

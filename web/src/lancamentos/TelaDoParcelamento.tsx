@@ -51,36 +51,12 @@ function formularioDo(p: Parcelamento): Formulario {
   };
 }
 
-/** O que o pedido muda, sem o alcance e a confirmação, que a tela junta ao enviar. */
-type Mudanca = Omit<AlteracaoDeParcelamento, "confirmar_realizadas" | "alcance" | "parcela">;
-type Alcance = AlteracaoDeParcelamento["alcance"];
-
-/** O alcance da mudança na parcela (GLOSSARY.md), na ordem em que a tela pergunta. */
-const ALCANCES: [Alcance, string][] = [
-  ["esta", "Só esta"],
-  ["proximas", "Esta e as próximas"],
-  ["todas", "Todas (inclusive as já realizadas)"],
-];
-
-/** Os campos que só mudam em "Todas": refazem as parcelas. */
-const DO_CRONOGRAMA = ["valor_total_centavos", "valor_da_parcela_centavos", "parcelas", "data"] as const;
-
-/** Como o aviso nomeia o que muda numa parcela realizada, além do valor e da data. */
-const NOMES_DOS_CAMPOS: Record<string, string> = {
-  descricao: "descrição",
-  categoria_ids: "categorias",
-  tags: "tags",
-  pessoa: "pessoa",
-  item_categoria_id: "item do planejamento",
-  fatura_mes: "fatura",
-};
-
 /** Só o que mudou: o servidor deixa como está o campo que não vem. `null` quando o valor não é número. */
-function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Mudanca | null {
+function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<AlteracaoDeParcelamento, "confirmar_realizadas"> | null {
   const centavos = emCentavos(f.valor);
   const parcelas = Number(f.parcelas);
   if (!centavos || !Number.isInteger(parcelas)) return null;
-  const mudou: Mudanca = {};
+  const mudou: Omit<AlteracaoDeParcelamento, "confirmar_realizadas"> = {};
   if (f.descricao.trim() !== p.descricao) mudou.descricao = f.descricao.trim();
   if (!mesmos(f.categoriaIds, p.categoria_ids)) mudou.categoria_ids = f.categoriaIds;
   if (!mesmos(f.tags, p.tags)) mudou.tags = f.tags;
@@ -93,12 +69,11 @@ function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Mudan
   return mudou;
 }
 
-/** "01/06 · R$ 100,00 → R$ 200,00 · 01/08/2026 · muda descrição, tags", ou "· sai". */
+/** "01/06 · R$ 100,00 → R$ 200,00 · 01/08/2026", ou "· sai". */
 function comoMuda(m: AvisoDeRealizadas["parcelas"][number], parcelas: number): string {
   const valor = m.valor_novo_centavos != null && m.valor_novo_centavos !== m.valor_centavos ? `${formatarCentavos(m.valor_centavos)} → ${formatarCentavos(m.valor_novo_centavos)}` : formatarCentavos(m.valor_centavos);
   const data = m.data_nova && m.data_nova !== m.data ? `${dataPorExtenso(m.data)} → ${dataPorExtenso(m.data_nova)}` : dataPorExtenso(m.data);
-  const outros = (m.mudou ?? []).flatMap((c) => NOMES_DOS_CAMPOS[c] ?? []);
-  return [numeroDaParcela(m.parcela, parcelas), valor, data, outros.length ? `muda ${outros.join(", ")}` : "", m.sai ? "sai" : ""].filter(Boolean).join(" · ");
+  return [numeroDaParcela(m.parcela, parcelas), valor, data, m.sai ? "sai" : ""].filter(Boolean).join(" · ");
 }
 
 /** "1 de fatura paga", "2 realizadas de fatura ainda não paga", "1 alterada à mão": só os tipos que saem. */
@@ -112,10 +87,10 @@ function tiposQueSaem(a: AvisoDeExclusao, noCartao: boolean): string[] {
 }
 
 /** Corrige ou exclui o parcelamento; as duas mudam a regra e precisam de internet (ADR 0011). */
-export function TelaDoParcelamento({ id, parcela }: { id: string; parcela?: number }) {
+export function TelaDoParcelamento({ id }: { id: string }) {
   const { dados: parcelamentos, semDados } = useParcelamentos();
   const parcelamento = parcelamentos?.find((p) => p.id === id);
-  if (parcelamento) return <Correcao parcelamento={parcelamento} parcela={parcela && parcela <= parcelamento.parcelas ? parcela : undefined} />;
+  if (parcelamento) return <Correcao parcelamento={parcelamento} />;
   return (
     <section>
       <h2>Parcelamento</h2>
@@ -125,28 +100,16 @@ export function TelaDoParcelamento({ id, parcela }: { id: string; parcela?: numb
   );
 }
 
-/**
- * O formulário nasce com o parcelamento que a primeira leitura trouxe; a releitura não apaga o que se digita.
- * Aberto de uma parcela (`parcela`), pergunta o alcance da mudança e a classificação começa com a dela, que
- * pode ter mudado só nela: o que vai é o que a pessoa mexeu; sem ela, a mudança vale para todas.
- */
-function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parcela?: number }) {
+/** O formulário nasce com o parcelamento que a primeira leitura trouxe; a releitura não apaga o que se digita. */
+function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const id = parcelamento.id;
   const { lancamentos } = useLancamentos();
   const { contasECartoes, categorias } = useCadastro();
   const { pessoas } = usePessoas();
   const opcoesDeTags = useTags();
   const online = useConexao();
-  // O ponto de partida: o parcelamento, com a classificação da parcela de onde a tela foi aberta.
-  const [base] = useState<Parcelamento>(() => {
-    const daEdicao = parcela ? lancamentos?.find((l) => l.parcelamento_id === id && l.parcela === parcela) : undefined;
-    if (!daEdicao) return parcelamento;
-    const { descricao, categoria_ids, tags, pessoa, item_categoria_id } = daEdicao;
-    return { ...parcelamento, descricao, categoria_ids, tags, pessoa, item_categoria_id };
-  });
-  const [form, setForm] = useState<Formulario>(() => formularioDo(base));
+  const [form, setForm] = useState<Formulario>(() => formularioDo(parcelamento));
   const [aviso, setAviso] = useState<AvisoDeRealizadas | null>(null);
-  const [alcance, setAlcance] = useState<Alcance | null>(parcela ? null : "todas");
   const [avisoDeExclusao, setAvisoDeExclusao] = useState<AvisoDeExclusao | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -175,7 +138,7 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
     itemTocado,
   );
   // Sem duas categorias com item, a escolha que o parcelamento já tem fica, se a categoria dela ficou.
-  const itemEscolhido = planejamento.escolha ?? (base.item_categoria_id && form.categoriaIds.includes(base.item_categoria_id) ? base.item_categoria_id : null);
+  const itemEscolhido = planejamento.escolha ?? (parcelamento.item_categoria_id && form.categoriaIds.includes(parcelamento.item_categoria_id) ? parcelamento.item_categoria_id : null);
 
   const mudar = (mudanca: Partial<Formulario>) => {
     setForm({ ...form, ...mudanca });
@@ -184,14 +147,12 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
   async function salvar(confirmarRealizadas: boolean) {
-    const alteracao = alteracaoDo(form, base, itemEscolhido);
+    const alteracao = alteracaoDo(form, parcelamento, itemEscolhido);
     if (!alteracao) return setErro("Digite o valor e o número de parcelas.");
     if (Object.keys(alteracao).length === 0) return setErro("Nada mudou.");
-    if (!alcance) return setErro("Escolha a que parcelas a mudança vale: só esta, esta e as próximas ou todas.");
-    if (alcance !== "todas" && DO_CRONOGRAMA.some((c) => c in alteracao)) return setErro('Valor, parcelas e data só mudam em "Todas".');
     setErro("");
     setEnviando(true);
-    const { aviso: novoAviso, motivo } = await corrigirParcelamento(id, { ...alteracao, alcance, parcela: alcance === "todas" ? undefined : parcela, confirmar_realizadas: confirmarRealizadas });
+    const { aviso: novoAviso, motivo } = await corrigirParcelamento(id, { ...alteracao, confirmar_realizadas: confirmarRealizadas });
     setEnviando(false);
     if (novoAviso) return setAviso(novoAviso);
     if (motivo) return setErro(`Não foi possível corrigir: ${motivo}.`);
@@ -257,7 +218,7 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
         <label htmlFor="data-do-parcelamento">{noCartao ? "Data da compra" : "Primeira parcela"}</label>
         <input id="data-do-parcelamento" type="date" value={form.data} onChange={(e) => e.target.value && mudar({ data: e.target.value })} />
       </div>
-      <p className="vazio">Valor, parcelas e data refazem todas as parcelas, menos as que alguém mudou à mão.</p>
+      <p className="vazio">Valor, parcelas e data refazem as parcelas, menos as que alguém mudou à mão.</p>
 
       <h3>Categorias</h3>
       <div className="fileira rolavel">
@@ -280,36 +241,11 @@ function Correcao({ parcelamento, parcela }: { parcelamento: Parcelamento; parce
           </button>
         ))}
       </div>
-      {parcela ? (
-        <>
-          <h3>A mudança vale para</h3>
-          <div className="alternancia empilhada" role="group" aria-label="A mudança vale para">
-            {ALCANCES.map(([valor, nome]) => (
-              <button
-                type="button"
-                key={valor}
-                className={alcance === valor ? "" : "secundario"}
-                aria-pressed={alcance === valor}
-                onClick={() => {
-                  setAlcance(valor);
-                  setAviso(null);
-                }}
-              >
-                {nome}
-              </button>
-            ))}
-          </div>
-          <p className="vazio">
-            Aberto da parcela {numeroDaParcela(parcela, parcelamento.parcelas)}. Descrição, categorias, tags e pessoa valem para as parcelas escolhidas, também as alteradas à mão.
-          </p>
-        </>
-      ) : (
-        <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas e as alteradas à mão.</p>
-      )}
+      <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas.</p>
 
       {aviso && (
         <div className="aviso" role="group" aria-label="Parcelas realizadas que mudam">
-          <p>Estas parcelas já foram realizadas: a correção muda o histórico de algo já realizado. Nada foi gravado ainda.</p>
+          <p>Estas parcelas já foram realizadas e mudam com a correção; nada foi gravado ainda.</p>
           <ul>
             {aviso.parcelas.map((m) => (
               <li key={m.id}>{comoMuda(m, Number(form.parcelas) || parcelamento.parcelas)}</li>

@@ -331,7 +331,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                     </a>
                   )}
                   {l.parcelamento_id && !l.naoEnviado && (
-                    <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}${l.parcela ? `/${l.parcela}` : ""}`} aria-label={`Parcelamento ${titulo}`}>
+                    <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
                       Parcelamento
                     </a>
                   )}

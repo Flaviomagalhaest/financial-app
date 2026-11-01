@@ -220,17 +220,10 @@ test("corrige o parcelamento pela tela e confirma antes de mudar as parcelas rea
   await expect(page.getByLabel("parcelas", { exact: true })).toHaveValue("6");
   await expect(page.getByLabel("Valor total")).toHaveValue("600,00");
   await page.getByLabel("Valor total").fill("1.200,00");
-  // Aberta da 5ª parcela, a tela pergunta o alcance; o total só muda em "Todas".
-  const alcance = page.getByRole("group", { name: "A mudança vale para" });
-  await alcance.getByRole("button", { name: "Esta e as próximas" }).click();
-  await page.getByRole("button", { name: "Salvar correção" }).click();
-  await expect(page.getByRole("alert")).toHaveText('Valor, parcelas e data só mudam em "Todas".');
-  await alcance.getByRole("button", { name: "Todas (inclusive as já realizadas)" }).click();
   await page.getByRole("button", { name: "Salvar correção" }).click();
 
   // A 1ª já foi realizada: o servidor não grava nada e mostra o que muda.
   const aviso = page.getByRole("group", { name: "Parcelas realizadas que mudam" });
-  await expect(aviso).toContainText("muda o histórico de algo já realizado");
   await expect(aviso).toContainText("01/06");
   await expect(aviso).toContainText("R$ 100,00 → R$ 200,00");
   await page.getByRole("button", { name: "Corrigir mesmo assim" }).click();
@@ -270,43 +263,6 @@ test("exclui o parcelamento inteiro pela tela; sem internet, corrigir e excluir 
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(0);
 });
 
-test("aberta de uma parcela, a correção da descrição vale só para ela ou para ela e as próximas", async ({ page }) => {
-  const { api, id, descricao } = await prepararParcelamento(page);
-  await page.reload();
-  const alcance = page.getByRole("group", { name: "A mudança vale para" });
-  const descricoes = async () =>
-    (await api.ler("/api/lancamentos"))
-      .filter((l: { parcelamento_id: string }) => l.parcelamento_id === id)
-      .sort((a: { parcela: number }, b: { parcela: number }) => a.parcela - b.parcela)
-      .map((l: { descricao: string }) => l.descricao);
-
-  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}/3`);
-  await page.getByLabel("Descrição").fill(`${descricao} da sala`);
-  // Sem escolher o alcance, nada vai.
-  await page.getByRole("button", { name: "Salvar correção" }).click();
-  await expect(page.getByRole("alert")).toContainText("Escolha a que parcelas a mudança vale");
-  await alcance.getByRole("button", { name: "Só esta" }).click();
-  await page.getByRole("button", { name: "Salvar correção" }).click();
-  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
-  expect(await descricoes()).toEqual([descricao, descricao, `${descricao} da sala`, descricao, descricao, descricao]);
-
-  // Aberta da 3ª de novo, a tela mostra a descrição dela, e voltar à do parcelamento só nela é uma mudança.
-  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}/3`);
-  await expect(page.getByLabel("Descrição")).toHaveValue(`${descricao} da sala`);
-  await page.getByLabel("Descrição").fill(descricao);
-  await alcance.getByRole("button", { name: "Só esta" }).click();
-  await page.getByRole("button", { name: "Salvar correção" }).click();
-  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
-  expect(await descricoes()).toEqual(Array(6).fill(descricao));
-
-  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}/4`);
-  await page.getByLabel("Descrição").fill(`${descricao} do quarto`);
-  await alcance.getByRole("button", { name: "Esta e as próximas" }).click();
-  await page.getByRole("button", { name: "Salvar correção" }).click();
-  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
-  expect(await descricoes()).toEqual([descricao, descricao, descricao, ...Array(3).fill(`${descricao} do quarto`)]);
-});
-
 test("no modo do valor da parcela, corrigir só a descrição não mexe no total", async ({ page }) => {
   // R$ 100,00 em 6 não divide por igual: a 1ª leva R$ 16,70 e as outras R$ 16,66.
   const { api, id, descricao } = await prepararParcelamento(page, 10000);
@@ -316,8 +272,6 @@ test("no modo do valor da parcela, corrigir só a descrição não mexe no total
   await expect(page.getByLabel("Valor da parcela")).toHaveValue("16,66");
   await page.getByLabel("Descrição").fill(`${descricao} da sala`);
   await page.getByRole("button", { name: "Salvar correção" }).click();
-  // A 1ª já foi realizada: mudar a classificação dela pede confirmação (ticket 142).
-  await page.getByRole("group", { name: "Parcelas realizadas que mudam" }).getByRole("button", { name: "Corrigir mesmo assim" }).click();
 
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   const [corrigido] = (await api.ler("/api/parcelamentos")).filter((p: { id: string }) => p.id === id);
@@ -342,8 +296,6 @@ test("com duas categorias com item no mês, a correção pergunta o item e grava
   await expect(aviso).toContainText("Conta no planejamento em:");
   await aviso.getByRole("button", { name: lazer.nome }).click();
   await page.getByRole("button", { name: "Salvar correção" }).click();
-  // A 1ª já foi realizada: mudar a classificação dela pede confirmação (ticket 142).
-  await page.getByRole("group", { name: "Parcelas realizadas que mudam" }).getByRole("button", { name: "Corrigir mesmo assim" }).click();
 
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   const parcelas = (await api.ler("/api/lancamentos")).filter((l: { parcelamento_id: string }) => l.parcelamento_id === id);
@@ -362,9 +314,6 @@ test("cria uma tag nova na correção e a grava em todas as parcelas", async ({ 
   await page.getByRole("button", { name: "Criar tag" }).click();
   await expect(page.getByRole("button", { name: "#Reforma" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Salvar correção" }).click();
-  await expect(page.getByRole("group", { name: "Parcelas realizadas que mudam" }).getByRole("listitem")).toHaveText([/^01\/06 · R\$ 100,00 · .* · muda tags$/]);
-  // A 1ª já foi realizada: mudar a classificação dela pede confirmação (ticket 142).
-  await page.getByRole("group", { name: "Parcelas realizadas que mudam" }).getByRole("button", { name: "Corrigir mesmo assim" }).click();
 
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   const parcelas = (await api.ler("/api/lancamentos")).filter((l: { parcelamento_id: string }) => l.parcelamento_id === id);
