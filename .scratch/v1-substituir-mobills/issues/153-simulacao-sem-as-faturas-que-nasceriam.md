@@ -1,7 +1,7 @@
 # Simulação da fatura paga sem as faturas que a mudança faria nascer
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
