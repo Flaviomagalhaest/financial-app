@@ -19,4 +19,5 @@ Ao mudar uma parcela, a pessoa escolhe "Só esta", "Esta e as próximas" ou "Tod
 - A parcela com uma mudança ainda na fila ou em conflito não pergunta o alcance: a mudança dela é "só esta", como antes.
 - A mudança de uma realizada que não é a parcela mudada (valor, data, conta ou fatura) pede a mesma confirmação da correção.
 - O conflito da versão, nos dois alcances que mudam o parcelamento, recusa o pedido (422) em vez de abrir a tela de conflito: a pessoa está com internet, confere e muda de novo.
-- A conta mudada em "todas" não muda a do parcelamento, e a mudança parcela a parcela que para no meio não é retomada pela tarefa diária (tickets 144 e 145).
+- A conta mudada em "todas" não muda a do parcelamento (ticket 144).
+- A parte parcela a parcela fica gravada no parcelamento (`mudanca_pendente`: os campos, os valores da parcela mudada e a parcela a partir da qual falta) até a última parcela mudar; se o pedido cai no meio, a tarefa diária a termina (ticket 145). Antes de gravar, o pedido confere todas as parcelas que vai mudar: a que sairia de uma fatura paga ou entraria numa recusa o pedido inteiro. Um pedido com alcance termina antes o que outro deixou pela metade no mesmo parcelamento, e recusa (422) se ainda houver pendência: a classificação de "esta e as próximas" não se junta à pendente desde a 1ª.
