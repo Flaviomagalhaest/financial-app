@@ -1,0 +1,1 @@
+ALTER TABLE favoritos ADD COLUMN IF NOT EXISTS partes text NOT NULL DEFAULT '[]'

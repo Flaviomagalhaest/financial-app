@@ -145,6 +145,7 @@ export function podeEstornar(l: ParaEstorno & { conta_id: string; naoEnviado?: b
 }
 
 /** O nome de um favorito (ou sugerido): a descrição, ou as categorias quando não há descrição. */
-export function tituloDoFavorito(f: { descricao: string; categoria_ids: string[] }, categorias: ComNome[]): string {
-  return f.descricao || f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ");
+export function tituloDoFavorito(f: { descricao: string; categoria_ids: string[]; partes?: { categoria_ids: string[] }[] }, categorias: ComNome[]): string {
+  const ids = f.categoria_ids.length ? f.categoria_ids : [...new Set((f.partes ?? []).flatMap((p) => p.categoria_ids))];
+  return f.descricao || ids.map((c) => nomePorId(categorias, c)).join(", ");
 }

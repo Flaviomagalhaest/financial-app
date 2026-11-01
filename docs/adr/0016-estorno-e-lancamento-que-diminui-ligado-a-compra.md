@@ -37,7 +37,7 @@ O **estorno avulso** é a mesma linha de `lancamentos` (`tipo` `despesa`, no car
 
 ## Adendo (ticket 138)
 
-O estorno de uma parte e o de todas as parcelas são a mesma linha de `lancamentos`, com duas colunas novas (backup na versão 28; nulo vale "não é"):
+O estorno de uma parte e o de todas as parcelas são a mesma linha de `lancamentos`, com duas colunas novas (backup na versão 29; nulo vale "não é"):
 
 - **Parte**: `estorno_de` aponta para a compra e `estorno_parte_id` para a parte. Na compra com partes, a parte é obrigatória; o estorno herda as categorias, as tags e o item dela (`acompanhar_estornos` segue a parte), e a soma dos estornos da parte não passa do valor dela, nem a de todos os estornos da compra do valor da compra. A parte que tem estorno não some nem encolhe abaixo do estornado, e as partes só se juntam sem estorno de parte. O estorno anterior à divisão da compra fica ligado à compra inteira, com a classificação que tinha.
 - **Todas as parcelas**: `estorno_parcelamento_id` aponta para o parcelamento e `estorno_de` fica vazio. É um estorno só, até `valor_total_centavos` menos o já estornado (de cada parcela e de todas), com a classificação do parcelamento (`acompanhar_estornos_do_parcelamento`, chamado onde ela muda: correção e edição em lote). Conta inteiro no mês da fatura em que aparece e trava a exclusão do parcelamento. "O banco antecipa e depois estorna" é a quitação seguida do estorno de todas, sem atalho.
