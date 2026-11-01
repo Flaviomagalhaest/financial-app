@@ -91,6 +91,7 @@ export type AvisoDeExclusao = components["schemas"]["AvisoDeExclusao"];
 export { oQueSobra, type Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
+export { chaveDaDescricao } from "./identidade";
 export type { AlteracaoDeRecorrencia, Conflito, Exclusao, ItemDaFila, ItemDeLancamento, Lancamento, NovaRecorrencia, NovoLancamento, NovoParcelamento, Recorrencia };
 export { deLancamento };
 export { identidadeDe, oferecerFavoritar, useOfertaDeFavoritar } from "./favoritos";

@@ -1,7 +1,7 @@
 # Escolher a sugestão completa a descrição?
 
 Type: grilling
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `grilling`, `domain-modeling`; HITL (decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,13 +15,17 @@ Quem digita "sa" e escolhe a sugestão "Sacolão São Jorge" salva o lançamento
 
 ## Checklist
 
-- [ ] Decidir com o dono uma das saídas e ajustar o termo **Sugestão** no `GLOSSARY.md`:
+- [x] Decidir com o dono uma das saídas e ajustar o termo **Sugestão** no `GLOSSARY.md`:
   - escolher completa a descrição com a da sugestão (sem a parcela `(n/total)`);
   - escolher completa só quando o digitado é o começo da descrição da sugestão (igual ou "começa com"), e mantém o digitado quando casou por uma palavra do meio;
   - nada muda (hoje é este o comportamento)
-- [ ] Implementar a saída escolhida em `escolher` (`web/src/lancamentos/TelaDeLancamento.tsx`), com o teste de navegador em `web/e2e/sugestao.spec.ts`
+- [x] Implementar a saída escolhida em `escolher` (`web/src/lancamentos/TelaDeLancamento.tsx`), com o teste de navegador em `web/e2e/sugestao.spec.ts`
 - [ ] Verificações do projeto rodando e PR aberto para `main`
 
 ## Notas
 
 Recomendação do agente do ticket 63: a segunda saída. Ela completa o caso comum (digitar o começo) e não troca a descrição quando o casamento foi por uma palavra do meio, em que o digitado pode ser outra coisa.
+
+## Decisão
+
+Decidido pelo dono: a segunda saída (completa só quando o digitado é o começo da descrição da sugestão). Teste de navegador escrito, mas não rodado na sessão (sem Postgres).
