@@ -52,7 +52,8 @@ test("estorna uma parte da compra: escolhe a parte, herda as categorias dela e v
   await partes.getByRole("radio", { name: /^Cortina/ }).check();
   await expect(page.getByTestId("valor")).toHaveText("R$ 40,00");
   await expect(page.getByRole("button", { name: casa.nome })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: roupa.nome })).toHaveAttribute("aria-pressed", "false");
+  // Só as categorias da parte aparecem: a da outra parte some.
+  await expect(page.getByRole("button", { name: roupa.nome })).toHaveCount(0);
   await expect(page.getByText(/ainda dá para estornar R\$ 40,00/)).toBeVisible();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
@@ -61,9 +62,10 @@ test("estorna uma parte da compra: escolhe a parte, herda as categorias dela e v
   const estorno = page.getByRole("listitem").filter({ hasText: `estorno de ${compra} — Cortina` });
   await expect(estorno).toContainText("+ R$ 40,00");
   await expect(estorno).toContainText(casa.nome);
-  const lidos = await api.ler("/api/lancamentos");
-  const gravado = lidos.find((l: { estorno_parte_id?: string }) => l.estorno_parte_id);
-  expect(gravado).toMatchObject({ valor_centavos: 4000, categoria_ids: [casa.id] });
+  // A fila sobe sozinha; espera o servidor ter o estorno.
+  await expect
+    .poll(async () => (await api.ler("/api/lancamentos")).find((l: { estorno_parte_id?: string }) => l.estorno_parte_id))
+    .toMatchObject({ valor_centavos: 4000, categoria_ids: [casa.id] });
 
   // A parte toda devolvida não se escolhe de novo; a outra, sim.
   await page.getByRole("listitem").filter({ hasText: compra }).filter({ hasText: "estornada em" }).getByRole("link", { name: `Estornar ${compra}` }).click();
@@ -103,9 +105,9 @@ test("estorna todas as parcelas num estorno só, ligado ao parcelamento, que con
 
   const estorno = page.getByRole("listitem").filter({ hasText: "estorno de todas as parcelas" });
   await expect(estorno).toContainText("+ R$ 300,00");
-  const lidos = await api.ler("/api/lancamentos");
-  const gravado = lidos.find((l: { estorno_parcelamento_id?: string }) => l.estorno_parcelamento_id);
-  expect(gravado).toMatchObject({ valor_centavos: 30000, estorno_de: null, categoria_ids: [roupa.id], tags: ["troca"] });
+  await expect
+    .poll(async () => (await api.ler("/api/lancamentos")).find((l: { estorno_parcelamento_id?: string }) => l.estorno_parcelamento_id))
+    .toMatchObject({ valor_centavos: 30000, estorno_de: null, categoria_ids: [roupa.id], tags: ["troca"] });
 
   // Não sobra nada: nenhuma parcela oferece mais "Estornar".
   await expect(page.getByRole("link", { name: `Estornar ${compra}` })).toHaveCount(0);
