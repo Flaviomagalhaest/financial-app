@@ -764,6 +764,7 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
           ...lancamento,
           item_categoria_id: escolha ?? antes?.item_categoria_id,
           estorno_de: antes?.estorno_de,
+          estorno_avulso: antes?.estorno_avulso,
           mes,
         })
       : null;
