@@ -6,7 +6,7 @@ from datetime import date
 import psycopg
 import pytest
 
-from app import lancamentos
+from app import lancamentos, sugestao
 from app.tarefa_diaria import fazer_tarefa_diaria
 from tests.conftest import Casal
 from tests.test_lancamentos import lancamento
@@ -245,3 +245,9 @@ def test_a_compra_com_parte_de_categoria_arquivada_nao_e_sugerida(casal: Casal):
     casal.pedir("flavio", "PATCH", f"/api/categorias/{fone}", json={"arquivada": True})
 
     assert indice(casal) == []
+
+
+def test_chave_so_tira_parcela_com_digitos_ascii():
+    """Igual ao aparelho: o `\\d` do JavaScript não pega dígitos de outras escritas."""
+    assert sugestao.chave("Geladeira (2/10)") == "geladeira"
+    assert sugestao.chave("Geladeira (٢/١٠)") == "geladeira (٢/١٠)"
