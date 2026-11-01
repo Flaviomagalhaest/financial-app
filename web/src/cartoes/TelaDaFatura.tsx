@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
 import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, usePessoas, type Fatura } from "../dados";
-import { eCredito, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
+import { eCredito, eEstorno, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { mesEmQueConta } from "../dados/aviso";
 import { dataPorExtenso, mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
@@ -110,7 +110,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   );
   const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
-  const estornosCentavos = compras.filter((l) => l.estorno_de && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
+  const estornosCentavos = compras.filter((l) => eEstorno(l) && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
   const ligacoes = useMemo(() => new Map(compras.map((l) => [l.id, ligacaoDoEstorno(l, indice, categorias)])), [compras, indice, categorias]);
   const tags = useMemo(() => [...new Set(compras.flatMap((l) => l.tags ?? []))].sort((a, b) => a.localeCompare(b, "pt-BR")), [compras]);
 
@@ -179,6 +179,11 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
           Ajustar fatura
         </button>
       )}
+      {fatura && !paga && (
+        <a className="botao secundario" href={`#/credito/${cartaoId}`}>
+          Lançar crédito
+        </a>
+      )}
       {fatura && !online && <p className="vazio">{paga ? "Corrigir" : "Ajustar"} a fatura precisa de internet.</p>}
       {fatura && ajustando && <FormularioDeAjuste cartaoId={cartaoId} fatura={fatura} aoFechar={() => setAjustando(false)} aoSalvar={buscar} />}
       {fatura && corrigindo && <FormularioDeCorrecao cartaoId={cartaoId} doCartao={doCartao} fatura={fatura} compras={compras} aoFechar={() => setCorrigindo(false)} aoSalvar={buscar} />}
@@ -223,7 +228,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
                     <ValorComSinal l={l} />
                   </div>
                   <p className="vazio">
-                    {nomePorId(contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")}
+                    {[nomePorId(contasECartoes, l.conta_id), l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")].filter(Boolean).join(" · ")}
                     {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                     {l.situacao === "previsto" && " · previsto"}
                     {l.pessoa ? ` · ${nomeDe(l.pessoa)}` : ""}

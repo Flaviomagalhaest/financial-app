@@ -2252,7 +2252,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Situacao
@@ -2270,6 +2273,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Estorno De */
             estorno_de?: string | null;
+            /** Estorno Avulso */
+            estorno_avulso?: boolean | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /**
@@ -2774,7 +2779,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /** Situacao */
             situacao?: ("previsto" | "realizado") | null;
@@ -2789,6 +2797,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Estorno De */
             estorno_de?: string | null;
+            /** Estorno Avulso */
+            estorno_avulso?: boolean | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /** Acao Em */

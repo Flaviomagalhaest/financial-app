@@ -119,7 +119,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
     const cartao = cartoes.find((c) => c.id === l.conta_id);
     if (!mesmoFechada && cartao && l.mes && !l.naoEnviado) {
       const situacao = await situacaoDaFatura(cartao.titular_id ?? cartao.id, l.mes);
-      if (situacao && situacao !== "aberta" && !l.estorno_de) return setSugerindoEstorno(l.id);
+      if (situacao && situacao !== "aberta" && !l.estorno_de && !l.estorno_avulso) return setSugerindoEstorno(l.id);
     }
     if (!window.confirm(`Excluir "${l.descricao || "este lançamento"}"?`)) return;
     setErro("");
@@ -243,7 +243,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                 <ValorComSinal l={l} />
               </div>
               <p className="vazio">
-                {dataPorExtenso(l.data)} · {nome(contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
+                {[dataPorExtenso(l.data), nome(contasECartoes, l.conta_id), l.categoria_ids.map((c) => nome(categorias, c)).join(", ")].filter(Boolean).join(" · ")}
                 {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                 {ligacao && ` · ${ligacao}`}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}

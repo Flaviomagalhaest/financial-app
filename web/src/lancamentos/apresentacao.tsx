@@ -11,16 +11,19 @@ export const nomePorId = (lista: ComNome[], id: string) => lista.find((i) => i.i
 
 /** A descrição, ou as categorias quando não há descrição. */
 export function tituloDoLancamento(l: Pick<NovoLancamento, "descricao" | "categoria_ids">, categorias: ComNome[]): string {
-  return l.descricao || l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ");
+  return l.descricao || l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ") || "Crédito";
 }
 
 /** `3` de `10` vira `03/10`, como a fatura mostra a parcela. */
 export const numeroDaParcela = (parcela: number, parcelas: number) => `${String(parcela).padStart(2, "0")}/${String(parcelas).padStart(2, "0")}`;
 
-/** O estorno é uma despesa que devolve dinheiro: aparece como crédito (ADR 0016). */
-export const eCredito = (l: Pick<NovoLancamento, "tipo" | "estorno_de">) => l.tipo !== "despesa" || !!l.estorno_de;
+/** O estorno, ligado a uma compra ou avulso, é uma despesa que devolve dinheiro (ADR 0016). */
+export const eEstorno = (l: Pick<NovoLancamento, "estorno_de" | "estorno_avulso">) => !!l.estorno_de || !!l.estorno_avulso;
 
-export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_centavos" | "estorno_de"> }) {
+/** O estorno é uma despesa que devolve dinheiro: aparece como crédito (ADR 0016). */
+export const eCredito = (l: Pick<NovoLancamento, "tipo" | "estorno_de" | "estorno_avulso">) => l.tipo !== "despesa" || eEstorno(l);
+
+export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_centavos" | "estorno_de" | "estorno_avulso"> }) {
   return (
     <span className={eCredito(l) ? "receita" : "despesa"}>
       {eCredito(l) ? "+" : "−"} {formatarCentavos(l.valor_centavos)}
@@ -28,7 +31,7 @@ export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_c
   );
 }
 
-type ParaEstorno = Pick<NovoLancamento, "id" | "tipo" | "valor_centavos" | "data" | "estorno_de" | "descricao" | "categoria_ids">;
+type ParaEstorno = Pick<NovoLancamento, "id" | "tipo" | "valor_centavos" | "data" | "estorno_de" | "estorno_avulso" | "descricao" | "categoria_ids">;
 
 /** Os estornos de cada compra, pelo id da compra, e as compras pelo id, para ligar uma ponta à outra. */
 export function indiceDeEstornos<L extends ParaEstorno>(lancamentos: L[]) {
@@ -49,8 +52,9 @@ export function restanteDaCompra(compra: ParaEstorno, indice: IndiceDeEstornos, 
   return compra.valor_centavos - estornado;
 }
 
-/** "estorno de ..." no estorno e "estornada em ..." na compra; vazio no resto. */
+/** "estorno de ..." no estorno, "estorno avulso" no avulso e "estornada em ..." na compra; vazio no resto. */
 export function ligacaoDoEstorno(l: ParaEstorno, indice: IndiceDeEstornos, categorias: ComNome[]): string {
+  if (l.estorno_avulso) return "estorno avulso";
   if (l.estorno_de) {
     const compra = indice.compras.get(l.estorno_de);
     return `estorno de ${compra ? tituloDoLancamento(compra, categorias) : "uma compra"}`;
@@ -65,7 +69,7 @@ export function ligacaoDoEstorno(l: ParaEstorno, indice: IndiceDeEstornos, categ
 export function podeEstornar(l: ParaEstorno & { conta_id: string; naoEnviado?: boolean; conflito?: boolean; exclusao?: unknown; recusa?: string }, cartoes: Cartao[], indice: IndiceDeEstornos): boolean {
   return (
     l.tipo === "despesa" &&
-    !l.estorno_de &&
+    !eEstorno(l) &&
     !l.naoEnviado &&
     !l.conflito &&
     !l.exclusao &&

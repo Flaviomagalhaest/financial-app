@@ -415,3 +415,22 @@ def test_correcao_nao_reabre_a_fatura(casal: Casal, abril_paga):
     assert resposta.status_code == 422
     assert resposta.json()["detail"] == "a correção não reabre a fatura: ela continua paga"
     assert abril(casal, abril_paga) == ABRIL_PAGA
+
+
+def test_estorno_avulso_na_fatura_paga_e_recusado_e_o_de_depois_entra(casal: Casal, abril_paga):
+    def creditar(data: str):
+        return casal.pedir(
+            "flavio",
+            "POST",
+            "/api/lancamentos",
+            json=lancamento(
+                abril_paga.cartao, [], data=data, valor_centavos=37, estorno_avulso=True
+            ),
+        )
+
+    em_abril = creditar("2026-04-20")
+    em_maio = creditar("2026-05-08")
+
+    assert recusado(em_abril)
+    assert em_maio.status_code == 201, em_maio.text
+    assert abril(casal, abril_paga) == ABRIL_PAGA

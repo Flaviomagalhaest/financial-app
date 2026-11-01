@@ -3745,8 +3745,7 @@
                   "type": "string",
                   "format": "uuid"
                 },
-                "type": "array",
-                "minItems": 1
+                "type": "array"
               },
               {
                 "type": "null"
@@ -4004,8 +4003,7 @@
                   "type": "string",
                   "format": "uuid"
                 },
-                "type": "array",
-                "minItems": 1
+                "type": "array"
               },
               {
                 "type": "null"
@@ -4880,8 +4878,7 @@
                   "type": "string",
                   "format": "uuid"
                 },
-                "type": "array",
-                "minItems": 1
+                "type": "array"
               },
               {
                 "type": "null"
@@ -6458,8 +6455,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "situacao": {
             "type": "string",
@@ -6511,6 +6508,17 @@
               }
             ],
             "title": "Estorno De"
+          },
+          "estorno_avulso": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Avulso"
           },
           "item_categoria_id": {
             "anyOf": [
@@ -6651,7 +6659,6 @@
           "valor_centavos",
           "data",
           "conta_id",
-          "categoria_ids",
           "situacao",
           "mes",
           "atrasado",
@@ -7867,8 +7874,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "situacao": {
             "anyOf": [
@@ -7928,6 +7935,17 @@
             ],
             "title": "Estorno De"
           },
+          "estorno_avulso": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Avulso"
+          },
           "item_categoria_id": {
             "anyOf": [
               {
@@ -7959,8 +7977,7 @@
           "tipo",
           "valor_centavos",
           "data",
-          "conta_id",
-          "categoria_ids"
+          "conta_id"
         ],
         "title": "NovoLancamento"
       },

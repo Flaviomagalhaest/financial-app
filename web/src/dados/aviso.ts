@@ -93,6 +93,7 @@ export type Contagem = {
   categoria_ids: string[];
   item_categoria_id?: string | null;
   estorno_de?: string | null;
+  estorno_avulso?: boolean | null;
   situacao: "previsto" | "realizado";
   /** O mês em que conta (`AAAA-MM-01`); `null` quando o aparelho não sabe (cartão sem fatura). */
   mes: string | null;
@@ -133,8 +134,8 @@ function trocar(p: Planejamento, antes?: Contagem | null, depois?: Contagem | nu
     if (!l || !doMes(p, l)) continue;
     const comItem = categoriasComItem(p, l.categoria_ids);
     const [conta, fica] = ondeConta(new Set(comItem), l.item_categoria_id, atual);
-    // O estorno diminui o item da compra que ele devolve.
-    if (conta) somas.get(conta)![l.situacao] += sinal * (l.estorno_de ? -l.valor_centavos : l.valor_centavos);
+    // O estorno diminui o item da compra que ele devolve; o avulso, o que ele escolhe.
+    if (conta) somas.get(conta)![l.situacao] += sinal * (l.estorno_de || l.estorno_avulso ? -l.valor_centavos : l.valor_centavos);
     if (sinal > 0 && fica) aEscolher = [...aEscolher, { lancamento_id: id, item_categoria_id: conta, categorias_com_item: [...comItem].sort() }];
   }
   const itens = p.itens.map((i) => {
