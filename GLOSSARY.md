@@ -270,7 +270,7 @@ Crédito que aparece como linha própria na fatura sem uma compra identificável
 _Avoid_: crédito avulso, reembolso
 
 **Parte da compra**:
-Pedaço de uma compra, com valor, categorias, tags e pessoa próprios, para a compra que junta coisas diferentes (ex.: roupa da esposa, fone do Flávio e cortina do casal no mesmo pedido); a soma das partes é o valor da compra, que aparece como uma linha só na fatura. Uma compra tem duas partes ou mais. Na compra parcelada e na recorrência, cada parcela ou ocorrência se divide pelas partes na mesma proporção, e o que vale é o valor dela.
+Pedaço de uma compra, com valor, categorias, tags e pessoa próprios, para a compra que junta coisas diferentes (ex.: roupa da esposa, fone do Flávio e cortina do casal no mesmo pedido); a soma das partes é o valor da compra, que aparece como uma linha só na fatura. Uma compra tem duas partes ou mais. Na compra parcelada e na recorrência, cada parcela ou ocorrência se divide pelas partes na mesma proporção (os centavos do arredondamento vão para a maior parte, a primeira no empate), e o que vale é o valor dela; a parcela que muda de valor se divide de novo na proporção que tinha.
 _Avoid_: item da compra (item é do planejamento), subitem, rateio
 
 **Compra cancelada**:
