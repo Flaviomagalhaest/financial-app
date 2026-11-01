@@ -1,7 +1,7 @@
 # Teste e2e da Hoje falha nos primeiros dias do mês
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
