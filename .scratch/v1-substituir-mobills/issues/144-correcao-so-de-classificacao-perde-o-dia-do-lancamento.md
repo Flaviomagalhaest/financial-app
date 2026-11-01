@@ -1,7 +1,7 @@
 # Correção só de classificação faz o parcelamento perder o dia do lançamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
