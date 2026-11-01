@@ -250,7 +250,7 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     # O DSQL aceita até 3.000 linhas por transação; no cartão, cada parcela pode criar a fatura.
     por_lote = max(1, LINHAS_POR_LOTE // (2 + len(categorias) + len(tags)))
     proximas = range(geradas + 1, min(regra.parcelas, geradas + por_lote) + 1)
-    puladas = [] if no_cartao else _puladas_que_chegaram(conn, regra, geradas)
+    puladas = _puladas_que_chegaram(conn, regra, geradas)
     if puladas:
         numeros: Sequence[int] = puladas[:por_lote]
     elif proximas:
@@ -321,7 +321,9 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
 
 def _puladas_que_chegaram(conn, regra: Parcelamento, geradas: int) -> list[int]:
     """As parcelas do boleto que a geração pulou por estarem antes de hoje (não têm lançamento,
-    nem excluído) e que a data corrigida pôs em hoje ou depois."""
+    nem excluído) e que a data corrigida pôs em hoje ou depois. O cartão não pula nenhuma."""
+    if faturas.ler_cartao(conn, regra.conta_id) is not None:
+        return []
     existem = {
         n
         for (n,) in conn.execute(
@@ -407,11 +409,10 @@ def _falta_conserto(conn, id: UUID) -> bool:
     [regra] = lidos
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
     pendente = _classificacao_pendente(conn, id)
-    no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     return (
         geradas < regra.parcelas
         or bool(pendente)
-        or (not no_cartao and bool(_puladas_que_chegaram(conn, regra, geradas)))
+        or bool(_puladas_que_chegaram(conn, regra, geradas))
         or bool(_correcoes(conn, regra, geradas, pendente))
     )
 
@@ -542,6 +543,9 @@ def _por_lote(regra: Parcelamento) -> int:
     return max(1, LINHAS_POR_LOTE // (10 + 2 * (len(regra.categoria_ids) + len(regra.tags))))
 
 
+_Acao = Literal["excluir", "reviver", "atualizar", "pular"]
+
+
 @dataclass
 class _Correcao:
     """O que falta fazer numa parcela para ela ficar como o parcelamento manda: sair, voltar
@@ -551,7 +555,7 @@ class _Correcao:
     id: UUID
     versao: int
     parcela: int
-    acao: Literal["excluir", "reviver", "atualizar", "pular"]
+    acao: _Acao
     mudou: list[str]
     valor: int
     dia: date
@@ -645,7 +649,7 @@ def _correcoes(
         a_mao,
         pulada,
     ) in parcelas:
-        acao: Literal["excluir", "reviver", "atualizar", "pular"] = "atualizar"
+        acao: _Acao = "atualizar"
         if excluida:
             if n > regra.parcelas or not (pulada or geradas < n):
                 continue
@@ -745,7 +749,8 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
     realizadas = [
         t.aviso
         for t in _correcoes(conn, nova, geradas_depois, classificacao)
-        if t.realizada and t.acao != "reviver" and t.muda_o_cronograma
+        # A que sai pulada sendo realizada já estava excluída (o encolher a tirou): nada muda.
+        if t.realizada and t.acao not in ("reviver", "pular") and t.muda_o_cronograma
     ]
     if realizadas and not alteracao.confirmar_realizadas:
         raise RealizadasMudam(

@@ -659,19 +659,25 @@ def test_mudar_o_calendario_daqui_para_frente_renumera_sem_mexer_no_passado(
     ]
 
 
-def test_mudar_o_inicio_para_o_passado_pula_o_que_passou_sem_realizar(casal: Casal):
-    conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
-    nova = recorrencia(
-        conta,
-        [assinatura],
-        descricao="Spotify",
-        valor_centavos=2190,
-        tipo_do_valor="fixo",
-        automatico=True,
-        inicio="2026-11-10",
-        vezes=4,
+def spotify(casal: Casal, **campos) -> dict:
+    nova = (
+        recorrencia(
+            casal.conta(),
+            [casal.categoria("Assinaturas")],
+            descricao="Spotify",
+            valor_centavos=2190,
+            tipo_do_valor="fixo",
+            inicio="2026-11-10",
+            vezes=4,
+        )
+        | campos
     )
-    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    assert casal.pedir("flavio", "POST", "/api/recorrencias", json=nova).status_code == 201
+    return nova
+
+
+def test_mudar_o_inicio_para_o_passado_tira_o_que_passou_sem_realizar(casal: Casal):
+    nova = spotify(casal, automatico=True)
 
     resposta = mudar(casal, nova["id"], 1, inicio="2026-09-10")
     fazer_tarefa_diaria(casal.client.app.state.url)
@@ -685,13 +691,38 @@ def test_mudar_o_inicio_para_o_passado_pula_o_que_passou_sem_realizar(casal: Cas
     [saldo] = [c["saldo_centavos"] for c in casal.pedir("flavio", "GET", "/api/contas").json()]
     assert saldo == 0
 
-    mudar(casal, nova["id"], 1, inicio="2026-11-10")
 
+def test_o_que_a_mudanca_tirou_do_passado_volta_quando_a_data_volta_para_frente(casal: Casal):
+    nova = spotify(casal, automatico=True)
+    assert mudar(casal, nova["id"], 1, inicio="2026-09-10").status_code == 200
+
+    resposta = mudar(casal, nova["id"], 1, inicio="2026-11-10")
+
+    assert resposta.status_code == 200
     assert [(l["ocorrencia"], l["data"]) for l in gerados(casal, nova["id"])] == [
         (1, "2026-11-10"),
         (2, "2026-12-10"),
         (3, "2027-01-10"),
         (4, "2027-02-10"),
+    ]
+
+
+def test_virar_automatica_nao_realiza_o_atrasado(casal: Casal, monkeypatch: pytest.MonkeyPatch):
+    no_dia(monkeypatch, "2026-09-01")
+    nova = spotify(casal, inicio="2026-09-10")
+    no_dia(monkeypatch, HOJE.isoformat())
+
+    assert mudar(casal, nova["id"], 1, automatico=True).status_code == 200
+    fazer_tarefa_diaria(casal.client.app.state.url)
+
+    # Setembro e outubro atrasados seguem esperando o casal; daqui para frente, automático.
+    assert [
+        (l["ocorrencia"], l["situacao"], l["automatico"]) for l in gerados(casal, nova["id"])
+    ] == [
+        (1, "previsto", False),
+        (2, "previsto", False),
+        (3, "previsto", True),
+        (4, "previsto", True),
     ]
 
 

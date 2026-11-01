@@ -522,26 +522,31 @@ def _por_lote(regra: Recorrencia) -> int:
 class _Retirada(NamedTuple):
     id: UUID
     ocorrencia: int
-    # A que a data nova levou para antes de hoje sai pulada: a geração não a traz de volta.
-    pulada: bool = False
+    # O que a data nova levou para antes de hoje: a geração não o traz de volta.
+    antes_de_hoje: bool = False
 
 
-def _trazer_de_volta_as_puladas(conn, regra: Recorrencia, desde: int) -> None:
-    """O previsto que a regra tirou e que a data de hoje da regra põe entre hoje e o horizonte,
-    dentro do fim: `geradas` recua até antes dele, e a geração o traz de volta."""
+def _recuar_geradas(conn, id: UUID, ocorrencia: int) -> None:
+    """A geração volta a passar pela ocorrência e traz de volta o que a regra tirou dela."""
+    conn.execute(
+        "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s", (ocorrencia - 1, id)
+    )
+
+
+def _recuar_ate_a_que_a_regra_tirou(conn, regra: Recorrencia, desde: int) -> None:
+    """Acha o primeiro previsto que a regra tirou e que, com as datas de agora, cai entre hoje e
+    o horizonte, dentro do fim: `geradas` recua até antes dele, e a geração o traz de volta
+    (com os que vêm depois)."""
     dia_de_hoje, ultimo_dia = lancamentos.hoje(), horizonte()
     for (n,) in conn.execute(
-        "SELECT ocorrencia FROM lancamentos WHERE recorrencia_id = %s AND ocorrencia >= %s"
-        " AND ocorrencia >= %s AND situacao = 'previsto' AND excluido_em IS NOT NULL"
-        " AND excluido_pela_regra ORDER BY ocorrencia",
+        "SELECT ocorrencia FROM lancamentos WHERE recorrencia_id = %s"
+        " AND ocorrencia >= GREATEST(%s, %s) AND situacao = 'previsto'"
+        " AND excluido_em IS NOT NULL AND excluido_pela_regra ORDER BY ocorrencia",
         (regra.id, desde, regra.ocorrencia_do_inicio),
     ).fetchall():
         dia = data_da_ocorrencia(regra, n)
         if dia_de_hoje <= dia <= ultimo_dia and not _fora_do_fim(regra, n, dia):
-            conn.execute(
-                "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
-                (n - 1, regra.id),
-            )
+            _recuar_geradas(conn, regra.id, n)
             return
 
 
@@ -553,11 +558,12 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     está por inteiro). O que sai faz `geradas` recuar até antes dele, para a geração trazê-lo de
     volta quando o fim sair ou o horizonte chegar. Não toca no realizado. Nada vira lançamento
     antes de hoje (ticket 87): o previsto que a data nova leva de hoje ou depois para antes sai
-    pulado (como a ocorrência que já tinha passado quando a regra nasceu), e o que saiu assim
-    volta se a data nova o trouxer para hoje ou depois. O que já está como a regra manda não
-    conta, por isso o lote seguinte sempre anda."""
+    (como a ocorrência que já tinha passado quando a regra nasceu), e o que saiu assim volta se
+    a data nova o trouxer para hoje ou depois; o atrasado não vira automático, que a tarefa
+    diária realizaria com a data passada. O que já está como a regra manda não conta, por isso
+    o lote seguinte sempre anda."""
     [regra] = _ler(conn, "id = %s", (id,))
-    _trazer_de_volta_as_puladas(conn, regra, desde)
+    _recuar_ate_a_que_a_regra_tirou(conn, regra, desde)
     previstos = conn.execute(
         f"SELECT l.id, l.ocorrencia, l.data, l.tipo, l.valor_centavos, l.descricao, l.conta_id,"
         f" l.pessoa, COALESCE(l.automatico, false), {lancamentos.VERSAO}, l.item_categoria_id,"
@@ -584,7 +590,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
     regras = _campos_da_regra(regra)
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
-    trabalho: list[tuple[UUID, int, list[str], date] | _Retirada] = []
+    trabalho: list[tuple[UUID, int, list[str], date, bool] | _Retirada] = []
     for (
         lancamento_id,
         n,
@@ -621,12 +627,13 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             trabalho.append(_Retirada(lancamento_id, n))
             continue
         if dia_novo < dia_de_hoje <= dia:
-            trabalho.append(_Retirada(lancamento_id, n, pulada=True))
+            trabalho.append(_Retirada(lancamento_id, n, antes_de_hoje=True))
             continue
         quer = regras | {"data": dia_novo}
         mudou = [campo for campo in quer if quer[campo] != tem[campo]]
-        if mudou or automatico != regra.automatico:
-            trabalho.append((lancamento_id, versao, mudou, quer["data"]))
+        fica_automatico = regra.automatico and (automatico or dia_novo >= dia_de_hoje)
+        if mudou or automatico != fica_automatico:
+            trabalho.append((lancamento_id, versao, mudou, quer["data"], fica_automatico))
     tags_da_regra = _tags_da_regra(conn, id)
     agora = datetime.now(UTC)
     por_lote = _por_lote(regra)
@@ -637,13 +644,10 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             conn.execute(
                 "UPDATE lancamentos SET excluido_pela_regra = true WHERE id = %s", (item.id,)
             )
-            if not item.pulada:
-                conn.execute(
-                    "UPDATE recorrencias SET geradas = LEAST(geradas, %s) WHERE id = %s",
-                    (item.ocorrencia - 1, id),
-                )
+            if not item.antes_de_hoje:
+                _recuar_geradas(conn, id, item.ocorrencia)
             continue
-        lancamento_id, versao, mudou, dia = item
+        lancamento_id, versao, mudou, dia, fica_automatico = item
         nova = subir_versao(
             conn,
             lancamento_id,
@@ -658,7 +662,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
                 regra.conta_id,
                 regra.pessoa,
                 dia,
-                regra.automatico,
+                fica_automatico,
                 lancamentos.mes_em_que_conta(conn, regra.conta_id, dia),
                 regra.item_categoria_id,
                 usuario,

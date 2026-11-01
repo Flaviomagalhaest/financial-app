@@ -943,28 +943,62 @@ def test_corrigir_a_data_de_um_cartao_com_parcela_realizada_pede_confirmacao(cas
     assert {l["data"] for l in parcelas(casal, novo["id"])} == {"2026-10-20"}
 
 
-def test_corrigir_a_data_para_o_passado_pula_as_parcelas_que_passaram_sem_realizar_e_elas_voltam(
-    casal: Casal,
-):
+def test_corrigir_a_data_para_o_passado_pula_as_parcelas_que_passaram_sem_realizar(casal: Casal):
     novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", automatico=True)
     assert [l["situacao"] for l in parcelas(casal, novo["id"])] == ["previsto"] * 3
 
-    para_tras = mudar(casal, novo["id"], data="2026-09-10")
+    resposta = mudar(casal, novo["id"], data="2026-09-10")
 
     # Setembro e outubro passaram: saem como puladas, nada vira realizado (ticket 87).
-    assert para_tras.status_code == 200
-    assert para_tras.json()["parcelas_puladas"] == 2
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas_puladas"] == 2
     assert valores(casal, novo["id"]) == [(3, 33333, "2026-11-10", "previsto")]
     [conta] = casal.pedir("flavio", "GET", "/api/contas").json()
     assert conta["saldo_centavos"] == 0
 
-    para_frente = mudar(casal, novo["id"], data="2026-11-10")
 
-    assert para_frente.json()["parcelas_puladas"] == 0
+def test_a_parcela_que_a_correcao_pulou_volta_quando_a_data_volta_para_hoje_ou_depois(
+    casal: Casal,
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", automatico=True)
+    assert mudar(casal, novo["id"], data="2026-09-10").status_code == 200
+
+    resposta = mudar(casal, novo["id"], data="2026-10-28")
+
+    # A de hoje volta e se realiza hoje, como a automática que chega na data.
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas_puladas"] == 0
     assert valores(casal, novo["id"]) == [
-        (1, 33334, "2026-11-10", "previsto"),
-        (2, 33333, "2026-12-10", "previsto"),
-        (3, 33333, "2027-01-10", "previsto"),
+        (1, 33334, "2026-10-28", "realizado"),
+        (2, 33333, "2026-11-28", "previsto"),
+        (3, 33333, "2026-12-28", "previsto"),
+    ]
+
+
+def test_crescer_de_novo_com_a_realizada_que_saiu_no_passado_nao_pede_confirmacao(casal: Casal):
+    novo = criar_geladeira(
+        casal,
+        casal.conta(),
+        lancada_em="2026-08-01",
+        data="2026-08-10",
+        parcelas=4,
+        automatico=True,
+    )
+    assert [l["situacao"] for l in parcelas(casal, novo["id"])] == ["realizado"] * 3 + ["previsto"]
+    encolheu = mudar(
+        casal, novo["id"], parcelas=2, valor_total_centavos=100000, confirmar_realizadas=True
+    )
+    assert encolheu.status_code == 200
+
+    # A 3ª, realizada em 10/10, saiu e continua fora: ela sai pulada, sem aviso.
+    resposta = mudar(casal, novo["id"], parcelas=4, valor_total_centavos=200000)
+
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas_puladas"] == 1
+    assert valores(casal, novo["id"]) == [
+        (1, 50000, "2026-08-10", "realizado"),
+        (2, 50000, "2026-09-10", "realizado"),
+        (4, 50000, "2026-11-10", "previsto"),
     ]
 
 

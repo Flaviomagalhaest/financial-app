@@ -1,7 +1,7 @@
 # Correção do boleto com parcelas puladas e nada retroativo na correção
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `domain-modeling` para o `GLOSSARY.md`
 Modelo recomendado: Opus
@@ -16,7 +16,14 @@ Origem: revisão (Spec) do [ticket 125](125-geracao-pula-o-passado.md): a regra 
 
 ## Checklist
 
-- [ ] Correção que leva parcela pulada para hoje ou depois a cria (sem reviver a parcela que o casal excluiu uma a uma); `parcelas_puladas` acompanha
-- [ ] Correção que leva parcela para antes de hoje: decidir com teste (sai como pulada, ou fica prevista atrasada, sem realizar a automática) e registrar no `GLOSSARY.md` (**Correção do parcelamento**). Se a escolha não sair da regra do ticket 87, vira pergunta no [ticket 129](129-conferir-escolhas-do-125.md)
-- [ ] Mesma conferência no reajuste "daqui para frente" da recorrência
-- [ ] Testes de API em `backend/tests/test_parcelamentos.py` e `backend/tests/test_recorrencias.py`
+- [x] Correção que leva parcela pulada para hoje ou depois a cria (sem reviver a parcela que o casal excluiu uma a uma); `parcelas_puladas` acompanha
+- [x] Correção que leva parcela para antes de hoje: decidir com teste (sai como pulada, ou fica prevista atrasada, sem realizar a automática) e registrar no `GLOSSARY.md` (**Correção do parcelamento**). Se a escolha não sair da regra do ticket 87, vira pergunta no [ticket 129](129-conferir-escolhas-do-125.md)
+- [x] Mesma conferência no reajuste "daqui para frente" da recorrência
+- [x] Testes de API em `backend/tests/test_parcelamentos.py` e `backend/tests/test_recorrencias.py`
+
+## Answer
+
+- **Parcela pulada que a correção põe em hoje ou depois nasce** (a geração cria o número que não tem lançamento nenhum); a excluída uma a uma tem lançamento e não volta. `parcelas_puladas` acompanha.
+- **Prevista que a correção leva de hoje ou depois para antes de hoje sai como pulada** (regra do [ticket 87](87-recorrencia-com-inicio-no-passado.md): "nem atrasada, nem realizada"): fica excluída com `excluido_pela_regra`, conta em `parcelas_puladas`, a automática não se realiza, e ela volta se outra correção a trouxer para hoje ou depois. O cartão não muda (ticket 99).
+- **Recorrência, daqui para frente**: a mesma regra para o previsto que a data nova leva para antes de hoje; o que saiu assim volta se a data voltar. O previsto atrasado não vira automático quando a regra vira automática.
+- O que não sai do 87 (a atrasada segue prevista com a data nova, a realizada muda com a confirmação, o atrasado que não vira automático) é a pergunta 6 do [ticket 129](129-conferir-escolhas-do-125.md). A retomada da correção noutro dia e o custo da busca das puladas são o [ticket 131](131-correcao-retomada-noutro-dia.md).
