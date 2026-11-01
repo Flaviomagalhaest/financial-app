@@ -844,8 +844,8 @@ def _copiar_da_parte(conn, estornos: list[UUID], parte_id: UUID) -> None:
 
 
 def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
-    """O estorno de todas as parcelas vale a classificação que o parcelamento tem agora. O item do
-    planejamento é o do mês dele, escolhido como o do crédito avulso (ticket 138)."""
+    """O estorno de todas as parcelas vale as categorias e as tags que o parcelamento tem agora
+    (ticket 138). Não tem escolha de item: conta no item do mês, como o crédito avulso."""
     estornos = [
         id
         for (id,) in conn.execute(
@@ -1133,7 +1133,9 @@ def _conferir_estorno(
             (original_id,),
         ).fetchall()
     )
-    if partes and not dados.estorno_parte_id:
+    # O estorno de antes da divisão da compra continua da compra inteira e pode ser editado.
+    ja_existe = conn.execute("SELECT 1 FROM lancamentos WHERE id = %s", (id,)).fetchone()
+    if partes and not dados.estorno_parte_id and not ja_existe:
         raise recusar("a compra tem partes: escolha a parte que foi estornada")
     if dados.estorno_parte_id and not partes:
         raise recusar("a compra não tem partes")

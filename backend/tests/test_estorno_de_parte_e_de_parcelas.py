@@ -1,5 +1,6 @@
 """Estorno de uma parte da compra e de todas as parcelas (ticket 138, ADR 0016 e 0022)."""
 
+from datetime import date
 from uuid import uuid4
 
 from tests.conftest import Casal
@@ -214,6 +215,14 @@ def test_dividir_compra_que_ja_tem_estorno_deixa_o_estorno_com_o_que_ele_tinha(c
         ["loja"],
         None,
     )
+    # O estorno de antes da divisão continua editável no valor.
+    menor = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{estorno['id']}",
+        json={"versao": estorno["versao"], "valor_centavos": 2500},
+    )
+    assert menor.status_code == 200, menor.text
     # O que já foi estornado da compra inteira conta contra o total dela.
     vestido, cortina = dividida.json()["partes"]
     for parte_estornada, valor in ((cortina, 4000), (vestido, 6000)):
@@ -257,14 +266,16 @@ def test_estorno_de_parte_com_item_do_planejamento_diminui_o_item_dela(casal: Ca
 def parcelada_no_cartao(casal: Casal, **campos):
     cartao = novo_cartao(casal)["id"]
     mercado = casal.categoria("Mercado")
-    novo = parcelamento(
-        cartao,
-        [mercado],
-        data="2026-03-28",
-        parcelas=3,
-        valor_total_centavos=30000,
-        tags=["viagem"],
-        **campos,
+    novo = (
+        parcelamento(
+            cartao,
+            [mercado],
+            data="2026-03-28",
+            parcelas=3,
+            valor_total_centavos=30000,
+            tags=["viagem"],
+        )
+        | campos
     )
     assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
     return cartao, mercado, novo
@@ -411,3 +422,20 @@ def test_estorno_nao_mistura_parte_e_parcelamento_nem_aceita_os_dois_ligados(cas
 
     assert os_dois.status_code == 422
     assert avulso.status_code == 422
+
+
+def test_banco_antecipa_e_depois_estorna_e_a_quitacao_seguida_do_estorno_de_todas(
+    casal: Casal, monkeypatch
+):
+    from app import lancamentos
+
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 10, 28))
+    cartao, _, novo = parcelada_no_cartao(casal, data="2026-10-26")
+
+    quitada = casal.pedir("flavio", "POST", f"/api/parcelamentos/{novo['id']}/quitacao", json={})
+    assert quitada.status_code == 200, quitada.text
+    estorno = estorno_de_todas(casal, novo, 30000, data="2026-10-29")
+
+    assert estorno.status_code == 201, estorno.text
+    assert fatura(casal, cartao, estorno.json()["fatura_mes"])["total_centavos"] == 0
+    assert estorno_de_todas(casal, novo, 1).status_code == 422

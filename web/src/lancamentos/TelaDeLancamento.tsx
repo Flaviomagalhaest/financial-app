@@ -25,7 +25,7 @@ import {
   type NovoLancamento,
   type Sugestao,
 } from "../dados";
-import { indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaParte, restanteDoEstorno, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
+import { eEstorno, indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaParte, restanteDoEstorno, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
 import { pagaPeloPagamento } from "../cartoes/apresentacao";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
@@ -46,7 +46,7 @@ function ultimoCriado(lancamentos: LancamentoNaTela[], euId?: string): Lancament
   // O criado só no aparelho ainda não tem autor nem hora do servidor: é deste aparelho, e o mais novo.
   const criadoEm = (l: LancamentoNaTela) => (l.criado_em ? Date.parse(l.criado_em) : (l.feitoEm ?? Infinity));
   const meus = lancamentos.filter(
-    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && !l.estorno_de && !l.estorno_avulso && !l.estorno_parcelamento_id && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
+    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && !eEstorno(l) && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
   );
   return meus.reduce<LancamentoNaTela | undefined>((ultimo, l) => (!ultimo || criadoEm(l) > criadoEm(ultimo) ? l : ultimo), undefined);
 }
@@ -161,7 +161,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   // O que ainda cabe: o valor da compra (da parte, do parcelamento) menos os outros estornos dela.
   const restante = restanteDoEstorno(compra, parteDoEstorno, eTodas, parcelamentoDoEstorno?.id, indice, existente?.id ?? novoId);
 
-  /** O estorno começa com o que o estorno devolve tem (compra, parte ou parcelamento); o valor, no máximo o que ainda cabe. */
+  /** Preenche o estorno com o que o alvo dele tem (compra, parte ou parcelamento); o valor é o que ainda cabe. */
   function preencherEstorno(c: NonNullable<typeof compra>, parteId: string | null, todas: boolean) {
     const parte = parteId ? c.partes?.find((p) => p.id === parteId) : undefined;
     const parcelamento = todas ? parcelamentos?.find((p) => p.id === c.parcelamento_id) : undefined;
@@ -192,11 +192,11 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     }
     setErro("");
     setEstornoAplicado(true);
-    const parte = compra.partes?.find((p) => restanteDaParte(compra, p.id, indice, novoId) > 0);
-    setParteEstornada(parte?.id ?? compra.partes?.[0]?.id ?? null);
+    const parteId = (compra.partes?.find((p) => restanteDaParte(compra, p.id, indice, novoId) > 0) ?? compra.partes?.[0])?.id ?? null;
+    setParteEstornada(parteId);
     setContaId(compra.conta_id);
     setData(hoje());
-    preencherEstorno(compra, parte?.id ?? compra.partes?.[0]?.id ?? null, false);
+    preencherEstorno(compra, parteId, false);
   }, [estornoDe, estornoAplicado, compra, indice, lancamentos, semDados, novoId]);
 
   // O crédito avulso novo abre no cartão da fatura de onde se veio. Preenche uma vez só.
@@ -231,7 +231,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     !problemaDaRecorrencia &&
     !problemaDoParcelamento &&
     (!estornoDe || estornoAplicado) &&
-    (!estornando || centavos <= restante);
+    (!estornando || (!compra && !parcelamentoDoEstorno) || centavos <= restante);
 
   const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
   const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
