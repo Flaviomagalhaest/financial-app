@@ -2,6 +2,7 @@
 ficam o cadastro, a edição das datas de uma fatura e a redistribuição das compras quando as
 datas mudam (fatura fechada nunca muda, ADR 0003)."""
 
+from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from typing import Literal
@@ -217,17 +218,23 @@ def titulares(conn) -> list[UUID]:
     return [id for (id,) in conn.execute("SELECT id FROM cartoes WHERE titular_id IS NULL")]
 
 
-def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[Fatura]:
+def faturas_do_titular(
+    conn, titular_id: UUID, mes: date | None = None, compras_a_mais: dict[date, int] | None = None
+) -> list[Fatura]:
     """As faturas do titular, com os números. O saldo anterior de cada uma vem da anterior
-    paga, por isso a conta corre desde a mais antiga, mesmo quando se pede um mês só."""
+    paga, por isso a conta corre desde a mais antiga, mesmo quando se pede um mês só. As
+    `compras_a_mais` (com sinal, por mês) simulam compras que ainda não foram gravadas."""
     dia = lancamentos.hoje()
-    compras = dict(
-        conn.execute(
-            f"SELECT {lancamentos.MES_EM_QUE_CONTA}, SUM({lancamentos.VALOR_COM_SINAL})::bigint"
-            " FROM lancamentos JOIN cartoes c ON c.id = lancamentos.conta_id"
-            " WHERE COALESCE(c.titular_id, c.id) = %s AND lancamentos.excluido_em IS NULL"
-            f" GROUP BY {lancamentos.MES_EM_QUE_CONTA}",
-            (titular_id,),
+    compras = Counter(compras_a_mais or {})
+    compras.update(
+        dict(
+            conn.execute(
+                f"SELECT {lancamentos.MES_EM_QUE_CONTA}, SUM({lancamentos.VALOR_COM_SINAL})::bigint"
+                " FROM lancamentos JOIN cartoes c ON c.id = lancamentos.conta_id"
+                " WHERE COALESCE(c.titular_id, c.id) = %s AND lancamentos.excluido_em IS NULL"
+                f" GROUP BY {lancamentos.MES_EM_QUE_CONTA}",
+                (titular_id,),
+            )
         )
     )
     pagos = {
@@ -281,7 +288,9 @@ def faturas_do_titular(conn, titular_id: UUID, mes: date | None = None) -> list[
 
 
 def _todas(conn) -> dict[tuple[UUID, date], Fatura]:
-    return {(f.cartao_id, f.mes): f for t in titulares(conn) for f in faturas_do_titular(conn, t)}
+    return {
+        k: f for t in titulares(conn) for k, f in _do_titular(faturas_do_titular(conn, t)).items()
+    }
 
 
 def _o_que_so_um_evento_muda(f: Fatura) -> tuple[date | None, date | None, int, int, int]:
@@ -334,6 +343,15 @@ def _conferir_faturas(
     depois_de_tudo = _todas(conn)
     if _garantir_a_seguinte(conn, depois_de_tudo):
         depois_de_tudo = _todas(conn)
+    _conferir_o_que_mudou(conn, antes, depois_de_tudo, corrigida)
+
+
+def _conferir_o_que_mudou(
+    conn,
+    antes: dict[tuple[UUID, date], Fatura],
+    depois_de_tudo: dict[tuple[UUID, date], Fatura],
+    corrigida: tuple[UUID, date] | None,
+) -> None:
     for chave, depois in depois_de_tudo.items():
         anterior = antes.get(chave)
         if (
@@ -368,6 +386,28 @@ def protegida[T](
         return resultado
 
     return com_as_regras
+
+
+def conferir_sem_gravar(conn, passos: list[dict[tuple[UUID, date], int]]) -> None:
+    """As regras de `protegida` em passos ainda não gravados, cada um uma transação: as compras
+    que mudam (com sinal) em cada fatura, por titular e mês. Recusa o que um dos passos
+    recusaria ao gravar, antes de gravar o primeiro."""
+    a_mais: dict[UUID, Counter] = {}
+    antes = {
+        t: _do_titular(faturas_do_titular(conn, t))
+        for t in {titular for passo in passos for titular, _ in passo}
+    }
+    for passo in passos:
+        for (titular, mes), valor in passo.items():
+            a_mais.setdefault(titular, Counter())[mes] += valor
+        for titular in {t for t, _ in passo}:
+            depois = _do_titular(faturas_do_titular(conn, titular, compras_a_mais=a_mais[titular]))
+            _conferir_o_que_mudou(conn, antes[titular], depois, None)
+            antes[titular] = depois
+
+
+def _do_titular(lista: list[Fatura]) -> dict[tuple[UUID, date], Fatura]:
+    return {(f.cartao_id, f.mes): f for f in lista}
 
 
 def faturas_que_vencem_ate(conn, ate: date) -> list[Fatura]:

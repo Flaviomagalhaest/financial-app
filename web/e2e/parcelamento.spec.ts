@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
@@ -419,4 +420,24 @@ test("sem internet, abre a tela de um parcelamento que o aparelho nunca abriu", 
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
   await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
   await expect(page.getByText("Sem internet: este parcelamento não está no aparelho.")).toHaveCount(0);
+});
+
+test("a tela do parcelamento mostra a mudança nas parcelas que uma recusa parou no meio", async ({ page }) => {
+  const { s } = await prepararCasal(page);
+  const api = await apiDaPagina(page);
+  const conta = await api.criar("/api/contas", { nome: `Boleto ${s}`, tipo: "corrente" });
+  const categoria = await api.criar("/api/categorias", { nome: `Móveis ${s}`, tipo: "despesa" });
+  const id = randomUUID();
+  await api.criar("/api/parcelamentos", { id, valor_total_centavos: 30000, parcelas: 3, descricao: `Sofá ${s}`, conta_id: conta.id, categoria_ids: [categoria.id], data: "2030-03-20" });
+  // A recusa é gravada pela tarefa diária (testes de API); aqui, só o que a tela mostra dela.
+  const motivo = "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura. Da 3ª parcela em diante, as que faltavam mudar ficaram como estavam";
+  await page.context().route("**/api/parcelamentos", async (rota) => {
+    if (rota.request().method() !== "GET") return rota.continue();
+    const lidos = await (await rota.fetch()).json();
+    await rota.fulfill({ json: lidos.map((p: { id: string }) => (p.id === id ? { ...p, mudanca_recusada: motivo } : p)) });
+  });
+
+  await page.goto(`/#/parcelamento/${id}`);
+
+  await expect(page.getByText(`Uma mudança nas parcelas parou no meio: ${motivo}. Para terminar, mude de novo uma das parcelas que faltaram.`)).toBeVisible();
 });
