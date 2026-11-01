@@ -1,7 +1,7 @@
 # Correção do parcelamento retomada noutro dia e a busca das puladas
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
