@@ -1,7 +1,7 @@
 # Antecipação e quitação: regras provisórias para o dono conferir
 
 Type: grilling
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se a regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -19,5 +19,13 @@ Origem: [ticket 48](48-antecipar-e-quitar.md) (revisão: a spec diz "data de hoj
 
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste de API em `backend/tests/test_parcelamentos.py` e ajuste em `_antecipar` (`backend/app/parcelamentos.py`), e nos verbetes "Antecipação" e "Parcela" do `GLOSSARY.md`
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] Nenhuma regra existente mudou; a nova (chave) está no ticket 154
+
+## Answer
+
+1. **Data**: mantida. Só hoje ou passada (422 para futura).
+2. **Valor editável**: mantido como total das K parcelas, dividido por igual, centavos na primeira.
+3. **Data/fatura da parcela antecipada**: mantido (dia do pagamento; no cartão, fatura que fecha depois; boleto, mês do pagamento).
+4. **Reenvio**: o dono quer a chave de idempotência. Vira o [ticket 154](154-antecipacao-chave-de-idempotencia.md).
+5. **Quitar sem nada a pagar**: não houve resposta explícita; fica o 422 (padrão recomendado). O dono pode reabrir.
