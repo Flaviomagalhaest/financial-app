@@ -801,6 +801,25 @@ def _fatura_depois(
     return mes, a_mao
 
 
+def fatura_em_que_ficaria(conn, atual: Lancamento, mudancas: dict) -> tuple[UUID, date] | None:
+    """O titular e o mês da fatura em que o lançamento ficaria com as `mudancas` (conta, data,
+    fatura), como `_fatura_depois` a escolhe, sem criar a fatura; `None` fora do cartão."""
+    cartao = faturas.ler_cartao(conn, mudancas.get("conta_id", atual.conta_id))
+    if cartao is None:
+        return None
+    if mudancas.get("fatura_mes"):
+        return cartao.titular.id, mudancas["fatura_mes"]
+    if not {"conta_id", "data"} & mudancas.keys():
+        return cartao.titular.id, atual.mes
+    (a_mao,) = conn.execute(
+        "SELECT COALESCE(fatura_a_mao, false) FROM lancamentos WHERE id = %s", (atual.id,)
+    ).fetchone()
+    if a_mao and "conta_id" not in mudancas and atual.fatura_mes:
+        return cartao.titular.id, atual.fatura_mes
+    data = mudancas.get("data", atual.data)
+    return cartao.titular.id, faturas.mes_da_parcela(conn, cartao.titular, data, atual.parcela)
+
+
 def _item_atual_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None:
     """O item em que um lançamento que vai mudar conta antes da mudança, se a categoria dele
     continua no lançamento: a categoria nova ou o mês novo que criam ambiguidade não o tiram do

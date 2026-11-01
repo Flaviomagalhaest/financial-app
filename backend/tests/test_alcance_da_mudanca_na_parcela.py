@@ -250,3 +250,130 @@ def test_encolher_tira_a_parcela_que_so_teve_a_classificacao_mudada_a_mao(casal:
 
     assert resposta.status_code == 200
     assert [l["parcela"] for l in parcelas(casal, novo["id"])] == [1, 2, 3]
+
+
+def um_lote_por_parcela(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cada transação muda uma parcela só: o parcelamento curto passa por vários lotes, como o de
+    perto de 80 parcelas."""
+    from app import parcelamentos
+
+    monkeypatch.setattr(parcelamentos, "parcelas_por_lote", lambda regra: 1)
+
+
+def interromper_depois_do_primeiro_lote(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O pedido grava a parcela mudada e o primeiro lote e cai antes dos seguintes."""
+    from app import mudanca_na_parcela
+
+    def cai(*_):
+        raise RuntimeError("a Lambda caiu")
+
+    monkeypatch.setattr(mudanca_na_parcela, "_mudar_um_lote", cai)
+
+
+def test_a_tarefa_diaria_termina_a_mudanca_parcela_a_parcela_que_parou_no_meio(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from app.tarefa_diaria import fazer_tarefa_diaria
+
+    um_lote_por_parcela(monkeypatch)
+    novo = criar_geladeira(
+        casal, casal.conta(), data="2026-11-10", parcelas=4, valor_total_centavos=40000
+    )
+    [_, segunda, *_] = parcelas(casal, novo["id"])
+    with monkeypatch.context() as queda:
+        interromper_depois_do_primeiro_lote(queda)
+        with pytest.raises(RuntimeError):
+            mudar_parcela(
+                casal, segunda, "esta_e_as_proximas", valor_centavos=11000, data="2026-12-15"
+            )
+    assert [v[1] for v in valores(casal, novo["id"])] == [10000, 11000, 11000, 10000]
+
+    feito = fazer_tarefa_diaria(casal.client.app.state.url)
+
+    assert feito["mudancas_na_parcela"] == 1
+    assert valores(casal, novo["id"]) == [
+        (1, 10000, "2026-11-10", "previsto", False),
+        (2, 11000, "2026-12-15", "previsto", True),
+        (3, 11000, "2027-01-15", "previsto", True),
+        (4, 11000, "2027-02-15", "previsto", True),
+    ]
+    assert fazer_tarefa_diaria(casal.client.app.state.url)["mudancas_na_parcela"] == 0
+
+
+def test_fatura_paga_num_lote_seguinte_recusa_a_mudanca_antes_de_gravar(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/06: as parcelas caem em março, abril e maio, todas fechadas; só maio foi paga.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    nubank = cartao(casal)
+    novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    assert [l["fatura_mes"] for l in parcelas(casal, novo["id"])] == [
+        "2026-03-01",
+        "2026-04-01",
+        "2026-05-01",
+    ]
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        nubank,
+        fatura_mes="2026-05-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago.status_code == 201, pago.text
+
+    # A 2ª cabe no primeiro lote; a 3ª, da fatura paga, viria no seguinte.
+    resposta = mudar_parcela(
+        casal,
+        primeira,
+        "esta_e_as_proximas",
+        valor_centavos=12000,
+        confirmar_realizadas=True,
+    )
+
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == (
+        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
+    )
+    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [10000] * 3
+
+
+def test_esta_e_as_proximas_nao_leva_o_valor_novo_as_de_antes_da_classificacao_pendente(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_parcelamentos import interromper_o_refazer
+
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", parcelas=4)
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            casal.pedir(
+                "flavio",
+                "PATCH",
+                f"/api/parcelamentos/{novo['id']}",
+                json={"descricao": "Geladeira"},
+            )
+    # A correção da descrição desde a 1ª ficou pendente no parcelamento.
+    terceira = parcelas(casal, novo["id"])[2]
+    assert terceira["descricao"] == "Geladeria"
+
+    # O pedido termina antes a correção pendente: a 3ª mudou depois do que o aparelho viu.
+    velha = mudar_parcela(casal, terceira, "esta_e_as_proximas", descricao="Geladeira nova")
+    assert velha.status_code == 422
+    assert "descricao" in velha.json()["detail"]
+    resposta = mudar_parcela(
+        casal, parcelas(casal, novo["id"])[2], "esta_e_as_proximas", descricao="Geladeira nova"
+    )
+
+    assert resposta.status_code == 200
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == [
+        "Geladeira",
+        "Geladeira",
+        "Geladeira nova",
+        "Geladeira nova",
+    ]

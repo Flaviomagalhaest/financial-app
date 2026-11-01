@@ -427,17 +427,19 @@ def completar_todos(url: str | None) -> int:
     trouxe, gravada no parcelamento até o refazer terminar. Devolve quantos consertou."""
     with conectar(url) as conn:
         ids = [id for (id,) in conn.execute("SELECT id FROM parcelamentos")]
-    consertados = 0
-    for id in ids:
-        if not em_transacao(url, lambda conn, id=id: _falta_conserto(conn, id)):
-            continue
-        consertados += 1
-        pendente = em_transacao(url, lambda conn, id=id: _classificacao_pendente(conn, id))
-        while em_transacao(url, lambda conn, id=id: _reajustar_do_parcelamento(conn, id)):
-            pass
-        em_transacao(url, lambda conn, id=id, feita=pendente: _dar_por_refeita(conn, id, feita))
-        gerar_as_parcelas(url, id)
-    return consertados
+    return sum(completar(url, id) for id in ids)
+
+
+def completar(url: str | None, id: UUID) -> bool:
+    """Conserta um parcelamento que um pedido deixou pela metade; devolve se faltava algo."""
+    if not em_transacao(url, lambda conn: _falta_conserto(conn, id)):
+        return False
+    pendente = em_transacao(url, lambda conn: classificacao_pendente(conn, id))
+    while em_transacao(url, lambda conn: _reajustar_do_parcelamento(conn, id)):
+        pass
+    em_transacao(url, lambda conn: _dar_por_refeita(conn, id, pendente))
+    gerar_as_parcelas(url, id)
+    return True
 
 
 # Os campos de classificação a levar às parcelas, cada um com a parcela a partir da qual vale: a
@@ -469,7 +471,7 @@ def _juntar(*classificacoes: Classificacao) -> dict[str, int]:
     return juntas
 
 
-def _classificacao_pendente(conn, id: UUID) -> dict[str, int]:
+def classificacao_pendente(conn, id: UUID) -> dict[str, int]:
     """Os campos de classificação que correções já gravadas ainda não levaram às parcelas."""
     linha = conn.execute(
         "SELECT classificacao_pendente FROM parcelamentos WHERE id = %s", (id,)
@@ -492,7 +494,7 @@ def _falta_conserto(conn, id: UUID) -> bool:
         return False
     [regra] = lidos
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
-    pendente = _classificacao_pendente(conn, id)
+    pendente = classificacao_pendente(conn, id)
     return (
         geradas < regra.parcelas
         or bool(pendente)
@@ -505,7 +507,7 @@ def _reajustar_do_parcelamento(conn, id: UUID) -> bool:
     """Um lote do conserto da tarefa diária, em nome de quem alterou o parcelamento por último."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False
-    return _reajustar_um_lote(conn, id, lidos[0].alterado_por, _classificacao_pendente(conn, id))
+    return _reajustar_um_lote(conn, id, lidos[0].alterado_por, classificacao_pendente(conn, id))
 
 
 def origem(descricao: str) -> str:
@@ -892,7 +894,7 @@ def gravar_correcao(
     geradas_depois = min(geradas, nova.parcelas)
     # Junto com o que correções anteriores deixaram pendente: o refazer deste pedido leva tudo.
     classificacao = _juntar(
-        dict.fromkeys(CLASSIFICACAO & pedidas.keys(), desde), _classificacao_pendente(conn, id)
+        dict.fromkeys(CLASSIFICACAO & pedidas.keys(), desde), classificacao_pendente(conn, id)
     )
     if editada:
         _seguir_o_parcelamento(conn, editada, nova, alteracao.model_fields_set | pedidas.keys())

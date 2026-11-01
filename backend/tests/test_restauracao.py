@@ -866,9 +866,9 @@ def test_backup_da_versao_20_sem_pendencia_restaura_parcelamento_sem_classificac
             if nome == "parcelamentos.csv":
                 linhas = conteudo.decode().strip("\r\n").splitlines()
                 conteudo = (
-                    # Sem a classificação pendente, o dia da correção (versão 23) e o dia do
-                    # lançamento (versão 24), as últimas.
-                    "\r\n".join(linha.rsplit(",", 3)[0] for linha in linhas).encode() + b"\r\n"
+                    # Sem a classificação pendente, o dia da correção (versão 23), o dia do
+                    # lançamento (versão 24) e a mudança pendente (versão 25), as últimas.
+                    "\r\n".join(linha.rsplit(",", 4)[0] for linha in linhas).encode() + b"\r\n"
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -906,8 +906,9 @@ def test_backup_da_versao_22_sem_o_dia_da_correcao_restaura_parcelamento_sem_cor
             if nome == "parcelamentos.csv":
                 linhas = conteudo.decode().strip("\r\n").splitlines()
                 conteudo = (
-                    # Sem o dia da correção e o dia do lançamento (versão 24), as últimas.
-                    "\r\n".join(linha.rsplit(",", 2)[0] for linha in linhas).encode() + b"\r\n"
+                    # Sem o dia da correção, o dia do lançamento (versão 24) e a mudança
+                    # pendente (versão 25), as últimas.
+                    "\r\n".join(linha.rsplit(",", 3)[0] for linha in linhas).encode() + b"\r\n"
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -949,9 +950,13 @@ def test_backup_da_versao_23_restaura_recorrencia_e_parcelamento_sem_o_dia_do_la
         for nome in origem.namelist():
             conteudo = origem.read(nome)
             if nome in ("recorrencias.csv", "parcelamentos.csv"):
+                # Sem o dia do lançamento; no parcelamento, também sem a mudança pendente
+                # (versão 25), a última.
+                ultimas = 2 if nome == "parcelamentos.csv" else 1
                 linhas = conteudo.decode().strip("\r\n").splitlines()
                 conteudo = (
-                    "\r\n".join(linha.rsplit(",", 1)[0] for linha in linhas).encode() + b"\r\n"
+                    "\r\n".join(linha.rsplit(",", ultimas)[0] for linha in linhas).encode()
+                    + b"\r\n"
                 )
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
@@ -969,6 +974,42 @@ def test_backup_da_versao_23_restaura_recorrencia_e_parcelamento_sem_o_dia_do_la
         assert conn.execute(
             "SELECT valor_total_centavos, corrigido_em, dia_do_lancamento FROM parcelamentos"
         ).fetchall() == [(3000, None, None)]
+
+
+def test_backup_da_versao_24_restaura_parcelamento_sem_mudanca_pendente(database_url):
+    # O formato 24, anterior ao ticket 145: o parcelamento não guardava a mudança por parcela.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO parcelamentos (id, valor_total_centavos, parcelas, data, automatico,"
+            " conta_id, criado_por, alterado_por) VALUES"
+            " ('00000000-0000-0000-0000-000000000003', 3000, 3, '2026-11-10', false,"
+            " '00000000-0000-0000-0000-000000000002', 'flavio', 'flavio')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM parcelamentos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "parcelamentos.csv":
+                linhas = conteudo.decode().strip("\r\n").splitlines()
+                conteudo = (
+                    "\r\n".join(linha.rsplit(",", 1)[0] for linha in linhas).encode() + b"\r\n"
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 24
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute(
+            "SELECT valor_total_centavos, mudanca_pendente FROM parcelamentos"
+        ).fetchall() == [(3000, "")]
 
 
 def test_os_favoritos_e_os_dispensados_voltam_do_backup_com_a_ordem(database_url):
