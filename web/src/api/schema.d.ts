@@ -2518,6 +2518,8 @@ export interface components {
             vezes?: number | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Dia Do Lancamento */
+            dia_do_lancamento?: string | null;
         };
         /** NovaTag */
         NovaTag: {
@@ -2745,6 +2747,8 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Dia Do Lancamento */
+            dia_do_lancamento?: string | null;
             /** Valor Total Centavos */
             valor_total_centavos?: number | null;
             /** Valor Da Parcela Centavos */
@@ -2847,6 +2851,8 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Dia Do Lancamento */
+            dia_do_lancamento?: string | null;
             /** Valor Total Centavos */
             valor_total_centavos: number;
             /** Automatico */
@@ -3172,6 +3178,8 @@ export interface components {
             vezes?: number | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Dia Do Lancamento */
+            dia_do_lancamento?: string | null;
             /**
              * Ocorrencia Do Inicio
              * @default 1

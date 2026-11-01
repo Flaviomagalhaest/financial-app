@@ -73,8 +73,12 @@ _Avoid_: motor de sugestão
 ### Futuro
 
 **Recorrência**:
-Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz). Só gera de hoje em diante: com o início no passado, as ocorrências de antes de hoje não viram lançamento (nem atrasado, nem realizado), mas o calendário e as `vezes` seguem contados desde o início; a de hoje, lançada junto com a regra, nasce realizada. A tarefa diária e a mudança da regra também não lançam ocorrência que já passou. A regra que termina antes de hoje é recusada.
+Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz). Só gera do dia do lançamento em diante: com o início no passado, as ocorrências de antes dele não viram lançamento (nem atrasado, nem realizado), mas o calendário e as `vezes` seguem contados desde o início; a do dia do lançamento nasce realizada. A tarefa diária e a mudança da regra também não lançam ocorrência que já passou: mudada a regra, conta de hoje. A regra que termina antes do dia do lançamento é recusada.
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
+
+**Dia do lançamento**:
+O dia (em São Paulo) em que o casal lançou a recorrência ou o parcelamento no aparelho, e não o dia em que o pedido chegou ao servidor: lançada sem internet, a regra pode subir no dia seguinte. A geração conta o "antes de hoje" a partir dele enquanto a regra é a que o casal lançou; um dia depois de hoje (relógio do aparelho adiantado) vale como hoje.
+_Avoid_: data de criação, criado em
 
 **Ocorrência**:
 Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...), com a data contada do início e nunca da anterior (o dia 31 passa por 30/11 e volta a 31/12); cada uma gera um previsto, e a que o casal pulou (excluída) não volta. A que o fim ou o horizonte tirou volta quando o fim sai ou o horizonte chega a ela: `geradas` recua até antes dela, e só o excluído marcado como da regra (`excluido_pela_regra`) é trazido de volta; o que o casal pulou nunca volta, esteja o número antes ou depois do fim.
@@ -101,7 +105,7 @@ Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o h
 _Avoid_: job, cron, rotina noturna
 
 **Parcelamento**:
-Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela. No boleto com a data no passado, as parcelas de antes de hoje são puladas (`parcelas_puladas` na resposta; não é a parcela que o casal excluiu): não viram lançamento, mas contam na numeração e no total, e a de hoje nasce realizada; o boleto que já venceu inteiro é recusado. A correção também pula a prevista que leva para antes de hoje (essa existe excluída, marcada como da regra, e volta se outra correção a trouxer para hoje ou depois). O cartão gera todas.
+Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela. No boleto com a data no passado, as parcelas de antes do dia do lançamento são puladas (`parcelas_puladas` na resposta; não é a parcela que o casal excluiu): não viram lançamento, mas contam na numeração e no total, e a desse dia nasce realizada; o boleto que já venceu inteiro é recusado. A correção também pula a prevista que leva para antes de hoje (essa existe excluída, marcada como da regra, e volta se outra correção a trouxer para hoje ou depois). O cartão gera todas.
 _Avoid_: compra parcelada, financiamento
 
 **Parcela**:
