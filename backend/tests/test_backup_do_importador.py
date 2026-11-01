@@ -1,5 +1,6 @@
 """O importador do Mobills gera um backup válido, e a restauração o grava num banco vazio (ADR 0012,
-ticket 68). Só exports fictícios (ADR 0007)."""
+ticket 68); até a virada, o refazer troca a importação gravada pela nova, travado pelo uso no app
+(ticket 91). Só exports fictícios (ADR 0007)."""
 
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -306,7 +307,8 @@ def test_refazer_avisa_a_preparacao_da_virada_que_se_perdeu(importacao, casal, d
     assert (
         casal.pedir("flavio", "PUT", f"/api/cartoes/{cartao['id']}", json=corpo).status_code == 200
     )
-    datas = {"fechamento": "2026-08-25", "vencimento": "2026-09-05"}
+    # Fora dos dias padrão do cartão (25 e 5): o fechamento escorregou com o feriado.
+    datas = {"fechamento": "2026-08-24", "vencimento": "2026-09-08"}
     caminho = f"/api/cartoes/{cartao['id']}/faturas/2026-08-01"
     assert casal.pedir("flavio", "PATCH", caminho, json=datas).status_code == 200
 
@@ -373,3 +375,19 @@ def test_linha_de_comando_nao_junta_esvaziar_e_refazer(tmp_path, monkeypatch, ca
     with pytest.raises(SystemExit):
         restauracao.main([str(tmp_path / "x.zip"), "--esvaziar", "--refazer-importacao"])
     assert "not allowed with argument --esvaziar" in capsys.readouterr().err
+
+
+def test_refazer_com_um_mes_a_mais_de_export_nao_avisa_datas_que_ninguem_informou(
+    exports, importacao, client, database_url
+):
+    # A importação antiga deu as datas padrão do cartão à fatura de setembro, das parcelas
+    # futuras; a nova traz setembro exportado, sem datas.
+    restaurar(database_url, gerar_backup_da_importacao(importacao, AGORA))
+    geral, faturas, revisao = exports
+    escrever_fatura(faturas, "Cartao A", "202609", [("14/07/2026", "TV", "Casa", 300.00)])
+    nova = importar(geral, faturas, revisao)
+    assert nova.impedimentos == []
+
+    _, perdidos = refazer(database_url, gerar_backup_da_importacao(nova, AGORA))
+
+    assert perdidos == []

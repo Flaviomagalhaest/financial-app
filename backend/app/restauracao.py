@@ -60,10 +60,10 @@ def main(argumentos: list[str] | None = None) -> int:
             else:
                 manifesto = restaurar_backup(conn, backup)
         except RestauracaoRecusada as erro:
-            nada = (
+            intacto = (
                 "nada foi apagado nem gravado" if opcoes.refazer_importacao else "nada foi gravado"
             )
-            print(f"recusada, {nada}: {erro}", file=sys.stderr)
+            print(f"recusada, {intacto}: {erro}", file=sys.stderr)
             return 1
         except RestauracaoDesfeita as erro:
             print(f"falhou e foi desfeita, o banco está vazio: {erro}", file=sys.stderr)

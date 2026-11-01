@@ -16,6 +16,8 @@ from pathlib import Path
 
 import psycopg
 
+from app.faturas import datas_padrao, ler_cartao
+
 VERSAO_FORMATO = 22
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
@@ -613,9 +615,9 @@ def conferir_backup(conn: psycopg.Connection, backup: bytes) -> None:
 
 
 # A autoria de tudo o que o importador do Mobills grava (`app.mobills.backup`).
-IMPORTADO_DO_MOBILLS = "mobills"
+AUTORIA_DA_IMPORTACAO = "mobills"
 # As colunas de quem criou, mudou, excluiu ou desfez: `criado_por`, `alterado_por`...
-_AUTORIA = "_por"
+_SUFIXO_DE_AUTORIA = "_por"
 
 
 def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> dict:
@@ -653,10 +655,10 @@ def refazer_importacao(conn: psycopg.Connection, backup: bytes) -> tuple[dict, l
         tabela
         for tabela, (colunas, linhas) in sorted(tabelas.items())
         if any(
-            linha[i] is not None and linha[i] != IMPORTADO_DO_MOBILLS
+            linha[i] is not None and linha[i] != AUTORIA_DA_IMPORTACAO
             for linha in linhas
             for i, coluna in enumerate(colunas)
-            if coluna.endswith(_AUTORIA)
+            if coluna.endswith(_SUFIXO_DE_AUTORIA)
         )
     ]:
         raise RestauracaoRecusada(
@@ -664,10 +666,10 @@ def refazer_importacao(conn: psycopg.Connection, backup: bytes) -> tuple[dict, l
         )
     no_banco = []
     for tabela in _tabelas(conn):
-        if autoria := [c for c in _colunas(conn, tabela) if c.endswith(_AUTORIA)]:
+        if autoria := [c for c in _colunas(conn, tabela) if c.endswith(_SUFIXO_DE_AUTORIA)]:
             outra = " OR ".join(f"{_identificador(c)} <> %(autor)s" for c in autoria)
             consulta = f"SELECT EXISTS (SELECT FROM {_identificador(tabela)} WHERE {outra})"
-            if conn.execute(consulta, {"autor": IMPORTADO_DO_MOBILLS}).fetchone()[0]:
+            if conn.execute(consulta, {"autor": AUTORIA_DA_IMPORTACAO}).fetchone()[0]:
                 no_banco.append(tabela)
     if no_banco:
         raise RestauracaoRecusada(
@@ -691,14 +693,22 @@ def _preparacao_da_virada(conn: psycopg.Connection, tabelas: Tabelas) -> list[st
         )
         for linha in linhas
     }
-    faturas = sum(
-        1
-        for cartao, mes, *datas in conn.execute(
-            "SELECT cartao_id::text, mes::text, fechamento::text, vencimento::text FROM faturas"
-            " WHERE fechamento IS NOT NULL OR vencimento IS NOT NULL"
-        )
-        if datas_no_zip.get((cartao, mes)) != tuple(datas)
-    )
+    faturas = 0
+    for cartao, mes, fechamento, vencimento in conn.execute(
+        "SELECT cartao_id, mes, fechamento, vencimento FROM faturas"
+        " WHERE fechamento IS NOT NULL OR vencimento IS NOT NULL"
+    ).fetchall():
+        datas = (fechamento, vencimento)
+        if datas_no_zip.get((str(cartao), mes.isoformat())) == tuple(
+            d and d.isoformat() for d in datas
+        ):
+            continue
+        # As datas padrão do cartão são as que a importação dá às faturas das parcelas futuras,
+        # e o export seguinte traz o mês sem datas: só o que difere delas o dono informou. Escapa
+        # a data que o dono deu igual à padrão, o que a ordem do ticket 69 deixa para depois da
+        # importação final.
+        if datas != datas_padrao(ler_cartao(conn, cartao).titular, mes):
+            faturas += 1
     (contas,) = conn.execute(
         "SELECT count(*) FROM contas"
         " WHERE saldo_abertura_centavos IS NOT NULL OR data_abertura IS NOT NULL"
