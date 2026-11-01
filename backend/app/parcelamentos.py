@@ -32,7 +32,7 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
-from app.recorrencias import com_o_dia_do_lancamento, dia_do_lancamento_vigente, mais_meses
+from app.recorrencias import com_o_dia_do_lancamento, mais_meses
 
 router = APIRouter(prefix="/api")
 
@@ -241,12 +241,25 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
     ]
 
 
+def _dia_do_lancamento_vigente(conn, regra: Parcelamento) -> date | None:
+    """O dia do lançamento, enquanto o parcelamento não foi corrigido (`corrigido_em`, que só a
+    correção grava). A classificação que a edição em lote muda também mexe em `alterado_em` e
+    não no calendário, por isso não conta (ticket 132)."""
+    return regra.dia_do_lancamento if _corrigido_em(conn, regra.id) is None else None
+
+
+def _corrigido_em(conn, id: UUID) -> date | None:
+    """O dia da última correção do parcelamento; nunca corrigido (ou excluído), nenhum."""
+    linha = conn.execute("SELECT corrigido_em FROM parcelamentos WHERE id = %s", (id,)).fetchone()
+    return linha[0] if linha else None
+
+
 def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas parcelas, quantas cabem numa transação, e devolve se pode faltar
     alguma. O id de cada parcela vem do parcelamento e do número dela: gerar de novo não
     duplica. No boleto, a parcela de antes de hoje não vira lançamento (ticket 87); enquanto o
     parcelamento é o que o casal lançou, o "hoje" é o dia do lançamento
-    (`dia_do_lancamento_vigente`), e a parcela desse dia nasce realizada. O cartão segue o
+    (`_dia_do_lancamento_vigente`), e a parcela desse dia nasce realizada. O cartão segue o
     ticket 99. Antes das próximas, nascem as puladas que uma correção trouxe para hoje ou
     depois (ticket 126)."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
@@ -273,7 +286,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     else:
         return False
     dia_de_hoje = lancamentos.hoje()
-    lancado = dia_do_lancamento_vigente(regra)
+    lancado = _dia_do_lancamento_vigente(conn, regra)
     desde = lancado or dia_de_hoje
     for n in numeros:
         lancamento_id = uuid5(id, str(n))
@@ -662,10 +675,7 @@ def _correcoes(
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     dia_de_hoje = lancamentos.hoje()
     if dia_da_correcao is None:
-        linha = conn.execute(
-            "SELECT corrigido_em FROM parcelamentos WHERE id = %s", (regra.id,)
-        ).fetchone()
-        dia_da_correcao = (linha[0] if linha else None) or dia_de_hoje
+        dia_da_correcao = _corrigido_em(conn, regra.id) or dia_de_hoje
     quer = {
         "descricao": regra.descricao,
         "pessoa": regra.pessoa,

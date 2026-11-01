@@ -249,9 +249,9 @@ def com_o_dia_do_lancamento[P: BaseModel](pedido: P) -> P:
 
 
 def dia_do_lancamento_vigente(regra) -> date | None:
-    """O dia do lançamento da regra gravada (recorrência ou parcelamento), enquanto ela é a que
-    o casal lançou: a geração conta o "antes de hoje" dele. Mudada a regra, conta de hoje, e
-    nada mais se gera para trás (ticket 125). Gravado sempre até hoje, ele nunca passa de hoje."""
+    """O dia do lançamento da recorrência gravada, enquanto ela é a que o casal lançou: a geração
+    conta o "antes de hoje" dele. Mudada a regra, conta de hoje, e nada mais se gera para trás
+    (ticket 125). Gravado sempre até hoje, ele nunca passa de hoje."""
     return regra.dia_do_lancamento if regra.alterado_em == regra.criado_em else None
 
 
