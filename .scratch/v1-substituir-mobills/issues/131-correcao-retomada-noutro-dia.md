@@ -1,7 +1,7 @@
 # Correção do parcelamento retomada noutro dia e a busca das puladas
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -16,6 +16,12 @@ Origem: revisão (Spec) do [ticket 126](126-correcao-com-parcelas-puladas.md)
 
 ## Checklist
 
-- [ ] Decidir com teste o que vale na retomada (por exemplo, gravar no parcelamento o dia da correção e comparar com ele)
-- [ ] Só procurar as puladas quando houver alguma (`geradas` maior que o número de lançamentos), sem ler as parcelas do boleto que não pulou nada
-- [ ] Teste de API em `backend/tests/test_parcelamentos.py`
+- [x] Decidir com teste o que vale na retomada (por exemplo, gravar no parcelamento o dia da correção e comparar com ele)
+- [x] Só procurar as puladas quando houver alguma (`geradas` maior que o número de lançamentos), sem ler as parcelas do boleto que não pulou nada
+- [x] Teste de API em `backend/tests/test_parcelamentos.py`
+
+## Resolução
+
+- Coluna `parcelamentos.corrigido_em` (migration 0056, formato de backup 23): o `_mudar` grava o dia do pedido; `_correcoes` compara a data de antes da prevista com ele, não com o dia do lote. Sem a coluna preenchida (parcelamento antigo), vale hoje.
+- `_puladas_que_chegaram` só lê as parcelas quando `geradas` é maior que o número de lançamentos do parcelamento (uma contagem).
+- Testes em `backend/tests/test_parcelamentos.py` e `test_restauracao.py` (conversor 22→23).

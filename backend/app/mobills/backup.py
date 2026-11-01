@@ -203,6 +203,7 @@ class _Linhas:
             ("criado_em", self.agora),
             ("excluido_pela_regra", False),
             ("classificacao_pendente", ""),
+            ("corrigido_em", None),
         ):
             if coluna in colunas:
                 valores.setdefault(coluna, padrao)

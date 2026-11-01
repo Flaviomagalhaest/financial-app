@@ -319,10 +319,21 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     return proximas[-1] < regra.parcelas
 
 
-def _puladas_que_chegaram(conn, regra: Parcelamento, geradas: int) -> list[int]:
+def _puladas_que_chegaram(
+    conn, regra: Parcelamento, geradas: int, lancamentos_existentes: int | None = None
+) -> list[int]:
     """As parcelas do boleto que a geração pulou por estarem antes de hoje (não têm lançamento,
-    nem excluído) e que a data corrigida pôs em hoje ou depois. O cartão não pula nenhuma."""
+    nem excluído) e que a data corrigida pôs em hoje ou depois. O cartão não pula nenhuma.
+    Só lê as parcelas do boleto quando falta alguma: `geradas` maior que o número de
+    lançamentos (ticket 131)."""
     if faturas.ler_cartao(conn, regra.conta_id) is not None:
+        return []
+    if lancamentos_existentes is None:
+        (lancamentos_existentes,) = conn.execute(
+            "SELECT count(*) FROM lancamentos WHERE parcelamento_id = %s AND parcela <= %s",
+            (regra.id, regra.parcelas),
+        ).fetchone()
+    if lancamentos_existentes >= min(geradas, regra.parcelas):
         return []
     existem = {
         n
@@ -590,7 +601,11 @@ CLASSIFICACAO = frozenset({"descricao", "categoria_ids", "tags", "pessoa", "item
 
 
 def _correcoes(
-    conn, regra: Parcelamento, geradas: int, classificacao: frozenset[str]
+    conn,
+    regra: Parcelamento,
+    geradas: int,
+    classificacao: frozenset[str],
+    dia_da_correcao: date | None = None,
 ) -> list[_Correcao]:
     """As parcelas que não estão como o parcelamento manda, na ordem do número. A que uma pessoa
     editou à mão (valor, data, conta ou fatura) fica como está nessas coisas. A classificação só
@@ -600,7 +615,9 @@ def _correcoes(
     No boleto, nada da correção vira lançamento antes de hoje (ticket 87): a prevista que a data
     nova leva de hoje ou depois para antes sai como pulada (`excluido_pela_regra`), e volta se
     outra correção a trouxer de novo para hoje ou depois. A atrasada (já antes de hoje) segue
-    prevista com a data nova; a realizada muda, com a confirmação."""
+    prevista com a data nova; a realizada muda, com a confirmação. O "de hoje ou depois" é do dia
+    em que a correção foi pedida (`corrigido_em`), não do dia em que o lote roda: a que para no
+    meio termina igual noutro dia (ticket 131)."""
     parcelas = conn.execute(
         f"SELECT id, parcela, data, valor_centavos, descricao, pessoa, situacao,"
         f" excluido_em IS NOT NULL, {lancamentos.VERSAO}, item_categoria_id, mes,"
@@ -626,6 +643,11 @@ def _correcoes(
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     dia_de_hoje = lancamentos.hoje()
+    if dia_da_correcao is None:
+        linha = conn.execute(
+            "SELECT corrigido_em FROM parcelamentos WHERE id = %s", (regra.id,)
+        ).fetchone()
+        dia_da_correcao = (linha[0] if linha else None) or dia_de_hoje
     quer = {
         "descricao": regra.descricao,
         "pessoa": regra.pessoa,
@@ -685,7 +707,7 @@ def _correcoes(
                 if pulada:
                     continue
                 acao = "pular"  # a que o encolher tirou volta, mas já passou
-            elif acao == "atualizar" and situacao == "previsto" and dia_antes >= dia_de_hoje:
+            elif acao == "atualizar" and situacao == "previsto" and dia_antes >= dia_da_correcao:
                 acao = "pular"
         if acao != "atualizar" or mudou:
             feitas.append(
@@ -748,7 +770,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
     classificacao = frozenset(CLASSIFICACAO & pedidas.keys()) | _classificacao_pendente(conn, id)
     realizadas = [
         t.aviso
-        for t in _correcoes(conn, nova, geradas_depois, classificacao)
+        for t in _correcoes(conn, nova, geradas_depois, classificacao, lancamentos.hoje())
         # A que sai pulada sendo realizada já estava excluída (o encolher a tirou): nada muda.
         if t.realizada and t.acao not in ("reviver", "pular") and t.muda_o_cronograma
     ]
@@ -763,7 +785,8 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
     if not conn.execute(
         "UPDATE parcelamentos SET valor_total_centavos = %s, parcelas = %s, data = %s,"
         " descricao = %s, pessoa = %s, item_categoria_id = %s, geradas = %s, alterado_por = %s,"
-        " classificacao_pendente = %s, alterado_em = now() WHERE id = %s AND geradas = %s",
+        " classificacao_pendente = %s, corrigido_em = %s, alterado_em = now()"
+        " WHERE id = %s AND geradas = %s",
         (
             nova.valor_total_centavos,
             nova.parcelas,
@@ -774,6 +797,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
             geradas_depois,
             usuario,
             ",".join(sorted(classificacao)),
+            lancamentos.hoje(),
             id,
             geradas,
         ),
