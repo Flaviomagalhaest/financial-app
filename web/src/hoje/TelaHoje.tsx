@@ -155,7 +155,9 @@ export function TelaHoje() {
           <section aria-labelledby="ainda-da-para-gastar" className="destaque-da-hoje">
             <h3 id="ainda-da-para-gastar">Ainda dá para gastar este mês</h3>
             <p className="valor" data-testid="ainda-da-para-gastar">
-              {formatarCentavos(dados.ainda_da_para_gastar_centavos)}
+              {dados.ainda_da_para_gastar_centavos < 0
+                ? `passou ${formatarCentavos(-dados.ainda_da_para_gastar_centavos)}`
+                : formatarCentavos(dados.ainda_da_para_gastar_centavos)}
             </p>
             <p className="vazio">
               {dados.planejado_centavos > 0

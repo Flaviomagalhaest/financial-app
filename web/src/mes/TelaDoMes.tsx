@@ -146,7 +146,7 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
       <h3>Itens do planejamento</h3>
       {itens.length > 0 ? (
         <>
-          {leitura.situacao !== "passado" && <p>Ainda dá para gastar: {formatarCentavos(ainda_da_para_gastar_centavos)}</p>}
+          {leitura.situacao !== "passado" && <p>{ainda_da_para_gastar_centavos < 0 ? `Ainda dá para gastar: passou ${formatarCentavos(-ainda_da_para_gastar_centavos)}` : `Ainda dá para gastar: ${formatarCentavos(ainda_da_para_gastar_centavos)}`}</p>}
           <div className="rolagem">
             <table className="tabela">
               <thead>

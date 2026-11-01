@@ -73,7 +73,7 @@ class Planejamento(BaseModel):
     a_escolher: list[AEscolher] = []
     # A soma do que falta em cada item, sem compensar item estourado com a sobra de outro, menos
     # os ajustes de fatura do mês (ADR 0008): eles saíram do bolso mas não são de item nenhum.
-    # Não fica abaixo de zero.
+    # Fica negativo quando os ajustes passam do que sobrava: a tela diz quanto passou.
     ainda_da_para_gastar_centavos: int
     # Os ajustes de fatura do mês, que contam aqui e no total, mas não em item.
     ajustes_de_fatura_centavos: int = 0
@@ -172,9 +172,8 @@ def ler_mes(conn, mes: str) -> Planejamento:
         mes=mes,
         itens=itens,
         a_escolher=a_escolher,
-        ainda_da_para_gastar_centavos=max(
-            sum(max(i.ainda_da_para_gastar_centavos, 0) for i in itens) - ajustes, 0
-        ),
+        ainda_da_para_gastar_centavos=sum(max(i.ainda_da_para_gastar_centavos, 0) for i in itens)
+        - ajustes,
         ajustes_de_fatura_centavos=ajustes,
     )
 

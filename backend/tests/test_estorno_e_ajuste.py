@@ -175,6 +175,25 @@ def test_ajuste_conta_nas_despesas_do_mes_e_no_ainda_da_para_gastar_mas_nao_em_c
     assert totais(casal, "2026-03")["despesas_centavos"] == 0
 
 
+def test_ainda_da_para_gastar_negativo_diz_quanto_estourou_por_causa_do_ajuste(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    casal.pedir(
+        "flavio",
+        "POST",
+        "/api/planejamento/2026-04/itens",
+        json={
+            "id": "00000000-0000-0000-0000-0000000000a2",
+            "categoria_id": casal.categoria("Mercado"),
+            "valor_centavos": 10000,
+        },
+    )
+
+    ajustar(casal, cartao, "2026-04-01", 15000)
+
+    planejamento = casal.pedir("flavio", "GET", "/api/planejamento/2026-04").json()
+    assert planejamento["ainda_da_para_gastar_centavos"] == -5000
+
+
 def estornar(casal: Casal, original: dict, data: str, **campos):
     return casal.pedir(
         "flavio",

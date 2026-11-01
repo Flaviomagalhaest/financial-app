@@ -118,6 +118,11 @@ test.describe("planejamento com a fila por cima", () => {
     expect(p.ainda_da_para_gastar_centavos).toBe(34000);
   });
 
+  test("o ajuste de fatura maior que o que sobra deixa o ainda dá para gastar negativo, sem parar em zero", () => {
+    const p = comAFila({ ...outubro, ajustes_de_fatura_centavos: 60000 }, [{ depois: lancamento({ id: "padaria", valor_centavos: 30000 }) }]);
+    expect(p.ainda_da_para_gastar_centavos).toBe(-25000);
+  });
+
   test("a exclusão não enviada tira a versão do servidor", () => {
     const p = comAFila(outubro, [{ antes: lancamento({ id: "feira", valor_centavos: 2000 }) }]);
     expect(item(p, "mercado")).toMatchObject({ realizado_centavos: 80000, percentual: 80 });

@@ -12,6 +12,7 @@ from app.exportacao import formatar_planilha
 from app.main import create_app
 from tests.conftest import Casal
 from tests.emissor import Emissor
+from tests.test_cartoes import comprar, novo_cartao
 from tests.test_lancamentos import lancamento
 
 
@@ -267,6 +268,41 @@ def test_planilha_traz_cada_parcela_com_o_numero_dela_como_no_mobills(
         "2026-03-28;Geladeira (1/2);-1500,01;Nubank;2026-04;Casa;;;efetivado;Flávio;Flávio",
         "2026-03-28;Geladeira (2/2);-1500,00;Nubank;2026-05;Casa;;;efetivado;Flávio;Flávio",
         "",
+    ]
+
+
+def test_planilha_traz_uma_linha_por_ajuste_de_fatura_diferente_de_zero_e_fecha_com_o_mes(
+    database_url: str, emissor: Emissor, casal: Casal
+):
+    novo = novo_cartao(casal)
+    cartao, nome = novo["id"], novo["nome"]
+    comprar(casal, cartao, "2026-04-02", valor_centavos=10000)
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/cartoes/{cartao}/faturas/2026-04-01",
+        json={"ajuste_centavos": 2350},
+    )
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/cartoes/{cartao}/faturas/2026-05-01",
+        json={"ajuste_centavos": -500},
+    )
+    casal.pedir(
+        "flavio", "PATCH", f"/api/cartoes/{cartao}/faturas/2026-06-01", json={"ajuste_centavos": 0}
+    )
+    s3 = S3Falso()
+
+    _cliente(database_url, emissor, s3).post(
+        "/api/exportacoes", json={"formato": "planilha"}, headers=emissor.cabecalho("flavio")
+    )
+
+    linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")[1:-1]
+    ajustes = [l for l in linhas if ";Ajuste de fatura " in l]
+    assert ajustes == [
+        f"2026-04-01;Ajuste de fatura {nome} 2026-04;-23,50;{nome};2026-04;;;;efetivado;;",
+        f"2026-05-01;Ajuste de fatura {nome} 2026-05;5,00;{nome};2026-05;;;;efetivado;;",
     ]
 
 
