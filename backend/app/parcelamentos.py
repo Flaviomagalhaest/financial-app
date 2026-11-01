@@ -31,7 +31,7 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
-from app.recorrencias import dia_do_lancamento, mais_meses
+from app.recorrencias import com_o_dia_do_lancamento, dia_do_lancamento_vigente, mais_meses
 
 router = APIRouter(prefix="/api")
 
@@ -229,17 +229,11 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
     ]
 
 
-def _lancado_em(regra: Parcelamento) -> date | None:
-    """O dia do lançamento, enquanto o parcelamento é o que o casal lançou: corrigido, nada mais
-    se gera para trás (ticket 125)."""
-    return regra.dia_do_lancamento if regra.alterado_em == regra.criado_em else None
-
-
 def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas parcelas, quantas cabem numa transação, e devolve se pode faltar
     alguma. O id de cada parcela vem do parcelamento e do número dela: gerar de novo não
     duplica. No boleto, a parcela de antes de hoje não vira lançamento (ticket 87); enquanto o
-    parcelamento é o que o casal lançou, o "hoje" é o dia do lançamento (`_lancado_em`), e a
+    parcelamento é o que o casal lançou, o "hoje" é o dia do lançamento (`dia_do_lancamento_vigente`), e a
     parcela desse dia nasce realizada. O cartão segue o ticket 99."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False  # excluído no meio da geração
@@ -260,8 +254,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         return False
     _reviver_as_que_a_correcao_tirou(conn, regra, geradas, proximas)
     dia_de_hoje = lancamentos.hoje()
-    lancado = _lancado_em(regra)
-    desde = min(lancado, dia_de_hoje) if lancado else dia_de_hoje
+    lancado = dia_do_lancamento_vigente(regra)
+    desde = lancado or dia_de_hoje
     for n in proximas:
         lancamento_id = uuid5(id, str(n))
         dia = regra.data if no_cartao else mais_meses(regra.data, n - 1)
@@ -430,7 +424,7 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
     no_cartao = faturas.ler_cartao(conn, novo.conta_id) is not None
     if no_cartao and novo.automatico is False:
         raise recusar("o parcelamento no cartão é automático")
-    novo = novo.model_copy(update={"dia_do_lancamento": dia_do_lancamento(novo.dia_do_lancamento)})
+    novo = com_o_dia_do_lancamento(novo)
     # Como a recorrência (ticket 87): o boleto que já venceu inteiro não teria parcela nenhuma.
     if not no_cartao and mais_meses(novo.data, novo.parcelas - 1) < novo.dia_do_lancamento:
         raise recusar("o parcelamento termina antes de hoje")

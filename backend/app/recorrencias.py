@@ -216,24 +216,29 @@ def data_da_ocorrencia(regra: Recorrencia, n: int) -> date:
     return _depois_do_inicio(regra, n - regra.ocorrencia_do_inicio)
 
 
-def dia_do_lancamento(pedido: date | None) -> date:
-    """O dia em que o casal lançou a regra: o do pedido, nunca depois de hoje."""
+def com_o_dia_do_lancamento[P: BaseModel](pedido: P) -> P:
+    """O pedido de criar uma regra (recorrência ou parcelamento) com o dia em que o casal a
+    lançou: o que veio nele, nunca depois de hoje (relógio adiantado); sem ele, hoje."""
     dia_de_hoje = lancamentos.hoje()
-    return min(pedido, dia_de_hoje) if pedido else dia_de_hoje
+    dia = min(pedido.dia_do_lancamento, dia_de_hoje) if pedido.dia_do_lancamento else dia_de_hoje
+    return pedido.model_copy(update={"dia_do_lancamento": dia})
 
 
-def lancada_em(regra: Recorrencia) -> date | None:
-    """O dia de onde a geração conta o "antes de hoje" além de hoje: o do lançamento, enquanto a
-    regra é a que o casal lançou. Mudada a regra, nada mais se gera para trás (ticket 125)."""
+def dia_do_lancamento_vigente(regra) -> date | None:
+    """O dia do lançamento da regra gravada (recorrência ou parcelamento), enquanto ela é a que
+    o casal lançou: a geração conta o "antes de hoje" dele. Mudada a regra, conta de hoje, e
+    nada mais se gera para trás (ticket 125). Gravado sempre até hoje, ele nunca passa de hoje."""
     return regra.dia_do_lancamento if regra.alterado_em == regra.criado_em else None
 
 
-def _termina_antes_do_lancamento(nova: NovaRecorrencia, lancada: date) -> bool:
+def _termina_antes_do_lancamento(nova: NovaRecorrencia) -> bool:
     """Nenhuma ocorrência do dia do lançamento em diante cabe no fim: a regra inteira está no
     passado."""
     if nova.ate is not None:
-        return nova.ate < lancada
-    return nova.vezes is not None and _depois_do_inicio(nova, nova.vezes - 1) < lancada
+        return nova.ate < nova.dia_do_lancamento
+    return (
+        nova.vezes is not None and _depois_do_inicio(nova, nova.vezes - 1) < nova.dia_do_lancamento
+    )
 
 
 def horizonte() -> date:
@@ -279,7 +284,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     horizonte tirou (`excluido_pela_regra`) volta quando a regra chega a ele: `geradas` recua até
     lá. A ocorrência de antes de hoje não vira lançamento (ticket 87; não é o mês pulado, que
     existe excluído): `geradas` passa por ela, e ela segue contando no calendário e nas `vezes`.
-    Enquanto a regra é a que o casal lançou, o "hoje" é o dia do lançamento (`lancada_em`), e a
+    Enquanto a regra é a que o casal lançou, o "hoje" é o dia do lançamento (`dia_do_lancamento_vigente`), e a
     ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu); fora dela,
     só a automática que chegou."""
     [regra] = _ler(conn, "id = %s", (id,))
@@ -289,8 +294,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     # O DSQL aceita até 3.000 linhas por transação: a mesma folga da restauração.
     por_lote = max(1, LINHAS_POR_LOTE // (1 + len(categorias) + len(tags)))
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
-    lancada = lancada_em(regra)
-    desde = min(lancada, dia_de_hoje) if lancada else dia_de_hoje
+    lancada = dia_do_lancamento_vigente(regra)
+    desde = lancada or dia_de_hoje
     proximas: list[tuple[int, date]] = []
     ultima, n = geradas, geradas
     while len(proximas) < por_lote:
@@ -459,8 +464,8 @@ def _gravar(conn, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, boo
     não edita a recorrência não enviada, e quem muda a regra é o PATCH (ticket 86)."""
     if ja := _ler(conn, "id = %s", (nova.id,)):
         return ja[0], False
-    nova = nova.model_copy(update={"dia_do_lancamento": dia_do_lancamento(nova.dia_do_lancamento)})
-    if _termina_antes_do_lancamento(nova, nova.dia_do_lancamento):
+    nova = com_o_dia_do_lancamento(nova)
+    if _termina_antes_do_lancamento(nova):
         raise recusar("a recorrência termina antes de hoje")
     conferir_ligacoes(conn, nova)
     tags = ids_das_tags(conn, nova.tags, usuario, set())
