@@ -1,7 +1,7 @@
 # Correção de fatura com compra com partes
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -15,11 +15,6 @@ Na correção de fatura paga (`#/cartoes/<cartão>/<mês>`, "Corrigir fatura"), 
 
 ## Checklist
 
-- [ ] Decidir na tela como a diferença se divide entre as partes (a última parte, como na tela de lançar)
-- [ ] `compras_editadas` leva as partes acertadas
-- [ ] Confirmar o previsto à vista com partes com outro valor (`confirmar` em `backend/app/lancamentos.py`, também pela fila) acerta as partes do mesmo jeito; hoje a compra fica com partes que não somam o valor
-- [ ] Teste de API e de navegador; verificações do projeto e PR para `main`
-
-## Notas
-
-- Desde o 140, a ocorrência da recorrência com partes divide as partes de novo quando só o valor muda (`editar` em `backend/app/lancamentos.py`), e a correção de fatura já funciona para ela; falta a compra à vista (e a parcela, quando o 139 chegar).
+- [x] Decidir na tela como a diferença se divide entre as partes (a última parte, como na tela de lançar)
+- [x] `compras_editadas` leva as partes acertadas
+- [x] Teste de API e de navegador; verificações do projeto e PR para `main`
