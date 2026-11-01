@@ -76,6 +76,7 @@ Spec escrita: [spec.md](spec.md).
 - [O que o Mobills exporta](issues/01-o-que-o-mobills-exporta.md): o export é XLSX, em dois modos (todas as transações e só cartão), e as faturas trazem a data real da compra. Achados na branch `research/mobills-exportacao`.
 - [Crédito da conta AWS](issues/16-conferir-credito-e-compartilhamento-na-conta-aws.md): saldo de US$ 119,98, válido até 12/04/2027, com o compartilhamento de créditos mantido (o outro projeto consome o mesmo crédito).
 - [Exportação](issues/25-exportacao.md): o backup é um zip de CSVs por tabela com manifesto e versão do formato, restaurado só em banco vazio; o CSV da planilha é um arquivo só de lançamentos. Um gerador atende o backup diário, o "exportar tudo" do app (URL assinada) e a carga do histórico do Mobills, que gera um backup válido; o CI testa a ida e volta. Veja o [ADR 0012](../../docs/adr/0012-exportacao-unica-zip-de-csvs-e-restauracao-so-em-banco-vazio.md).
+- [Conferir as regras de estorno e ajuste de fatura](issues/94-conferir-as-regras-de-estorno-e-ajuste.md): cancelar é excluir (fatura aberta ou fechada); a compra com estorno não sai; o estorno acompanha a compra; estorno avulso sem compra; alcance "só esta / esta e as próximas / todas" em qualquer campo da parcela; **partes da compra** na v1, à vista, parcelada e recorrente, por proporção. [ADR 0022](../../docs/adr/0022-partes-da-compra.md) e adendo da [ADR 0016](../../docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md); tickets 133 a 141.
 
 ## Not yet specified
 

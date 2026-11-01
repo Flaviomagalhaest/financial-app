@@ -113,7 +113,11 @@ Lançamento que é uma das N partes de um parcelamento (ex.: 3/10). No cartão, 
 _Avoid_: prestação
 
 **Parcela alterada à mão**:
-O "alterado à mão" da parcela: valor, data, conta ou fatura que uma pessoa mudou, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento a preserva nessas quatro coisas; a descrição, as categorias, as tags, a pessoa e o item valem para todas as parcelas.
+O "alterado à mão" da parcela: o campo que uma pessoa mudou só nela, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento e a mudança de "esta e as próximas" ou de "todas" a preservam nesses campos, com o aviso de quantas ficaram como estavam.
+
+**Alcance da mudança na parcela**:
+A escolha, ao mudar qualquer campo de uma parcela, entre "Só esta", "Esta e as próximas" e "Todas (inclusive as já realizadas)"; "só esta" deixa a parcela alterada à mão naquele campo.
+_Avoid_: escopo da edição, aplicar em lote
 
 **Correção do parcelamento**:
 Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje: a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_puladas`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova.
@@ -251,11 +255,19 @@ O que faltou pagar de uma fatura paga (o total menos o pago), que passa para a f
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
 
 **Estorno**:
-Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original e com as mesmas categorias e tags. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
+Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original (ou à parte dela) e com as categorias e tags dela, que acompanham as da compra quando ela muda. Na compra parcelada, é de uma parcela ou de todas, num estorno só. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
 _Avoid_: reembolso, devolução
 
+**Estorno avulso**:
+Crédito que aparece como linha própria na fatura sem uma compra identificável (uma correção de centavos, um crédito de loja), lançado um por um quando aparece; diminui o total da fatura e do mês, como o estorno, mas não está ligado a compra nem tem o limite do valor dela; a categoria, as tags e a pessoa são opcionais.
+_Avoid_: crédito avulso, reembolso
+
+**Parte da compra**:
+Pedaço de uma compra, com valor, categorias, tags e pessoa próprios, para a compra que junta coisas diferentes (ex.: roupa da esposa, fone do Flávio e cortina do casal no mesmo pedido); a soma das partes é o valor da compra, que aparece como uma linha só na fatura. Uma compra tem duas partes ou mais. Na compra parcelada e na recorrência, cada parcela ou ocorrência se divide pelas partes na mesma proporção, e o que vale é o valor dela.
+_Avoid_: item da compra (item é do planejamento), subitem, rateio
+
 **Compra cancelada**:
-Compra no cartão que o casal desfaz antes do fechamento da fatura: é excluída e some de tudo (fatura, mês, categoria, tag e planejamento). Depois do fechamento, o caminho é o estorno.
+Compra no cartão que não aconteceu (lançada errada ou desfeita): é excluída e some de tudo (fatura, mês, categoria, tag e planejamento), com a fatura aberta ou fechada, mas não na paga. A compra que aconteceu e foi devolvida não se cancela: recebe um estorno, e enquanto tiver estorno não pode ser excluída.
 _Avoid_: compra estornada (estorno é o crédito que aparece numa fatura posterior)
 
 **Transferência**:
