@@ -512,15 +512,23 @@ def test_edicao_em_lote_deixa_de_fora_a_compra_com_partes(casal: Casal):
     assert depois["categoria_ids"] == [] and depois["versao"] == 1
 
 
-def test_sugestao_e_favorito_ainda_nao_levam_a_compra_com_partes(casal: Casal):
+def test_sugestao_leva_a_compra_com_partes_e_o_favorito_a_conta_pelas_partes(casal: Casal):
     conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
-    compra_com_partes(casal, conta, [parte([roupa], 600), parte([casa], 400)], data="2026-10-02")
+    for dia in range(1, 6):
+        compra_com_partes(
+            casal, conta, [parte([roupa], 600), parte([casa], 400)], data=f"2026-10-0{dia}"
+        )
 
     sugestoes = casal.pedir("flavio", "GET", "/api/sugestoes").json()["sugestoes"]
     favoritos = casal.pedir("flavio", "GET", "/api/favoritos").json()
 
-    assert sugestoes == []
-    assert favoritos["sugeridos"] == []
+    [sugestao] = sugestoes
+    assert [(p["valor_centavos"], p["categoria_ids"]) for p in sugestao["partes"]] == [
+        (600, [roupa]),
+        (400, [casa]),
+    ]
+    [sugerido] = favoritos["sugeridos"]
+    assert sugerido["usos"] == 5 and len(sugerido["partes"]) == 2
 
 
 def test_juntar_as_partes_com_a_classificacao_que_o_pedido_traz(casal: Casal):

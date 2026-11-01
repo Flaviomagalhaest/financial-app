@@ -5926,8 +5926,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -5953,6 +5953,14 @@
             "exclusiveMinimum": 0.0,
             "title": "Valor Centavos"
           },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/ParteDoModelo"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -5971,7 +5979,6 @@
         "required": [
           "tipo",
           "conta_id",
-          "categoria_ids",
           "valor_centavos",
           "id",
           "ordem",
@@ -7820,8 +7827,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -7847,6 +7854,14 @@
             "exclusiveMinimum": 0.0,
             "title": "Valor Centavos"
           },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/ParteDoModelo"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -7857,7 +7872,6 @@
         "required": [
           "tipo",
           "conta_id",
-          "categoria_ids",
           "valor_centavos",
           "id"
         ],
@@ -8763,6 +8777,55 @@
         ],
         "title": "Parte",
         "description": "Um pedaço da compra que junta coisas diferentes, com classificação própria (ADR 0022). Quem\nsoma por categoria, tag, pessoa ou item lê a parte; a fatura, o mês e o saldo leem a compra."
+      },
+      "ParteDoModelo": {
+        "properties": {
+          "descricao": {
+            "type": "string",
+            "title": "Descricao",
+            "default": ""
+          },
+          "valor_centavos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Valor Centavos"
+          },
+          "categoria_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categoria Ids"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "pessoa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pessoa"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valor_centavos",
+          "categoria_ids"
+        ],
+        "title": "ParteDoModelo",
+        "description": "Uma parte da compra do favorito ou da sugestão (ADR 0022): sem id nem item, porque a compra\nque nasce dela cria as próprias partes. O valor é o da última compra: vale como proporção."
       },
       "PedidoDeBusca": {
         "properties": {
@@ -9684,8 +9747,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -9711,6 +9774,14 @@
             "exclusiveMinimum": 0.0,
             "title": "Valor Centavos"
           },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/ParteDoModelo"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
+          },
           "chave": {
             "type": "string",
             "title": "Chave"
@@ -9724,7 +9795,6 @@
         "required": [
           "tipo",
           "conta_id",
-          "categoria_ids",
           "valor_centavos",
           "chave",
           "usos"
@@ -9779,6 +9849,14 @@
               }
             ],
             "title": "Pessoa"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/ParteDoModelo"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
           },
           "em": {
             "type": "string",

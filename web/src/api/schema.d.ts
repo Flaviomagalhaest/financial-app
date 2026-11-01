@@ -2013,7 +2013,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2024,6 +2027,11 @@ export interface components {
             pessoa?: string | null;
             /** Valor Centavos */
             valor_centavos: number;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["ParteDoModelo"][];
             /**
              * Id
              * Format: uuid
@@ -2731,7 +2739,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2742,6 +2753,11 @@ export interface components {
             pessoa?: string | null;
             /** Valor Centavos */
             valor_centavos: number;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["ParteDoModelo"][];
             /**
              * Id
              * Format: uuid
@@ -3161,6 +3177,29 @@ export interface components {
             /** Item Categoria Id */
             item_categoria_id?: string | null;
         };
+        /**
+         * ParteDoModelo
+         * @description Uma parte da compra do favorito ou da sugestão (ADR 0022): sem id nem item, porque a compra
+         *     que nasce dela cria as próprias partes. O valor é o da última compra: vale como proporção.
+         */
+        ParteDoModelo: {
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+        };
         /** PedidoDeBusca */
         PedidoDeBusca: {
             /**
@@ -3546,7 +3585,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -3557,6 +3599,11 @@ export interface components {
             pessoa?: string | null;
             /** Valor Centavos */
             valor_centavos: number;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["ParteDoModelo"][];
             /** Chave */
             chave: string;
             /** Usos */
@@ -3587,6 +3634,11 @@ export interface components {
             tags: string[];
             /** Pessoa */
             pessoa: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["ParteDoModelo"][];
             /**
              * Em
              * Format: date-time

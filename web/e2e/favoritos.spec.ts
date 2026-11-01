@@ -151,3 +151,32 @@ test("os mais repetidos viram sugeridos; promover ou dispensar, e reordenar e re
   await expect(lista.filter({ hasText: `Padaria ${s}` })).toHaveCount(0);
   await expect(lista.filter({ hasText: `Mercado ${s}` })).toBeVisible();
 });
+
+test("o favorito com partes preenche as partes na proporção do último valor, e mudar o valor redivide", async ({ page }) => {
+  const s = sufixo();
+  const { api, conta, categoria } = await prepararCasal(page, s);
+  const eletronico = await api.criar("/api/categorias", { nome: `Eletrônico ${s}`, tipo: "despesa" });
+  const modelo = [
+    { descricao: "Vestido", valor_centavos: 50000, categoria_ids: [categoria.id], tags: [], pessoa: null },
+    { descricao: "Fone", valor_centavos: 25000, categoria_ids: [eletronico.id], tags: [], pessoa: null },
+    { descricao: "Cortina", valor_centavos: 25000, categoria_ids: [categoria.id], tags: [], pessoa: null },
+  ];
+  await api.criar("/api/favoritos", { id: randomUUID(), descricao: `Mercado Livre ${s}`, tipo: "despesa", conta_id: conta.id, categoria_ids: [], tags: [], pessoa: null, valor_centavos: 100000, partes: modelo });
+  await page.reload();
+
+  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("group", { name: "Favoritos" }).getByRole("button", { name: new RegExp(`Mercado Livre ${s}`) }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 1.000,00");
+  const parte = (n: number) => page.getByRole("group", { name: `Parte ${n}`, exact: true });
+  await expect(parte(1).getByLabel("Valor da parte")).toHaveValue("500,00");
+  await expect(parte(2).getByLabel("Valor da parte")).toHaveValue("250,00");
+  await expect(parte(3).getByLabel("Valor de Cortina")).toContainText("R$ 250,00");
+
+  // Outro valor: as partes se dividem de novo, 2 : 1 : 1.
+  await digitar(page, "Apagar", "Apagar", "Apagar", "Apagar", "Apagar", "Apagar");
+  await digitar(page, "4", "00", "00");
+  await expect(page.getByTestId("valor")).toHaveText("R$ 400,00");
+  await expect(parte(1).getByLabel("Valor da parte")).toHaveValue("200,00");
+  await expect(parte(2).getByLabel("Valor da parte")).toHaveValue("100,00");
+  await expect(parte(3).getByLabel("Valor de Cortina")).toContainText("R$ 100,00");
+});

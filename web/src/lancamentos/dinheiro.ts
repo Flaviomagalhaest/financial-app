@@ -36,14 +36,21 @@ export function dividirEmParcelas(total: number, parcelas: number): { primeira: 
  * `tabelas-de-teste/redivisao-das-partes.json` prende as duas contas juntas (ADR 0018).
  */
 export function redividir<P extends { valor_centavos: number }>(partes: P[], valor: number): P[] | null {
-  const pesos = partes.map((p) => BigInt(p.valor_centavos));
-  const total = pesos.reduce((soma, peso) => soma + peso, 0n);
-  // Em BigInt: o valor vezes o peso passa do inteiro exato do JavaScript nos valores grandes.
-  const valores = pesos.map((peso) => Number((BigInt(valor) * peso) / total));
-  const maior = partes.reduce((m, p, i) => (p.valor_centavos > partes[m].valor_centavos ? i : m), 0);
-  valores[maior] += valor - valores.reduce((soma, v) => soma + v, 0);
+  const valores = dividirNaProporcao(partes.map((p) => p.valor_centavos), valor);
   if (valores.some((v) => v <= 0)) return null;
   return partes.map((p, i) => ({ ...p, valor_centavos: valores[i] }));
+}
+
+/**
+ * O total dividido na proporção dos pesos, como `redividir`, sem recusar a parte que ficaria sem
+ * centavo: a tela de lançar a mostra com zero e pede outro valor.
+ */
+export function dividirNaProporcao(pesos: number[], total: number): number[] {
+  const soma = pesos.reduce((a, b) => a + b, 0);
+  // Em BigInt: o total vezes o peso passa do inteiro exato do JavaScript nos valores grandes.
+  const valores = pesos.map((peso) => Number((BigInt(total) * BigInt(peso)) / BigInt(soma)));
+  valores[pesos.indexOf(Math.max(...pesos))] += total - valores.reduce((a, b) => a + b, 0);
+  return valores;
 }
 
 /** "1.234,56" ou "1234.56" em centavos; vazio é `null` e o que não for número é `undefined`. */

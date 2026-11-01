@@ -1162,6 +1162,40 @@ def test_backup_da_versao_26_sem_partes_restaura_sem_nenhuma(database_url):
         assert conn.execute("SELECT count(*) FROM lancamento_partes").fetchone() == (0,)
 
 
+def test_backup_da_versao_27_sem_partes_no_favorito_restaura_com_a_lista_vazia(database_url):
+    # O formato 27, anterior ao ticket 141: o favorito era de uma compra só.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO favoritos (id, estado, identidade, tipo, conta_id, categoria_ids, tags,"
+            " valor_centavos, ordem, criado_por, partes) VALUES"
+            " ('00000000-0000-0000-0000-000000000001', 'favorito', 'x', 'despesa',"
+            " '00000000-0000-0000-0000-000000000002', '[]', '[]', 1000, 1, 'flavio', '[]')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM favoritos")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "favoritos.csv":
+                conteudo = b"\n".join(
+                    b",".join(linha.split(b",")[:-1]) if linha else linha
+                    for linha in conteudo.split(b"\n")
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 27
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT partes FROM favoritos").fetchall() == [("[]",)]
+
+
 def test_as_partes_da_compra_voltam_do_backup_com_as_categorias_e_as_tags(database_url):
     aplicar_migrations(database_url)
     compra, parte, categoria, tag = (f"00000000-0000-0000-0000-00000000000{n}" for n in range(1, 5))
@@ -1187,8 +1221,8 @@ def test_as_partes_da_compra_voltam_do_backup_com_as_categorias_e_as_tags(databa
         ).fetchall() == [("Vestido", 50000, "esposa", categoria, tag)]
 
 
-def test_backup_da_versao_27_sem_partes_da_regra_restaura_sem_nenhuma(database_url):
-    # O formato 27, anterior ao ticket 140: só a compra à vista tinha partes.
+def test_backup_da_versao_28_sem_partes_da_regra_restaura_sem_nenhuma(database_url):
+    # O formato 28, anterior ao ticket 140: só a compra à vista tinha partes.
     aplicar_migrations(database_url)
     with psycopg.connect(database_url, autocommit=True) as conn:
         atual = gerar_backup(conn)
@@ -1201,7 +1235,7 @@ def test_backup_da_versao_27_sem_partes_da_regra_restaura_sem_nenhuma(database_u
             conteudo = origem.read(nome)
             if nome == "manifesto.json":
                 manifesto = json.loads(conteudo)
-                manifesto["versao_formato"] = 27
+                manifesto["versao_formato"] = 28
                 for tabela in novas:
                     del manifesto["tabelas"][tabela]
                 conteudo = json.dumps(manifesto).encode()

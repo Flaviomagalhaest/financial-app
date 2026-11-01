@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar, lancar } from "./lancar";
 
@@ -64,4 +65,42 @@ test("sugere pelo histórico sem internet: escolher preenche os campos e mantém
   await context.setOffline(false);
   await expect(sugestoes).toHaveCount(1);
   await expect(sugestoes.first()).toContainText(`${casa} · ${outraConta} · Flávio`);
+});
+
+test("a sugestão de uma compra com partes oferece o pacote: escolher divide o valor da tela na proporção", async ({ page }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/#/historico");
+  await entrar(page);
+  const api = await apiDaPagina(page);
+  const conta = await api.criar("/api/contas", { nome: `Corrente ${s}`, tipo: "corrente" });
+  const roupa = await api.criar("/api/categorias", { nome: `Roupa ${s}`, tipo: "despesa" });
+  const casa = await api.criar("/api/categorias", { nome: `Casa ${s}`, tipo: "despesa" });
+  await api.criar("/api/lancamentos", {
+    id: crypto.randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 100000,
+    data: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()),
+    descricao: `Atacado ${s}`,
+    conta_id: conta.id,
+    categoria_ids: [],
+    partes: [
+      { id: crypto.randomUUID(), descricao: "Vestido", valor_centavos: 75000, categoria_ids: [roupa.id] },
+      { id: crypto.randomUUID(), descricao: "Cortina", valor_centavos: 25000, categoria_ids: [casa.id] },
+    ],
+  });
+  const indice = page.waitForResponse((r) => r.url().endsWith("/api/sugestoes") && r.ok());
+  await page.reload();
+  await indice;
+
+  const sugestoes = await descrever(page, ["2", "00", "00"], `atacado ${s}`);
+  await expect(sugestoes).toHaveCount(1);
+  await expect(sugestoes.first()).toContainText("Vestido R$ 750,00 + Cortina R$ 250,00");
+  await sugestoes.first().click();
+  await page.getByRole("button", { name: "Pronto" }).click();
+
+  const parte = (n: number) => page.getByRole("group", { name: `Parte ${n}`, exact: true });
+  await expect(page.getByTestId("valor")).toHaveText("R$ 200,00");
+  await expect(parte(1).getByLabel("Valor da parte")).toHaveValue("150,00");
+  await expect(parte(2).getByLabel("Valor de Cortina")).toContainText("R$ 50,00");
+  await expect(parte(1).getByRole("button", { name: `Roupa ${s}` })).toHaveAttribute("aria-pressed", "true");
 });

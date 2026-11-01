@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { components } from "../api/schema";
 import { chaveDaTag, type Categoria, type Pessoa } from "../dados";
 import { nomePorId } from "./apresentacao";
-import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
+import { comoDigitado, dividirNaProporcao, emCentavos, formatarCentavos } from "./dinheiro";
 import { SeletorDeTags } from "./SeletorDeTags";
 
 export type Parte = components["schemas"]["Parte"];
@@ -87,6 +87,12 @@ export function PartesDaCompra(props: { partes: Parte[]; so?: Parte[] | null; ca
 export type ParteEmEdicao = Omit<Parte, "valor_centavos"> & { valor: string };
 
 export const emEdicao = (p: Parte): ParteEmEdicao => ({ ...p, valor: comoDigitado(p.valor_centavos) });
+
+/** As partes de um favorito ou sugestão como a tela as edita, com novos ids e o total dividido na proporção. */
+export function emEdicaoNaProporcao(modelo: { descricao?: string; valor_centavos: number; categoria_ids: string[]; tags?: string[]; pessoa?: string | null }[], total: number): ParteEmEdicao[] {
+  const valores = dividirNaProporcao(modelo.map((p) => p.valor_centavos), total);
+  return modelo.map((p, i) => emEdicao({ id: crypto.randomUUID(), descricao: p.descricao ?? "", valor_centavos: valores[i], categoria_ids: p.categoria_ids, tags: p.tags ?? [], pessoa: p.pessoa ?? null, item_categoria_id: null }));
+}
 
 /** Uma parte vazia, com o id que nasce no aparelho. */
 export const parteNova = (): ParteEmEdicao => ({ id: crypto.randomUUID(), descricao: "", valor: "", categoria_ids: [], tags: [], pessoa: null, item_categoria_id: null });

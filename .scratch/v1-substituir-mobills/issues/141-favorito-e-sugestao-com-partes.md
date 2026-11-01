@@ -1,7 +1,7 @@
 # Favorito e sugestão com partes
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 137
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Sonnet
@@ -15,12 +15,12 @@ O favorito e a sugestão por descrição passam a levar as partes da compra.
 
 ## Checklist
 
-- [ ] A identidade do lançamento inclui as partes (descrição, categorias, tags, pessoa e proporção)
-- [ ] O favorito de compra com partes preenche as partes na proporção do último valor; mudar o valor redivide
-- [ ] A sugestão por descrição oferece o pacote com partes
-- [ ] Testes; verificações do projeto e PR para `main`
+- [x] A identidade do lançamento inclui as partes (descrição, categorias, tags, pessoa e proporção)
+- [x] O favorito de compra com partes preenche as partes na proporção do último valor; mudar o valor redivide
+- [x] A sugestão por descrição oferece o pacote com partes
+- [x] Testes; verificações do projeto e PR para `main`
 
 ## Notas
 
 - Decisão Q45 do ticket 94; ADR 0022.
-- O 140 trouxe a conta da proporção: `redividir` em `backend/app/partes.py` e em `web/src/lancamentos/dinheiro.ts`, presas por `tabelas-de-teste/redivisao-das-partes.json`. O favorito pode dividir as partes pelo valor com ela.
+- No merge com o 140, a divisão na proporção do app (`dividirNaProporcao`) passou para `web/src/lancamentos/dinheiro.ts`, junto do `redividir` da recorrência, e a tabela `tabelas-de-teste/redivisao-das-partes.json` prende as duas contas ao servidor.
