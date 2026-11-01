@@ -85,7 +85,7 @@ Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...
 _Avoid_: instância, repetição
 
 **Daqui para frente**:
-Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número.
+Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número. Nada vira lançamento antes de hoje: o previsto que a data nova leva de hoje ou depois para antes sai, marcado como da regra, e volta se outra mudança o trouxer para hoje ou depois. O atrasado não vira automático.
 _Avoid_: a partir de agora, mudar tudo
 
 **Encerrar**:
@@ -105,7 +105,7 @@ Rotina do servidor que roda logo depois da meia-noite de São Paulo: estende o h
 _Avoid_: job, cron, rotina noturna
 
 **Parcelamento**:
-Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela. No boleto com a data no passado, as parcelas de antes do dia do lançamento são puladas (`parcelas_puladas` na resposta; não é a parcela que o casal excluiu, que existe excluída): não viram lançamento, mas contam na numeração e no total, e a desse dia nasce realizada; o boleto que já venceu inteiro é recusado. O cartão gera todas.
+Compra ou dívida dividida em N parcelas; não é um lançamento, gera um lançamento para cada parcela. No boleto com a data no passado, as parcelas de antes do dia do lançamento são puladas (`parcelas_puladas` na resposta; não é a parcela que o casal excluiu): não viram lançamento, mas contam na numeração e no total, e a desse dia nasce realizada; o boleto que já venceu inteiro é recusado. A correção também pula a prevista que leva para antes de hoje (essa existe excluída, marcada como da regra, e volta se outra correção a trouxer para hoje ou depois). O cartão gera todas.
 _Avoid_: compra parcelada, financiamento
 
 **Parcela**:
@@ -116,7 +116,7 @@ _Avoid_: prestação
 O "alterado à mão" da parcela: valor, data, conta ou fatura que uma pessoa mudou, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento a preserva nessas quatro coisas; a descrição, as categorias, as tags, a pessoa e o item valem para todas as parcelas.
 
 **Correção do parcelamento**:
-Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo.
+Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje: a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_puladas`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova.
 _Avoid_: regerar, recalcular o parcelamento
 
 **Antecipação**:
@@ -305,6 +305,10 @@ _Avoid_: download, relatório
 **Restauração**:
 Carga de um backup num banco vazio, tudo ou nada (em lotes que se desfazem se algo falhar), conferida contra o manifesto, que recusa banco com dados e versão de formato desconhecida; é também o caminho da carga do histórico do Mobills.
 _Avoid_: importação do backup, merge
+
+**Refazer a importação**:
+Trocar, até a virada, a importação do Mobills gravada por uma nova: esvazia o banco e faz a restauração do zip novo. Recusa, sem apagar nada, se o banco ou o zip tiver **uso pelo app**: alguma linha com quem criou, alterou, excluiu ou desfez diferente da autoria da importação. A preparação da virada (saldo de abertura, limite, titular, datas das faturas) se perde e é informada de novo.
+_Avoid_: reimportar, mesclar a importação
 
 ### Importação do Mobills
 

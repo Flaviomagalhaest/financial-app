@@ -28,6 +28,7 @@ import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
 import { divisao, pedidoDo, problemaDo, rotuloDasParcelas, type ParcelamentoNaFolha } from "./parcelamento";
 import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
+import { avisoDasPuladas, ocorrenciasPuladas, parcelasPuladas } from "./puladas";
 import { Teclado } from "./Teclado";
 
 type Tipo = "despesa" | "receita";
@@ -173,6 +174,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
 
   const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
   const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
+  const avisoDaRecorrencia = recorrencia ? avisoDasPuladas(ocorrenciasPuladas(recorrencia, data, hoje()), { um: "ocorrência", varios: "ocorrências" }) : "";
+  const avisoDoParcelamento = parcelamento ? avisoDasPuladas(parcelasPuladas(parcelamento.parcelas, data, hoje(), noCartao), { um: "parcela", varios: "parcelas" }) : "";
   const rotuloDoParcelamento = parcelamento && (parcelas ? rotuloDasParcelas(parcelas) : `${parcelamento.parcelas}x`);
 
   // O que a folha de detalhes preencheu, numa linha; a data de hoje e o realizado são o normal e não aparecem.
@@ -491,11 +494,11 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
-          recorrencia={id || estornando ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
+          recorrencia={id || estornando ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
           parcelamento={
             id || estornando || tipo !== "despesa"
               ? undefined
-              : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
+              : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, aviso: avisoDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
           }
           onFechar={() => setDetalhesAbertos(false)}
         />

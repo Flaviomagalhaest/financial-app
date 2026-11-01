@@ -11,13 +11,14 @@ from datetime import UTC, date, datetime
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from app import pessoas
-from app.backup import NUMERICOS, esquema, montar_backup
+from app.backup import AUTORIA_DA_IMPORTACAO, NUMERICOS, esquema, montar_backup
 from app.faturas import Titular, datas_padrao
 from app.mobills.importacao import FONTE, Importacao, Lancamento
 
 # O `criado_por` de tudo o que veio do Mobills: um só, para o "Parece repetido" (que compara
-# autores diferentes) não comparar o histórico com ele mesmo.
-CRIADO_POR = "mobills"
+# autores diferentes) não comparar o histórico com ele mesmo, e para o refazer saber o que é só
+# importado (`app.backup.refazer_importacao`).
+CRIADO_POR = AUTORIA_DA_IMPORTACAO
 _ESPACO = uuid5(NAMESPACE_URL, "https://github.com/Flaviomagalhaest/financial-app/mobills")
 
 
@@ -202,6 +203,7 @@ class _Linhas:
             ("criado_em", self.agora),
             ("excluido_pela_regra", False),
             ("classificacao_pendente", ""),
+            ("corrigido_em", None),
         ):
             if coluna in colunas:
                 valores.setdefault(coluna, padrao)

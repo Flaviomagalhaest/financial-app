@@ -16,6 +16,7 @@ Origem: [ticket 125](125-geracao-pula-o-passado.md) (revisão: o ticket 87 não 
 3. **A de hoje só nasce realizada na criação.** Gerada depois (pela tarefa diária ou por uma mudança da regra), a estimada de hoje nasce prevista e pede confirmação.
 4. **"Pulada" tem dois sentidos**: o mês que o casal pulou (excluído) e a parcela que não nasceu por estar no passado (`parcelas_puladas`). Trocar a palavra do segundo (por exemplo "anteriores")?
 5. **Precisa de ADR?** "A geração só lança de hoje em diante" mexe no previsto e no realizado da ADR 0004; hoje o registro é o ticket 87 e o glossário.
+6. **A correção que leva a data para trás** ([ticket 126](126-correcao-com-parcelas-puladas.md)). Do 87 vem que a prevista que passa de hoje ou depois para antes sai como pulada, sem realizar a automática. Três escolhas não vêm do 87: a parcela atrasada (que já estava antes de hoje) muda de data e segue prevista; a realizada muda de data para o passado, com a confirmação de sempre; e o previsto atrasado de uma recorrência que vira automática não vira automático, segue esperando o casal. A alternativa nas duas primeiras é tirar a atrasada como pulada e recusar mover a realizada.
 
 ## Checklist
 

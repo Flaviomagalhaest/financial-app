@@ -1,0 +1,27 @@
+{
+  "sobre": "Quantas ocorrências da recorrência e parcelas do boleto caem antes de hoje e não viram lançamento (ticket 87; ADR 0018; backend/app/recorrencias.py, backend/app/parcelamentos.py e web/src/lancamentos). `hoje` é fixo. O calendário é contado do início (dia 31 volta a 31); o fim por `vezes` ou `ate` vale; o cartão não pula parcela.",
+  "recorrencias": [
+    { "caso": "início hoje não pula nada", "hoje": "2026-10-15", "inicio": "2026-10-15", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": null, "puladas": 0 },
+    { "caso": "início ontem pula uma", "hoje": "2026-10-15", "inicio": "2026-10-14", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": null, "puladas": 1 },
+    { "caso": "início no futuro não pula nada", "hoje": "2026-10-15", "inicio": "2026-11-01", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": null, "puladas": 0 },
+    { "caso": "mensal começada em julho pula quatro", "hoje": "2026-10-15", "inicio": "2026-07-10", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": null, "puladas": 4 },
+    { "caso": "a cada 2 meses", "hoje": "2026-10-15", "inicio": "2026-04-20", "a_cada": 2, "unidade": "meses", "ate": null, "vezes": null, "puladas": 3 },
+    { "caso": "semanal começada há quatro semanas", "hoje": "2026-10-15", "inicio": "2026-09-17", "a_cada": 1, "unidade": "semanas", "ate": null, "vezes": null, "puladas": 4 },
+    { "caso": "a cada 2 semanas", "hoje": "2026-10-15", "inicio": "2026-09-01", "a_cada": 2, "unidade": "semanas", "ate": null, "vezes": null, "puladas": 4 },
+    { "caso": "dia 31 conta do início: 31/07, 31/08, 30/09 e depois 31/10", "hoje": "2026-10-15", "inicio": "2026-07-31", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": null, "puladas": 3 },
+    { "caso": "dia 31 em fevereiro cai no 28", "hoje": "2026-03-01", "inicio": "2026-01-31", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": null, "puladas": 2 },
+    { "caso": "fim por vezes corta as puladas", "hoje": "2026-10-15", "inicio": "2026-07-10", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": 2, "puladas": 2 },
+    { "caso": "fim por vezes inteira no passado", "hoje": "2026-10-15", "inicio": "2026-01-10", "a_cada": 1, "unidade": "meses", "ate": null, "vezes": 3, "puladas": 3 },
+    { "caso": "fim por data corta as puladas", "hoje": "2026-10-15", "inicio": "2026-07-10", "a_cada": 1, "unidade": "meses", "ate": "2026-08-31", "vezes": null, "puladas": 2 },
+    { "caso": "fim por data no dia da ocorrência ainda conta", "hoje": "2026-10-15", "inicio": "2026-07-10", "a_cada": 1, "unidade": "meses", "ate": "2026-09-10", "vezes": null, "puladas": 3 }
+  ],
+  "parcelamentos": [
+    { "caso": "primeira parcela hoje não pula nada", "hoje": "2026-10-15", "data": "2026-10-15", "parcelas": 3, "no_cartao": false, "puladas": 0 },
+    { "caso": "primeira parcela ontem pula uma", "hoje": "2026-10-15", "data": "2026-10-14", "parcelas": 3, "no_cartao": false, "puladas": 1 },
+    { "caso": "boleto no futuro não pula nada", "hoje": "2026-10-15", "data": "2026-11-01", "parcelas": 3, "no_cartao": false, "puladas": 0 },
+    { "caso": "boleto de 4 parcelas começado há dois meses", "hoje": "2026-10-15", "data": "2026-08-10", "parcelas": 4, "no_cartao": false, "puladas": 3 },
+    { "caso": "todas no passado", "hoje": "2026-10-15", "data": "2026-01-10", "parcelas": 3, "no_cartao": false, "puladas": 3 },
+    { "caso": "dia 31 conta do início", "hoje": "2026-10-15", "data": "2026-07-31", "parcelas": 5, "no_cartao": false, "puladas": 3 },
+    { "caso": "o cartão não pula nenhuma", "hoje": "2026-10-15", "data": "2026-01-10", "parcelas": 3, "no_cartao": true, "puladas": 0 }
+  ]
+}

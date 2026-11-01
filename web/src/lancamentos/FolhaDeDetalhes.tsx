@@ -34,7 +34,12 @@ type Props = {
    * Só no lançamento novo: "Repete?". Sem repetição (`null`) é uma vez só; com ela, salvar cria a
    * recorrência que começa na data, e situação e fatura ficam por conta da regra.
    */
-  recorrencia?: { valor: RecorrenciaNaFolha | null; problema: string | null; onMudar: (recorrencia: RecorrenciaNaFolha | null) => void };
+  recorrencia?: {
+    valor: RecorrenciaNaFolha | null;
+    problema: string | null; onMudar: (recorrencia: RecorrenciaNaFolha | null) => void;
+    /** Quantas ocorrências caem antes de hoje e não serão lançadas, dito antes de salvar. */
+    aviso: string;
+  };
   /**
    * Só na despesa nova: o "Parcelado" de "Repete?". Com ele, salvar cria o parcelamento, e a data é a
    * da compra (no cartão) ou a da 1ª parcela; `rotulo` mostra como o valor digitado se divide.
@@ -44,6 +49,8 @@ type Props = {
     noCartao: boolean;
     rotulo: string;
     problema: string | null;
+    /** Quantas parcelas vencem antes de hoje e não serão lançadas, dito antes de salvar. */
+    aviso: string;
     onMudar: (parcelamento: ParcelamentoNaFolha | null) => void;
   };
   onFechar: () => void;
@@ -202,6 +209,7 @@ export function FolhaDeDetalhes(props: Props) {
             </label>
           )}
           {props.parcelamento?.problema && <p className="erro">{props.parcelamento.problema}</p>}
+          {props.parcelamento?.aviso && <p className="aviso">{props.parcelamento.aviso}</p>}
         </>
       )}
       {recorrencia && (
@@ -263,6 +271,7 @@ export function FolhaDeDetalhes(props: Props) {
             <p className="vazio">O estimado (a luz, o salário) sempre pede confirmação.</p>
           )}
           {props.recorrencia?.problema && <p className="erro">{props.recorrencia.problema}</p>}
+          {props.recorrencia?.aviso && <p className="aviso">{props.recorrencia.aviso}</p>}
         </>
       )}
 
