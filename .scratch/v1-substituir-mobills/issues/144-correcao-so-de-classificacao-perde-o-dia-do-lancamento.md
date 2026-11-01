@@ -17,3 +17,7 @@ O ticket 132 diz que o parcelamento continua "o que o casal lançou" até uma co
 
 - [x] O dia do lançamento só deixa de valer quando a correção muda valor, parcelas ou data. Conferir antes se `corrigido_em` também serve ao refazer de uma correção que parou no meio (ticket 131).
 - [x] Teste: boleto lançado ontem com a geração parada, correção só da descrição, tarefa diária: a parcela de ontem nasce realizada.
+
+## Resolução
+
+`gravar_correcao` só grava `corrigido_em` quando a correção muda valor, parcelas ou data (`_muda_o_calendario`); nas outras (descrição, pessoa, categoria, tags) mantém o valor anterior. Manter o anterior, e não zerar, preserva o dia do pedido que o refazer da correção parada lê (ticket 131); sem correção anterior ele segue vazio e o refazer usa o dia da retomada, inofensivo porque o calendário não mudou. Teste: `test_corrigir_so_a_descricao_nao_tira_a_parcela_do_dia_do_lancamento`.

@@ -249,9 +249,18 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
 
 def _dia_do_lancamento_vigente(conn, regra: Parcelamento) -> date | None:
     """O dia do lançamento, enquanto o parcelamento não foi corrigido (`corrigido_em`, que só a
-    correção de valor, parcelas ou data grava). A classificação que a edição em lote muda também mexe em `alterado_em` e
-    não no calendário, por isso não conta (ticket 132)."""
+    correção de valor, parcelas ou data grava, ticket 144). A classificação que a edição em lote
+    muda também mexe em `alterado_em` e não no calendário, por isso não conta (ticket 132)."""
     return regra.dia_do_lancamento if _corrigido_em(conn, regra.id) is None else None
+
+
+def _muda_o_calendario(atual: Parcelamento, nova: Parcelamento) -> bool:
+    """Se a correção mexe no valor, nas parcelas ou na data, o que desfaz o dia do lançamento."""
+    return (nova.valor_total_centavos, nova.parcelas, nova.data) != (
+        atual.valor_total_centavos,
+        atual.parcelas,
+        atual.data,
+    )
 
 
 def _corrigido_em(conn, id: UUID) -> date | None:
@@ -937,10 +946,7 @@ def gravar_correcao(
             usuario,
             _gravar_classificacao(classificacao),
             # Só a correção de valor, parcelas ou data tira o dia do lançamento (ticket 144).
-            lancamentos.hoje()
-            if (nova.valor_total_centavos, nova.parcelas, nova.data)
-            != (atual.valor_total_centavos, atual.parcelas, atual.data)
-            else _corrigido_em(conn, id),
+            lancamentos.hoje() if _muda_o_calendario(atual, nova) else _corrigido_em(conn, id),
             id,
             geradas,
         ),
