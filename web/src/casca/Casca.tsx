@@ -24,7 +24,7 @@ type Props = { email: string; onSair: () => void; hoje: ReactNode };
 
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
-  const { rota, id, mes, consulta } = useRota();
+  const { rota, id, mes, consulta, parcela } = useRota();
   // A busca é da aba Histórico (ticket 24), e a lupa a abre de qualquer aba; as edições em lote saem dela.
   const aba = rota === "busca" || rota === "edicoes-em-lote" ? "historico" : rota;
 
@@ -66,7 +66,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "favorito" && id && <NovoLancamento key={id} favoritoId={id} />}
         {rota === "favoritos" && <TelaDeFavoritos />}
         {rota === "conflito" && id && <TelaDeConflito key={id} id={id} />}
-        {rota === "parcelamento" && id && <TelaDoParcelamento key={id} id={id} />}
+        {rota === "parcelamento" && id && <TelaDoParcelamento key={`${id}/${parcela ?? ""}`} id={id} parcela={parcela} />}
         {rota === "recorrencia" && id && <TelaDaRecorrencia key={id} id={id} />}
         {rota === "contas-e-categorias" && <TelaDeContasECategorias />}
         {rota === "configuracoes" && <Configuracoes />}

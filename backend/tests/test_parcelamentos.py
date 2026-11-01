@@ -667,14 +667,20 @@ def test_corrigir_descricao_tags_e_pessoa_vale_para_todas_as_parcelas_inclusive_
         "previsto",
     ]
 
-    resposta = mudar(
-        casal,
-        novo["id"],
-        descricao="Geladeira",
-        tags=["casa nova", "Eletro"],
-        pessoa="esposa",
-        categoria_ids=[casa],
-    )
+    pedido = {
+        "descricao": "Geladeira",
+        "tags": ["casa nova", "Eletro"],
+        "pessoa": "esposa",
+        "categoria_ids": [casa],
+    }
+    # A 1ª é realizada: mudar o histórico dela pede confirmação (ticket 142).
+    aviso = mudar(casal, novo["id"], **pedido)
+    assert aviso.status_code == 409
+    assert [(p["parcela"], sorted(p["mudou"])) for p in aviso.json()["parcelas"]] == [
+        (1, ["categoria_ids", "descricao", "pessoa", "tags"])
+    ]
+
+    resposta = mudar(casal, novo["id"], confirmar_realizadas=True, **pedido)
 
     assert resposta.status_code == 200
     assert resposta.json()["descricao"] == "Geladeira"
@@ -752,6 +758,7 @@ def test_corrigir_o_valor_refaz_as_parcelas_e_so_avisa_quando_uma_realizada_muda
         "data": "2026-10-10",
         "data_nova": "2026-10-10",
         "sai": False,
+        "mudou": ["valor_centavos"],
     }
     # O aviso não gravou nada: nem o parcelamento, nem as parcelas.
     assert (
@@ -1143,9 +1150,11 @@ def test_excluir_o_parcelamento_exclui_todas_as_parcelas_e_nao_volta(
     casal.pedir("flavio", "POST", "/api/lancamentos", json=avulso)
     assert parcelas(casal, novo["id"])[0]["situacao"] == "realizado"
 
-    resposta = casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}")
-    de_novo = casal.pedir("esposa", "DELETE", f"/api/parcelamentos/{novo['id']}")
+    sem_confirmar = excluir_parcelamento(casal, novo["id"])
+    resposta = excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True)
+    de_novo = excluir_parcelamento(casal, novo["id"], "esposa")
 
+    assert (sem_confirmar.status_code, sem_confirmar.json()["realizadas"]) == (409, 1)
     assert (resposta.status_code, de_novo.status_code) == (204, 204)
     assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
     assert [l["id"] for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()] == [
@@ -1428,7 +1437,7 @@ def test_a_tarefa_diaria_e_os_automaticos_com_o_parcelamento_excluido_nao_fazem_
     novo = criar_geladeira(
         casal, casal.conta(), lancada_em="2026-10-10", data="2026-10-10", automatico=True
     )
-    assert casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}").status_code == 204
+    assert excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True).status_code == 204
 
     assert automaticos.realizar_automaticos(database_url, UUID(novo["id"])) == 0
     assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
@@ -1476,3 +1485,245 @@ def test_a_busca_das_puladas_nao_le_as_parcelas_do_boleto_que_nao_pulou_nenhuma(
 
         assert original(Espia(), regra, 3) == []
     assert not any("SELECT parcela FROM lancamentos" in sql for sql in executadas)
+
+
+def excluir_parcelamento(casal: Casal, id: str, quem: str = "flavio", **parametros):
+    return casal.pedir(quem, "DELETE", f"/api/parcelamentos/{id}", params=parametros)
+
+
+def test_excluir_o_parcelamento_com_parcela_paga_ou_editada_a_mao_pede_confirmacao_e_conta_cada_tipo(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/05: abril fechou em 25/04. A 1ª parcela está em abril, que o casal pagou; a 2ª
+    # entrou na fatura aberta de maio quando abril fechou; a 3ª e a 4ª ainda são previstas.
+    no_dia(monkeypatch, "2026-05-10")
+    conta, nubank = casal.conta(), cartao(casal)
+    novo = parcelamento(nubank, [casal.categoria()], data="2026-04-10", parcelas=4)
+    novo["valor_total_centavos"] = 100000
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    pago = pagar(casal, conta, nubank, fatura_mes="2026-04-01", valor_centavos=25000)
+    assert pago.status_code == 201, pago.text
+    [*_, quarta] = parcelas(casal, novo["id"])
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{quarta['id']}",
+        json={"versao": 1, "valor_centavos": 30000},
+    )
+    assert [l["situacao"] for l in parcelas(casal, novo["id"])] == [
+        "realizado",
+        "realizado",
+        "previsto",
+        "previsto",
+    ]
+
+    aviso = excluir_parcelamento(casal, novo["id"])
+
+    assert aviso.status_code == 409
+    assert aviso.json() == {
+        "motivo": "isto apaga lançamentos já pagos e pode desconfigurar o histórico",
+        "parcelas": 4,
+        "de_fatura_paga": 1,
+        "realizadas": 1,
+        "editadas_a_mao": 1,
+    }
+    # Nada saiu.
+    assert len(parcelas(casal, novo["id"])) == 4
+    assert len(casal.pedir("flavio", "GET", "/api/parcelamentos").json()) == 1
+
+    assert excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True).status_code == 204
+    assert parcelas(casal, novo["id"]) == []
+    assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
+
+
+def test_excluir_o_parcelamento_so_com_previstas_nao_pede_confirmacao(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+
+    assert excluir_parcelamento(casal, novo["id"]).status_code == 204
+    assert parcelas(casal, novo["id"]) == []
+
+
+def classificacao(casal: Casal, id: str) -> list[tuple]:
+    return [(l["descricao"], sorted(l["tags"]), l["pessoa"]) for l in parcelas(casal, id)]
+
+
+def test_corrigir_so_esta_parcela_muda_a_classificacao_dela_e_o_parcelamento_fica(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+
+    resposta = mudar(
+        casal,
+        novo["id"],
+        alcance="esta",
+        parcela=2,
+        descricao="Geladeira, entrada",
+        tags=["extra"],
+        pessoa="esposa",
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    assert (resposta.json()["descricao"], resposta.json()["tags"]) == ("Geladeria", [])
+    assert classificacao(casal, novo["id"]) == [
+        ("Geladeria", [], None),
+        ("Geladeira, entrada", ["extra"], "esposa"),
+        ("Geladeria", [], None),
+    ]
+    # Uma correção de "todas" depois leva a descrição também à parcela que mudou sozinha.
+    assert mudar(casal, novo["id"], descricao="Geladeira").status_code == 200
+    assert classificacao(casal, novo["id"]) == [
+        ("Geladeira", [], None),
+        ("Geladeira", ["extra"], "esposa"),
+        ("Geladeira", [], None),
+    ]
+
+
+AVISO_DE_REALIZADAS = (
+    "a correção muda parcelas já realizadas, e com elas o histórico do que já aconteceu"
+)
+
+
+@pytest.mark.parametrize(
+    "alcance",
+    [
+        {"alcance": "esta", "parcela": 1},
+        {"alcance": "proximas", "parcela": 1},
+        {"alcance": "todas"},
+    ],
+)
+def test_a_classificacao_que_atinge_uma_realizada_pede_confirmacao_em_todo_alcance(
+    casal: Casal, alcance: dict
+):
+    # 10/10 já passou: a 1ª parcela, automática, é realizada; as outras, previstas.
+    novo = criar_geladeira(
+        casal, casal.conta(), lancada_em="2026-10-10", data="2026-10-10", automatico=True
+    )
+
+    aviso = mudar(casal, novo["id"], descricao="Geladeira", **alcance)
+
+    assert aviso.status_code == 409
+    assert aviso.json()["motivo"] == AVISO_DE_REALIZADAS
+    assert [(p["parcela"], p["mudou"], p["sai"]) for p in aviso.json()["parcelas"]] == [
+        (1, ["descricao"], False)
+    ]
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == ["Geladeria"] * 3
+
+    confirmada = mudar(
+        casal, novo["id"], descricao="Geladeira", confirmar_realizadas=True, **alcance
+    )
+
+    assert confirmada.status_code == 200
+    assert parcelas(casal, novo["id"])[0]["descricao"] == "Geladeira"
+
+
+def test_corrigir_esta_e_as_proximas_deixa_as_de_antes_e_vale_para_as_que_ainda_vao_nascer(
+    casal: Casal,
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10", parcelas=3)
+    [_, segunda, _] = parcelas(casal, novo["id"])
+    # A 2ª teve o valor editado à mão: a classificação vale para ela também.
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{segunda['id']}",
+        json={"versao": 1, "valor_centavos": 12345},
+    )
+
+    resposta = mudar(
+        casal, novo["id"], alcance="proximas", parcela=2, descricao="Geladeira", tags=["casa"]
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    assert (resposta.json()["descricao"], resposta.json()["tags"]) == ("Geladeira", ["casa"])
+    assert classificacao(casal, novo["id"]) == [
+        ("Geladeria", [], None),
+        ("Geladeira", ["casa"], None),
+        ("Geladeira", ["casa"], None),
+    ]
+    assert parcelas(casal, novo["id"])[1]["valor_centavos"] == 12345
+    # A parcela que nasce depois, quando o parcelamento cresce, vem com a classificação nova; a
+    # 1ª continua como estava.
+    assert mudar(casal, novo["id"], parcelas=4).status_code == 200
+    assert classificacao(casal, novo["id"]) == [
+        ("Geladeria", [], None),
+        ("Geladeira", ["casa"], None),
+        ("Geladeira", ["casa"], None),
+        ("Geladeira", ["casa"], None),
+    ]
+
+
+@pytest.mark.parametrize(
+    "campos",
+    [
+        {"valor_total_centavos": 60000},
+        {"valor_da_parcela_centavos": 20000},
+        {"parcelas": 4},
+        {"data": "2026-12-10"},
+    ],
+)
+@pytest.mark.parametrize("alcance", ["esta", "proximas"])
+def test_total_numero_de_parcelas_e_data_so_mudam_no_alcance_todas(
+    casal: Casal, alcance: str, campos: dict
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+
+    resposta = mudar(casal, novo["id"], alcance=alcance, parcela=2, **campos)
+
+    assert resposta.status_code == 422
+    assert valores(casal, novo["id"]) == [
+        (1, 33334, "2026-11-10", "previsto"),
+        (2, 33333, "2026-12-10", "previsto"),
+        (3, 33333, "2027-01-10", "previsto"),
+    ]
+
+
+def test_o_alcance_parcial_precisa_de_uma_parcela_que_existe(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+
+    assert mudar(casal, novo["id"], alcance="esta", descricao="x").status_code == 422
+    assert mudar(casal, novo["id"], alcance="esta", parcela=9, descricao="x").status_code == 422
+    assert mudar(casal, novo["id"], alcance="proximas", parcela=9, descricao="x").status_code == 422
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == ["Geladeria"] * 3
+
+
+def test_a_tarefa_diaria_termina_esta_e_as_proximas_sem_mexer_nas_de_antes(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], alcance="proximas", parcela=2, descricao="Geladeira")
+
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 1
+
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == [
+        "Geladeria",
+        "Geladeira",
+        "Geladeira",
+    ]
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
+
+
+@pytest.mark.parametrize(
+    ("alcance", "esperado"),
+    [
+        ("esta", ["Geladeira", "Entrada", "Geladeira"]),
+        ("proximas", ["Geladeira", "Entrada", "Entrada"]),
+    ],
+)
+def test_o_alcance_parcial_depois_de_uma_correcao_que_parou_no_meio_termina_ela_antes(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch, alcance, esperado
+):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], descricao="Geladeira")
+
+    assert (
+        mudar(casal, novo["id"], alcance=alcance, parcela=2, descricao="Entrada").status_code == 200
+    )
+    fazer_tarefa_diaria(database_url)
+
+    assert [l["descricao"] for l in parcelas(casal, novo["id"])] == esperado

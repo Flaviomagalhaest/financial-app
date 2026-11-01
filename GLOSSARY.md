@@ -113,14 +113,18 @@ Lançamento que é uma das N partes de um parcelamento (ex.: 3/10). No cartão, 
 _Avoid_: prestação
 
 **Parcela alterada à mão**:
-O "alterado à mão" da parcela: o campo que uma pessoa mudou só nela, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento e a mudança de "esta e as próximas" ou de "todas" a preservam nesses campos, com o aviso de quantas ficaram como estavam.
+O "alterado à mão" da parcela: o valor, a data, a conta ou a fatura que uma pessoa mudou só nela, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento a preserva nesses campos. A descrição, as categorias, as tags, a pessoa e o item que a mudança traz valem para ela quando ela está no alcance da mudança. Excluir o parcelamento com uma parcela alterada à mão pede confirmação.
 
 **Alcance da mudança na parcela**:
-A escolha, ao mudar qualquer campo de uma parcela, entre "Só esta", "Esta e as próximas" e "Todas (inclusive as já realizadas)"; "só esta" deixa a parcela alterada à mão naquele campo.
+A escolha, ao abrir a mudança do parcelamento a partir de uma parcela, entre "Só esta", "Esta e as próximas" e "Todas (inclusive as já realizadas)". A descrição, as categorias, as tags, a pessoa e o item valem para as parcelas escolhidas; "esta e as próximas" vale também para as que ainda vão nascer. O valor, o número de parcelas e a data do parcelamento só mudam em "todas". O alcance que atinge uma parcela realizada pede confirmação, porque muda o histórico do que já aconteceu.
 _Avoid_: escopo da edição, aplicar em lote
 
 **Correção do parcelamento**:
-Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje: a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_puladas`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova.
+Mudança do valor, do número de parcelas ou da data de um parcelamento (só no alcance "todas"), que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje: a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_puladas`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova.
+
+**Exclusão do parcelamento**:
+Apaga o parcelamento e todas as parcelas, também as pagas e as alteradas à mão. Quando alguma é de fatura paga, realizada ou alterada à mão, o app avisa que isso apaga lançamentos já pagos e pode desconfigurar o histórico, diz quantas de cada tipo saem e só exclui com a confirmação.
+_Avoid_: desfazer o parcelamento
 _Avoid_: regerar, recalcular o parcelamento
 
 **Antecipação**:

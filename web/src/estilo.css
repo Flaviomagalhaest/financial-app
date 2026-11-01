@@ -267,6 +267,11 @@ h2 {
   gap: 0.5rem;
 }
 
+/* Opções de texto longo, uma por linha (o alcance da mudança na parcela). */
+.alternancia.empilhada {
+  grid-template-columns: 1fr;
+}
+
 .valor {
   margin: 0;
   font-size: 2.5rem;

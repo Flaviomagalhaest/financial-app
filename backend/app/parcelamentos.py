@@ -5,7 +5,7 @@ da compra e a parcela n cai n - 1 faturas depois da fatura da compra; fora dele 
 parcela n vence n - 1 meses depois da primeira."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID, uuid5
@@ -106,11 +106,19 @@ class Parcelamento(DadosDoParcelamento):
     parcelas_puladas: int = 0
 
 
+# O alcance da edição aberta numa parcela (ticket 142): só ela, ela e as de depois, ou todas,
+# inclusive as realizadas.
+Alcance = Literal["esta", "proximas", "todas"]
+# O que só muda no alcance "todas": refaz as parcelas.
+CRONOGRAMA = frozenset({"valor_total_centavos", "valor_da_parcela_centavos", "parcelas", "data"})
+
+
 class AlteracaoDeParcelamento(BaseModel):
     """O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,
-    tags, pessoa e item valem para todas as parcelas, inclusive as realizadas. Valor, número de
-    parcelas e data refazem as parcelas, salvo as que uma pessoa editou à mão; se uma realizada
-    mudar ou sair, o pedido só vale com `confirmar_realizadas`."""
+    tags, pessoa e item valem para as parcelas do `alcance`, inclusive as editadas à mão. Valor,
+    número de parcelas e data só mudam no alcance "todas" e refazem as parcelas, salvo as que uma
+    pessoa editou à mão. Se uma parcela realizada mudar ou sair, o pedido só vale com
+    `confirmar_realizadas`."""
 
     # Sem `None` no tipo: mandar null num campo obrigatório do parcelamento é erro, não "limpar".
     descricao: str = Field(default=None)
@@ -128,6 +136,10 @@ class AlteracaoDeParcelamento(BaseModel):
     # Como na criação: no cartão, a data da compra; fora dele, a da 1ª parcela.
     data: date = Field(default=None)
     confirmar_realizadas: bool = False
+    # Sem o campo, "todas". "esta" e "proximas" contam a partir da `parcela`, o número da parcela
+    # em que a edição foi aberta.
+    alcance: Alcance = "todas"
+    parcela: int | None = Field(default=None, ge=1)
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
@@ -136,6 +148,16 @@ class AlteracaoDeParcelamento(BaseModel):
     def _um_valor(self):
         if self.valor_total_centavos is not None and self.valor_da_parcela_centavos is not None:
             raise ValueError("informe o valor total ou o da parcela, um dos dois")
+        return self
+
+    @model_validator(mode="after")
+    def _alcance_com_a_parcela(self):
+        if self.alcance == "todas":
+            return self
+        if self.parcela is None:
+            raise ValueError(f'o alcance "{self.alcance}" precisa do número da parcela')
+        if CRONOGRAMA & self.model_fields_set:
+            raise ValueError('o total, o número de parcelas e a data só mudam no alcance "todas"')
         return self
 
 
@@ -150,6 +172,9 @@ class ParcelaQueMuda(BaseModel):
     valor_novo_centavos: int | None
     data_nova: date | None
     sai: bool
+    # Os campos que mudam nela (valor_centavos, data, fatura_mes, descricao, categoria_ids, tags,
+    # pessoa, item_categoria_id); vazio quando ela sai.
+    mudou: list[str] = []
 
 
 class AvisoDeRealizadas(BaseModel):
@@ -380,7 +405,7 @@ def _reviver_as_que_a_correcao_tirou(
         return
     tags = _tags_do_parcelamento(conn, regra.id)
     agora = datetime.now(UTC)
-    for correcao in _correcoes(conn, regra, geradas, frozenset()):
+    for correcao in _correcoes(conn, regra, geradas, _Classificacao()):
         if correcao.acao in ("reviver", "pular") and correcao.parcela in proximas:
             _aplicar(conn, regra, correcao, tags, regra.alterado_por, agora)
 
@@ -404,29 +429,68 @@ def completar_todos(url: str | None) -> int:
         if not em_transacao(url, lambda conn, id=id: _falta_conserto(conn, id)):
             continue
         consertados += 1
-        pendente = em_transacao(url, lambda conn, id=id: _classificacao_pendente(conn, id))
-        while em_transacao(url, lambda conn, id=id: _reajustar_do_parcelamento(conn, id)):
-            pass
-        em_transacao(url, lambda conn, id=id, feita=pendente: _dar_por_refeita(conn, id, feita))
+        _refazer_o_pendente(url, id)
         gerar_as_parcelas(url, id)
     return consertados
 
 
-def _classificacao_pendente(conn, id: UUID) -> frozenset[str]:
-    """Os campos de classificação que correções já gravadas ainda não levaram às parcelas."""
+def _refazer_o_pendente(url: str | None, id: UUID) -> None:
+    """Termina de pôr as parcelas como o parcelamento manda, com a classificação que ficou
+    pendente, em nome de quem o alterou por último."""
+    pendente = em_transacao(url, lambda conn: _classificacao_pendente(conn, id))
+    while em_transacao(url, lambda conn: _reajustar_do_parcelamento(conn, id)):
+        pass
+    em_transacao(url, lambda conn: _dar_por_refeita(conn, id, pendente))
+
+
+@dataclass(frozen=True)
+class _Classificacao:
+    """Os campos de classificação que uma correção leva às parcelas, da parcela `desde` em
+    diante (o alcance "proximas" do ticket 142; "todas" é desde a 1ª)."""
+
+    campos: frozenset[str] = frozenset()
+    desde: int = 1
+
+    def __bool__(self) -> bool:
+        return bool(self.campos)
+
+    def da_parcela(self, n: int) -> frozenset[str]:
+        return self.campos if n >= self.desde else frozenset()
+
+    def com(self, outra: "_Classificacao") -> "_Classificacao":
+        """Junta a de um pedido à que ficou pendente. Duas com início diferente só se encontram
+        quando dois pedidos correm juntos: vale a que começa antes."""
+        if not (self and outra):
+            return self or outra
+        return _Classificacao(self.campos | outra.campos, min(self.desde, outra.desde))
+
+    def gravada(self) -> str:
+        """Como fica em `classificacao_pendente`: "descricao,tags", com "@N" no fim quando
+        começa depois da 1ª parcela (o texto de antes do ticket 142 continua valendo)."""
+        campos = ",".join(sorted(self.campos))
+        return f"{campos}@{self.desde}" if campos and self.desde > 1 else campos
+
+    @classmethod
+    def lida(cls, texto: str | None) -> "_Classificacao":
+        campos, _, desde = (texto or "").partition("@")
+        return cls(frozenset(filter(None, campos.split(","))), int(desde or 1))
+
+
+def _classificacao_pendente(conn, id: UUID) -> _Classificacao:
+    """A classificação que correções já gravadas ainda não levaram às parcelas."""
     linha = conn.execute(
         "SELECT classificacao_pendente FROM parcelamentos WHERE id = %s", (id,)
     ).fetchone()
-    return frozenset(filter(None, (linha[0] or "").split(","))) if linha else frozenset()
+    return _Classificacao.lida(linha[0] if linha else None)
 
 
-def _dar_por_refeita(conn, id: UUID, feita: frozenset[str]) -> None:
+def _dar_por_refeita(conn, id: UUID, feita: _Classificacao) -> None:
     """Tira do pendente o que acabou de ser refeito; se outra correção gravou campos novos no
     meio, o pendente mudou e fica para ela."""
     conn.execute(
         "UPDATE parcelamentos SET classificacao_pendente = '' WHERE id = %s"
         " AND coalesce(classificacao_pendente, '') = %s",
-        (id, ",".join(sorted(feita))),
+        (id, feita.gravada()),
     )
 
 
@@ -592,6 +656,7 @@ class _Correcao:
     realizada: bool
     valor_antes: int
     dia_antes: date
+    mes_antes: date
 
     @property
     def muda_o_cronograma(self) -> bool:
@@ -599,6 +664,12 @@ class _Correcao:
             self.valor_antes,
             self.dia_antes,
         )
+
+    @property
+    def muda_alguma_coisa(self) -> bool:
+        """Muda o cronograma ou a classificação (ticket 142: o alcance que atinge uma realizada
+        pede confirmação)."""
+        return self.muda_o_cronograma or bool(CLASSIFICACAO & set(self.mudou))
 
     @property
     def aviso(self) -> ParcelaQueMuda:
@@ -611,6 +682,7 @@ class _Correcao:
             valor_novo_centavos=None if sai else self.valor,
             data_nova=None if sai else self.dia,
             sai=sai,
+            mudou=[] if sai else self.mudou,
         )
 
 
@@ -622,13 +694,13 @@ def _correcoes(
     conn,
     regra: Parcelamento,
     geradas: int,
-    classificacao: frozenset[str],
+    classificacao: "_Classificacao",
     dia_da_correcao: date | None = None,
 ) -> list[_Correcao]:
     """As parcelas que não estão como o parcelamento manda, na ordem do número. A que uma pessoa
     editou à mão (valor, data, conta ou fatura) fica como está nessas coisas. A classificação só
-    se refaz no que o pedido trouxe (`classificacao`), para a descrição que uma pessoa corrigiu
-    numa parcela só não voltar a cada correção de valor. A parcela que saiu antes, quando o
+    se refaz no que o pedido trouxe (`classificacao`), e só nas parcelas do alcance dele, para a
+    descrição que uma pessoa corrigiu numa parcela só não voltar a cada correção de valor. A parcela que saiu antes, quando o
     parcelamento encolheu, volta se ele crescer de novo (as de depois de `geradas`), com tudo.
     No boleto, nada da correção vira lançamento antes de hoje (ticket 87): a prevista que a data
     nova leva de hoje ou depois para antes sai como pulada (`excluido_pela_regra`), e volta se
@@ -705,7 +777,10 @@ def _correcoes(
             "categoria_ids": categorias.get(lancamento_id, set()),
             "tags": tags.get(lancamento_id, set()),
         }
-        campos = CLASSIFICACAO if acao == "reviver" else classificacao
+        campos = CLASSIFICACAO if acao == "reviver" else classificacao.da_parcela(n)
+        # Com as categorias novas, sai o item da parcela que não é de nenhuma delas.
+        if "categoria_ids" in campos and tem["item_categoria_id"] not in quer["categoria_ids"]:
+            campos |= {"item_categoria_id"}
         mudou = [campo for campo in quer if campo in campos and quer[campo] != tem[campo]]
         valor, dia, mes = valor_antes, dia_antes, mes_antes
         if acao != "excluir" and not a_mao:
@@ -741,22 +816,31 @@ def _correcoes(
                     situacao == "realizado",
                     valor_antes,
                     dia_antes,
+                    mes_antes,
                 )
             )
     return feitas
 
 
-def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> frozenset[str]:
+def _mudar(
+    conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str
+) -> _Classificacao | None:
     """Valida e grava o parcelamento corrigido (recusa antes de gravar, e avisa se uma realizada
     mudaria sem `confirmar_realizadas`); as parcelas são refeitas depois, em lotes. Devolve a
-    classificação que o pedido trouxe."""
+    classificação que o pedido trouxe, ou `None` no alcance "esta", que já mudou a parcela."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         raise HTTPException(status_code=404, detail="parcelamento não encontrado")
     [atual] = lidos
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
     pedidas = alteracao.model_dump(
         include=alteracao.model_fields_set
-        - {"valor_total_centavos", "valor_da_parcela_centavos", "confirmar_realizadas"}
+        - {
+            "valor_total_centavos",
+            "valor_da_parcela_centavos",
+            "confirmar_realizadas",
+            "alcance",
+            "parcela",
+        }
     )
     if atual.item_categoria_id not in pedidas.get("categoria_ids", [atual.item_categoria_id]):
         pedidas.setdefault("item_categoria_id", None)  # a escolha sai com a categoria dela
@@ -774,6 +858,10 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
     except ValidationError as erro:
         raise recusar("; ".join(e["msg"] for e in erro.errors())) from erro
     conferir_ligacoes(conn, nova, atual.conta_id, frozenset(atual.categoria_ids))
+    if alteracao.alcance == "esta":
+        campos = _Classificacao(frozenset(CLASSIFICACAO & pedidas.keys()), alteracao.parcela)
+        _mudar_so_esta(conn, nova, geradas, alteracao, campos, usuario)
+        return None
     (a_mao,) = conn.execute(
         f"SELECT max(parcela) FROM lancamentos WHERE parcelamento_id = %s"
         f" AND excluido_em IS NULL AND {lancamentos.ALTERADA_A_MAO}",
@@ -785,19 +873,19 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
         )
     geradas_depois = min(geradas, nova.parcelas)
     # Junto com o que correções anteriores deixaram pendente: o refazer deste pedido leva tudo.
-    classificacao = frozenset(CLASSIFICACAO & pedidas.keys()) | _classificacao_pendente(conn, id)
+    desde = alteracao.parcela if alteracao.alcance == "proximas" else 1
+    if desde > atual.parcelas:
+        raise recusar(f"a parcela {desde} não está no parcelamento")
+    pedida = _Classificacao(frozenset(CLASSIFICACAO & pedidas.keys()), desde)
+    classificacao = pedida.com(_classificacao_pendente(conn, id))
     realizadas = [
         t.aviso
         for t in _correcoes(conn, nova, geradas_depois, classificacao, lancamentos.hoje())
         # A que sai pulada sendo realizada já estava excluída (o encolher a tirou): nada muda.
-        if t.realizada and t.acao not in ("reviver", "pular") and t.muda_o_cronograma
+        if t.realizada and t.acao not in ("reviver", "pular") and t.muda_alguma_coisa
     ]
     if realizadas and not alteracao.confirmar_realizadas:
-        raise RealizadasMudam(
-            AvisoDeRealizadas(
-                motivo="a correção muda parcelas que já foram realizadas", parcelas=realizadas
-            )
-        )
+        raise RealizadasMudam(_aviso_de_realizadas(realizadas))
     tags_de_antes = set(_tags_do_parcelamento(conn, id))
     tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes)
     if not conn.execute(
@@ -814,7 +902,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
             nova.item_categoria_id,
             geradas_depois,
             usuario,
-            ",".join(sorted(classificacao)),
+            classificacao.gravada(),
             lancamentos.hoje(),
             id,
             geradas,
@@ -837,6 +925,57 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
                 (id, tag),
             )
     return classificacao
+
+
+def _mudar_so_esta(
+    conn,
+    nova: Parcelamento,
+    geradas: int,
+    alteracao: AlteracaoDeParcelamento,
+    campos: _Classificacao,
+    usuario: str,
+) -> None:
+    """O alcance "esta": a classificação pedida vai só para a parcela da edição, e o parcelamento
+    fica como estava. Valor, data e fatura dela não mudam."""
+    n = alteracao.parcela
+    tinha = conn.execute(
+        "SELECT id FROM lancamentos WHERE parcelamento_id = %s AND parcela = %s"
+        " AND excluido_em IS NULL",
+        (nova.id, n),
+    ).fetchone()
+    if not tinha:
+        raise recusar(f"a parcela {n} não está no parcelamento")
+    achada = next(
+        (
+            c
+            for c in _correcoes(conn, nova, geradas, campos, lancamentos.hoje())
+            if c.parcela == n and c.acao == "atualizar"
+        ),
+        None,
+    )
+    mudou = [campo for campo in (achada.mudou if achada else []) if campo in CLASSIFICACAO]
+    if not mudou:
+        return
+    correcao = replace(
+        achada, mudou=mudou, valor=achada.valor_antes, dia=achada.dia_antes, mes=achada.mes_antes
+    )
+    if correcao.realizada and not alteracao.confirmar_realizadas:
+        raise RealizadasMudam(_aviso_de_realizadas([correcao.aviso]))
+    ja_tinha = {
+        tag
+        for (tag,) in conn.execute(
+            "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (tinha[0],)
+        )
+    }
+    tags = ids_das_tags(conn, nova.tags, usuario, ja_tinha)
+    _aplicar(conn, nova, correcao, tags, usuario, datetime.now(UTC))
+
+
+def _aviso_de_realizadas(parcelas: list[ParcelaQueMuda]) -> AvisoDeRealizadas:
+    return AvisoDeRealizadas(
+        motivo="a correção muda parcelas já realizadas, e com elas o histórico do que já aconteceu",
+        parcelas=parcelas,
+    )
 
 
 def _aplicar(
@@ -886,7 +1025,7 @@ def _aplicar(
             )
 
 
-def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: frozenset[str]) -> bool:
+def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: _Classificacao) -> bool:
     """Põe as parcelas de acordo com o parcelamento de hoje, até um lote, e devolve se pode faltar
     alguma. A que já está como ele manda não conta, por isso o lote seguinte sempre anda."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
@@ -921,10 +1060,17 @@ def alterar_parcelamento(
     from app import automaticos
 
     url = url_do_banco(request)
+    pendente = em_transacao(url, lambda conn: _classificacao_pendente(conn, id))
+    if pendente and (alteracao.alcance != "todas" or pendente.desde > 1):
+        # Uma correção anterior parou no meio com outro alcance: juntas, uma levaria a outra
+        # para parcelas fora do alcance dela. Termina a de antes, que já foi aceita.
+        _refazer_o_pendente(url, id)
     try:
         classificacao = em_transacao(url, lambda conn: _mudar(conn, id, alteracao, usuario))
     except RealizadasMudam as e:
         return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
+    if classificacao is None:  # o alcance "esta" já mudou a parcela
+        return _o_corrigido(url, id)
     while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, usuario, classificacao)):
         pass
     # Antes de gerar: a geração já cria as parcelas com a classificação inteira.
@@ -932,6 +1078,10 @@ def alterar_parcelamento(
     gerar_as_parcelas(url, id)
     # A parcela automática que a data nova já alcançou se realiza agora, como na criação.
     automaticos.realizar_automaticos(url, id)
+    return _o_corrigido(url, id)
+
+
+def _o_corrigido(url: str | None, id: UUID) -> Parcelamento:
     with conectar(url) as conn:
         if not (lidos := _ler(conn, "id = %s", (id,))):
             # Excluído por outra sessão no meio do refazer: as parcelas saíram com ele.
@@ -958,19 +1108,95 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
     return len(a_excluir) > por_lote
 
 
-@router.delete("/parcelamentos/{id}", status_code=204, operation_id="excluir_parcelamento")
-def excluir_parcelamento(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
+class AvisoDeExclusao(BaseModel):
+    """Excluir o parcelamento apagaria parcelas já pagas ou editadas à mão; nada foi apagado.
+    Repetir o pedido com `confirmar_realizadas` apaga. As editadas à mão também entram nas
+    outras contas quando são de fatura paga ou realizadas."""
+
+    motivo: str
+    # Quantas parcelas saem, de qualquer tipo.
+    parcelas: int
+    # No cartão, as da fatura que já recebeu pagamento.
+    de_fatura_paga: int
+    # As realizadas fora da fatura paga: no cartão, as da fatura aberta; no boleto, as pagas.
+    realizadas: int
+    editadas_a_mao: int
+
+
+class ExclusaoPedeConfirmacao(Exception):
+    def __init__(self, aviso: AvisoDeExclusao):
+        self.aviso = aviso
+
+
+def _aviso_de_exclusao(conn, id: UUID) -> AvisoDeExclusao | None:
+    """O que a exclusão apagaria de já pago ou editado à mão; `None` se só há previstas."""
+    linhas = conn.execute(
+        f"SELECT conta_id, {lancamentos.MES_EM_QUE_CONTA}, situacao, {lancamentos.ALTERADA_A_MAO}"
+        " FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL",
+        (id,),
+    ).fetchall()
+    pagas: dict[UUID, set[date]] = {}
+    for conta_id in {linha[0] for linha in linhas}:
+        cartao = faturas.ler_cartao(conn, conta_id)
+        pagas[conta_id] = (
+            {
+                f.mes
+                for f in cartoes.faturas_do_titular(conn, cartao.titular.id)
+                if cartoes.paga_pelo_pagamento(f)
+            }
+            if cartao
+            else set()
+        )
+    de_fatura_paga = sum(1 for conta_id, mes, *_ in linhas if mes in pagas[conta_id])
+    realizadas = sum(
+        1
+        for conta_id, mes, situacao, _ in linhas
+        if situacao == "realizado" and mes not in pagas[conta_id]
+    )
+    editadas = sum(1 for *_, a_mao in linhas if a_mao)
+    if not (de_fatura_paga or realizadas or editadas):
+        return None
+    return AvisoDeExclusao(
+        motivo="isto apaga lançamentos já pagos e pode desconfigurar o histórico",
+        parcelas=len(linhas),
+        de_fatura_paga=de_fatura_paga,
+        realizadas=realizadas,
+        editadas_a_mao=editadas,
+    )
+
+
+@router.delete(
+    "/parcelamentos/{id}",
+    status_code=204,
+    operation_id="excluir_parcelamento",
+    responses={
+        409: {
+            "model": AvisoDeExclusao,
+            "description": "A exclusão apaga parcelas pagas ou editadas à mão",
+        }
+    },
+)
+def excluir_parcelamento(
+    id: UUID, usuario: UsuarioLogado, request: Request, confirmar_realizadas: bool = False
+) -> Response:
     """Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
-    recebe o aviso de excluído)."""
+    recebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou editada à mão,
+    responde 409 com quantas de cada tipo e não apaga nada até o pedido vir com
+    `confirmar_realizadas` (ticket 142)."""
     url = url_do_banco(request)
 
     def fechar(conn) -> None:
+        if not confirmar_realizadas and (aviso := _aviso_de_exclusao(conn, id)):
+            raise ExclusaoPedeConfirmacao(aviso)
         # Com todas as parcelas dadas por geradas, a tarefa diária não gera novas enquanto as de
         # agora saem.
         conn.execute("UPDATE parcelamentos SET geradas = parcelas WHERE id = %s", (id,))
 
-    em_transacao(url, fechar)
+    try:
+        em_transacao(url, fechar)
+    except ExclusaoPedeConfirmacao as e:
+        return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
     while em_transacao(url, lambda conn: _excluir_um_lote(conn, id, usuario)):
         pass
 

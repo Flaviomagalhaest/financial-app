@@ -804,7 +804,9 @@ export interface paths {
          * Excluir Parcelamento
          * @description Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
          *     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
-         *     recebe o aviso de excluído).
+         *     recebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou editada à mão,
+         *     responde 409 com quantas de cada tipo e não apaga nada até o pedido vir com
+         *     `confirmar_realizadas` (ticket 142).
          */
         delete: operations["excluir_parcelamento"];
         options?: never;
@@ -1270,9 +1272,10 @@ export interface components {
         /**
          * AlteracaoDeParcelamento
          * @description O que se corrige num parcelamento; campo ausente fica como está. Descrição, categorias,
-         *     tags, pessoa e item valem para todas as parcelas, inclusive as realizadas. Valor, número de
-         *     parcelas e data refazem as parcelas, salvo as que uma pessoa editou à mão; se uma realizada
-         *     mudar ou sair, o pedido só vale com `confirmar_realizadas`.
+         *     tags, pessoa e item valem para as parcelas do `alcance`, inclusive as editadas à mão. Valor,
+         *     número de parcelas e data só mudam no alcance "todas" e refazem as parcelas, salvo as que uma
+         *     pessoa editou à mão. Se uma parcela realizada mudar ou sair, o pedido só vale com
+         *     `confirmar_realizadas`.
          */
         AlteracaoDeParcelamento: {
             /** Descricao */
@@ -1301,6 +1304,14 @@ export interface components {
              * @default false
              */
             confirmar_realizadas: boolean;
+            /**
+             * Alcance
+             * @default todas
+             * @enum {string}
+             */
+            alcance: "esta" | "proximas" | "todas";
+            /** Parcela */
+            parcela?: number | null;
         };
         /**
          * AlteracaoDeRecorrencia
@@ -1393,6 +1404,24 @@ export interface components {
             categoria_ids: string[];
             /** Tags */
             tags: string[];
+        };
+        /**
+         * AvisoDeExclusao
+         * @description Excluir o parcelamento apagaria parcelas já pagas ou editadas à mão; nada foi apagado.
+         *     Repetir o pedido com `confirmar_realizadas` apaga. As editadas à mão também entram nas
+         *     outras contas quando são de fatura paga ou realizadas.
+         */
+        AvisoDeExclusao: {
+            /** Motivo */
+            motivo: string;
+            /** Parcelas */
+            parcelas: number;
+            /** De Fatura Paga */
+            de_fatura_paga: number;
+            /** Realizadas */
+            realizadas: number;
+            /** Editadas A Mao */
+            editadas_a_mao: number;
         };
         /**
          * AvisoDeRealizadas
@@ -2809,6 +2838,11 @@ export interface components {
             data_nova: string | null;
             /** Sai */
             sai: boolean;
+            /**
+             * Mudou
+             * @default []
+             */
+            mudou: string[];
         };
         /** Parcelamento */
         Parcelamento: {
@@ -5191,7 +5225,9 @@ export interface operations {
     };
     excluir_parcelamento: {
         parameters: {
-            query?: never;
+            query?: {
+                confirmar_realizadas?: boolean;
+            };
             header?: never;
             path: {
                 id: string;
@@ -5206,6 +5242,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description A exclusão apaga parcelas pagas ou editadas à mão */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvisoDeExclusao"];
+                };
             };
             /** @description Validation Error */
             422: {

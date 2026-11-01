@@ -83,6 +83,7 @@ export type Historico = components["schemas"]["Historico"];
 export type Parcelamento = components["schemas"]["Parcelamento"];
 export type AlteracaoDeParcelamento = components["schemas"]["AlteracaoDeParcelamento"];
 export type AvisoDeRealizadas = components["schemas"]["AvisoDeRealizadas"];
+export type AvisoDeExclusao = components["schemas"]["AvisoDeExclusao"];
 export { oQueSobra, type Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
@@ -1028,20 +1029,25 @@ export async function corrigirParcelamento(id: string, alteracao: AlteracaoDePar
   }
 }
 
+/** O que o servidor disse da exclusão: apagou (`{}`), pede confirmar (`aviso`, com quantas parcelas de cada tipo saem) ou recusou (`motivo`). */
+export type ExclusaoDoParcelamento = { aviso?: AvisoDeExclusao; motivo?: string };
+
 /**
- * Exclui o parcelamento inteiro, as realizadas também; precisa de internet. Devolve o motivo da
- * recusa, ou `null`. O 204 não tem corpo, então `recusaDe` (que exige `data`) não serve.
+ * Exclui o parcelamento inteiro, as realizadas também; precisa de internet. Se uma parcela é de
+ * fatura paga, realizada ou editada à mão, nada sai e volta o aviso, para repetir com
+ * `confirmarRealizadas` (ticket 142). O 204 não tem corpo, então `recusaDe` (que exige `data`) não serve.
  */
-export async function excluirParcelamento(id: string): Promise<string | null> {
+export async function excluirParcelamento(id: string, confirmarRealizadas = false): Promise<ExclusaoDoParcelamento> {
   try {
-    const { error } = await api.DELETE("/api/parcelamentos/{id}", { params: { path: { id } } });
+    const { error, response } = await api.DELETE("/api/parcelamentos/{id}", { params: { path: { id }, query: { confirmar_realizadas: confirmarRealizadas } } });
+    if (response.status === 409) return { aviso: error as AvisoDeExclusao };
     const detalhe = (error as { detail?: unknown } | undefined)?.detail;
-    if (error) return typeof detalhe === "string" ? detalhe : "o servidor recusou excluir o parcelamento";
+    if (error) return { motivo: typeof detalhe === "string" ? detalhe : "o servidor recusou excluir o parcelamento" };
   } catch {
-    return "sem resposta do servidor";
+    return { motivo: "sem resposta do servidor" };
   }
   await relerAsParcelas();
-  return null;
+  return {};
 }
 
 /** Cadastro precisa de internet (ADR 0011): não entra na fila. `false` se o servidor recusou. */
