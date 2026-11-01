@@ -247,11 +247,11 @@ O que faltou pagar de uma fatura paga (o total menos o pago), que passa para a f
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
 
 **Estorno**:
-Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original e com as mesmas categorias e tags. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
+Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original e com as categorias e tags dela, que acompanham as da compra quando ela muda. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
 _Avoid_: reembolso, devolução
 
 **Compra cancelada**:
-Compra no cartão que o casal desfaz antes do fechamento da fatura: é excluída e some de tudo (fatura, mês, categoria, tag e planejamento). Depois do fechamento, o caminho é o estorno.
+Compra no cartão que não aconteceu (lançada errada ou desfeita): é excluída e some de tudo (fatura, mês, categoria, tag e planejamento), com a fatura aberta ou fechada, mas não na paga. A compra que aconteceu e foi devolvida não se cancela: recebe um estorno, e enquanto tiver estorno não pode ser excluída.
 _Avoid_: compra estornada (estorno é o crédito que aparece numa fatura posterior)
 
 **Transferência**:
