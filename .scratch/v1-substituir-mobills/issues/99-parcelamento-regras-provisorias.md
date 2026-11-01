@@ -1,7 +1,7 @@
 # Parcelamento: regras provisórias para o dono conferir
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se a regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -28,7 +28,23 @@ Origem: [ticket 46](46-parcelamento-criar.md) (revisão: a spec não diz quando 
 11. **A correção não troca cartão ou conta, nem `automatico`.** O casal exclui e lança de novo. Alternativa: aceitar `conta_id` (refaz a fatura de todas) e `automatico`.
 12. **A parcela excluída uma a uma não volta numa correção** (é uma parcela pulada, como o previsto da recorrência); a que sai porque o parcelamento encolheu volta se ele crescer, e a exclusão de uma parcela depois do novo fim, seguida de encolher e crescer, a traz de volta.
 
+## Answer
+
+Respondido pelo dono. Manter como está (1 a 6 e 9 a 12), com os esclarecimentos:
+
+1. Como está: a parcela n > 1 vira realizada quando a fatura de antes fecha.
+2. Manter o 422 em `automatico: false` no cartão.
+3. Manter 420 parcelas.
+4. Só despesa na v1.
+5. Vale o ticket 87 (implementado no [ticket 125](125-geracao-pula-o-passado.md)).
+6. Só o número mudou: o total fica.
+7. **Mudou:** a edição pergunta o escopo (só esta, esta e as futuras, todas incluindo as realizadas). Classificação vale para o escopo, inclusive parcela editada à mão; o número de parcelas só no escopo "todas"; atingir realizadas exige confirmação.
+8. **Mudou:** excluir exige `confirmar_realizadas`, com aviso claro de que apaga algo já pago e pode desconfigurar o histórico.
+9. a 12. Manter.
+
+As mudanças 7 e 8 estão no [ticket 142](142-escopo-na-edicao-de-parcela-e-aviso-ao-excluir.md).
+
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste de API em `backend/tests/test_parcelamentos.py` e ajuste em `realiza_em`, em `gravar` ou na validação de `NovoParcelamento` (`backend/app/parcelamentos.py`; as 6 a 12 estão em `_mudar`, `_trabalho` e `excluir_parcelamento`), e nos verbetes "Parcela alterada à mão" e "Correção do parcelamento" e no "Automático" do `GLOSSARY.md`
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] Se uma regra mudar (7 e 8, no ticket 142): teste de API em `backend/tests/test_parcelamentos.py` e ajuste em `realiza_em`, em `gravar` ou na validação de `NovoParcelamento` (`backend/app/parcelamentos.py`; as 6 a 12 estão em `_mudar`, `_trabalho` e `excluir_parcelamento`), e nos verbetes "Parcela alterada à mão" e "Correção do parcelamento" e no "Automático" do `GLOSSARY.md`
