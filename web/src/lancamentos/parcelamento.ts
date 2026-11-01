@@ -1,5 +1,6 @@
 import { config } from "../config";
 import type { NovoParcelamento } from "../dados";
+import { maisMeses } from "./datas";
 import { dividirEmParcelas, formatarCentavos } from "./dinheiro";
 
 /** Sem juros, o total se divide pelas parcelas; com juros, cada parcela vale o digitado. */
@@ -46,4 +47,15 @@ export function rotuloDasParcelas(valores: Valores): string {
   const { total, primeira, outras } = divisao(valores);
   const parcelas = primeira === outras ? `${valores.parcelas}x de ${formatarCentavos(outras)}` : `${valores.parcelas}x: ${formatarCentavos(primeira)} na 1ª e ${formatarCentavos(outras)} nas outras`;
   return valores.valor_total_centavos == null ? `${parcelas}, total ${formatarCentavos(total)}` : parcelas;
+}
+
+/**
+ * Quantas parcelas do boleto vencem antes de `hoje` e não serão lançadas (o cartão gera todas).
+ * Repete `_gerar_um_lote` do servidor só para mostrar, como a ADR 0018.
+ */
+export function parcelasPuladas(parcelas: number, data: string, hoje: string, noCartao: boolean): number {
+  if (noCartao || !Number.isInteger(parcelas) || parcelas < 2) return 0;
+  let puladas = 0;
+  while (puladas < parcelas && maisMeses(data, puladas) < hoje) puladas++;
+  return puladas;
 }
