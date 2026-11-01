@@ -3065,6 +3065,22 @@ export interface components {
             /** Recusa */
             recusa: string | null;
         };
+        /**
+         * ProximoPrevisto
+         * @description O previsto de hoje em diante com que a regra segue: a tela abre a recorrência por ele.
+         */
+        ProximoPrevisto: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Data
+             * Format: date
+             */
+            data: string;
+        };
         /** PuladoNoDesfazer */
         PuladoNoDesfazer: {
             /**
@@ -3199,6 +3215,7 @@ export interface components {
              * Format: date-time
              */
             alterado_em: string;
+            proximo_previsto?: components["schemas"]["ProximoPrevisto"] | null;
         };
         /**
          * Resultado

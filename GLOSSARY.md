@@ -31,7 +31,7 @@ Classificação permanente de um lançamento, de uma lista plana que o casal man
 _Avoid_: subcategoria, grupo
 
 **Categoria arquivada**:
-Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada.
+Categoria que o casal tirou das opções de lançamento novo sem apagá-la: os lançamentos que já a têm a mantêm, e ela pode ser desarquivada. Arquivar não mexe nas recorrências: a recorrência ativa que a tem segue gerando previstos com ela até o casal trocar a categoria daqui para frente ou encerrar a regra, nunca sozinha.
 
 **Juntar (categoria ou tag)**:
 Passar todos os lançamentos de uma categoria (ou tag) para outra do mesmo tipo e excluir a primeira; o lançamento que já tinha as duas fica com uma só.
@@ -75,6 +75,9 @@ _Avoid_: motor de sugestão
 **Recorrência**:
 Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz). Só gera do dia do lançamento em diante: com o início no passado, as ocorrências de antes dele não viram lançamento (nem atrasado, nem realizado), mas o calendário e as `vezes` seguem contados desde o início; a do dia do lançamento nasce realizada. A tarefa diária e a mudança da regra também não lançam ocorrência que já passou: mudada a regra, conta de hoje. A regra que termina antes do dia do lançamento é recusada.
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
+
+**Recorrência ativa**:
+Recorrência que ainda tem previsto de hoje em diante; a que terminou, ou cujos previstos que viriam o casal pulou, não é ativa, mesmo com atrasado esperando confirmação.
 
 **Dia do lançamento**:
 O dia (em São Paulo) em que o casal lançou a recorrência ou o parcelamento no aparelho, e não o dia em que o pedido chegou ao servidor: lançada sem internet, a regra pode subir no dia seguinte. A geração conta o "antes de hoje" a partir dele enquanto a regra é a que o casal lançou; um dia depois de hoje (relógio do aparelho adiantado) vale como hoje.
@@ -282,11 +285,11 @@ Valor de uma conta numa data, informado pelo casal, a partir do qual o saldo é 
 _Avoid_: saldo inicial, saldo importado
 
 **Conta arquivada**:
-Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve.
+Conta que o casal tirou das opções (não recebe lançamento nem transferência novos) sem perder o histórico; o saldo e os lançamentos antigos continuam, e desarquivar a devolve. Como na categoria arquivada, a recorrência ativa nela segue gerando previstos até o casal trocar a conta ou encerrar a regra; o parcelamento também segue, porque a compra já foi feita.
 _Avoid_: conta excluída, conta inativa
 
 **Cartão arquivado**:
-Cartão que o casal tirou das opções de novo lançamento sem perder o histórico; as compras antigas continuam nele e na fatura delas, e desarquivar o devolve.
+Cartão que o casal tirou das opções de novo lançamento sem perder o histórico; as compras antigas continuam nele e na fatura delas, e desarquivar o devolve. A recorrência ativa e o parcelamento nele seguem como na conta arquivada.
 _Avoid_: cartão cancelado, cartão inativo
 
 **Limite**:
