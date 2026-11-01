@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
 
@@ -15,6 +16,9 @@ test("editar: o que se digita antes de o lançamento carregar não se perde", as
   await lancar(page, { teclas: ["1", "0", "0", "0", "0"], conta, categoria: mercado, descricao: `Feira ${s}` });
   const editar = page.getByRole("link", { name: `Editar Feira ${s}` });
   await expect(editar).toBeVisible();
+  // Apagar o banco do aparelho perderia o que ainda está na fila: espera o servidor ter o lançamento.
+  const api = await apiDaPagina(page);
+  await expect.poll(async () => (await api.ler("/api/lancamentos")).some((l: { descricao: string }) => l.descricao === `Feira ${s}`)).toBe(true);
   const href = await editar.getAttribute("href");
 
   // Segura a lista de lançamentos: a tela abre a edição sem o lançamento no aparelho.
