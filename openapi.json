@@ -6708,6 +6708,14 @@
             "title": "Fonte",
             "default": "app"
           },
+          "proporcao_das_partes": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Proporcao Das Partes",
+            "default": []
+          },
           "parece_repetido_de": {
             "anyOf": [
               {

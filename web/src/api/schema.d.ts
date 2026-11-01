@@ -2341,6 +2341,11 @@ export interface components {
              * @enum {string}
              */
             fonte: "app" | "mobills";
+            /**
+             * Proporcao Das Partes
+             * @default []
+             */
+            proporcao_das_partes: number[];
             /** Parece Repetido De */
             parece_repetido_de?: string | null;
         };

@@ -236,6 +236,9 @@ class Lancamento(DadosDoLancamento):
     alterado_em: datetime
     # De onde veio: "app" ou "mobills" (o importado); lançamento antigo, sem marca, é do app.
     fonte: Literal["app", "mobills"] = "app"
+    # A proporção em que as partes se dividem quando o valor muda, na ordem delas: na parcela, a
+    # que veio do parcelamento (ticket 139); sem ela, a dos valores. Vazia sem partes.
+    proporcao_das_partes: list[int] = []
     # O lançamento da outra pessoa com mesmo valor, conta e tipo e data a até um dia, que já
     # estava no servidor quando este chegou, e que o casal ainda não conferiu ("Parece repetido").
     parece_repetido_de: UUID | None = None
@@ -1498,6 +1501,7 @@ def _todos(
     ):
         tags.setdefault(lancamento_id, []).append(nome)
     partes = ler_partes(conn, ids if filtro else None)
+    pesos = pesos_das_partes(conn, list(partes))
     dia = hoje()
     return [
         Lancamento(
@@ -1532,6 +1536,7 @@ def _todos(
             alterada_a_mao=l[25],
             estorno_avulso=l[26],
             partes=partes.get(l[0], []),
+            proporcao_das_partes=pesos.get(l[0], []),
         )
         for l in linhas
     ]

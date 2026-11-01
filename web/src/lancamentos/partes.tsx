@@ -83,6 +83,20 @@ export function PartesDaCompra(props: { partes: Parte[]; so?: Parte[] | null; ca
   );
 }
 
+/**
+ * O valor dividido pelas partes na proporção dos `pesos`, como no servidor (`app/partes.py`): cada
+ * parte com a sua fatia sem os centavos, e os que sobram na maior parte (a primeira, no empate).
+ */
+export function dividirPelaProporcao(valor: number, pesos: number[]): number[] {
+  if (!pesos.length) return [];
+  // Em BigInt: o produto do valor pelo peso passa do inteiro exato do número em compras grandes.
+  const total = BigInt(pesos.reduce((soma, p) => soma + p, 0));
+  const valores = pesos.map((p) => Number((BigInt(valor) * BigInt(p)) / total));
+  const maior = pesos.reduce((m, p, i) => (p > pesos[m] ? i : m), 0);
+  valores[maior] += valor - valores.reduce((soma, v) => soma + v, 0);
+  return valores;
+}
+
 /** A parte como a tela a edita: o valor como se digita, e o da última é o que falta (`restoDaUltima`). */
 export type ParteEmEdicao = Omit<Parte, "valor_centavos"> & { valor: string };
 

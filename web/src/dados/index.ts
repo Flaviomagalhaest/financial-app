@@ -122,6 +122,8 @@ export type LancamentoNaTela = NovoLancamento & {
   parcelas?: Lancamento["parcelas"];
   /** A parcela que uma pessoa mudou: a correção do parcelamento preserva valor, data, conta e fatura dela. */
   alterada_a_mao?: Lancamento["alterada_a_mao"];
+  /** A proporção em que as partes da parcela se dividem quando o valor muda (ticket 139). */
+  proporcao_das_partes?: Lancamento["proporcao_das_partes"];
   /** O lançamento da outra pessoa que este parece repetir. */
   parece_repetido_de?: string | null;
   /** A hora da última ação no aparelho, enquanto a mudança não subiu. */
