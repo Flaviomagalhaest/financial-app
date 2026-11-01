@@ -14,6 +14,7 @@ import {
   useFaturas,
   useFavoritos,
   useLancamentos,
+  useParcelamentos,
   usePessoas,
   useSugestao,
   useTags,
@@ -24,7 +25,7 @@ import {
   type NovoLancamento,
   type Sugestao,
 } from "../dados";
-import { indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaCompra, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
+import { indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaParte, restanteDoEstorno, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
 import { pagaPeloPagamento } from "../cartoes/apresentacao";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
@@ -45,7 +46,7 @@ function ultimoCriado(lancamentos: LancamentoNaTela[], euId?: string): Lancament
   // O criado só no aparelho ainda não tem autor nem hora do servidor: é deste aparelho, e o mais novo.
   const criadoEm = (l: LancamentoNaTela) => (l.criado_em ? Date.parse(l.criado_em) : (l.feitoEm ?? Infinity));
   const meus = lancamentos.filter(
-    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && !l.estorno_de && !l.estorno_avulso && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
+    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && !l.estorno_de && !l.estorno_avulso && !l.estorno_parcelamento_id && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
   );
   return meus.reduce<LancamentoNaTela | undefined>((ultimo, l) => (!ultimo || criadoEm(l) > criadoEm(ultimo) ? l : ultimo), undefined);
 }
@@ -69,6 +70,7 @@ type Props = {
 export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
   const { contas, cartoes, contasECartoes, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
+  const { dados: parcelamentos } = useParcelamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
   const opcoesDeTags = useTags();
   const sugerir = useSugestao();
@@ -106,6 +108,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const [favoritarAoSalvar, setFavoritarAoSalvar] = useState(false);
   const [favoritoAplicado, setFavoritoAplicado] = useState(false);
   const [estornoAplicado, setEstornoAplicado] = useState(false);
+  // O que o estorno novo devolve: uma parte da compra com partes, ou todas as parcelas da compra parcelada (ticket 138).
+  const [parteEstornada, setParteEstornada] = useState<string | null>(null);
+  const [todasAsParcelas, setTodasAsParcelas] = useState(false);
   const [creditoAplicado, setCreditoAplicado] = useState(false);
   // A parcela que muda pergunta o alcance ao salvar (ticket 136); "só esta" é a edição de sempre.
   const [escolhendoAlcance, setEscolhendoAlcance] = useState(false);
@@ -141,17 +146,44 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setPartes(achado.partes?.length ? achado.partes.map(emEdicao) : null);
   }, [id, existente, lancamentos, semDados]);
 
-  // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra.
+  // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra; o de todas as
+  // parcelas (`existente.estorno_parcelamento_id`) é ligado ao parcelamento, sem compra.
   const compraId = estornoDe ?? existente?.estorno_de ?? undefined;
-  const estornando = !!compraId;
+  const estornando = !!compraId || !!existente?.estorno_parcelamento_id;
   // O estorno avulso (novo ou o que se edita) não tem compra: leva cartão, valor e data, e o resto é opcional.
   const avulso = !!creditoNoCartao || !!existente?.estorno_avulso;
-  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
+  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? [], parcelamentos ?? []), [lancamentos, parcelamentos]);
   const compra = compraId ? indice.compras.get(compraId) : undefined;
-  // O que ainda cabe: o valor da compra menos os outros estornos dela.
-  const restante = compra ? restanteDaCompra(compra, indice, existente?.id ?? novoId) : 0;
+  // O que o estorno devolve: no que se edita, o que ele já é; no novo, o que a pessoa escolheu.
+  const parteDoEstorno = existente ? (existente.estorno_parte_id ?? null) : parteEstornada;
+  const eTodas = existente ? !!existente.estorno_parcelamento_id : todasAsParcelas;
+  const parcelamentoDoEstorno = parcelamentos?.find((p) => p.id === (existente?.estorno_parcelamento_id ?? compra?.parcelamento_id));
+  // O que ainda cabe: o valor da compra (da parte, do parcelamento) menos os outros estornos dela.
+  const restante = restanteDoEstorno(compra, parteDoEstorno, eTodas, parcelamentoDoEstorno?.id, indice, existente?.id ?? novoId);
 
-  // O estorno novo começa com o que a compra tem; o valor, no máximo o que ainda cabe. Preenche uma vez só.
+  /** O estorno começa com o que o estorno devolve tem (compra, parte ou parcelamento); o valor, no máximo o que ainda cabe. */
+  function preencherEstorno(c: NonNullable<typeof compra>, parteId: string | null, todas: boolean) {
+    const parte = parteId ? c.partes?.find((p) => p.id === parteId) : undefined;
+    const parcelamento = todas ? parcelamentos?.find((p) => p.id === c.parcelamento_id) : undefined;
+    const origem = parte ?? parcelamento ?? c;
+    const doEstorno = restanteDoEstorno(c, parteId, todas, c.parcelamento_id ?? undefined, indice, novoId);
+    setTipo("despesa");
+    setCentavos(Math.max(0, doEstorno));
+    setCategoriaIds(origem.categoria_ids);
+    setTags(origem.tags ?? []);
+    setDescricao(parte?.descricao || c.descricao ? `Estorno ${parte?.descricao || c.descricao}` : "");
+    setPessoa(origem.pessoa ?? c.pessoa ?? null);
+  }
+
+  /** Troca o que o estorno novo devolve e preenche de novo com o que a escolha tem. */
+  function escolherEstorno(parteId: string | null, todas: boolean) {
+    setParteEstornada(parteId);
+    setTodasAsParcelas(todas);
+    if (compra) preencherEstorno(compra, parteId, todas);
+  }
+
+  // O estorno novo começa com o que a compra tem; na compra com partes, com a primeira parte que ainda tem o que estornar.
+  // Preenche uma vez só.
   useEffect(() => {
     if (!estornoDe || estornoAplicado) return;
     if (!compra) {
@@ -160,14 +192,11 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     }
     setErro("");
     setEstornoAplicado(true);
-    setTipo("despesa");
-    setCentavos(Math.min(compra.valor_centavos, restanteDaCompra(compra, indice, novoId)));
+    const parte = compra.partes?.find((p) => restanteDaParte(compra, p.id, indice, novoId) > 0);
+    setParteEstornada(parte?.id ?? compra.partes?.[0]?.id ?? null);
     setContaId(compra.conta_id);
-    setCategoriaIds(compra.categoria_ids);
-    setTags(compra.tags ?? []);
-    setDescricao(compra.descricao ? `Estorno ${compra.descricao}` : "");
-    setPessoa(compra.pessoa ?? null);
     setData(hoje());
+    preencherEstorno(compra, parte?.id ?? compra.partes?.[0]?.id ?? null, false);
   }, [estornoDe, estornoAplicado, compra, indice, lancamentos, semDados, novoId]);
 
   // O crédito avulso novo abre no cartão da fatura de onde se veio. Preenche uma vez só.
@@ -202,7 +231,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     !problemaDaRecorrencia &&
     !problemaDoParcelamento &&
     (!estornoDe || estornoAplicado) &&
-    (!estornando || !compra || centavos <= restante);
+    (!estornando || centavos <= restante);
 
   const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
   const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
@@ -392,7 +421,10 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     categoria_ids: partes ? [] : categoriaIds,
     pessoa: partes ? null : pessoa,
     fatura_mes: noCartao ? faturaMes : null,
-    ...(compraId && { estorno_de: compraId }),
+    // O estorno de todas as parcelas é ligado ao parcelamento, sem a parcela (ticket 138).
+    ...(compraId && !eTodas && { estorno_de: compraId }),
+    ...(compraId && !eTodas && parteDoEstorno && { estorno_parte_id: parteDoEstorno }),
+    ...(eTodas && parcelamentoDoEstorno && { estorno_parcelamento_id: parcelamentoDoEstorno.id }),
     ...(avulso && { estorno_avulso: true }),
     item_categoria_id: partes ? null : itemEscolhido,
     ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
@@ -484,10 +516,43 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       <p className="valor" data-testid="valor" aria-live="polite">
         {formatarCentavos(centavos)}
       </p>
-      {estornando && compra && (
+      {estornando && compra && !eTodas && (
         <p className="vazio">
           Compra “{tituloDoLancamento(compra, categorias)}” de {formatarCentavos(compra.valor_centavos)}: ainda dá para estornar até {formatarCentavos(restante)}.
         </p>
+      )}
+      {estornando && eTodas && parcelamentoDoEstorno && (
+        <p className="vazio">
+          Todas as parcelas de “{parcelamentoDoEstorno.descricao || "compra parcelada"}”, {formatarCentavos(parcelamentoDoEstorno.valor_total_centavos)} em {parcelamentoDoEstorno.parcelas}x: ainda dá para estornar até{" "}
+          {formatarCentavos(restante)}. O estorno entra inteiro na fatura em que aparecer.
+        </p>
+      )}
+      {estornoPronto && compra?.partes && compra.partes.length > 0 && (
+        <fieldset aria-label="Parte estornada" disabled={!!existente}>
+          <legend>Parte estornada</legend>
+          {compra.partes.map((p) => {
+            const resta = restanteDaParte(compra, p.id, indice, existente?.id ?? novoId);
+            return (
+              <label key={p.id}>
+                <input type="radio" name="parte-estornada" checked={parteDoEstorno === p.id} disabled={!existente && resta <= 0} onChange={() => escolherEstorno(p.id, false)} />
+                {p.descricao || p.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} — {formatarCentavos(p.valor_centavos)}, ainda dá para estornar {formatarCentavos(Math.max(0, resta))}
+              </label>
+            );
+          })}
+        </fieldset>
+      )}
+      {estornoPronto && !existente && compra?.parcelamento_id && parcelamentoDoEstorno && (
+        <fieldset aria-label="Quanto estornar da compra parcelada">
+          <legend>Quanto estornar</legend>
+          <label>
+            <input type="radio" name="alcance-do-estorno" checked={!eTodas} onChange={() => escolherEstorno(parteDoEstorno, false)} />
+            Só esta parcela{compra.parcela && compra.parcelas ? ` (${numeroDaParcela(compra.parcela, compra.parcelas)})` : ""}
+          </label>
+          <label>
+            <input type="radio" name="alcance-do-estorno" checked={eTodas} onChange={() => escolherEstorno(parteDoEstorno, true)} />
+            Todas as parcelas
+          </label>
+        </fieldset>
       )}
       {estornoPronto && estornoDe && conta === "" && cartoes.length > 0 && (
         <p className="vazio">O cartão da compra está arquivado: marque o cartão que recebe o estorno.</p>

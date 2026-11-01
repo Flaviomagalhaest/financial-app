@@ -6575,6 +6575,30 @@
             ],
             "title": "Estorno Avulso"
           },
+          "estorno_parte_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Parte Id"
+          },
+          "estorno_parcelamento_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Parcelamento Id"
+          },
           "item_categoria_id": {
             "anyOf": [
               {
@@ -8032,6 +8056,30 @@
               }
             ],
             "title": "Estorno Avulso"
+          },
+          "estorno_parte_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Parte Id"
+          },
+          "estorno_parcelamento_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estorno Parcelamento Id"
           },
           "item_categoria_id": {
             "anyOf": [

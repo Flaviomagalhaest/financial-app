@@ -210,31 +210,6 @@ def test_dividir_conflita_com_a_categoria_que_o_outro_lado_mudou(casal: Casal):
     assert [c["campo"] for c in dividida.json()["campos"]] == ["categoria_ids"]
 
 
-def test_estorno_de_compra_com_partes_espera_o_estorno_de_uma_parte(casal: Casal):
-    from tests.test_cartoes import novo_cartao
-
-    cartao, roupa, casa = (
-        novo_cartao(casal)["id"],
-        casal.categoria("Roupa"),
-        casal.categoria("Casa"),
-    )
-    compra = compra_com_partes(
-        casal, cartao, [parte([roupa], 600), parte([casa], 400)], data="2026-03-28"
-    ).json()
-
-    estorno = casal.pedir(
-        "flavio",
-        "POST",
-        "/api/lancamentos",
-        json=lancamento(cartao, [roupa], valor_centavos=100, estorno_de=compra["id"]),
-    )
-
-    assert (estorno.status_code, estorno.json()["detail"]) == (
-        422,
-        "o estorno de uma parte da compra ainda não existe",
-    )
-
-
 def test_parcela_ainda_nao_se_divide_em_partes(casal: Casal):
     from tests.test_parcelamentos import parcelamento, parcelas
 

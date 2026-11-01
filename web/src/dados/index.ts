@@ -709,6 +709,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
       // escolha do item (a confirmação não a leva), fica a do servidor, como em `alteracao`.
       estorno_de: l.estorno_de ?? antes?.estorno_de,
       estorno_avulso: l.estorno_avulso ?? antes?.estorno_avulso,
+      estorno_parcelamento_id: l.estorno_parcelamento_id ?? antes?.estorno_parcelamento_id,
       parcela: antes?.parcela,
       item_categoria_id: l.item_categoria_id || antes?.item_categoria_id,
       situacao: situacaoNoAparelho(l, antes),
@@ -777,6 +778,7 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
           item_categoria_id: escolha ?? antes?.item_categoria_id,
           estorno_de: antes?.estorno_de,
           estorno_avulso: antes?.estorno_avulso,
+          estorno_parcelamento_id: antes?.estorno_parcelamento_id,
           mes,
         })
       : null;

@@ -203,6 +203,8 @@ class _Linhas:
             ("criado_em", self.agora),
             ("excluido_pela_regra", False),
             ("estorno_avulso", False),
+            ("estorno_parte_id", None),
+            ("estorno_parcelamento_id", None),
             ("classificacao_pendente", ""),
             ("mudanca_pendente", ""),
             ("corrigido_em", None),

@@ -13,7 +13,7 @@ from app.banco import conectar, em_transacao
 from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import recusar, url_do_banco
 from app.login import UsuarioLogado
-from app.partes import CATEGORIAS_QUE_CONTAM
+from app.partes import CATEGORIAS_QUE_CONTAM, e_estorno
 
 router = APIRouter(prefix="/api")
 
@@ -112,10 +112,7 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
         tuple[UUID, UUID | None], tuple[str, int, UUID | None, UUID | None, set[UUID]]
     ] = {}
     # O estorno diminui o item da compra que ele devolve; o avulso, o que ele escolhe.
-    sinal = (
-        "CASE WHEN l.estorno_de IS NULL AND NOT COALESCE(l.estorno_avulso, false)"
-        " THEN 1 ELSE -1 END"
-    )
+    sinal = f"CASE WHEN NOT {e_estorno('l')} THEN 1 ELSE -1 END"
     for id, parte, situacao, valor, escolhida, atual, categoria_id, *_ in conn.execute(
         f"SELECT l.id, NULL::uuid, l.situacao, {sinal} * l.valor_centavos,"
         " l.item_categoria_id, l.item_atual_categoria_id, lc.categoria_id, l.data, l.criado_em"

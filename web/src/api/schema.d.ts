@@ -2283,6 +2283,10 @@ export interface components {
             estorno_de?: string | null;
             /** Estorno Avulso */
             estorno_avulso?: boolean | null;
+            /** Estorno Parte Id */
+            estorno_parte_id?: string | null;
+            /** Estorno Parcelamento Id */
+            estorno_parcelamento_id?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /**
@@ -2819,6 +2823,10 @@ export interface components {
             estorno_de?: string | null;
             /** Estorno Avulso */
             estorno_avulso?: boolean | null;
+            /** Estorno Parte Id */
+            estorno_parte_id?: string | null;
+            /** Estorno Parcelamento Id */
+            estorno_parcelamento_id?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /**

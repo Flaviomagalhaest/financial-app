@@ -30,6 +30,15 @@ PESSOAS_QUE_CONTAM = (
 )
 
 
+def e_estorno(tabela: str = "lancamentos") -> str:
+    """O teste SQL do crédito que diminui (ADR 0016): o estorno de uma compra ou de uma parte, o de
+    todas as parcelas (ticket 138) e o avulso (ticket 135). Quem soma despesas o usa."""
+    return (
+        f"({tabela}.estorno_de IS NOT NULL OR {tabela}.estorno_parcelamento_id IS NOT NULL"
+        f" OR COALESCE({tabela}.estorno_avulso, false))"
+    )
+
+
 def valor(apelido: str) -> str:
     """O valor de uma linha de um dos fragmentos (`apelido`): o da parte, ou o do lançamento."""
     return f"COALESCE({apelido}.valor_da_parte, lancamentos.valor_centavos)"
@@ -38,7 +47,6 @@ def valor(apelido: str) -> str:
 def com_sinal(apelido: str) -> str:
     """O valor da linha com o sinal de quem soma despesas, como `lancamentos.VALOR_COM_SINAL`."""
     return (
-        "CASE WHEN lancamentos.tipo = 'despesa' AND NOT"
-        " (lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
+        f"CASE WHEN lancamentos.tipo = 'despesa' AND NOT {e_estorno()}"
         f" THEN {valor(apelido)} ELSE -{valor(apelido)} END"
     )
