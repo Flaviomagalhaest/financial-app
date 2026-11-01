@@ -299,6 +299,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
         "automatico": False,
         "ate": None,
         "item_categoria_id": None,
+        "partes": [],
         "ocorrencia_do_inicio": 1,
         # Sem o dia no pedido, vale o da chegada.
         "dia_do_lancamento": "2026-10-28",
@@ -338,6 +339,7 @@ def test_sem_internet_a_recorrencia_sobe_no_lote_como_um_pedido_so(casal: Casal)
         "tags": [],
         "pessoa": None,
         "item_categoria_id": None,
+        "partes": [],
         "ocorrencia_do_inicio": 1,
         "dia_do_lancamento": "2026-10-28",
         "criado_por": "esposa",

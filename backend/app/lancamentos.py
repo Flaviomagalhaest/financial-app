@@ -17,6 +17,7 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual_das_partes, guardar_item_atual_do_lancamento
 from app.login import UsuarioLogado
+from app.partes import NAO_DA_PARA_DIVIDIR, redividir
 from app.pessoas import configuradas
 
 router = APIRouter(prefix="/api")
@@ -121,7 +122,7 @@ class Parte(BaseModel):
         return self
 
 
-SO_A_VISTA = "por enquanto, só a compra à vista tem partes"
+SO_A_VISTA = "por enquanto, só a compra à vista e a recorrência têm partes"
 SEM_CLASSIFICACAO_PROPRIA = "a compra com partes não tem categoria, tag nem pessoa próprias"
 DUAS_PARTES_OU_MAIS = "a compra tem duas partes ou mais"
 
@@ -701,9 +702,13 @@ def tags_das_partes(conn, id: UUID) -> set[UUID]:
     }
 
 
-def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
+def gravar_partes(
+    conn, id: UUID, partes: list[Parte], usuario: str, da_regra: frozenset[UUID] = frozenset()
+) -> None:
     """Troca as partes do lançamento pela lista; a parte que fica (o mesmo id) mantém o item em
-    que contava, se a categoria dele continua nela (`item_em_que_conta`)."""
+    que contava, se a categoria dele continua nela (`item_em_que_conta`). `da_regra` são as tags
+    que a regra que gera o lançamento já tem: a arquivada segue valendo nos previstos dela, como a
+    tag da própria regra (glossário, **Categoria arquivada**)."""
     guardar_item_atual_das_partes(conn, "p.lancamento_id = %s", (id,))
     item_atual = dict(
         conn.execute(
@@ -711,7 +716,7 @@ def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
             (id,),
         ).fetchall()
     )
-    ja_tinha = tags_das_partes(conn, id)
+    ja_tinha = tags_das_partes(conn, id) | da_regra
     ja_tinha |= {
         t
         for (t,) in conn.execute(
@@ -1017,7 +1022,7 @@ def _item_atual_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None
 
 def iguais(campo: Campo, pedido, gravado) -> bool:
     if campo == "partes":
-        return list(map(_parte_normalizada, pedido)) == list(map(_parte_normalizada, gravado))
+        return list(map(parte_normalizada, pedido)) == list(map(parte_normalizada, gravado))
     if campo == "categoria_ids":
         return set(pedido) == set(gravado)
     if campo == "tags":
@@ -1139,7 +1144,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if "pessoa" in pedidas:
         pedidas["pessoa"] = pedidas["pessoa"] or None
     if alteracao.partes is not None:
-        pedidas |= _o_que_as_partes_mudam(alteracao.partes, pedidas)
+        pedidas |= o_que_as_partes_mudam(alteracao.partes, pedidas)
     mudancas = {}
     conflitos: list[Campo] = []
     for campo, valor in pedidas.items():
@@ -1172,6 +1177,14 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         mudancas["item_categoria_id"] = None
     if not mudancas:
         return atual
+    if (
+        "valor_centavos" in mudancas
+        and "partes" not in pedidas
+        and atual.recorrencia_id
+        and atual.partes
+    ):
+        # O valor da ocorrência é o que vale: as partes dela se dividem de novo (ADR 0022).
+        mudancas["partes"] = redivididas(atual.partes, mudancas["valor_centavos"])
     editado = _com_mudancas(atual, mudancas)
     if editado.partes:
         _conferir_compra_com_partes(conn, atual, editado)
@@ -1229,7 +1242,18 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     return _um(conn, id)
 
 
-def _o_que_as_partes_mudam(partes: list[Parte], pedidas: dict) -> dict:
+def redivididas(partes: list[Parte], valor_centavos: int) -> list[Parte]:
+    """As partes divididas de novo para o valor (`partes.redividir`); a que ficaria sem centavo
+    recusa a mudança (422)."""
+    if not partes:
+        return []
+    try:
+        return redividir(partes, valor_centavos)
+    except ValueError as erro:
+        raise recusar(NAO_DA_PARA_DIVIDIR) from erro
+
+
+def o_que_as_partes_mudam(partes: list[Parte], pedidas: dict) -> dict:
     """Os campos que mudam com as partes pedidas, para valerem também no conflito: dividir tira a
     classificação própria da compra; uma parte só (tirar a penúltima) devolve a dela à compra,
     que volta a ser uma, com o valor dela. Sem partes, a compra volta a ser uma com a
@@ -1260,15 +1284,16 @@ def _o_que_as_partes_mudam(partes: list[Parte], pedidas: dict) -> dict:
 
 def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancamento) -> None:
     """A compra com partes depois da mudança: sem classificação própria, com as partes somando o
-    valor dela, à vista (a parcela e a recorrência têm partes nos tickets 139 e 140) e sem estorno
-    (o estorno de uma parte é do ticket 138)."""
+    valor dela, à vista ou da recorrência (a parcela tem partes no ticket 139) e sem estorno (o
+    estorno de uma parte é do ticket 138). Na recorrência, mudar as partes de um lançamento é o
+    "só este": a mudança daqui para frente não o alcança depois (ticket 140)."""
     if editado.categoria_ids or editado.tags or editado.pessoa or editado.item_categoria_id:
         raise recusar(SEM_CLASSIFICACAO_PROPRIA)
     try:
         conferir_partes(editado.partes, editado.valor_centavos, editado.tipo)
     except ValueError as e:
         raise recusar(str(e))
-    if atual.parcelamento_id or atual.recorrencia_id:
+    if atual.parcelamento_id:
         raise recusar(SO_A_VISTA)
     if atual.estorno_de or atual.estorno_avulso:
         raise recusar("estorno não tem partes")
@@ -1279,7 +1304,7 @@ def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancame
         raise recusar("a compra tem estorno; exclua o estorno antes de dividi-la em partes")
 
 
-def _parte_normalizada(parte) -> tuple:
+def parte_normalizada(parte) -> tuple:
     p = parte if isinstance(parte, Parte) else Parte.model_construct(**parte)
     return (
         str(p.id),
@@ -1580,6 +1605,11 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
             momento,
         ),
     )
+    # O valor de verdade (a conta de luz que veio maior) divide as partes da ocorrência de novo
+    # (ADR 0022); a compra à vista com partes é do ticket 151.
+    if "valor_centavos" in ajustes and atual.partes and atual.recorrencia_id:
+        gravar_partes(conn, id, redivididas(atual.partes, ajustes["valor_centavos"]), usuario)
+        ajustes["partes"] = True
     registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
     return _um(conn, id)
 

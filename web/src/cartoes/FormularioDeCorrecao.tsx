@@ -2,14 +2,20 @@ import { useEffect, useState, type FormEvent } from "react";
 import { corrigirFatura, pagamentosDaFatura, useCadastro, type CorrecaoDeFatura, type Fatura, type LancamentoNaTela } from "../dados";
 import { eCredito, tituloDoLancamento } from "../lancamentos/apresentacao";
 import { diaAnterior, hoje } from "../lancamentos/datas";
-import { comoDigitado, emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
+import { comoDigitado, emCentavos, formatarCentavos, redividir } from "../lancamentos/dinheiro";
 
 type PagamentoNaTela = { id: string; conta_origem_id: string; valor: string; data: string; descricao: string };
 type Parte = NonNullable<LancamentoNaTela["partes"]>[number];
-type CompraNaTela = { id: string; versao: number; titulo: string; original: number; valor: string; excluir: boolean; partes: Parte[] };
+/** `proporcional`: a ocorrência da recorrência, cujas partes são proporção (ADR 0022, ticket 140). */
+type CompraNaTela = { id: string; versao: number; titulo: string; original: number; valor: string; excluir: boolean; partes: Parte[]; proporcional: boolean };
 
-/** A compra com partes muda de valor na última parte, como a tela de lançar ("o que falta da compra"); `undefined` quando a última não ficaria com valor. */
-const partesAcertadas = (partes: Parte[], valor: number): Parte[] | undefined => {
+/**
+ * A compra com partes muda de valor na última parte, como a tela de lançar ("o que falta da compra");
+ * a ocorrência da recorrência divide o valor novo na proporção das partes, como o servidor faria.
+ * `undefined` quando alguma parte não ficaria com valor.
+ */
+const partesAcertadas = ({ partes, proporcional }: Pick<CompraNaTela, "partes" | "proporcional">, valor: number): Parte[] | undefined => {
+  if (proporcional) return redividir(partes, valor) ?? undefined;
   const outras = partes.slice(0, -1).reduce((soma, p) => soma + p.valor_centavos, 0);
   return valor - outras > 0 ? [...partes.slice(0, -1), { ...partes[partes.length - 1], valor_centavos: valor - outras }] : undefined;
 };
@@ -48,7 +54,7 @@ export function FormularioDeCorrecao({
   const [daFatura, setDaFatura] = useState<CompraNaTela[]>(() =>
     compras
       .filter((l) => !l.naoEnviado && l.versao !== undefined)
-      .map((l) => ({ id: l.id, versao: l.versao ?? 0, titulo: tituloDoLancamento(l, categorias), original: l.valor_centavos, valor: comoDigitado(l.valor_centavos), excluir: false, partes: l.partes ?? [] })),
+      .map((l) => ({ id: l.id, versao: l.versao ?? 0, titulo: tituloDoLancamento(l, categorias), original: l.valor_centavos, valor: comoDigitado(l.valor_centavos), excluir: false, partes: l.partes ?? [], proporcional: !!l.recorrencia_id })),
   );
   const [novas, setNovas] = useState<CompraNova[]>([]);
   const [erro, setErro] = useState("");
@@ -87,7 +93,7 @@ export function FormularioDeCorrecao({
           ? "confira o valor, a data e a conta de cada pagamento"
           : daFatura.some((c) => !c.excluir && !valorOuNada(c.valor))
             ? "confira o valor das compras"
-            : daFatura.some((c) => !c.excluir && c.partes.length > 0 && valorOuNada(c.valor) !== c.original && !partesAcertadas(c.partes, valorOuNada(c.valor) ?? 0))
+            : daFatura.some((c) => !c.excluir && c.partes.length > 0 && valorOuNada(c.valor) !== c.original && !partesAcertadas(c, valorOuNada(c.valor) ?? 0))
               ? "o valor da compra com partes não cobre as outras partes"
             : novas.some((c) => !valorOuNada(c.valor) || !c.data || !c.categoria_id)
               ? "confira o valor, a data e a categoria das compras novas"
@@ -105,8 +111,8 @@ export function FormularioDeCorrecao({
       compras_excluidas: daFatura.filter((c) => c.excluir).map((c) => ({ id: c.id, versao: c.versao })),
       compras_editadas: daFatura.filter((c) => !c.excluir && valorOuNada(c.valor) !== c.original).map((c) => {
         const valor_centavos = valorOuNada(c.valor);
-        // A diferença vai para a última parte, para as partes seguirem somando a compra (ADR 0022).
-        const partes = c.partes.length > 0 && valor_centavos ? partesAcertadas(c.partes, valor_centavos) : undefined;
+        // As partes seguem somando a compra (ADR 0022): a diferença vai para a última, ou na proporção.
+        const partes = c.partes.length > 0 && valor_centavos ? partesAcertadas(c, valor_centavos) : undefined;
         return { id: c.id, versao: c.versao, valor_centavos, ...(partes && { partes }) };
       }),
       compras_novas: novas.map((c) => ({

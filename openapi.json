@@ -4267,7 +4267,6 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
             "title": "Categoria Ids"
           },
           "tags": {
@@ -4341,6 +4340,13 @@
               }
             ],
             "title": "Vezes"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes"
           },
           "a_partir_da_ocorrencia": {
             "type": "integer",
@@ -4617,7 +4623,6 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
             "title": "Categoria Ids"
           },
           "tags": {
@@ -4691,6 +4696,13 @@
               }
             ],
             "title": "Vezes"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes"
           }
         },
         "type": "object",
@@ -7513,8 +7525,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -7600,6 +7612,14 @@
               }
             ],
             "title": "Dia Do Lancamento"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
           }
         },
         "type": "object",
@@ -7609,7 +7629,6 @@
           "valor_centavos",
           "tipo_do_valor",
           "conta_id",
-          "categoria_ids",
           "inicio",
           "a_cada",
           "unidade"
@@ -9375,8 +9394,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -9463,6 +9482,14 @@
             ],
             "title": "Dia Do Lancamento"
           },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
+          },
           "ocorrencia_do_inicio": {
             "type": "integer",
             "title": "Ocorrencia Do Inicio",
@@ -9504,7 +9531,6 @@
           "valor_centavos",
           "tipo_do_valor",
           "conta_id",
-          "categoria_ids",
           "inicio",
           "a_cada",
           "unidade",

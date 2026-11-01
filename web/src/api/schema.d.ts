@@ -1430,6 +1430,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][];
             /** A Partir Da Ocorrencia */
             a_partir_da_ocorrencia: number;
         };
@@ -1571,6 +1573,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][];
         };
         /** Cartao */
         Cartao: {
@@ -2617,7 +2621,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2646,6 +2653,11 @@ export interface components {
             item_categoria_id?: string | null;
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
         };
         /** NovaTag */
         NovaTag: {
@@ -3438,7 +3450,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -3467,6 +3482,11 @@ export interface components {
             item_categoria_id?: string | null;
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /**
              * Ocorrencia Do Inicio
              * @default 1

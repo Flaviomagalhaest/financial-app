@@ -83,6 +83,7 @@ def _juntar_escolhas_de_item(conn, origem: UUID, destino: UUID) -> None:
         ("lancamento_partes", "item_categoria_id"),
         ("lancamento_partes", "item_atual_categoria_id"),
         ("recorrencias", "item_id"),
+        ("regra_partes", "item_categoria_id"),
         ("parcelamentos", "item_categoria_id"),
     ):
         conn.execute(f"UPDATE {tabela} SET {coluna} = %s WHERE {coluna} = %s", (destino, origem))
@@ -124,6 +125,13 @@ def juntar_categoria(
             (destino.id, origem.id),
         )
         conn.execute("DELETE FROM parte_categorias WHERE categoria_id = %s", (origem.id,))
+        conn.execute(
+            "INSERT INTO regra_parte_categorias (parte_id, categoria_id)"
+            " SELECT parte_id, %s FROM regra_parte_categorias WHERE categoria_id = %s"
+            " ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM regra_parte_categorias WHERE categoria_id = %s", (origem.id,))
         # A recorrência e o parcelamento vão junto, para a escolha de item continuar numa
         # categoria deles.
         for regra in ("recorrencia", "parcelamento"):
@@ -280,6 +288,12 @@ def juntar_tag(id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Reques
             (destino.id, origem.id),
         )
         conn.execute("DELETE FROM parte_tags WHERE tag_id = %s", (origem.id,))
+        conn.execute(
+            "INSERT INTO regra_parte_tags (parte_id, tag_id)"
+            " SELECT parte_id, %s FROM regra_parte_tags WHERE tag_id = %s ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM regra_parte_tags WHERE tag_id = %s", (origem.id,))
         conn.execute("DELETE FROM tags WHERE id = %s", (origem.id,))
         return destino
 

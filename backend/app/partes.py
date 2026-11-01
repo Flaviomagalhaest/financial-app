@@ -42,3 +42,23 @@ def com_sinal(apelido: str) -> str:
         " (lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
         f" THEN {valor(apelido)} ELSE -{valor(apelido)} END"
     )
+
+
+NAO_DA_PARA_DIVIDIR = "o valor não dá para dividir pelas partes: cada uma precisa de um centavo"
+
+
+def redividir[P](partes: list[P], valor_centavos: int) -> list[P]:
+    """As partes divididas de novo para um valor, na proporção que têm (ADR 0022): na parcela e na
+    ocorrência da recorrência, o que vale é o valor dela. Cada parte fica com a parte inteira da
+    conta, e os centavos que sobram vão para a maior (a primeira, no empate). O app repete a conta
+    para mostrar as partes antes de o servidor responder (ADR 0018);
+    `tabelas-de-teste/redivisao-das-partes.json` prende as duas juntas. A parte que ficaria sem
+    nenhum centavo recusa (`ValueError`)."""
+    pesos = [p.valor_centavos for p in partes]
+    total = sum(pesos)
+    valores = [valor_centavos * peso // total for peso in pesos]
+    maior = pesos.index(max(pesos))
+    valores[maior] += valor_centavos - sum(valores)
+    if min(valores) <= 0:
+        raise ValueError(NAO_DA_PARA_DIVIDIR)
+    return [p.model_copy(update={"valor_centavos": v}) for p, v in zip(partes, valores)]

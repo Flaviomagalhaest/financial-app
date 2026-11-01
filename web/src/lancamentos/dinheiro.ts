@@ -28,6 +28,31 @@ export function dividirEmParcelas(total: number, parcelas: number): { primeira: 
   return { primeira: outras + (total % parcelas), outras };
 }
 
+/**
+ * As partes divididas de novo para um valor, na proporção que têm, como o servidor divide
+ * (`partes.redividir`): cada uma com a parte inteira da conta, e os centavos que sobram na maior (a
+ * primeira, no empate). `null` quando alguma ficaria sem nenhum centavo, que o servidor recusa. Só
+ * para mostrar a ocorrência e a regra antes da resposta; a tabela
+ * `tabelas-de-teste/redivisao-das-partes.json` prende as duas contas juntas (ADR 0018).
+ */
+export function redividir<P extends { valor_centavos: number }>(partes: P[], valor: number): P[] | null {
+  const valores = dividirNaProporcao(partes.map((p) => p.valor_centavos), valor);
+  if (valores.some((v) => v <= 0)) return null;
+  return partes.map((p, i) => ({ ...p, valor_centavos: valores[i] }));
+}
+
+/**
+ * O total dividido na proporção dos pesos, como `redividir`, sem recusar a parte que ficaria sem
+ * centavo: a tela de lançar a mostra com zero e pede outro valor.
+ */
+export function dividirNaProporcao(pesos: number[], total: number): number[] {
+  const soma = pesos.reduce((a, b) => a + b, 0);
+  // Em BigInt: o total vezes o peso passa do inteiro exato do JavaScript nos valores grandes.
+  const valores = pesos.map((peso) => Number((BigInt(total) * BigInt(peso)) / BigInt(soma)));
+  valores[pesos.indexOf(Math.max(...pesos))] += total - valores.reduce((a, b) => a + b, 0);
+  return valores;
+}
+
 /** "1.234,56" ou "1234.56" em centavos; vazio é `null` e o que não for número é `undefined`. */
 export function emCentavos(texto: string): number | null | undefined {
   const limpo = texto.trim().replace(/\./g, texto.includes(",") ? "" : ".").replace(",", ".");
