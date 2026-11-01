@@ -10,6 +10,7 @@ import {
   usePessoas,
   useTags,
   type AlteracaoDeParcelamento,
+  type AvisoDeExclusao,
   type AvisoDeRealizadas,
   type Parcelamento,
 } from "../dados";
@@ -68,6 +69,16 @@ function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<
   return mudou;
 }
 
+/** "1 de fatura paga", "2 realizadas de fatura ainda não paga", "1 alterada à mão": só os tipos que saem. */
+function tiposQueSaem(a: AvisoDeExclusao, noCartao: boolean): string[] {
+  const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+  return [
+    a.de_fatura_paga ? plural(a.de_fatura_paga, "de fatura paga", "de fatura paga") : "",
+    a.realizadas ? plural(a.realizadas, noCartao ? "realizada de fatura ainda não paga" : "realizada", noCartao ? "realizadas de fatura ainda não paga" : "realizadas") : "",
+    a.alteradas_a_mao ? plural(a.alteradas_a_mao, "alterada à mão", "alteradas à mão") : "",
+  ].filter(Boolean);
+}
+
 /** Corrige ou exclui o parcelamento; as duas mudam a regra e precisam de internet (ADR 0011). */
 export function TelaDoParcelamento({ id }: { id: string }) {
   const { dados: parcelamentos, semDados } = useParcelamentos();
@@ -92,6 +103,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const online = useConexao();
   const [form, setForm] = useState<Formulario>(() => formularioDo(parcelamento));
   const [aviso, setAviso] = useState<AvisoDeRealizadas | null>(null);
+  const [avisoDeExclusao, setAvisoDeExclusao] = useState<AvisoDeExclusao | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [itemTocado, setItemTocado] = useState<string | null>(null);
@@ -143,12 +155,14 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
     window.location.hash = "#/historico";
   }
 
-  async function excluir() {
-    if (!window.confirm(`Excluir "${parcelamento.descricao || "este parcelamento"}" inteiro? As ${parcelamento.parcelas} parcelas saem, também as realizadas.`)) return;
+  /** Sem `confirmarRealizadas`, pergunta antes; se o servidor achar parcela paga ou alterada à mão, nada sai e a tela mostra o aviso forte. */
+  async function excluir(confirmarRealizadas: boolean) {
+    if (!confirmarRealizadas && !window.confirm(`Excluir "${parcelamento.descricao || "este parcelamento"}" inteiro? As ${parcelamento.parcelas} parcelas saem.`)) return;
     setErro("");
     setEnviando(true);
-    const motivo = await excluirParcelamento(id);
+    const { aviso: novoAviso, motivo } = await excluirParcelamento(id, confirmarRealizadas);
     setEnviando(false);
+    if (novoAviso) return setAvisoDeExclusao(novoAviso);
     if (motivo) return setErro(`Não foi possível excluir: ${motivo}.`);
     window.location.hash = "#/historico";
   }
@@ -279,9 +293,31 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         ))}
       </ul>
 
-      <button type="button" className="secundario" disabled={enviando || !online} onClick={() => void excluir()}>
-        Excluir parcelamento
-      </button>
+      {avisoDeExclusao ? (
+        <div className="aviso" role="alertdialog" aria-label="Excluir parcelas já pagas">
+          <p>
+            <strong>Isto apaga lançamentos já pagos e pode desconfigurar o histórico. Confirma?</strong>
+          </p>
+          <p>Saem as {avisoDeExclusao.parcelas} parcelas; entre elas:</p>
+          <ul>
+            {tiposQueSaem(avisoDeExclusao, noCartao).map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+          <div className="acoes">
+            <button type="button" disabled={enviando || !online} onClick={() => void excluir(true)}>
+              Excluir mesmo assim
+            </button>
+            <button type="button" className="secundario" onClick={() => setAvisoDeExclusao(null)}>
+              Voltar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="secundario" disabled={enviando || !online} onClick={() => void excluir(false)}>
+          Excluir parcelamento
+        </button>
+      )}
       <a href="#/historico">Voltar ao Histórico</a>
     </section>
   );

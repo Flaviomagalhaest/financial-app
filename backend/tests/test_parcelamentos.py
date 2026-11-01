@@ -1143,9 +1143,11 @@ def test_excluir_o_parcelamento_exclui_todas_as_parcelas_e_nao_volta(
     casal.pedir("flavio", "POST", "/api/lancamentos", json=avulso)
     assert parcelas(casal, novo["id"])[0]["situacao"] == "realizado"
 
-    resposta = casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}")
-    de_novo = casal.pedir("esposa", "DELETE", f"/api/parcelamentos/{novo['id']}")
+    sem_confirmar = excluir_parcelamento(casal, novo["id"])
+    resposta = excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True)
+    de_novo = excluir_parcelamento(casal, novo["id"], "esposa")
 
+    assert (sem_confirmar.status_code, sem_confirmar.json()["realizadas"]) == (409, 1)
     assert (resposta.status_code, de_novo.status_code) == (204, 204)
     assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
     assert [l["id"] for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()] == [
@@ -1432,7 +1434,7 @@ def test_a_tarefa_diaria_e_os_automaticos_com_o_parcelamento_excluido_nao_fazem_
     novo = criar_geladeira(
         casal, casal.conta(), lancada_em="2026-10-10", data="2026-10-10", automatico=True
     )
-    assert casal.pedir("flavio", "DELETE", f"/api/parcelamentos/{novo['id']}").status_code == 204
+    assert excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True).status_code == 204
 
     assert automaticos.realizar_automaticos(database_url, UUID(novo["id"])) == 0
     assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
@@ -1545,3 +1547,61 @@ def test_parcelamento_com_parcela_estornada_nao_se_exclui_e_fica_como_estava(cas
     assert recusada.json()["detail"] == "a compra tem estorno; exclua o estorno antes"
     assert len(parcelas(casal, novo["id"])) == 3
     assert casal.pedir("flavio", "GET", "/api/parcelamentos").json()[0]["id"] == novo["id"]
+
+
+def excluir_parcelamento(casal: Casal, id: str, quem: str = "flavio", **parametros):
+    return casal.pedir(quem, "DELETE", f"/api/parcelamentos/{id}", params=parametros)
+
+
+def test_excluir_o_parcelamento_com_parcela_paga_ou_alterada_a_mao_pede_confirmacao_e_conta_cada_tipo(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/05: abril fechou em 25/04. A 1ª parcela está em abril, que o casal pagou; a 2ª
+    # entrou na fatura aberta de maio quando abril fechou; a 3ª e a 4ª ainda são previstas.
+    no_dia(monkeypatch, "2026-05-10")
+    conta, nubank = casal.conta(), cartao(casal)
+    novo = parcelamento(nubank, [casal.categoria()], data="2026-04-10", parcelas=4)
+    novo["valor_total_centavos"] = 100000
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    pago = pagar(casal, conta, nubank, fatura_mes="2026-04-01", valor_centavos=25000)
+    assert pago.status_code == 201, pago.text
+    [*_, quarta] = parcelas(casal, novo["id"])
+    casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{quarta['id']}",
+        json={"versao": 1, "valor_centavos": 30000},
+    )
+    assert [l["situacao"] for l in parcelas(casal, novo["id"])] == [
+        "realizado",
+        "realizado",
+        "previsto",
+        "previsto",
+    ]
+
+    aviso = excluir_parcelamento(casal, novo["id"])
+
+    assert aviso.status_code == 409
+    assert aviso.json() == {
+        "motivo": "isto apaga lançamentos já pagos e pode desconfigurar o histórico",
+        "parcelas": 4,
+        "de_fatura_paga": 1,
+        "realizadas": 1,
+        "alteradas_a_mao": 1,
+    }
+    # Nada saiu.
+    assert len(parcelas(casal, novo["id"])) == 4
+    assert len(casal.pedir("flavio", "GET", "/api/parcelamentos").json()) == 1
+
+    assert excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True).status_code == 204
+    assert parcelas(casal, novo["id"]) == []
+    assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
+
+
+def test_excluir_o_parcelamento_so_com_previstas_nao_pede_confirmacao(casal: Casal):
+    novo = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+
+    assert excluir_parcelamento(casal, novo["id"]).status_code == 204
+    assert parcelas(casal, novo["id"]) == []
