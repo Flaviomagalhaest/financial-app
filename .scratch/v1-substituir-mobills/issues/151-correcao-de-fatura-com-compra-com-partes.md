@@ -1,7 +1,7 @@
 # Correção de fatura com compra com partes
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ Na correção de fatura paga (`#/cartoes/<cartão>/<mês>`, "Corrigir fatura"), 
 
 ## Checklist
 
-- [ ] Decidir na tela como a diferença se divide entre as partes (a última parte, como na tela de lançar)
-- [ ] `compras_editadas` leva as partes acertadas
-- [ ] Teste de API e de navegador; verificações do projeto e PR para `main`
+- [x] Decidir na tela como a diferença se divide entre as partes (a última parte, como na tela de lançar)
+- [x] `compras_editadas` leva as partes acertadas
+- [x] Teste de API e de navegador; verificações do projeto e PR para `main`
