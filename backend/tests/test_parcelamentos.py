@@ -89,6 +89,7 @@ def test_compra_com_juros_pelo_valor_da_parcela_e_reenvio_devolve_o_gravado(casa
         "tags": ["casa nova"],
         "pessoa": "esposa",
         "item_categoria_id": None,
+        "partes": [],
         "dia_do_lancamento": "2026-10-28",
         "criado_por": "flavio",
         "criado_em": None,

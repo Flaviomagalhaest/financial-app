@@ -4147,7 +4147,6 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
             "title": "Categoria Ids"
           },
           "tags": {
@@ -4179,6 +4178,13 @@
               }
             ],
             "title": "Item Categoria Id"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes"
           },
           "valor_total_centavos": {
             "anyOf": [
@@ -8130,8 +8136,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -8163,6 +8169,14 @@
               }
             ],
             "title": "Item Categoria Id"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
           },
           "dia_do_lancamento": {
             "anyOf": [
@@ -8217,8 +8231,7 @@
           "id",
           "parcelas",
           "data",
-          "conta_id",
-          "categoria_ids"
+          "conta_id"
         ],
         "title": "NovoParcelamento"
       },
@@ -8361,8 +8374,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -8394,6 +8407,14 @@
               }
             ],
             "title": "Item Categoria Id"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
           },
           "dia_do_lancamento": {
             "anyOf": [
@@ -8445,7 +8466,6 @@
           "parcelas",
           "data",
           "conta_id",
-          "categoria_ids",
           "valor_total_centavos",
           "automatico",
           "criado_por",
@@ -8495,8 +8515,8 @@
               "format": "uuid"
             },
             "type": "array",
-            "minItems": 1,
-            "title": "Categoria Ids"
+            "title": "Categoria Ids",
+            "default": []
           },
           "tags": {
             "items": {
@@ -8528,6 +8548,14 @@
               }
             ],
             "title": "Item Categoria Id"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
           },
           "dia_do_lancamento": {
             "anyOf": [
@@ -8583,7 +8611,6 @@
           "parcelas",
           "data",
           "conta_id",
-          "categoria_ids",
           "valor_total_centavos",
           "automatico",
           "criado_por",

@@ -17,6 +17,7 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual_das_partes, guardar_item_atual_do_lancamento
 from app.login import UsuarioLogado
+from app.partes import dividir as dividir_pela_proporcao
 from app.pessoas import configuradas
 
 router = APIRouter(prefix="/api")
@@ -121,7 +122,7 @@ class Parte(BaseModel):
         return self
 
 
-SO_A_VISTA = "por enquanto, só a compra à vista tem partes"
+SO_A_VISTA = "por enquanto, a recorrência não tem partes"
 SEM_CLASSIFICACAO_PROPRIA = "a compra com partes não tem categoria, tag nem pessoa próprias"
 DUAS_PARTES_OU_MAIS = "a compra tem duas partes ou mais"
 
@@ -377,6 +378,7 @@ CAMPOS_DA_PARCELA = (
     "tags",
     "pessoa",
     "item_categoria_id",
+    "partes",
 )
 # Uma pessoa mudou (campo sem `origem`) um desses campos só na parcela, que a correção do
 # parcelamento não toca. A confirmação sem ajuste só registra a situação, e as regras gravam com
@@ -702,15 +704,8 @@ def tags_das_partes(conn, id: UUID) -> set[UUID]:
 
 
 def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
-    """Troca as partes do lançamento pela lista; a parte que fica (o mesmo id) mantém o item em
-    que contava, se a categoria dele continua nela (`item_em_que_conta`)."""
-    guardar_item_atual_das_partes(conn, "p.lancamento_id = %s", (id,))
-    item_atual = dict(
-        conn.execute(
-            "SELECT id, item_atual_categoria_id FROM lancamento_partes WHERE lancamento_id = %s",
-            (id,),
-        ).fetchall()
-    )
+    """Troca as partes do lançamento pela lista, pelo nome das tags (a nova nasce aqui; a
+    arquivada só vale para quem já a tinha)."""
     ja_tinha = tags_das_partes(conn, id)
     ja_tinha |= {
         t
@@ -718,14 +713,32 @@ def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
             "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s", (id,)
         )
     }
-    tags_de_cada = [ids_das_tags(conn, p.tags, usuario, ja_tinha) for p in partes]
+    gravar_partes_por_id(
+        conn, id, [(parte, ids_das_tags(conn, parte.tags, usuario, ja_tinha)) for parte in partes]
+    )
+
+
+def gravar_partes_por_id(
+    conn, id: UUID, partes: list[tuple[Parte, list[UUID]]], pesos: list[int] | None = None
+) -> None:
+    """Troca as partes do lançamento pela lista, cada uma com os ids das tags; a parte que fica (o
+    mesmo id) mantém o item em que contava, se a categoria dele continua nela
+    (`item_em_que_conta`). Os `pesos` são a proporção da parcela que segue a do parcelamento
+    (ticket 139); sem eles, a proporção é o valor de cada parte."""
+    guardar_item_atual_das_partes(conn, "p.lancamento_id = %s", (id,))
+    item_atual = dict(
+        conn.execute(
+            "SELECT id, item_atual_categoria_id FROM lancamento_partes WHERE lancamento_id = %s",
+            (id,),
+        ).fetchall()
+    )
     apagar_partes(conn, [id])
-    for ordem, (parte, tags) in enumerate(zip(partes, tags_de_cada)):
+    for ordem, (parte, tags) in enumerate(partes):
         atual = item_atual.get(parte.id)
         conn.execute(
             "INSERT INTO lancamento_partes (id, lancamento_id, ordem, descricao, valor_centavos,"
-            " pessoa, item_categoria_id, item_atual_categoria_id)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            " pessoa, item_categoria_id, item_atual_categoria_id, proporcao)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 parte.id,
                 id,
@@ -735,6 +748,7 @@ def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
                 parte.pessoa,
                 parte.item_categoria_id,
                 atual if atual in parte.categoria_ids else None,
+                pesos[ordem] if pesos else None,
             ),
         )
         for categoria in parte.categoria_ids:
@@ -746,6 +760,45 @@ def gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
             conn.execute(
                 "INSERT INTO parte_tags (parte_id, tag_id) VALUES (%s, %s)", (parte.id, tag)
             )
+
+
+def pesos_das_partes(conn, ids: list[UUID]) -> dict[UUID, list[int]]:
+    """A proporção das partes de cada lançamento, na ordem delas: a que a parcela recebeu do
+    parcelamento ou, sem ela, o valor de cada parte (ticket 139)."""
+    pesos: dict[UUID, list[int]] = {}
+    for lancamento_id, peso in conn.execute(
+        "SELECT lancamento_id, COALESCE(proporcao, valor_centavos) FROM lancamento_partes"
+        " WHERE lancamento_id = ANY(%s) ORDER BY lancamento_id, ordem",
+        (ids,),
+    ):
+        pesos.setdefault(lancamento_id, []).append(peso)
+    return pesos
+
+
+def redividir_partes(conn, id: UUID, valor: int) -> None:
+    """A parcela com partes que muda de valor se divide de novo na mesma proporção (ticket 139):
+    a proporção fica gravada, para a próxima divisão não carregar o arredondamento desta."""
+    pesos = pesos_das_partes(conn, [id]).get(id)
+    if not pesos:
+        return
+    conferir_divisao(valor, pesos)
+    ids = [
+        p
+        for (p,) in conn.execute(
+            "SELECT id FROM lancamento_partes WHERE lancamento_id = %s ORDER BY ordem", (id,)
+        )
+    ]
+    for parte_id, peso, novo in zip(ids, pesos, dividir_pela_proporcao(valor, pesos)):
+        conn.execute(
+            "UPDATE lancamento_partes SET valor_centavos = %s, proporcao = %s WHERE id = %s",
+            (novo, peso, parte_id),
+        )
+
+
+def conferir_divisao(valor: int, pesos: list[int]) -> None:
+    """Cada parte fica com um centavo ou mais na parcela de `valor`."""
+    if pesos and min(dividir_pela_proporcao(valor, pesos)) <= 0:
+        raise recusar("a parcela não chega a um centavo por parte")
 
 
 def apagar_partes(conn, ids: list[UUID], so_as_ligacoes: bool = False) -> None:
@@ -1017,7 +1070,7 @@ def _item_atual_depois(conn, id: UUID, depois: DadosDoLancamento) -> UUID | None
 
 def iguais(campo: Campo, pedido, gravado) -> bool:
     if campo == "partes":
-        return list(map(_parte_normalizada, pedido)) == list(map(_parte_normalizada, gravado))
+        return list(map(parte_normalizada, pedido)) == list(map(parte_normalizada, gravado))
     if campo == "categoria_ids":
         return set(pedido) == set(gravado)
     if campo == "tags":
@@ -1139,7 +1192,7 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if "pessoa" in pedidas:
         pedidas["pessoa"] = pedidas["pessoa"] or None
     if alteracao.partes is not None:
-        pedidas |= _o_que_as_partes_mudam(alteracao.partes, pedidas)
+        pedidas |= o_que_as_partes_mudam(alteracao.partes, pedidas)
     mudancas = {}
     conflitos: list[Campo] = []
     for campo, valor in pedidas.items():
@@ -1170,9 +1223,12 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if "item_categoria_id" not in mudancas and atual.item_categoria_id not in (None, *categorias):
         # A escolha explícita sai com a categoria dela.
         mudancas["item_categoria_id"] = None
+    redividir = redivide(conn, atual, mudancas)
     if not mudancas:
         return atual
     editado = _com_mudancas(atual, mudancas)
+    if redividir:
+        editado.partes = _redivididas(conn, atual, editado.valor_centavos)
     if editado.partes:
         _conferir_compra_com_partes(conn, atual, editado)
     elif not editado.categoria_ids and not atual.estorno_avulso:
@@ -1225,11 +1281,50 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         _gravar_tags(conn, id, editado.tags, usuario)
     if "partes" in mudancas:
         gravar_partes(conn, id, editado.partes, usuario)
+    if redividir:
+        redividir_partes(conn, id, editado.valor_centavos)
     acompanhar_estornos(conn, id)
     return _um(conn, id)
 
 
-def _o_que_as_partes_mudam(partes: list[Parte], pedidas: dict) -> dict:
+def _redivididas(conn, atual: Lancamento, valor: int) -> list[Parte]:
+    """As partes do lançamento com o `valor` dividido na proporção delas; recusa se uma parte
+    ficaria sem um centavo."""
+    pesos = pesos_das_partes(conn, [atual.id])[atual.id]
+    conferir_divisao(valor, pesos)
+    return [
+        p.model_copy(update={"valor_centavos": v})
+        for p, v in zip(atual.partes, dividir_pela_proporcao(valor, pesos))
+    ]
+
+
+def redivide(conn, atual: Lancamento, mudancas: dict) -> bool:
+    """Se a parcela com partes que muda de valor se divide de novo na mesma proporção (ticket
+    139): quando o pedido não traz as partes ou as traz só divididas pelo valor novo, na proporção
+    gravada ou na dos valores de antes. Assim a parcela não fica alterada à mão nas partes, e a
+    mudança delas em "todas" ou "esta e as próximas" continua chegando a ela."""
+    if not (atual.parcelamento_id and atual.partes and "valor_centavos" in mudancas):
+        return False
+    if "partes" not in mudancas:
+        return True
+    pedidas = mudancas["partes"]
+    valor = mudancas["valor_centavos"]
+    pesos = pesos_das_partes(conn, [atual.id])[atual.id]
+    sem_valor = [parte_normalizada(p)[:2] + parte_normalizada(p)[3:] for p in pedidas]
+    if sem_valor != [parte_normalizada(p)[:2] + parte_normalizada(p)[3:] for p in atual.partes]:
+        return False
+    valores = [parte_normalizada(p)[2] for p in pedidas]
+    divisoes = (
+        dividir_pela_proporcao(valor, pesos),
+        dividir_pela_proporcao(valor, [p.valor_centavos for p in atual.partes]),
+    )
+    if valores not in divisoes:
+        return False
+    del mudancas["partes"]
+    return True
+
+
+def o_que_as_partes_mudam(partes: list[Parte], pedidas: dict) -> dict:
     """Os campos que mudam com as partes pedidas, para valerem também no conflito: dividir tira a
     classificação própria da compra; uma parte só (tirar a penúltima) devolve a dela à compra,
     que volta a ser uma, com o valor dela. Sem partes, a compra volta a ser uma com a
@@ -1260,15 +1355,15 @@ def _o_que_as_partes_mudam(partes: list[Parte], pedidas: dict) -> dict:
 
 def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancamento) -> None:
     """A compra com partes depois da mudança: sem classificação própria, com as partes somando o
-    valor dela, à vista (a parcela e a recorrência têm partes nos tickets 139 e 140) e sem estorno
-    (o estorno de uma parte é do ticket 138)."""
+    valor dela, à vista ou parcelada (a recorrência tem partes no ticket 140) e sem estorno (o
+    estorno de uma parte é do ticket 138)."""
     if editado.categoria_ids or editado.tags or editado.pessoa or editado.item_categoria_id:
         raise recusar(SEM_CLASSIFICACAO_PROPRIA)
     try:
         conferir_partes(editado.partes, editado.valor_centavos, editado.tipo)
     except ValueError as e:
         raise recusar(str(e))
-    if atual.parcelamento_id or atual.recorrencia_id:
+    if atual.recorrencia_id:
         raise recusar(SO_A_VISTA)
     if atual.estorno_de or atual.estorno_avulso:
         raise recusar("estorno não tem partes")
@@ -1279,7 +1374,7 @@ def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancame
         raise recusar("a compra tem estorno; exclua o estorno antes de dividi-la em partes")
 
 
-def _parte_normalizada(parte) -> tuple:
+def parte_normalizada(parte) -> tuple:
     p = parte if isinstance(parte, Parte) else Parte.model_construct(**parte)
     return (
         str(p.id),
@@ -1559,6 +1654,9 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
         _conferir_conta_ou_cartao(
             conn, confirmacao.conta_id, confirmacao.conta_id == atual.conta_id
         )
+    if atual.partes and "valor_centavos" in ajustes:
+        # A compra com partes confirmada com outro valor se divide de novo na mesma proporção.
+        _redivididas(conn, atual, ajustes["valor_centavos"])
     mes, a_mao = _fatura_depois(conn, atual, _com_mudancas(atual, ajustes), ajustes)
     if mes != atual.mes:
         guardar_item_atual_do_lancamento(conn, id)  # no mês novo, fica no item em que estava
@@ -1581,6 +1679,8 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
         ),
     )
     registrar_mudancas(conn, id, ["situacao", *ajustes], versao, usuario, momento)
+    if atual.partes and "valor_centavos" in ajustes:
+        redividir_partes(conn, id, ajustes["valor_centavos"])
     return _um(conn, id)
 
 

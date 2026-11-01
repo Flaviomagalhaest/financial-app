@@ -256,6 +256,8 @@ def _mudar_a_parcela(conn, id: UUID, alteracao: AlteracaoDaParcela, usuario: str
     }
     if alteracao.alcance != "so_esta" and "tipo" in mudou:
         raise recusar("a parcela é uma despesa")
+    # As partes só divididas pelo valor novo não mudam a proporção: não vão para o parcelamento.
+    lancamentos.redivide(conn, antes, mudou)
     # A parcela mudada primeiro, com a edição de sempre: conflito, recusas e fatura paga.
     editar(conn, id, so_nela, usuario)
     mudanca = _Mudanca(antes.parcelamento_id)

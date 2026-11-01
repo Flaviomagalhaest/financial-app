@@ -393,8 +393,20 @@ class _Plano:
 def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
     mudancas = _Mudancas(conn, pedido)
     lancamentos, estornos_fora = _selecionados(conn, pedido.selecao)
-    com_partes = [l for l in lancamentos if l.partes]
-    lancamentos = [l for l in lancamentos if not l.partes]
+    # A parcela de um parcelamento com partes também fica de fora, mesmo a que uma pessoa juntou
+    # só nela: o lote levaria a categoria ao parcelamento, que não tem classificação própria.
+    parcelamentos_com_partes = {
+        id
+        for (id,) in conn.execute(
+            "SELECT DISTINCT parcelamento_id FROM parcelamento_partes WHERE parcelamento_id = ANY(%s)",
+            ([l.parcelamento_id for l in lancamentos if l.parcelamento_id],),
+        )
+    }
+    com_partes = [
+        l for l in lancamentos if l.partes or l.parcelamento_id in parcelamentos_com_partes
+    ]
+    fora = {l.id for l in com_partes}
+    lancamentos = [l for l in lancamentos if l.id not in fora]
     mudam, ja_estao, de_outro_tipo, sem_categoria = [], 0, 0, 0
     for l in lancamentos:
         categorias, tags, outro_tipo = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
