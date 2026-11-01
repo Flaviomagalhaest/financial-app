@@ -60,7 +60,7 @@ const GERADOS_POR_LOTE = config.maximoDeParcelas;
 /** As leituras que uma regra aceita muda: os previstos e as parcelas que o servidor fez só vêm nelas. */
 export const RELIDAS_DEPOIS_DE_REGRA = [LISTA, HOJE, "/api/recorrencias", "/api/parcelamentos"] as const;
 /** Os campos que o servidor versiona um a um (`CAMPOS` em `lancamentos.py`). */
-export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags", "pessoa", "fatura_mes", "item_categoria_id"];
+export const CAMPOS: Campo[] = ["tipo", "situacao", "valor_centavos", "data", "descricao", "conta_id", "categoria_ids", "tags", "pessoa", "fatura_mes", "item_categoria_id", "partes"];
 
 /** O pedido sem o que a fila controla; um `Omit` por tipo, para a união continuar pela `acao`. */
 type SemControle<I> = I extends ItemDaFila ? Omit<I, "id" | "desde" | "revisao"> : never;
@@ -84,6 +84,11 @@ async function mudar(id: string, proximo: (atual: ItemDeLancamento | undefined, 
  * maiúsculas (o `toLowerCase` faz aqui o papel do `casefold`). */
 function comparavel(campo: Campo, valor: unknown): unknown {
   if (campo === "categoria_ids") return [...((valor as string[]) ?? [])].sort().join();
+  // As partes são um campo só (ADR 0022): a lista inteira, cada parte como o servidor a compara.
+  if (campo === "partes")
+    return JSON.stringify(
+      ((valor as NovoLancamento["partes"]) ?? []).map((p) => [p.id, p.descricao ?? "", p.valor_centavos, comparavel("categoria_ids", p.categoria_ids), comparavel("tags", p.tags), p.pessoa ?? "", p.item_categoria_id ?? ""]),
+    );
   if (campo === "tags") return ((valor as string[]) ?? []).map((t) => t.toLowerCase()).sort().join("\u0000");
   return valor ?? "";
 }
@@ -106,8 +111,8 @@ export function alteracao(lancamento: NovoLancamento, base: Base | undefined): A
 }
 
 export function comoNovo(l: NovoLancamento): NovoLancamento {
-  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa } = l;
-  return { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa };
+  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, partes } = l;
+  return { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, partes: partes ?? [] };
 }
 
 /** O pedido de criar ou de editar que fica na fila no lugar de `atual`. */

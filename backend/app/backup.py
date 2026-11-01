@@ -18,7 +18,7 @@ import psycopg
 
 from app.faturas import datas_padrao, ler_cartao
 
-VERSAO_FORMATO = 25
+VERSAO_FORMATO = 27
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -530,6 +530,45 @@ def _da_versao_24_para_a_25(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_25_para_a_26(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 26 (ticket 135) marca no lançamento o estorno avulso, o crédito no cartão sem
+    compra ligada. Antes dela nenhum lançamento era avulso."""
+    colunas, linhas = tabelas["lancamentos"]
+    if "estorno_avulso" not in colunas:
+        tabelas["lancamentos"] = (
+            [*colunas, "estorno_avulso"],
+            [[*linha, "false"] for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
+def _da_versao_26_para_a_27(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 27 (ticket 137) traz as partes da compra, com as categorias e as tags de cada
+    uma (ADR 0022). Backup antigo entra sem nenhuma: toda compra era uma só."""
+    novas = {
+        "lancamento_partes": (
+            [
+                "id",
+                "lancamento_id",
+                "ordem",
+                "descricao",
+                "valor_centavos",
+                "pessoa",
+                "item_categoria_id",
+                "item_atual_categoria_id",
+            ],
+            {"ordem": "0", "valor_centavos": "0"},
+        ),
+        "parte_categorias": (["parte_id", "categoria_id"], {}),
+        "parte_tags": (["parte_id", "tag_id"], {}),
+    }
+    for tabela, (colunas, somas) in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -557,6 +596,8 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     22: _da_versao_22_para_a_23,
     23: _da_versao_23_para_a_24,
     24: _da_versao_24_para_a_25,
+    25: _da_versao_25_para_a_26,
+    26: _da_versao_26_para_a_27,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

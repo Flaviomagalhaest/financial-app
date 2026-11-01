@@ -52,6 +52,7 @@ import {
 import { saldoNoAparelho } from "./saldo";
 import {
   avisoDePlanejamento,
+  avisosDasPartes,
   categoriasComItem,
   comAFila,
   fechamentoDaFatura,
@@ -372,7 +373,7 @@ const naTelaDoServidor = (l: Lancamento): LancamentoNaTela => ({ ...l, naoEnviad
 function linhaDoServidor(linha: components["schemas"]["LinhaDaBusca"]): LinhaDaBusca {
   if (linha.parcelamento) return { parcelamento: { ...linha.parcelamento, lancamentos: linha.parcelamento.lancamentos.map(naTelaDoServidor) } };
   if (linha.transferencia) return { transferencia: linha.transferencia };
-  return { lancamento: naTelaDoServidor(linha.lancamento!) };
+  return { lancamento: naTelaDoServidor(linha.lancamento!), partes_achadas: linha.partes_achadas };
 }
 
 /**
@@ -707,6 +708,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
       // O estorno não muda de compra, nem a parcela de número: vale o que o servidor tem. Sem
       // escolha do item (a confirmação não a leva), fica a do servidor, como em `alteracao`.
       estorno_de: l.estorno_de ?? antes?.estorno_de,
+      estorno_avulso: l.estorno_avulso ?? antes?.estorno_avulso,
       parcela: antes?.parcela,
       item_categoria_id: l.item_categoria_id || antes?.item_categoria_id,
       situacao: situacaoNoAparelho(l, antes),
@@ -725,6 +727,8 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
 /** O lançamento que está na tela de lançar, como ele vai ser salvo. */
 export type LancamentoEmEdicao = Pick<NovoLancamento, "id" | "valor_centavos" | "categoria_ids" | "conta_id" | "data" | "fatura_mes"> & {
   situacao: LancamentoNaTela["situacao"];
+  /** As partes da compra, com a escolha de item tocada em cada uma (ADR 0022). */
+  partes?: NovoLancamento["partes"];
 };
 
 /**
@@ -757,17 +761,30 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
   const ultima = () => (antes || !planejamento ? null : ultimaEscolha(comItem, [...porId.values()], planejamento.itens.map((i) => i.categoria_id)));
   const escolha = comItem.length < 2 ? null : ([escolhaTocada, antes?.item_categoria_id, ultima()].find((c) => c && comItem.includes(c)) ?? null);
 
+  // Na compra com partes, cada parte escolhe o item dela: a tocada ou a que ela já tinha.
+  const partes = lancamento.partes?.length
+    ? lancamento.partes.map((parte) => {
+        const daParte = planejamento ? categoriasComItem(planejamento, parte.categoria_ids) : [];
+        const tinha = antes?.partes?.find((x) => x.id === parte.id)?.item_categoria_id;
+        const escolhaDaParte = daParte.length < 2 ? null : ([parte.item_categoria_id, tinha].find((c) => c && daParte.includes(c)) ?? null);
+        return { ...parte, item_categoria_id: escolhaDaParte };
+      })
+    : null;
   const aviso: Aviso | null =
-    planejamento && mes
+    planejamento && mes && !partes
       ? avisoDePlanejamento(planejamento, antes, {
           ...lancamento,
           item_categoria_id: escolha ?? antes?.item_categoria_id,
           estorno_de: antes?.estorno_de,
+          estorno_avulso: antes?.estorno_avulso,
           mes,
         })
       : null;
   return {
     aviso,
+    /** Na compra com partes, o aviso de cada parte, na ordem delas, e a escolha de item de cada uma. */
+    avisosDasPartes: planejamento && mes && partes ? avisosDasPartes(planejamento, antes, { ...lancamento, partes, item_categoria_id: null, estorno_de: antes?.estorno_de, mes }) : [],
+    partesComEscolha: partes,
     /** O mês em que o lançamento conta; `null` no cartão sem dia de fechamento e sem fatura escolhida. */
     mes,
     escolha,
@@ -929,8 +946,8 @@ export async function salvarLancamento(lancamento: NovoLancamento, novo: boolean
  * vai pela fila e vale sem internet; devolve `false` quando ela não subiu agora.
  */
 export async function escolherItem(mostrado: LancamentoNaTela, categoriaId: string): Promise<boolean> {
-  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes } = mostrado;
-  const lancamento = { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes, item_categoria_id: categoriaId };
+  const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes, partes } = mostrado;
+  const lancamento = { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, fatura_mes, partes: partes ?? [], item_categoria_id: categoriaId };
   await enfileirarSalvar(lancamento, false, baseDe(mostrado));
   return enviarAgora();
 }

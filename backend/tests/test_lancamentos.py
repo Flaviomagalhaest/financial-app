@@ -38,11 +38,13 @@ def test_cria_um_lancamento_e_o_ve_na_lista(casal: Casal):
         "ocorrencia": None,
         "automatico": False,
         "estorno_de": None,
+        "estorno_avulso": False,
         "parcelamento_id": None,
         "parcela": None,
         "parcelas": None,
         "alterada_a_mao": False,
         "item_categoria_id": None,
+        "partes": [],
         # Lançamento de conta conta no mês da data e não tem fatura (ADR 0003).
         "mes": "2026-10-01",
         "fatura_mes": None,

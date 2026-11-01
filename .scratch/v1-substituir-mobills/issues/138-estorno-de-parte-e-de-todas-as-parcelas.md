@@ -24,3 +24,4 @@ O estorno passa a ser de uma parte da compra e, na compra parcelada, de uma parc
 ## Notas
 
 - Decisões Q30, Q37, Q41 e Q42 do ticket 94; adendo da ADR 0016.
+- O 137 deixou o estorno de compra com partes recusado na API ("o estorno de uma parte da compra ainda não existe", em `_conferir_estorno`) e sem "Estornar" na tela (`podeEstornar`); dividir uma compra que já tem estorno também é recusado. Este ticket tira as duas travas.

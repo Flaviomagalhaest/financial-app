@@ -13,6 +13,7 @@ from app.banco import conectar, em_transacao
 from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import recusar, url_do_banco
 from app.login import UsuarioLogado
+from app.partes import CATEGORIAS_QUE_CONTAM
 
 router = APIRouter(prefix="/api")
 
@@ -61,6 +62,9 @@ class AEscolher(BaseModel):
     """Lançamento com duas ou mais categorias com item no mês e sem escolha explícita."""
 
     lancamento_id: UUID
+    # Na compra com partes, a parte que está a escolher; cada parte escolhe o item dela
+    # (ADR 0022).
+    parte_id: UUID | None = None
     # A categoria do item em que ele conta enquanto o casal não escolhe: o item em que já estava
     # quando a ambiguidade surgiu, ou nenhum.
     item_categoria_id: UUID | None
@@ -103,22 +107,32 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
     ate = _proximo_mes(mes)
     movimentos: list[tuple[UUID, str, int]] = []
     a_escolher: list[AEscolher] = []
-    por_lancamento: dict[UUID, tuple[str, int, UUID | None, UUID | None, set[UUID]]] = {}
-    for id, situacao, valor, escolhida, atual, categoria_id in conn.execute(
-        "SELECT l.id, l.situacao,"
-        # O estorno diminui o item da compra que ele devolve.
-        " CASE WHEN l.estorno_de IS NULL THEN l.valor_centavos ELSE -l.valor_centavos END,"
-        " l.item_categoria_id, l.item_atual_categoria_id,"
-        " lc.categoria_id FROM lancamentos l"
-        " JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"
-        " WHERE l.excluido_em IS NULL AND lc.categoria_id = ANY(%s)"
-        f" AND {_DO_MES} ORDER BY l.data, l.criado_em, l.id",
-        (list(categorias_com_item), mes, mes, ate),
+    # Cada lançamento sem partes e cada parte da compra que tem partes (ADR 0022) conta num item.
+    por_pedaco: dict[
+        tuple[UUID, UUID | None], tuple[str, int, UUID | None, UUID | None, set[UUID]]
+    ] = {}
+    # O estorno diminui o item da compra que ele devolve; o avulso, o que ele escolhe.
+    sinal = (
+        "CASE WHEN l.estorno_de IS NULL AND NOT COALESCE(l.estorno_avulso, false)"
+        " THEN 1 ELSE -1 END"
+    )
+    for id, parte, situacao, valor, escolhida, atual, categoria_id, *_ in conn.execute(
+        f"SELECT l.id, NULL::uuid, l.situacao, {sinal} * l.valor_centavos,"
+        " l.item_categoria_id, l.item_atual_categoria_id, lc.categoria_id, l.data, l.criado_em"
+        " FROM lancamentos l JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"
+        f" WHERE l.excluido_em IS NULL AND lc.categoria_id = ANY(%s) AND {_DO_MES}"
+        f" UNION ALL SELECT l.id, p.id, l.situacao, {sinal} * p.valor_centavos,"
+        " p.item_categoria_id, p.item_atual_categoria_id, pc.categoria_id, l.data, l.criado_em"
+        " FROM lancamentos l JOIN lancamento_partes p ON p.lancamento_id = l.id"
+        " JOIN parte_categorias pc ON pc.parte_id = p.id"
+        f" WHERE l.excluido_em IS NULL AND pc.categoria_id = ANY(%s) AND {_DO_MES}"
+        " ORDER BY 8, 9, 1, 2 NULLS FIRST",
+        (list(categorias_com_item), mes, mes, ate) * 2,
     ):
-        por_lancamento.setdefault(id, (situacao, valor, escolhida, atual, set()))[4].add(
+        por_pedaco.setdefault((id, parte), (situacao, valor, escolhida, atual, set()))[4].add(
             categoria_id
         )
-    for id, (situacao, valor, escolhida, atual, com_item) in por_lancamento.items():
+    for (id, parte), (situacao, valor, escolhida, atual, com_item) in por_pedaco.items():
         conta_em, fica_a_escolher = onde_conta(com_item, escolhida, atual)
         if conta_em:
             movimentos.append((categorias_com_item[conta_em], situacao, valor))
@@ -126,6 +140,7 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
             a_escolher.append(
                 AEscolher(
                     lancamento_id=id,
+                    parte_id=parte,
                     item_categoria_id=conta_em,
                     categorias_com_item=sorted(com_item),
                 )
@@ -324,8 +339,8 @@ def criar_item(
         # O lançamento que já contava em outro item fica nele: o novo só cria a ambiguidade.
         guardar_item_atual(
             conn,
-            f"{_DO_MES} AND l.id IN (SELECT lancamento_id FROM lancamento_categorias"
-            " WHERE categoria_id = %s)",
+            f"{_DO_MES} AND l.id IN (SELECT lancamento_id FROM {CATEGORIAS_QUE_CONTAM} x"
+            " WHERE x.categoria_id = %s)",
             (dia, dia, _proximo_mes(dia), novo.categoria_id),
         )
         conn.execute(

@@ -1094,6 +1094,8 @@ label.caixa > input {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
 /* Busca: os filtros escolhidos em fichas, os totais em quatro colunas e as parcelas recuadas. */
 .busca {
   display: flex;
@@ -1261,4 +1263,58 @@ label.caixa > input {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+/* As partes da compra (ADR 0022): cada parte num cartão na tela de lançar; na linha da compra, a lista que abre. */
+.partes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.parte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--borda);
+  border-radius: 0.75rem;
+  background: var(--superficie);
+}
+
+.parte label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.valor-da-parte {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.partes-da-compra summary {
+  color: var(--texto-suave);
+  cursor: pointer;
+}
+
+.partes-da-compra ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  padding: 0 0 0 0.75rem;
+  border-left: 2px solid var(--borda);
+  list-style: none;
+}
+
+.partes-da-compra li > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.partes-da-compra p {
+  margin: 0;
 }

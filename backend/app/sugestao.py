@@ -113,6 +113,8 @@ def indice_de_sugestao(usuario: UsuarioLogado, request: Request) -> IndiceDeSuge
             "   (SELECT max(alterado_em) FROM lancamento_campos m"
             "       WHERE m.lancamento_id = l.id AND m.campo = ANY(%s))) AS em"
             " FROM lancamentos l WHERE l.excluido_em IS NULL"
+            # A compra com partes entra na sugestão com elas no ticket 141 (ADR 0022).
+            " AND NOT EXISTS (SELECT FROM lancamento_partes p WHERE p.lancamento_id = l.id)"
             " ORDER BY em DESC, l.data DESC, l.id",
             (_CAMPOS_DA_SUGESTAO,),
         ).fetchall()

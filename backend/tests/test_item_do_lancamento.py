@@ -43,6 +43,7 @@ def test_com_duas_categorias_com_item_conta_no_item_escolhido_e_sem_escolha_fica
     assert plano["a_escolher"] == [
         {
             "lancamento_id": sem_escolha["id"],
+            "parte_id": None,
             "item_categoria_id": None,
             "categorias_com_item": sorted([restaurante, viagem]),
         }
@@ -74,6 +75,7 @@ def test_item_criado_no_meio_do_mes_mantem_o_item_atual_e_poe_o_lancamento_a_esc
     assert plano["a_escolher"] == [
         {
             "lancamento_id": jantar["id"],
+            "parte_id": None,
             "item_categoria_id": restaurante,
             "categorias_com_item": sorted([restaurante, viagem]),
         }

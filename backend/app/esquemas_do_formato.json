@@ -3545,5 +3545,517 @@
       "alterado_em": "timestamp with time zone",
       "fatura_mes": "date"
     }
+  },
+  "26": {
+    "cartoes": {
+      "id": "uuid",
+      "nome": "text",
+      "dia_fechamento": "integer",
+      "dia_vencimento": "integer",
+      "limite_centavos": "bigint",
+      "mes_anterior_ao_fechamento": "boolean",
+      "titular_id": "uuid",
+      "arquivado_em": "timestamp with time zone",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "categorias": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "arquivada_em": "timestamp with time zone"
+    },
+    "contas": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "saldo_abertura_centavos": "bigint",
+      "data_abertura": "date",
+      "arquivada_em": "timestamp with time zone"
+    },
+    "edicao_em_lote_lancamentos": {
+      "lote_id": "uuid",
+      "lancamento_id": "uuid",
+      "versao": "bigint",
+      "categoria_ids_antes": "text",
+      "tag_ids_antes": "text",
+      "item_categoria_id_antes": "uuid",
+      "item_atual_categoria_id_antes": "uuid",
+      "resultado_do_desfazer": "text"
+    },
+    "edicao_em_lote_parcelamentos": {
+      "lote_id": "uuid",
+      "parcelamento_id": "uuid",
+      "categoria_ids_antes": "text",
+      "tag_ids_antes": "text",
+      "item_categoria_id_antes": "uuid",
+      "categoria_ids_depois": "text",
+      "tag_ids_depois": "text",
+      "resultado_do_desfazer": "text"
+    },
+    "edicoes_em_lote": {
+      "id": "uuid",
+      "resumo": "text",
+      "situacao": "text",
+      "lancamentos": "integer",
+      "recusa": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "desfeita_por": "text",
+      "desfeita_em": "timestamp with time zone"
+    },
+    "exportacoes": {
+      "id": "uuid",
+      "usuario": "text",
+      "formato": "text",
+      "criada_em": "timestamp with time zone"
+    },
+    "faturas": {
+      "cartao_id": "uuid",
+      "mes": "date",
+      "fechamento": "date",
+      "vencimento": "date",
+      "criado_em": "timestamp with time zone",
+      "ajuste_centavos": "bigint"
+    },
+    "favoritos": {
+      "id": "uuid",
+      "estado": "text",
+      "identidade": "text",
+      "descricao": "text",
+      "tipo": "text",
+      "conta_id": "uuid",
+      "categoria_ids": "text",
+      "tags": "text",
+      "pessoa": "text",
+      "valor_centavos": "bigint",
+      "ordem": "integer",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "filtros_salvos": {
+      "id": "uuid",
+      "nome": "text",
+      "criterios": "text",
+      "ordem": "text",
+      "periodo_relativo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "itens_do_planejamento": {
+      "id": "uuid",
+      "mes": "date",
+      "categoria_id": "uuid",
+      "valor_centavos": "bigint",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "lancamento_campos": {
+      "lancamento_id": "uuid",
+      "campo": "text",
+      "versao": "bigint",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "origem": "text"
+    },
+    "lancamento_categorias": {
+      "lancamento_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "lancamento_tags": {
+      "lancamento_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "lancamentos": {
+      "id": "uuid",
+      "tipo": "text",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "versao": "bigint",
+      "excluido_em": "timestamp with time zone",
+      "excluido_por": "text",
+      "pessoa": "text",
+      "fonte": "text",
+      "repetido_mantido_em": "timestamp with time zone",
+      "recorrencia_id": "uuid",
+      "ocorrencia": "integer",
+      "automatico": "boolean",
+      "mes": "date",
+      "fatura_a_mao": "boolean",
+      "estorno_de": "uuid",
+      "parcelamento_id": "uuid",
+      "parcela": "integer",
+      "item_categoria_id": "uuid",
+      "item_atual_categoria_id": "uuid",
+      "excluido_pela_regra": "boolean",
+      "estorno_avulso": "boolean"
+    },
+    "modelo_do_planejamento": {
+      "categoria_id": "uuid",
+      "valor_centavos": "bigint",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "parcelamento_categorias": {
+      "parcelamento_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "parcelamento_tags": {
+      "parcelamento_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "parcelamentos": {
+      "id": "uuid",
+      "valor_total_centavos": "bigint",
+      "parcelas": "integer",
+      "data": "date",
+      "automatico": "boolean",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "pessoa": "text",
+      "geradas": "integer",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "item_categoria_id": "uuid",
+      "classificacao_pendente": "text",
+      "corrigido_em": "date",
+      "dia_do_lancamento": "date",
+      "mudanca_pendente": "text"
+    },
+    "recorrencia_categorias": {
+      "recorrencia_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "recorrencia_tags": {
+      "recorrencia_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "recorrencias": {
+      "id": "uuid",
+      "tipo": "text",
+      "valor_centavos": "bigint",
+      "tipo_do_valor": "text",
+      "automatico": "boolean",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "inicio": "date",
+      "a_cada": "integer",
+      "unidade": "text",
+      "ate": "date",
+      "vezes": "integer",
+      "geradas": "integer",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "pessoa": "text",
+      "item_id": "uuid",
+      "ocorrencia_do_inicio": "integer",
+      "dia_do_lancamento": "date"
+    },
+    "tags": {
+      "id": "uuid",
+      "nome": "text",
+      "arquivada_em": "timestamp with time zone",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "transferencias": {
+      "id": "uuid",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_origem_id": "uuid",
+      "conta_destino_id": "uuid",
+      "categoria_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "fatura_mes": "date"
+    }
+  },
+  "27": {
+    "cartoes": {
+      "id": "uuid",
+      "nome": "text",
+      "dia_fechamento": "integer",
+      "dia_vencimento": "integer",
+      "limite_centavos": "bigint",
+      "mes_anterior_ao_fechamento": "boolean",
+      "titular_id": "uuid",
+      "arquivado_em": "timestamp with time zone",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "categorias": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "arquivada_em": "timestamp with time zone"
+    },
+    "contas": {
+      "id": "uuid",
+      "nome": "text",
+      "tipo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "saldo_abertura_centavos": "bigint",
+      "data_abertura": "date",
+      "arquivada_em": "timestamp with time zone"
+    },
+    "edicao_em_lote_lancamentos": {
+      "lote_id": "uuid",
+      "lancamento_id": "uuid",
+      "versao": "bigint",
+      "categoria_ids_antes": "text",
+      "tag_ids_antes": "text",
+      "item_categoria_id_antes": "uuid",
+      "item_atual_categoria_id_antes": "uuid",
+      "resultado_do_desfazer": "text"
+    },
+    "edicao_em_lote_parcelamentos": {
+      "lote_id": "uuid",
+      "parcelamento_id": "uuid",
+      "categoria_ids_antes": "text",
+      "tag_ids_antes": "text",
+      "item_categoria_id_antes": "uuid",
+      "categoria_ids_depois": "text",
+      "tag_ids_depois": "text",
+      "resultado_do_desfazer": "text"
+    },
+    "edicoes_em_lote": {
+      "id": "uuid",
+      "resumo": "text",
+      "situacao": "text",
+      "lancamentos": "integer",
+      "recusa": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "desfeita_por": "text",
+      "desfeita_em": "timestamp with time zone"
+    },
+    "exportacoes": {
+      "id": "uuid",
+      "usuario": "text",
+      "formato": "text",
+      "criada_em": "timestamp with time zone"
+    },
+    "faturas": {
+      "cartao_id": "uuid",
+      "mes": "date",
+      "fechamento": "date",
+      "vencimento": "date",
+      "criado_em": "timestamp with time zone",
+      "ajuste_centavos": "bigint"
+    },
+    "favoritos": {
+      "id": "uuid",
+      "estado": "text",
+      "identidade": "text",
+      "descricao": "text",
+      "tipo": "text",
+      "conta_id": "uuid",
+      "categoria_ids": "text",
+      "tags": "text",
+      "pessoa": "text",
+      "valor_centavos": "bigint",
+      "ordem": "integer",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "filtros_salvos": {
+      "id": "uuid",
+      "nome": "text",
+      "criterios": "text",
+      "ordem": "text",
+      "periodo_relativo": "text",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "itens_do_planejamento": {
+      "id": "uuid",
+      "mes": "date",
+      "categoria_id": "uuid",
+      "valor_centavos": "bigint",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "lancamento_campos": {
+      "lancamento_id": "uuid",
+      "campo": "text",
+      "versao": "bigint",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "origem": "text"
+    },
+    "lancamento_categorias": {
+      "lancamento_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "lancamento_partes": {
+      "id": "uuid",
+      "lancamento_id": "uuid",
+      "ordem": "integer",
+      "descricao": "text",
+      "valor_centavos": "bigint",
+      "pessoa": "text",
+      "item_categoria_id": "uuid",
+      "item_atual_categoria_id": "uuid"
+    },
+    "lancamento_tags": {
+      "lancamento_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "lancamentos": {
+      "id": "uuid",
+      "tipo": "text",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "versao": "bigint",
+      "excluido_em": "timestamp with time zone",
+      "excluido_por": "text",
+      "pessoa": "text",
+      "fonte": "text",
+      "repetido_mantido_em": "timestamp with time zone",
+      "recorrencia_id": "uuid",
+      "ocorrencia": "integer",
+      "automatico": "boolean",
+      "mes": "date",
+      "fatura_a_mao": "boolean",
+      "estorno_de": "uuid",
+      "parcelamento_id": "uuid",
+      "parcela": "integer",
+      "item_categoria_id": "uuid",
+      "item_atual_categoria_id": "uuid",
+      "excluido_pela_regra": "boolean",
+      "estorno_avulso": "boolean"
+    },
+    "modelo_do_planejamento": {
+      "categoria_id": "uuid",
+      "valor_centavos": "bigint",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone"
+    },
+    "parcelamento_categorias": {
+      "parcelamento_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "parcelamento_tags": {
+      "parcelamento_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "parcelamentos": {
+      "id": "uuid",
+      "valor_total_centavos": "bigint",
+      "parcelas": "integer",
+      "data": "date",
+      "automatico": "boolean",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "pessoa": "text",
+      "geradas": "integer",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "item_categoria_id": "uuid",
+      "classificacao_pendente": "text",
+      "corrigido_em": "date",
+      "dia_do_lancamento": "date",
+      "mudanca_pendente": "text"
+    },
+    "parte_categorias": {
+      "parte_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "parte_tags": {
+      "parte_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "recorrencia_categorias": {
+      "recorrencia_id": "uuid",
+      "categoria_id": "uuid"
+    },
+    "recorrencia_tags": {
+      "recorrencia_id": "uuid",
+      "tag_id": "uuid"
+    },
+    "recorrencias": {
+      "id": "uuid",
+      "tipo": "text",
+      "valor_centavos": "bigint",
+      "tipo_do_valor": "text",
+      "automatico": "boolean",
+      "descricao": "text",
+      "conta_id": "uuid",
+      "inicio": "date",
+      "a_cada": "integer",
+      "unidade": "text",
+      "ate": "date",
+      "vezes": "integer",
+      "geradas": "integer",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "pessoa": "text",
+      "item_id": "uuid",
+      "ocorrencia_do_inicio": "integer",
+      "dia_do_lancamento": "date"
+    },
+    "tags": {
+      "id": "uuid",
+      "nome": "text",
+      "arquivada_em": "timestamp with time zone",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone"
+    },
+    "transferencias": {
+      "id": "uuid",
+      "situacao": "text",
+      "valor_centavos": "bigint",
+      "data": "date",
+      "descricao": "text",
+      "conta_origem_id": "uuid",
+      "conta_destino_id": "uuid",
+      "categoria_id": "uuid",
+      "criado_por": "text",
+      "criado_em": "timestamp with time zone",
+      "alterado_por": "text",
+      "alterado_em": "timestamp with time zone",
+      "fatura_mes": "date"
+    }
   }
 }

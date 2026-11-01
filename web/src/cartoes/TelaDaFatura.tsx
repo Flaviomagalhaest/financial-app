@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
 import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, usePessoas, type Fatura } from "../dados";
-import { eCredito, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
+import { eCredito, eEstorno, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { mesEmQueConta } from "../dados/aviso";
 import { dataPorExtenso, mesPorExtenso } from "../lancamentos/datas";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
+import { bateComOFiltro, PartesDaCompra, partesQueBatem, valorNoFiltro, type FiltroDeClassificacao } from "../lancamentos/partes";
 import { comSinal, pagaPeloPagamento, SITUACAO, saldoQuePassou } from "./apresentacao";
 import { FormularioDeCorrecao } from "./FormularioDeCorrecao";
 
@@ -110,14 +111,19 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   );
   const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
-  const estornosCentavos = compras.filter((l) => l.estorno_de && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
+  const estornosCentavos = compras.filter((l) => eEstorno(l) && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
   const ligacoes = useMemo(() => new Map(compras.map((l) => [l.id, ligacaoDoEstorno(l, indice, categorias)])), [compras, indice, categorias]);
-  const tags = useMemo(() => [...new Set(compras.flatMap((l) => l.tags ?? []))].sort((a, b) => a.localeCompare(b, "pt-BR")), [compras]);
+  const tags = useMemo(
+    () => [...new Set(compras.flatMap((l) => [...(l.tags ?? []), ...(l.partes ?? []).flatMap((p) => p.tags)]))].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [compras],
+  );
 
-  const filtradas = compras.filter((l) => (categoria === TODAS || l.categoria_ids.includes(categoria)) && (tag === TODAS || !!l.tags?.includes(tag)));
+  // A compra com partes passa pela parte que bate, e vale o valor dela (ADR 0022).
+  const filtro: FiltroDeClassificacao = { categorias: categoria === TODAS ? [] : [categoria], tags: tag === TODAS ? [] : [tag] };
+  const filtradas = compras.filter((l) => bateComOFiltro(l, filtro));
   const dias = [...new Set(filtradas.map((l) => l.data))].sort((a, b) => b.localeCompare(a));
   const filtrando = categoria !== TODAS || tag !== TODAS;
-  const somaFiltrada = filtradas.reduce((soma, l) => soma + (eCredito(l) ? -l.valor_centavos : l.valor_centavos), 0);
+  const somaFiltrada = filtradas.reduce((soma, l) => soma + (eCredito(l) ? -1 : 1) * valorNoFiltro(l, filtro), 0);
 
   return (
     <section>
@@ -179,6 +185,11 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
           Ajustar fatura
         </button>
       )}
+      {fatura && !paga && (
+        <a className="botao secundario" href={`#/credito/${cartaoId}`}>
+          Lançar crédito
+        </a>
+      )}
       {fatura && !online && <p className="vazio">{paga ? "Corrigir" : "Ajustar"} a fatura precisa de internet.</p>}
       {fatura && ajustando && <FormularioDeAjuste cartaoId={cartaoId} fatura={fatura} aoFechar={() => setAjustando(false)} aoSalvar={buscar} />}
       {fatura && corrigindo && <FormularioDeCorrecao cartaoId={cartaoId} doCartao={doCartao} fatura={fatura} compras={compras} aoFechar={() => setCorrigindo(false)} aoSalvar={buscar} />}
@@ -220,15 +231,18 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
                 <li key={l.id}>
                   <div>
                     <strong>{tituloDoLancamento(l, categorias)}</strong>
-                    <ValorComSinal l={l} />
+                    <ValorComSinal l={{ ...l, valor_centavos: valorNoFiltro(l, filtro) }} />
                   </div>
                   <p className="vazio">
-                    {nomePorId(contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")}
+                    {[nomePorId(contasECartoes, l.conta_id), !l.partes?.length && l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")].filter(Boolean).join(" · ")}
                     {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                     {l.situacao === "previsto" && " · previsto"}
                     {l.pessoa ? ` · ${nomeDe(l.pessoa)}` : ""}
                     {ligacoes.get(l.id) && ` · ${ligacoes.get(l.id)}`}
                   </p>
+                  {!!l.partes?.length && (
+                    <PartesDaCompra partes={l.partes} so={partesQueBatem(l, filtro)} categorias={categorias} nomeDe={nomeDe} titulo={tituloDoLancamento(l, categorias)} />
+                  )}
                   {podeEstornar(l, cartoes, indice) && (
                     <div className="acoes">
                       <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${tituloDoLancamento(l, categorias)}`}>
