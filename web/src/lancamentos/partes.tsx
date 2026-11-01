@@ -89,12 +89,15 @@ export type ParteEmEdicao = Omit<Parte, "valor_centavos"> & { valor: string };
 export const emEdicao = (p: Parte): ParteEmEdicao => ({ ...p, valor: comoDigitado(p.valor_centavos) });
 
 /**
- * Divide o total na proporção das partes de um favorito ou sugestão (o valor da última compra).
- * Os centavos do arredondamento vão para a maior parte, a primeira no empate (ADR 0022).
+ * Divide o total na proporção `base` (as partes de um favorito ou sugestão, ou a proporção guardada
+ * na parcela), como o servidor (`app/partes.py`): cada parte com a sua fatia sem os centavos, e os
+ * que sobram na maior parte, a primeira no empate (ADR 0022).
  */
 export function dividirNaProporcao(base: number[], total: number): number[] {
-  const soma = base.reduce((a, b) => a + b, 0);
-  const valores = base.map((v) => Math.floor((total * v) / soma));
+  if (!base.length) return [];
+  // Em BigInt: o produto do total pela fatia passa do inteiro exato do número em compras grandes.
+  const soma = BigInt(base.reduce((a, b) => a + b, 0));
+  const valores = base.map((v) => Number((BigInt(total) * BigInt(v)) / soma));
   const sobra = total - valores.reduce((a, b) => a + b, 0);
   valores[base.indexOf(Math.max(...base))] += sobra;
   return valores;
@@ -115,12 +118,13 @@ export function valoresDasPartes(partes: ParteEmEdicao[], total: number): number
   return [...digitados, total - digitados.reduce((soma, v) => soma + v, 0)];
 }
 
-/** Por que as partes ainda não salvam; vazio quando estão prontas. */
-export function problemaDasPartes(partes: ParteEmEdicao[], total: number): string {
+/** Por que as partes ainda não salvam; vazio quando estão prontas. No parcelado, `menorParcela` também se divide por elas. */
+export function problemaDasPartes(partes: ParteEmEdicao[], total: number, menorParcela?: number): string {
   const valores = valoresDasPartes(partes, total);
   if (partes.slice(0, -1).some((p) => !emCentavos(p.valor) || emCentavos(p.valor)! <= 0)) return "Cada parte precisa de um valor.";
   if (valores[valores.length - 1] <= 0) return "As partes passam do valor da compra.";
   if (partes.some((p) => p.categoria_ids.length === 0)) return "Cada parte precisa de uma categoria.";
+  if (menorParcela !== undefined && Math.min(...dividirNaProporcao(valores, menorParcela)) <= 0) return "A parcela não chega a um centavo por parte.";
   return "";
 }
 
@@ -133,6 +137,8 @@ export function partesParaSalvar(partes: ParteEmEdicao[], total: number): Parte[
 type PropsDoEditor = {
   partes: ParteEmEdicao[];
   total: number;
+  /** No parcelado, a menor parcela, que também se divide pelas partes. */
+  menorParcela?: number;
   categorias: Categoria[];
   pessoas: Pessoa[];
   opcoesDeTags: string[];
@@ -146,7 +152,7 @@ type PropsDoEditor = {
 /** As partes da compra na tela de lançar: cada uma com descrição, valor, categorias, tags e pessoa. */
 export function EditorDePartes(props: PropsDoEditor) {
   const valores = valoresDasPartes(props.partes, props.total);
-  const problema = problemaDasPartes(props.partes, props.total);
+  const problema = problemaDasPartes(props.partes, props.total, props.menorParcela);
 
   function mudar(id: string, mudanca: Partial<ParteEmEdicao>) {
     props.onMudar(props.partes.map((p) => (p.id === id ? { ...p, ...mudanca } : p)));

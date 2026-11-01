@@ -42,3 +42,16 @@ def com_sinal(apelido: str) -> str:
         " (lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
         f" THEN {valor(apelido)} ELSE -{valor(apelido)} END"
     )
+
+
+def dividir(valor: int, proporcao: list[int]) -> list[int]:
+    """O valor de uma parcela dividido pelas partes, na `proporcao` delas (ADR 0022): cada
+    parte fica com a sua fatia, sem os centavos, e os centavos que sobram vão para a maior parte
+    (a primeira, no empate). A soma é sempre o valor."""
+    if not proporcao:
+        return []
+    total = sum(proporcao)
+    valores = [valor * fatia // total for fatia in proporcao]
+    maior = max(range(len(proporcao)), key=lambda i: (proporcao[i], -i))
+    valores[maior] += valor - sum(valores)
+    return valores

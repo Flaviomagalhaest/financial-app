@@ -1360,6 +1360,8 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][];
             /** Valor Total Centavos */
             valor_total_centavos?: number | null;
             /** Valor Da Parcela Centavos */
@@ -2347,6 +2349,11 @@ export interface components {
              * @enum {string}
              */
             fonte: "app" | "mobills";
+            /**
+             * Proporcao Das Partes
+             * @default []
+             */
+            proporcao_das_partes: number[];
             /** Parece Repetido De */
             parece_repetido_de?: string | null;
         };
@@ -2880,7 +2887,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2891,6 +2901,11 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
             /** Valor Total Centavos */
@@ -2984,7 +2999,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2995,6 +3013,11 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
             /** Valor Total Centavos */
@@ -3051,7 +3074,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -3062,6 +3088,11 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
             /** Valor Total Centavos */

@@ -1,3 +1,4 @@
+import csv
 import io
 import json
 import zipfile
@@ -203,6 +204,9 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "lancamentos": 0,
             "modelo_do_planejamento": 0,
             "parcelamento_categorias": 0,
+            "parcelamento_parte_categorias": 0,
+            "parcelamento_parte_tags": 0,
+            "parcelamento_partes": 0,
             "parcelamento_tags": 0,
             "parcelamentos": 0,
             "parte_categorias": 0,
@@ -1216,3 +1220,81 @@ def test_as_partes_da_compra_voltam_do_backup_com_as_categorias_e_as_tags(databa
             " FROM lancamento_partes p JOIN parte_categorias pc ON pc.parte_id = p.id"
             " JOIN parte_tags pt ON pt.parte_id = p.id"
         ).fetchall() == [("Vestido", 50000, "esposa", categoria, tag)]
+
+
+def test_backup_da_versao_28_sem_partes_do_parcelamento_restaura_sem_nenhuma(database_url):
+    # O formato 28, anterior ao ticket 139: só a compra à vista tinha partes, sem a proporção.
+    aplicar_migrations(database_url)
+    compra, parte = (f"00000000-0000-0000-0000-00000000001{n}" for n in range(1, 3))
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO lancamento_partes (id, lancamento_id, ordem, descricao, valor_centavos)"
+            " VALUES (%s, %s, 0, 'Vestido', 50000)",
+            (parte, compra),
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM lancamento_partes")
+    antigo = io.BytesIO()
+    novas = ("parcelamento_partes", "parcelamento_parte_categorias", "parcelamento_parte_tags")
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            if nome.removesuffix(".csv") in novas:
+                continue
+            conteudo = origem.read(nome)
+            if nome == "lancamento_partes.csv":
+                [cabecalho, *linhas] = list(csv.reader(io.StringIO(conteudo.decode())))
+                fora = cabecalho.index("proporcao")
+                saida = io.StringIO()
+                csv.writer(saida, lineterminator="\n").writerows(
+                    [c for i, c in enumerate(linha) if i != fora] for linha in [cabecalho, *linhas]
+                )
+                conteudo = saida.getvalue().encode()
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 28
+                for tabela in novas:
+                    del manifesto["tabelas"][tabela]
+                del manifesto["tabelas"]["lancamento_partes"]["somas"]["proporcao"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT count(*) FROM parcelamento_partes").fetchone() == (0,)
+        assert conn.execute(
+            "SELECT valor_centavos, proporcao FROM lancamento_partes"
+        ).fetchall() == [(50000, None)]
+
+
+def test_as_partes_do_parcelamento_voltam_do_backup_com_as_categorias_e_as_tags(database_url):
+    aplicar_migrations(database_url)
+    regra, parte, categoria, tag = (f"00000000-0000-0000-0000-00000000002{n}" for n in range(1, 5))
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO parcelamento_partes (id, parcelamento_id, ordem, descricao,"
+            " valor_centavos, pessoa) VALUES (%s, %s, 0, 'Fone', 25000, 'flavio')",
+            (parte, regra),
+        )
+        conn.execute(
+            "INSERT INTO parcelamento_parte_categorias VALUES (%s, %s)", (parte, categoria)
+        )
+        conn.execute("INSERT INTO parcelamento_parte_tags VALUES (%s, %s)", (parte, tag))
+        backup = gerar_backup(conn)
+        for tabela in (
+            "parcelamento_partes",
+            "parcelamento_parte_categorias",
+            "parcelamento_parte_tags",
+        ):
+            conn.execute(f"DELETE FROM {tabela}")
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        restaurar_backup(conn, backup)
+
+        assert conn.execute(
+            "SELECT p.descricao, p.valor_centavos, p.pessoa, pc.categoria_id::text, pt.tag_id::text"
+            " FROM parcelamento_partes p"
+            " JOIN parcelamento_parte_categorias pc ON pc.parte_id = p.id"
+            " JOIN parcelamento_parte_tags pt ON pt.parte_id = p.id"
+        ).fetchall() == [("Fone", 25000, "flavio", categoria, tag)]

@@ -20,6 +20,7 @@ import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, rotuloDaFatura } from "./datas";
 import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
 import { avisoDasMantidas, comoMuda, divisao, type ValorDigitado } from "./parcelamento";
+import { PartesDaCompra, resumoDaParte } from "./partes";
 
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -98,7 +99,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const id = parcelamento.id;
   const { lancamentos } = useLancamentos();
   const { contasECartoes, categorias } = useCadastro();
-  const { pessoas } = usePessoas();
+  const { pessoas, nomeDe } = usePessoas();
   const opcoesDeTags = useTags();
   const online = useConexao();
   const [form, setForm] = useState<Formulario>(() => formularioDo(parcelamento));
@@ -140,6 +141,12 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
     setAviso(null);
   };
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
+  // A compra parcelada com partes (ADR 0022) não tem categoria, tag nem pessoa próprias: as partes
+  // mudam numa parcela, com "Todas" ou "Esta e as próximas".
+  const comPartes = parcelamento.partes.length > 0;
+  // As partes do parcelamento são uma proporção, não um valor: "66,7%".
+  const somaDasPartes = parcelamento.partes.reduce((soma, p) => soma + p.valor_centavos, 0);
+  const percentual = (v: number) => `${((v * 100) / somaDasPartes).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
   async function salvar(confirmarRealizadas: boolean) {
     const alteracao = alteracaoDo(form, parcelamento, itemEscolhido);
@@ -225,6 +232,24 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
       </div>
       <p className="vazio">Valor, parcelas e data refazem as parcelas, menos as que alguém mudou à mão.</p>
 
+      {comPartes ? (
+        <>
+          <h3>Partes</h3>
+          <ul className="lista" aria-label="Partes do parcelamento">
+            {parcelamento.partes.map((p) => (
+              <li key={p.id}>
+                <div>
+                  <span>{p.descricao || "Parte"}</span>
+                  <span>{percentual(p.valor_centavos)}</span>
+                </div>
+                <p className="vazio">{resumoDaParte(p, categorias, nomeDe)}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="vazio">Cada parcela se divide pelas partes nessa proporção. Para mudá-las, mude uma parcela e escolha &ldquo;Todas&rdquo; ou &ldquo;Esta e as próximas&rdquo;.</p>
+        </>
+      ) : (
+        <>
       <h3>Categorias</h3>
       <div className="fileira rolavel">
         {categoriasDeDespesa.map((c) => (
@@ -247,6 +272,8 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         ))}
       </div>
       <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas, menos onde alguém mudou à mão.</p>
+        </>
+      )}
 
       {aviso && (
         <div className="aviso" role="group" aria-label="Parcelas realizadas que mudam">
@@ -271,7 +298,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
           {erro}
         </p>
       )}
-      <button type="button" disabled={enviando || !online || form.categoriaIds.length === 0} onClick={() => void salvar(false)}>
+      <button type="button" disabled={enviando || !online || (!comPartes && form.categoriaIds.length === 0)} onClick={() => void salvar(false)}>
         Salvar correção
       </button>
 
@@ -289,6 +316,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
               {l.alterada_a_mao && " · alterada à mão"}
               {l.naoEnviado && " · ⏳ não enviado"}
             </p>
+            {!!l.partes?.length && <PartesDaCompra partes={l.partes} categorias={categorias} nomeDe={nomeDe} titulo={`${parcelamento.descricao} ${l.parcela}`} />}
           </li>
         ))}
       </ul>

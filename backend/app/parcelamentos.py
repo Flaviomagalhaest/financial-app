@@ -20,6 +20,9 @@ from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import (
+    SEM_CENTAVO_POR_PARTE,
+    SEM_CLASSIFICACAO_PROPRIA,
+    Parte,
     conferir_ligacoes,
     conferir_sem_estorno,
     excluir,
@@ -33,6 +36,7 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
+from app.partes import dividir as dividir_pela_proporcao
 from app.recorrencias import com_o_dia_do_lancamento, mais_meses
 
 router = APIRouter(prefix="/api")
@@ -52,13 +56,18 @@ class DadosDoParcelamento(BaseModel):
     descricao: str = ""
     # O cartão ou a conta de onde sai o boleto.
     conta_id: UUID
-    categoria_ids: list[UUID] = Field(min_length=1)
+    # Vazia só na compra com partes, que não tem classificação própria (ADR 0022).
+    categoria_ids: list[UUID] = []
     tags: list[str] = []
     # O id de uma pessoa do casal, que as parcelas herdam; sem ela, é do conjunto.
     pessoa: str | None = None
     # A escolha do item do planejamento, pela categoria dele, com que as parcelas nascem
     # (ADR 0006).
     item_categoria_id: UUID | None = None
+    # As partes da compra parcelada que junta coisas diferentes (ADR 0022, ticket 139): duas ou
+    # mais, guardadas como proporção. Cada parcela se divide por elas, e o que vale é o valor da
+    # parcela. Com partes, o parcelamento não tem categoria, tag, pessoa nem item próprios.
+    partes: list[Parte] = []
     # O dia (São Paulo) em que o casal lançou no aparelho; sem ele, o da chegada. No boleto, o
     # "antes de hoje" se conta a partir dele e a parcela desse dia nasce realizada (ticket 127).
     dia_do_lancamento: date | None = None
@@ -70,6 +79,20 @@ class DadosDoParcelamento(BaseModel):
     def _item_de_uma_das_categorias(self):
         if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
             raise ValueError(lancamentos.ITEM_FORA_DAS_CATEGORIAS)
+        return self
+
+    @model_validator(mode="after")
+    def _classificacao(self):
+        if not self.partes:
+            if not self.categoria_ids:
+                raise ValueError("parcelamento sem categoria")
+            return self
+        if self.categoria_ids or self.tags or self.pessoa or self.item_categoria_id:
+            raise ValueError(SEM_CLASSIFICACAO_PROPRIA)
+        if len(self.partes) < 2:
+            raise ValueError(lancamentos.DUAS_PARTES_OU_MAIS)
+        if len({p.id for p in self.partes}) != len(self.partes):
+            raise ValueError("parte repetida")
         return self
 
 
@@ -87,6 +110,21 @@ class NovoParcelamento(DadosDoParcelamento):
             raise ValueError("informe o valor total ou o da parcela, um dos dois")
         if self.valor_total_centavos is not None and self.valor_total_centavos < self.parcelas:
             raise ValueError("o total não chega a um centavo por parcela")
+        return self
+
+    @model_validator(mode="after")
+    def _partes_somam_o_valor(self):
+        """As partes dividem o valor digitado, o total ou o da parcela; a menor parcela ainda dá
+        um centavo a cada parte."""
+        if not self.partes:
+            return self
+        informado = self.valor_total_centavos or self.valor_da_parcela_centavos
+        soma = sum(p.valor_centavos for p in self.partes)
+        if soma != informado:
+            raise ValueError(f"as partes somam {soma} centavos e a compra, {informado}")
+        proporcao = [p.valor_centavos for p in self.partes]
+        if min(dividir_pela_proporcao(self.total // self.parcelas, proporcao)) <= 0:
+            raise ValueError(SEM_CENTAVO_POR_PARTE)
         return self
 
     @property
@@ -115,12 +153,17 @@ class AlteracaoDeParcelamento(BaseModel):
 
     # Sem `None` no tipo: mandar null num campo obrigatório do parcelamento é erro, não "limpar".
     descricao: str = Field(default=None)
-    categoria_ids: list[UUID] = Field(default=None, min_length=1)
+    # Vazia só junto com as partes, que tiram a classificação própria do parcelamento.
+    categoria_ids: list[UUID] = Field(default=None)
     tags: list[str] = Field(default=None)
     # Vazia, passa o parcelamento para o conjunto.
     pessoa: str | None = None
     # Vazio tira a escolha; ela também sai com a categoria dela.
     item_categoria_id: UUID | None = None
+    # A lista inteira de partes, como na compra à vista (ADR 0022): duas ou mais dividem o
+    # parcelamento, e o valor de cada uma é a proporção dela; uma só junta, e o parcelamento
+    # volta a ter a classificação dela. As parcelas se dividem de novo.
+    partes: list[Parte] = Field(default=None)
     # O total novo, ou o da parcela (vale vezes o número de parcelas); só o número de parcelas
     # mantém o total, e as parcelas se dividem de novo.
     valor_total_centavos: int | None = Field(default=None, gt=0)
@@ -237,14 +280,150 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
         (ids,),
     ):
         tags.setdefault(parcelamento_id, []).append(nome)
+    partes = _ler_partes(conn, ids)
     return [
         Parcelamento(
             **dict(zip([*_NOMES_DAS_COLUNAS, "parcelas_puladas"], linha)),
             categoria_ids=categorias.get(linha[0], []),
             tags=tags.get(linha[0], []),
+            partes=partes.get(linha[0], []),
         )
         for linha in linhas
     ]
+
+
+def _ler_partes(conn, ids: list[UUID]) -> dict[UUID, list[Parte]]:
+    """As partes de cada parcelamento, na ordem, com o valor que é a proporção delas."""
+    linhas = conn.execute(
+        "SELECT id, parcelamento_id, descricao, valor_centavos, pessoa, item_categoria_id"
+        " FROM parcelamento_partes WHERE parcelamento_id = ANY(%s)"
+        " ORDER BY parcelamento_id, ordem",
+        (ids,),
+    ).fetchall()
+    if not linhas:
+        return {}
+    categorias: dict[UUID, list[UUID]] = {}
+    for parte_id, categoria_id in conn.execute(
+        "SELECT pc.parte_id, pc.categoria_id FROM parcelamento_parte_categorias pc"
+        " JOIN parcelamento_partes p ON p.id = pc.parte_id"
+        " WHERE p.parcelamento_id = ANY(%s) ORDER BY pc.categoria_id",
+        (ids,),
+    ):
+        categorias.setdefault(parte_id, []).append(categoria_id)
+    tags: dict[UUID, list[str]] = {}
+    for parte_id, nome in conn.execute(
+        "SELECT pt.parte_id, t.nome FROM parcelamento_parte_tags pt"
+        " JOIN parcelamento_partes p ON p.id = pt.parte_id JOIN tags t ON t.id = pt.tag_id"
+        " WHERE p.parcelamento_id = ANY(%s) ORDER BY t.nome",
+        (ids,),
+    ):
+        tags.setdefault(parte_id, []).append(nome)
+    por_parcelamento: dict[UUID, list[Parte]] = {}
+    for id, parcelamento_id, descricao, valor, pessoa, item in linhas:
+        por_parcelamento.setdefault(parcelamento_id, []).append(
+            Parte.model_construct(
+                id=id,
+                descricao=descricao,
+                valor_centavos=valor,
+                categoria_ids=categorias.get(id, []),
+                tags=tags.get(id, []),
+                pessoa=pessoa,
+                item_categoria_id=item,
+            )
+        )
+    return por_parcelamento
+
+
+def _tags_das_partes(conn, id: UUID) -> dict[UUID, list[UUID]]:
+    """Os ids das tags de cada parte do parcelamento: a parcela nasce com eles, mesmo arquivadas."""
+    tags: dict[UUID, list[UUID]] = {}
+    for parte_id, tag_id in conn.execute(
+        "SELECT pt.parte_id, pt.tag_id FROM parcelamento_parte_tags pt"
+        " JOIN parcelamento_partes p ON p.id = pt.parte_id WHERE p.parcelamento_id = %s",
+        (id,),
+    ):
+        tags.setdefault(parte_id, []).append(tag_id)
+    return tags
+
+
+def _gravar_partes(conn, id: UUID, partes: list[Parte], usuario: str) -> None:
+    """Troca as partes do parcelamento pela lista; a tag arquivada só vale para quem já a tinha."""
+    ja_tinha = {t for ids in _tags_das_partes(conn, id).values() for t in ids}
+    tags_de_cada = [ids_das_tags(conn, p.tags, usuario, ja_tinha) for p in partes]
+    _apagar_partes(conn, id)
+    for ordem, (parte, tags) in enumerate(zip(partes, tags_de_cada)):
+        conn.execute(
+            "INSERT INTO parcelamento_partes (id, parcelamento_id, ordem, descricao,"
+            " valor_centavos, pessoa, item_categoria_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (
+                parte.id,
+                id,
+                ordem,
+                parte.descricao,
+                parte.valor_centavos,
+                parte.pessoa,
+                parte.item_categoria_id,
+            ),
+        )
+        for categoria in parte.categoria_ids:
+            conn.execute(
+                "INSERT INTO parcelamento_parte_categorias (parte_id, categoria_id)"
+                " VALUES (%s, %s)",
+                (parte.id, categoria),
+            )
+        for tag in tags:
+            conn.execute(
+                "INSERT INTO parcelamento_parte_tags (parte_id, tag_id) VALUES (%s, %s)",
+                (parte.id, tag),
+            )
+
+
+def _apagar_partes(conn, id: UUID) -> None:
+    partes = [
+        p
+        for (p,) in conn.execute(
+            "SELECT id FROM parcelamento_partes WHERE parcelamento_id = %s", (id,)
+        )
+    ]
+    if not partes:
+        return
+    conn.execute("DELETE FROM parcelamento_parte_categorias WHERE parte_id = ANY(%s)", (partes,))
+    conn.execute("DELETE FROM parcelamento_parte_tags WHERE parte_id = ANY(%s)", (partes,))
+    conn.execute("DELETE FROM parcelamento_partes WHERE id = ANY(%s)", (partes,))
+
+
+@dataclass
+class PartesDaParcela:
+    """As partes do parcelamento numa parcela: cada uma com o id dela na parcela (vem da parcela e
+    da parte, e gerar de novo não duplica), o valor da parcela dividido na proporção e os ids das
+    tags; a `proporcao`, que a parcela guarda para se dividir de novo."""
+
+    partes: list[tuple[Parte, list[UUID]]]
+    proporcao: list[int]
+
+    def sem_ids(self) -> list[lancamentos.ParteNormalizada]:
+        return [lancamentos.parte_sem_id(p) for p, _ in self.partes]
+
+
+def partes_da_parcela(
+    regra: Parcelamento, tags: dict[UUID, list[UUID]], lancamento_id: UUID, valor: int
+) -> PartesDaParcela:
+    proporcao = [p.valor_centavos for p in regra.partes]
+    return PartesDaParcela(
+        [
+            (
+                p.model_copy(update={"id": uuid5(lancamento_id, str(p.id)), "valor_centavos": v}),
+                tags.get(p.id, []),
+            )
+            for p, v in zip(regra.partes, dividir_pela_proporcao(valor, proporcao))
+        ],
+        proporcao,
+    )
+
+
+def _linhas_das_partes(regra: Parcelamento) -> int:
+    """As linhas que as partes de uma parcela gravam: a parte, as categorias e as tags dela."""
+    return sum(1 + len(p.categoria_ids) + len(p.tags) for p in regra.partes)
 
 
 def _dia_do_lancamento_vigente(conn, regra: Parcelamento) -> date | None:
@@ -289,8 +468,11 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         )
     ]
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
+    tags_das_partes = _tags_das_partes(conn, id) if regra.partes else {}
     # O DSQL aceita até 3.000 linhas por transação; no cartão, cada parcela pode criar a fatura.
-    por_lote = max(1, LINHAS_POR_LOTE // (2 + len(categorias) + len(tags)))
+    por_lote = max(
+        1, LINHAS_POR_LOTE // (2 + len(categorias) + len(tags) + _linhas_das_partes(regra))
+    )
     proximas = range(geradas + 1, min(regra.parcelas, geradas + por_lote) + 1)
     puladas = _puladas_que_chegaram(conn, regra, geradas)
     if puladas:
@@ -351,6 +533,16 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
             conn.execute(
                 "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
                 (lancamento_id, tag),
+            )
+        if regra.partes:
+            divididas = partes_da_parcela(
+                regra,
+                tags_das_partes,
+                lancamento_id,
+                valor_da_parcela(regra.valor_total_centavos, regra.parcelas, n),
+            )
+            lancamentos.gravar_partes_por_id(
+                conn, lancamento_id, divididas.partes, divididas.proporcao
             )
     if puladas:
         return True  # as próximas vêm no lote seguinte
@@ -578,6 +770,8 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
             "INSERT INTO parcelamento_tags (parcelamento_id, tag_id) VALUES (%s, %s)",
             (novo.id, tag),
         )
+    if novo.partes:
+        _gravar_partes(conn, novo.id, novo.partes, usuario)
     return _ler(conn, "id = %s", (novo.id,))[0], True
 
 
@@ -625,10 +819,28 @@ def _tags_do_parcelamento(conn, id: UUID) -> list[UUID]:
     ]
 
 
-def parcelas_por_lote(regra: Parcelamento) -> int:
+def parcelas_por_lote(conn, regra: Parcelamento) -> int:
     """Quantas parcelas cabem numa transação, pelas linhas que cada uma mexe (a folga do DSQL é
-    a mesma da geração)."""
-    return max(1, LINHAS_POR_LOTE // (10 + 2 * (len(regra.categoria_ids) + len(regra.tags))))
+    a mesma da geração): as partes do parcelamento que entram e as que a parcela tem, que saem,
+    porque a de partes próprias pode ter mais que ele, e ele pode não ter mais nenhuma."""
+    (gravadas,) = conn.execute(
+        "SELECT COALESCE(max(linhas), 0) FROM (SELECT p.lancamento_id, count(*)"
+        " + sum((SELECT count(*) FROM parte_categorias c WHERE c.parte_id = p.id)"
+        " + (SELECT count(*) FROM parte_tags t WHERE t.parte_id = p.id)) AS linhas"
+        " FROM lancamento_partes p JOIN lancamentos l ON l.id = p.lancamento_id"
+        " WHERE l.parcelamento_id = %s GROUP BY p.lancamento_id) AS por_parcela",
+        (regra.id,),
+    ).fetchone()
+    return max(
+        1,
+        LINHAS_POR_LOTE
+        // (
+            10
+            + 2 * (len(regra.categoria_ids) + len(regra.tags))
+            + _linhas_das_partes(regra)
+            + int(gravadas)
+        ),
+    )
 
 
 _Acao = Literal["excluir", "reviver", "atualizar", "pular"]
@@ -651,6 +863,11 @@ class _Correcao:
     realizada: bool
     valor_antes: int
     dia_antes: date
+    # As partes do parcelamento que a parcela passa a ter, divididas pelo valor dela; sem elas, e
+    # com "partes" em `mudou`, a parcela só se divide de novo na proporção que já tem (o valor
+    # mudou). `partes_a_mao`: a proporção é de uma pessoa, que a mudou só nesta parcela.
+    partes: PartesDaParcela | None = None
+    partes_a_mao: bool = False
 
     @property
     def muda_o_cronograma(self) -> bool:
@@ -674,7 +891,13 @@ class _Correcao:
 
 
 # O que vale para as parcelas quando o pedido o traz, menos onde uma pessoa o mudou à mão.
-CLASSIFICACAO = frozenset({"descricao", "categoria_ids", "tags", "pessoa", "item_categoria_id"})
+CLASSIFICACAO = frozenset(
+    {"descricao", "categoria_ids", "tags", "pessoa", "item_categoria_id", "partes"}
+)
+# A classificação da compra: as partes, ou a categoria, as tags, a pessoa e o item dela. Quando a
+# parcela ou o parcelamento têm partes, ela muda inteira ou fica inteira como está: a parcela não
+# fica com partes e categoria própria ao mesmo tempo (ADR 0022).
+DA_COMPRA = CLASSIFICACAO - {"descricao"}
 # Os campos da parcela que o valor, o número de parcelas e a data do parcelamento dão.
 CRONOGRAMA = frozenset({"valor_centavos", "data", "conta_id", "fatura_mes"})
 
@@ -727,6 +950,8 @@ def _correcoes(
         (ids,),
     ):
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
+    partes = lancamentos.ler_partes(conn, ids)
+    tags_das_partes = _tags_das_partes(conn, regra.id) if regra.partes else {}
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     dia_de_hoje = lancamentos.hoje()
     if dia_da_correcao is None:
@@ -772,14 +997,8 @@ def _correcoes(
             "tags": tags.get(lancamento_id, set()),
         }
         campos = dict.fromkeys(CLASSIFICACAO, 1) if acao == "reviver" else classificacao
-        mudou = []
-        for campo, querido in quer.items():
-            if campo not in campos or n < campos[campo] or querido == tem[campo]:
-                continue
-            if campo in maos:
-                mantidas.add(n)
-            else:
-                mudou.append(campo)
+        pedidos_aqui = {c for c, desde in campos.items() if n >= desde}
+        mudou = [c for c, querido in quer.items() if c in pedidos_aqui and querido != tem[c]]
         valor, dia, mes = valor_antes, dia_antes, mes_antes
         if acao != "excluir":
             pela_regra = valor_da_parcela(regra.valor_total_centavos, regra.parcelas, n)
@@ -801,6 +1020,28 @@ def _correcoes(
             # A fatura que o app escolheu de novo conta como mudança do parcelamento (ADR 0011).
             if no_cartao and mes != mes_antes:
                 mudou.append("fatura_mes")
+        tem_partes = partes.get(lancamento_id, [])
+        novas_partes = None
+        if "partes" in pedidos_aqui and acao != "excluir":
+            novas_partes = partes_da_parcela(regra, tags_das_partes, lancamento_id, valor)
+            if novas_partes.sem_ids() != list(map(lancamentos.parte_sem_id, tem_partes)):
+                mudou.append("partes")
+        da_compra = [c for c in mudou if c in DA_COMPRA]
+        if regra.partes or tem_partes:
+            # A classificação da compra muda inteira, ou fica inteira se alguém a mudou só aqui.
+            presos = da_compra if maos & DA_COMPRA else []
+        else:
+            presos = [c for c in da_compra if c in maos]
+        if "descricao" in mudou and "descricao" in maos:
+            presos.append("descricao")
+        if presos:
+            mantidas.add(n)
+            mudou = [c for c in mudou if c not in presos]
+        if "partes" not in mudou:
+            novas_partes = None
+            # Com outro valor, a parcela se divide de novo na proporção que tem (ticket 139).
+            if tem_partes and valor != valor_antes and acao != "excluir":
+                mudou.append("partes")
         if not no_cartao and dia < dia_de_hoje:
             if acao == "reviver":
                 if pulada:
@@ -822,6 +1063,8 @@ def _correcoes(
                     situacao == "realizado",
                     valor_antes,
                     dia_antes,
+                    novas_partes,
+                    "partes" in maos,
                 )
             )
     return feitas
@@ -857,8 +1100,11 @@ def gravar_correcao(
     (geradas,) = conn.execute("SELECT geradas FROM parcelamentos WHERE id = %s", (id,)).fetchone()
     pedidas = alteracao.model_dump(
         include=alteracao.model_fields_set
-        - {"valor_total_centavos", "valor_da_parcela_centavos", "confirmar_realizadas"}
+        - {"valor_total_centavos", "valor_da_parcela_centavos", "confirmar_realizadas", "partes"}
     )
+    if alteracao.partes is not None:
+        # Dividir tira a classificação própria do parcelamento; uma parte só a devolve (ADR 0022).
+        pedidas |= lancamentos.o_que_as_partes_mudam(alteracao.partes, pedidas)
     if atual.item_categoria_id not in pedidas.get("categoria_ids", [atual.item_categoria_id]):
         pedidas.setdefault("item_categoria_id", None)  # a escolha sai com a categoria dela
     parcelas = pedidas.get("parcelas", atual.parcelas)
@@ -874,7 +1120,28 @@ def gravar_correcao(
         nova = Parcelamento(**(atual.model_dump() | pedidas | {"valor_total_centavos": total}))
     except ValidationError as erro:
         raise recusar("; ".join(e["msg"] for e in erro.errors())) from erro
-    conferir_ligacoes(conn, nova, atual.conta_id, frozenset(atual.categoria_ids))
+    conferir_ligacoes(
+        conn,
+        nova,
+        atual.conta_id,
+        frozenset(atual.categoria_ids) | {c for p in atual.partes for c in p.categoria_ids},
+    )
+    if nova.partes:
+        lancamentos.conferir_divisao(
+            nova.valor_total_centavos // nova.parcelas, [p.valor_centavos for p in nova.partes]
+        )
+        if not atual.partes:
+            lancamentos.conferir_sem_estorno(
+                conn,
+                [
+                    i
+                    for (i,) in conn.execute(
+                        "SELECT id FROM lancamentos WHERE parcelamento_id = %s"
+                        " AND excluido_em IS NULL",
+                        (id,),
+                    )
+                ],
+            )
     sobram = dict(
         conn.execute(
             "SELECT id, parcela FROM lancamentos WHERE parcelamento_id = %s"
@@ -899,19 +1166,21 @@ def gravar_correcao(
     if editada:
         _seguir_o_parcelamento(conn, editada, nova, alteracao.model_fields_set | pedidas.keys())
     mantidas: set[int] = set()
+    correcoes = _correcoes(
+        conn,
+        nova,
+        geradas_depois,
+        classificacao,
+        lancamentos.hoje(),
+        mantidas,
+        _cronograma_pedido(alteracao),
+    )
+    _conferir_as_divisoes(conn, correcoes)
     realizadas = [
         *tambem_mudam,
         *(
             t.aviso
-            for t in _correcoes(
-                conn,
-                nova,
-                geradas_depois,
-                classificacao,
-                lancamentos.hoje(),
-                mantidas,
-                _cronograma_pedido(alteracao),
-            )
+            for t in correcoes
             # A que sai pulada sendo realizada já estava excluída (o encolher a tirou): nada muda.
             if t.realizada
             and t.acao not in ("reviver", "pular")
@@ -969,7 +1238,23 @@ def gravar_correcao(
                 "INSERT INTO parcelamento_tags (parcelamento_id, tag_id) VALUES (%s, %s)",
                 (id, tag),
             )
+    if "partes" in pedidas and not lancamentos.iguais("partes", nova.partes, atual.partes):
+        _gravar_partes(conn, id, nova.partes, usuario)
     return CorrecaoGravada(classificacao, mantidas)
+
+
+def _conferir_as_divisoes(conn, correcoes: list[_Correcao]) -> None:
+    """Cada parcela que a correção divide de novo fica com um centavo ou mais por parte, na
+    proporção do parcelamento ou na que ela já tem. Conferido antes de gravar: o refazer em lotes
+    não volta atrás, e a recusa no meio dele deixaria a correção pela metade."""
+    redivididas = [t for t in correcoes if "partes" in t.mudou and t.acao != "excluir"]
+    proporcoes = lancamentos.proporcao_das_partes(conn, [t.id for t in redivididas])
+    for t in redivididas:
+        if t.partes is not None:
+            if any(p.valor_centavos <= 0 for p, _ in t.partes.partes):
+                raise recusar(lancamentos.SEM_CENTAVO_POR_PARTE)
+        else:
+            lancamentos.conferir_divisao(t.valor, proporcoes.get(t.id, []))
 
 
 def _cronograma_pedido(alteracao: AlteracaoDeParcelamento) -> frozenset[str]:
@@ -1036,9 +1321,25 @@ def _aplicar(
         atribuicoes += ", item_atual_categoria_id = %s"
         parametros += (item_atual if item_atual in regra.categoria_ids else None,)
     nova = subir_versao(conn, correcao.id, correcao.versao, atribuicoes, parametros)
+    # A proporção que uma pessoa deu só a esta parcela continua dela, dividida pelo valor novo.
+    da_pessoa = ["partes"] if correcao.partes_a_mao and "partes" in correcao.mudou else []
     registrar_mudancas(
-        conn, correcao.id, correcao.mudou, nova, usuario, agora, origem=origem(regra.descricao)
+        conn,
+        correcao.id,
+        [c for c in correcao.mudou if c not in da_pessoa],
+        nova,
+        usuario,
+        agora,
+        origem=origem(regra.descricao),
     )
+    registrar_mudancas(conn, correcao.id, da_pessoa, nova, usuario, agora)
+    if "partes" in correcao.mudou:
+        if correcao.partes is not None:
+            lancamentos.gravar_partes_por_id(
+                conn, correcao.id, correcao.partes.partes, correcao.partes.proporcao
+            )
+        else:
+            lancamentos.redividir_partes(conn, correcao.id, correcao.valor)
     if "categoria_ids" in correcao.mudou:
         gravar_categorias(conn, correcao.id, regra.categoria_ids)
     if "tags" in correcao.mudou:
@@ -1061,7 +1362,7 @@ def _reajustar_um_lote(conn, id: UUID, usuario: str, classificacao: Classificaca
     trabalho = _correcoes(conn, regra, geradas, classificacao)
     tags = _tags_do_parcelamento(conn, id)
     agora = datetime.now(UTC)
-    por_lote = parcelas_por_lote(regra)
+    por_lote = parcelas_por_lote(conn, regra)
     for correcao in trabalho[:por_lote]:
         _aplicar(conn, regra, correcao, tags, usuario, agora)
     return len(trabalho) > por_lote
@@ -1123,7 +1424,7 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
     faltar alguma."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False
-    por_lote = parcelas_por_lote(lidos[0])
+    por_lote = parcelas_por_lote(conn, lidos[0])
     a_excluir = [
         lancamento_id
         for (lancamento_id,) in conn.execute(
@@ -1248,6 +1549,7 @@ def excluir_parcelamento(
         pass
 
     def tirar(conn) -> None:
+        _apagar_partes(conn, id)
         conn.execute("DELETE FROM parcelamento_categorias WHERE parcelamento_id = %s", (id,))
         conn.execute("DELETE FROM parcelamento_tags WHERE parcelamento_id = %s", (id,))
         conn.execute("DELETE FROM parcelamentos WHERE id = %s", (id,))
@@ -1329,6 +1631,7 @@ def _antecipar(
         )
         campos = ["situacao", "valor_centavos", "data"] + (["fatura_mes"] if no_cartao else [])
         lancamentos.registrar_mudancas(conn, lancamento_id, campos, nova, usuario, momento)
+        lancamentos.redividir_partes(conn, lancamento_id, valor_da_parcela(pago, quantas, posicao))
     return [linha[0] for linha in escolhidas]
 
 

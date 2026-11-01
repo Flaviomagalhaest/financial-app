@@ -18,7 +18,7 @@ import psycopg
 
 from app.faturas import datas_padrao, ler_cartao
 
-VERSAO_FORMATO = 28
+VERSAO_FORMATO = 29
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -578,6 +578,40 @@ def _da_versao_27_para_a_28(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_28_para_a_29(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 29 (ticket 139) traz as partes da compra parcelada, guardadas no parcelamento
+    como proporção, e a proporção que cada parte de uma parcela recebeu dele. Backup antigo entra
+    sem nenhuma: só a compra à vista tinha partes, e a proporção dela é o valor."""
+    colunas, linhas = tabelas["lancamento_partes"]
+    if "proporcao" not in colunas:
+        tabelas["lancamento_partes"] = (
+            [*colunas, "proporcao"],
+            [[*linha, None] for linha in linhas],
+        )
+        manifesto["tabelas"]["lancamento_partes"]["somas"]["proporcao"] = "0"
+    novas = {
+        "parcelamento_partes": (
+            [
+                "id",
+                "parcelamento_id",
+                "ordem",
+                "descricao",
+                "valor_centavos",
+                "pessoa",
+                "item_categoria_id",
+            ],
+            {"ordem": "0", "valor_centavos": "0"},
+        ),
+        "parcelamento_parte_categorias": (["parte_id", "categoria_id"], {}),
+        "parcelamento_parte_tags": (["parte_id", "tag_id"], {}),
+    }
+    for tabela, (colunas, somas) in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -608,6 +642,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     25: _da_versao_25_para_a_26,
     26: _da_versao_26_para_a_27,
     27: _da_versao_27_para_a_28,
+    28: _da_versao_28_para_a_29,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.
