@@ -439,5 +439,5 @@ test("a tela do parcelamento mostra a mudança nas parcelas que uma recusa parou
 
   await page.goto(`/#/parcelamento/${id}`);
 
-  await expect(page.getByText(`Uma mudança nas parcelas parou no meio: ${motivo}. Para terminar, mude de novo uma das parcelas que faltaram.`)).toBeVisible();
+  await expect(page.getByText(`Uma mudança nas parcelas parou no meio: ${motivo}. Para terminar, mude de novo uma das parcelas que faltaram, em “Esta e as próximas” ou “Todas”.`)).toBeVisible();
 });

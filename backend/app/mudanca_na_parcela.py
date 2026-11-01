@@ -215,13 +215,13 @@ def _conferir_antes_de_gravar(conn, falta: list[tuple[Lancamento, dict]], quanta
     for inicio in range(0, len(falta), quantas):
         passo: Counter = Counter()
         for outra, valores in falta[inicio : inicio + quantas]:
-            for (titular, mes), valor in (
-                (lancamentos.onde_ficaria(conn, outra, {}), -outra.valor_centavos),
-                (
-                    lancamentos.onde_ficaria(conn, outra, valores),
-                    valores.get("valor_centavos", outra.valor_centavos),
-                ),
-            ):
+            # Sai da fatura em que está com o valor de antes e entra na nova com o de depois.
+            sai = lancamentos.onde_ficaria(conn, outra, {}), -outra.valor_centavos
+            entra = (
+                lancamentos.onde_ficaria(conn, outra, valores),
+                valores.get("valor_centavos", outra.valor_centavos),
+            )
+            for (titular, mes), valor in (sai, entra):
                 if titular:
                     passo[titular, mes] += lancamentos.valor_com_sinal(outra, valor)
         passos.append(passo)
@@ -235,7 +235,9 @@ def _ha_pendente(conn, parcelamento_id: UUID) -> bool:
     return bool(texto) or bool(parcelamentos.classificacao_pendente(conn, parcelamento_id))
 
 
-def _mudar_a_parcela(conn, id: UUID, alteracao: AlteracaoDaParcela, usuario: str) -> _Mudanca:
+def _mudar_a_parcela(
+    conn, id: UUID, alteracao: AlteracaoDaParcela, usuario: str, tirar_a_recusa: bool = True
+) -> _Mudanca:
     """A parcela mudada, o parcelamento e o primeiro lote das outras, numa transação só; avisa,
     antes de gravar, se uma realizada que não é esta mudaria, e recusa se um lote das outras
     seria recusado pelas regras da fatura paga. O resto parcela a parcela fica gravado no parcelamento."""
@@ -269,12 +271,14 @@ def _mudar_a_parcela(conn, id: UUID, alteracao: AlteracaoDaParcela, usuario: str
     # pendente desde a 1ª, e as parcelas a parcela de um e de outro se atropelariam.
     if _ha_pendente(conn, regra.id):
         raise recusar("o parcelamento ainda está terminando outra mudança: tente de novo")
-    # A mudança nova toma o lugar da que uma recusa parou.
-    conn.execute(
-        "UPDATE parcelamentos SET mudanca_recusada = NULL"
-        " WHERE id = %s AND mudanca_recusada IS NOT NULL",
-        (regra.id,),
-    )
+    # A mudança nova toma o lugar da que uma recusa parou, menos a recusa que este pedido acabou
+    # de achar ao terminar o anterior: ela é de outra mudança, que o casal ainda não viu.
+    if tirar_a_recusa:
+        conn.execute(
+            "UPDATE parcelamentos SET mudanca_recusada = NULL"
+            " WHERE id = %s AND mudanca_recusada IS NOT NULL",
+            (regra.id,),
+        )
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     desde = antes.parcela if alteracao.alcance == "esta_e_as_proximas" else 1
 
@@ -442,9 +446,10 @@ def terminar_as_mudancas_pendentes(url: str | None) -> int:
     return terminadas
 
 
-def _terminar_o_que_outro_pedido_deixou(url: str | None, id: UUID) -> None:
+def _terminar_o_que_outro_pedido_deixou(url: str | None, id: UUID) -> bool:
     """Antes de uma mudança com alcance, termina a que outro pedido deixou pela metade no
-    parcelamento da parcela: a classificação pendente e a parte parcela a parcela."""
+    parcelamento da parcela: a classificação pendente e a parte parcela a parcela. Devolve se a
+    parte parcela a parcela foi recusada (a recusa fica gravada no parcelamento)."""
     with conectar(url) as conn:
         linha = conn.execute(
             "SELECT p.id, coalesce(p.mudanca_pendente, ''), coalesce(p.classificacao_pendente, '')"
@@ -453,15 +458,17 @@ def _terminar_o_que_outro_pedido_deixou(url: str | None, id: UUID) -> None:
             (id,),
         ).fetchone()
     if not linha:
-        return
+        return False
     parcelamento_id, por_parcela, classificacao = linha
+    recusada = False
     if por_parcela:
         try:
             terminar_o_pendente(url, parcelamento_id)
         except HTTPException:
-            pass  # o pedido anterior fica como parou; este segue
+            recusada = True  # o pedido anterior fica como parou; este segue
     if classificacao:
         parcelamentos.completar(url, parcelamento_id)
+    return recusada
 
 
 def _motivo_do_conflito(conflito: ConflitoDeCampos) -> HTTPException:
@@ -489,11 +496,15 @@ def mudar_parcela(
     pessoa conferir e mudar de novo. Se uma realizada que não é esta mudar, responde 409 com o
     aviso e não grava nada até o pedido vir com `confirmar_realizadas`."""
     url = url_do_banco(request)
-    if alteracao.alcance != "so_esta":
-        _terminar_o_que_outro_pedido_deixou(url, id)
+    recusada = alteracao.alcance != "so_esta" and _terminar_o_que_outro_pedido_deixou(url, id)
     try:
         mudanca = em_transacao(
-            url, cartoes.protegida(lambda conn: _mudar_a_parcela(conn, id, alteracao, usuario))
+            url,
+            cartoes.protegida(
+                lambda conn: _mudar_a_parcela(
+                    conn, id, alteracao, usuario, tirar_a_recusa=not recusada
+                )
+            ),
         )
     except LancamentoNaoEncontrado:
         raise HTTPException(status_code=404, detail="lançamento não encontrado")

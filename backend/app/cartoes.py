@@ -289,7 +289,7 @@ def faturas_do_titular(
 
 def _todas(conn) -> dict[tuple[UUID, date], Fatura]:
     return {
-        k: f for t in titulares(conn) for k, f in _do_titular(faturas_do_titular(conn, t)).items()
+        k: f for t in titulares(conn) for k, f in _por_chave(faturas_do_titular(conn, t)).items()
     }
 
 
@@ -394,19 +394,19 @@ def conferir_sem_gravar(conn, passos: list[dict[tuple[UUID, date], int]]) -> Non
     recusaria ao gravar, antes de gravar o primeiro."""
     a_mais: dict[UUID, Counter] = {}
     antes = {
-        t: _do_titular(faturas_do_titular(conn, t))
+        t: _por_chave(faturas_do_titular(conn, t))
         for t in {titular for passo in passos for titular, _ in passo}
     }
     for passo in passos:
         for (titular, mes), valor in passo.items():
             a_mais.setdefault(titular, Counter())[mes] += valor
         for titular in {t for t, _ in passo}:
-            depois = _do_titular(faturas_do_titular(conn, titular, compras_a_mais=a_mais[titular]))
+            depois = _por_chave(faturas_do_titular(conn, titular, compras_a_mais=a_mais[titular]))
             _conferir_o_que_mudou(conn, antes[titular], depois, None)
             antes[titular] = depois
 
 
-def _do_titular(lista: list[Fatura]) -> dict[tuple[UUID, date], Fatura]:
+def _por_chave(lista: list[Fatura]) -> dict[tuple[UUID, date], Fatura]:
     return {(f.cartao_id, f.mes): f for f in lista}
 
 

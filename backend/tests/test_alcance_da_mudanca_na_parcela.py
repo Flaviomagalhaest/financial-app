@@ -470,3 +470,46 @@ def test_a_recusa_na_tarefa_diaria_fica_no_parcelamento_ate_a_proxima_mudanca(
     resposta = mudar_parcela(casal, primeira, "todas", descricao="Geladeira nova")
     assert resposta.status_code == 200, resposta.text
     assert parcelamento(casal, novo["id"])["mudanca_recusada"] is None
+
+
+def test_a_recusa_achada_ao_terminar_o_pedido_anterior_fica_no_parcelamento(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    nubank = cartao(casal)
+    novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    with monkeypatch.context() as queda:
+        interromper_depois_do_primeiro_lote(queda)
+        with pytest.raises(RuntimeError):
+            mudar_parcela(
+                casal,
+                primeira,
+                "esta_e_as_proximas",
+                valor_centavos=12000,
+                confirmar_realizadas=True,
+            )
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        nubank,
+        fatura_mes="2026-05-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago.status_code == 201, pago.text
+
+    # O pedido seguinte, de outro campo, termina antes o anterior e acha a recusa: ela fica.
+    [primeira, *_] = parcelas(casal, novo["id"])
+    resposta = mudar_parcela(casal, primeira, "todas", descricao="Geladeira nova")
+
+    assert resposta.status_code == 200, resposta.text
+    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [12000, 12000, 10000]
+    assert parcelamento(casal, novo["id"])["mudanca_recusada"] == (
+        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
+        " Da 3ª parcela em diante, as que faltavam mudar ficaram como estavam"
+    )

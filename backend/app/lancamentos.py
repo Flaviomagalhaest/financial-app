@@ -355,7 +355,7 @@ VERSAO = "COALESCE(versao, 1)"
 # sobrou dela e o que a API antiga gravar durante o deploy.
 MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
 # O valor com o sinal de quem soma despesas (fatura, mês): a despesa soma, o estorno e a receita
-# (crédito) diminuem.
+# (crédito) diminuem. `valor_com_sinal` repete a regra em Python, para a simulação da fatura.
 VALOR_COM_SINAL = (
     "CASE WHEN lancamentos.tipo = 'despesa' AND NOT "
     + "(lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
