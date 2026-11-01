@@ -1,7 +1,7 @@
 # Favorito e sugestão com partes
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 137
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Sonnet
@@ -15,10 +15,10 @@ O favorito e a sugestão por descrição passam a levar as partes da compra.
 
 ## Checklist
 
-- [ ] A identidade do lançamento inclui as partes (descrição, categorias, tags, pessoa e proporção)
-- [ ] O favorito de compra com partes preenche as partes na proporção do último valor; mudar o valor redivide
-- [ ] A sugestão por descrição oferece o pacote com partes
-- [ ] Testes; verificações do projeto e PR para `main`
+- [x] A identidade do lançamento inclui as partes (descrição, categorias, tags, pessoa e proporção)
+- [x] O favorito de compra com partes preenche as partes na proporção do último valor; mudar o valor redivide
+- [x] A sugestão por descrição oferece o pacote com partes
+- [x] Testes; verificações do projeto e PR para `main`
 
 ## Notas
 

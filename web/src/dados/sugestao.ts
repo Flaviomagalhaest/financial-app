@@ -5,6 +5,7 @@
 import type { components } from "../api/schema";
 import { config } from "../config";
 import type { NovoLancamento } from "./armazem";
+import { identidadeDaParte } from "./favoritos";
 
 /** Categorias, tags, conta e pessoa de um lançamento anterior; escolher preenche esses campos. */
 export type Sugestao = components["schemas"]["Sugestao"];
@@ -33,7 +34,8 @@ export function chaveDaDescricao(descricao: string): string {
  * Sem descrição ou sem categoria, nenhuma, como no servidor.
  */
 export function sugestaoDe(lancamento: NovoLancamento, em: number): Sugestao | null {
-  if (!lancamento.descricao?.trim() || lancamento.categoria_ids.length === 0) return null;
+  const partes = (lancamento.partes ?? []).map(({ descricao, valor_centavos, categoria_ids, tags, pessoa }) => ({ descricao, valor_centavos, categoria_ids, tags: tags ?? [], pessoa: pessoa ?? null }));
+  if (!lancamento.descricao?.trim() || (lancamento.categoria_ids.length === 0 && partes.length === 0)) return null;
   return {
     chave: chaveDaDescricao(lancamento.descricao),
     descricao: lancamento.descricao,
@@ -42,14 +44,24 @@ export function sugestaoDe(lancamento: NovoLancamento, em: number): Sugestao | n
     categoria_ids: [...lancamento.categoria_ids].sort(),
     tags: lancamento.tags ?? [],
     pessoa: lancamento.pessoa ?? null,
+    partes,
     em: new Date(em).toISOString(),
     origem: "historico",
   };
 }
 
 /** A mesma sugestão vinda de dois lançamentos aparece uma vez só. */
-const identidade = (s: Sugestao) =>
-  [s.tipo, s.conta_id, [...s.categoria_ids].sort().join(), s.tags.map((t) => t.toLowerCase()).sort().join("\u0000"), s.pessoa ?? ""].join("|");
+const identidade = (s: Sugestao) => {
+  const total = s.partes.reduce((soma, p) => soma + p.valor_centavos, 0);
+  return [
+    s.tipo,
+    s.conta_id,
+    [...s.categoria_ids].sort().join(),
+    s.tags.map((t) => t.toLowerCase()).sort().join("\u0000"),
+    s.pessoa ?? "",
+    JSON.stringify(s.partes.map((p) => identidadeDaParte(p, total))),
+  ].join("|");
+};
 
 const letraOuNumero = /[\p{L}\p{N}]/u;
 

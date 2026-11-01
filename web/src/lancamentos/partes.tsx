@@ -88,6 +88,24 @@ export type ParteEmEdicao = Omit<Parte, "valor_centavos"> & { valor: string };
 
 export const emEdicao = (p: Parte): ParteEmEdicao => ({ ...p, valor: comoDigitado(p.valor_centavos) });
 
+/**
+ * Divide o total na proporção das partes de um favorito ou sugestão (o valor da última compra).
+ * Os centavos do arredondamento vão para a maior parte, a primeira no empate (ADR 0022).
+ */
+export function dividirNaProporcao(base: number[], total: number): number[] {
+  const soma = base.reduce((a, b) => a + b, 0);
+  const valores = base.map((v) => Math.floor((total * v) / soma));
+  const sobra = total - valores.reduce((a, b) => a + b, 0);
+  valores[base.indexOf(Math.max(...base))] += sobra;
+  return valores;
+}
+
+/** As partes de um favorito ou sugestão como a tela as edita, com novos ids e o total dividido na proporção. */
+export function emEdicaoNaProporcao(modelo: { descricao?: string; valor_centavos: number; categoria_ids: string[]; tags?: string[]; pessoa?: string | null }[], total: number): ParteEmEdicao[] {
+  const valores = dividirNaProporcao(modelo.map((p) => p.valor_centavos), total);
+  return modelo.map((p, i) => emEdicao({ id: crypto.randomUUID(), descricao: p.descricao ?? "", valor_centavos: valores[i], categoria_ids: p.categoria_ids, tags: p.tags ?? [], pessoa: p.pessoa ?? null, item_categoria_id: null }));
+}
+
 /** Uma parte vazia, com o id que nasce no aparelho. */
 export const parteNova = (): ParteEmEdicao => ({ id: crypto.randomUUID(), descricao: "", valor: "", categoria_ids: [], tags: [], pessoa: null, item_categoria_id: null });
 

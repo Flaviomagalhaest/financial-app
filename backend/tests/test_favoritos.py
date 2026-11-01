@@ -25,6 +25,7 @@ def favorito(conta: str, categorias: list[str], **campos) -> dict:
         "tags": [],
         "pessoa": None,
         "valor_centavos": 1200,
+        "partes": [],
     } | campos
 
 
@@ -113,6 +114,7 @@ def test_sugere_so_os_tres_mais_repetidos_com_cinco_usos_ou_mais(casal: Casal):
         "categoria_ids": [comida],
         "tags": [],
         "pessoa": None,
+        "partes": [],
         "valor_centavos": 2000,
         "usos": 8,
     }
@@ -263,3 +265,153 @@ def test_arquivar_a_categoria_nao_perde_o_valor_padrao_mas_tira_o_sugerido(casal
     visto = listar(casal)
     assert visto["favoritos"][0]["valor_padrao_centavos"] == 1500
     assert visto["sugeridos"] == []
+
+
+def parte_do_modelo(categorias: list[str], valor: int, **campos) -> dict:
+    return {
+        "descricao": "",
+        "valor_centavos": valor,
+        "categoria_ids": categorias,
+        "tags": [],
+        "pessoa": None,
+    } | campos
+
+
+def compra_ml(casal: Casal, conta: str, partes: list[dict], **campos) -> dict:
+    """A compra com partes, no formato do lançamento (as partes ganham id)."""
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(
+            conta,
+            [],
+            valor_centavos=sum(p["valor_centavos"] for p in partes),
+            descricao="Mercado Livre",
+            partes=[{"id": str(uuid4())} | p for p in partes],
+        )
+        | campos,
+    )
+    assert resposta.status_code == 201, resposta.text
+    return resposta.json()
+
+
+def favorito_com_partes(conta: str, partes: list[dict], **campos) -> dict:
+    return (
+        favorito(
+            conta,
+            [],
+            descricao="Mercado Livre",
+            valor_centavos=sum(p["valor_centavos"] for p in partes),
+            partes=partes,
+        )
+        | campos
+    )
+
+
+def test_favorito_com_partes_guarda_cada_parte_e_o_valor_padrao_e_o_da_ultima_compra(
+    casal: Casal,
+):
+    conta = casal.conta()
+    roupa, fone, casa = (
+        casal.categoria("Roupa"),
+        casal.categoria("Eletrônico"),
+        casal.categoria("Casa"),
+    )
+    partes = [
+        parte_do_modelo([roupa], 50000, descricao="Vestido", pessoa="esposa", tags=["presente"]),
+        parte_do_modelo([fone], 25000, descricao="Fone", pessoa="flavio"),
+        parte_do_modelo([casa], 25000, descricao="Cortina"),
+    ]
+    novo = favorito_com_partes(conta, partes)
+
+    criado = casal.pedir("flavio", "POST", "/api/favoritos", json=novo)
+
+    assert criado.status_code == 201, criado.text
+    compra_ml(casal, conta, [p | {"valor_centavos": p["valor_centavos"] * 2} for p in partes])
+    [visto] = listar(casal)["favoritos"]
+    assert visto["partes"] == partes
+    assert visto["categoria_ids"] == [] and visto["valor_centavos"] == 100000
+    assert visto["valor_padrao_centavos"] == 200000
+
+
+def test_a_identidade_inclui_as_partes_e_a_proporcao_nao_o_valor(casal: Casal):
+    conta = casal.conta()
+    roupa, fone = casal.categoria("Roupa"), casal.categoria("Eletrônico")
+    partes = [parte_do_modelo([roupa], 600), parte_do_modelo([fone], 400)]
+    casal.pedir("flavio", "POST", "/api/favoritos", json=favorito_com_partes(conta, partes))
+
+    mesma_proporcao = [parte_do_modelo([roupa], 1200), parte_do_modelo([fone], 800)]
+    outra_proporcao = [parte_do_modelo([roupa], 500), parte_do_modelo([fone], 500)]
+    outra_pessoa = [parte_do_modelo([roupa], 600, pessoa="flavio"), parte_do_modelo([fone], 400)]
+    de_novo = casal.pedir(
+        "flavio", "POST", "/api/favoritos", json=favorito_com_partes(conta, mesma_proporcao)
+    )
+    proporcao = casal.pedir(
+        "flavio", "POST", "/api/favoritos", json=favorito_com_partes(conta, outra_proporcao)
+    )
+    pessoa = casal.pedir(
+        "flavio", "POST", "/api/favoritos", json=favorito_com_partes(conta, outra_pessoa)
+    )
+
+    assert de_novo.status_code == 200
+    assert proporcao.status_code == pessoa.status_code == 201
+    assert len(listar(casal)["favoritos"]) == 3
+
+
+def test_a_compra_com_partes_nao_e_a_mesma_que_a_sem_partes(casal: Casal):
+    conta, roupa, fone = casal.conta(), casal.categoria("Roupa"), casal.categoria("Eletrônico")
+    casal.pedir(
+        "flavio",
+        "POST",
+        "/api/favoritos",
+        json=favorito(conta, [roupa], descricao="Mercado Livre", valor_centavos=1000),
+    )
+    compra_ml(casal, conta, [parte_do_modelo([roupa], 600), parte_do_modelo([fone], 400)])
+    lancar(casal, conta, [roupa], descricao="Mercado Livre", valor_centavos=700)
+
+    [visto] = listar(casal)["favoritos"]
+
+    assert visto["valor_padrao_centavos"] == 700
+
+
+def test_a_compra_repetida_com_partes_vira_sugerida_com_as_partes(casal: Casal):
+    conta, roupa, fone = casal.conta(), casal.categoria("Roupa"), casal.categoria("Eletrônico")
+    partes = [parte_do_modelo([roupa], 600), parte_do_modelo([fone], 400)]
+    for _ in range(5):
+        compra_ml(casal, conta, partes)
+
+    [sugerido] = listar(casal)["sugeridos"]
+
+    assert sugerido["usos"] == 5 and sugerido["partes"] == partes
+    assert sugerido["categoria_ids"] == []
+    promovido = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/favoritos",
+        json={k: v for k, v in sugerido.items() if k not in ("chave", "usos")}
+        | {"id": str(uuid4())},
+    )
+    assert promovido.status_code == 201, promovido.text
+    assert listar(casal)["sugeridos"] == []
+
+
+def test_recusa_favorito_com_partes_invalidas(casal: Casal):
+    conta, roupa, fone = casal.conta(), casal.categoria("Roupa"), casal.categoria("Eletrônico")
+    duas = [parte_do_modelo([roupa], 600), parte_do_modelo([fone], 400)]
+
+    uma_so = favorito_com_partes(conta, duas[:1])
+    nao_soma = favorito_com_partes(conta, duas, valor_centavos=999)
+    com_categoria = favorito_com_partes(conta, duas, categoria_ids=[roupa])
+    com_pessoa = favorito_com_partes(conta, duas, pessoa="flavio")
+    sem_categoria = favorito_com_partes(conta, [duas[0], parte_do_modelo([], 400)])
+    categoria_inexistente = favorito_com_partes(
+        conta, [duas[0], parte_do_modelo([str(uuid4())], 400)]
+    )
+
+    codigos = {
+        casal.pedir("flavio", "POST", "/api/favoritos", json=f).status_code
+        for f in [uma_so, nao_soma, com_categoria, com_pessoa, sem_categoria, categoria_inexistente]
+    }
+    assert codigos == {422}
+    assert listar(casal)["favoritos"] == []
