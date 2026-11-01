@@ -43,6 +43,8 @@ test("sugere pelo histórico sem internet: escolher preenche os campos e mantém
 
   await sugestoes.first().click();
   await expect(sugestoes).toHaveCount(0);
+  // Casou por uma palavra do meio: a descrição fica como foi digitada.
+  await expect(page.getByLabel("Descrição")).toHaveValue(s);
   await page.getByRole("button", { name: "Pronto" }).click();
   await expect(page.getByTestId("valor")).toHaveText("R$ 45,00");
   await expect(page.getByRole("button", { name: outraConta })).toHaveAttribute("aria-pressed", "true");
@@ -58,8 +60,12 @@ test("sugere pelo histórico sem internet: escolher preenche os campos e mantém
   await page.getByRole("button", { name: casa }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(sacolao).toContainText("⏳ não enviado");
-  await descrever(page, ["1", "00"], `sacolão são ${s}`);
+  const sugestoesCorrigidas = await descrever(page, ["1", "00"], `sacolão são ${s}`);
   await expect(sugestoes.first()).toContainText(`${casa} · ${outraConta} · Flávio`);
+  // O digitado é o começo da descrição: escolher a completa, sem a parcela.
+  await sugestoesCorrigidas.first().click();
+  await expect(page.getByLabel("Descrição")).toHaveValue(`Sacolão São ${s}`);
+  await page.getByLabel("Descrição").fill(`sacolão são ${s}`);
 
   // Com a rede de volta, a fila sobe e o índice novo já não tem a sugestão corrigida.
   await context.setOffline(false);
