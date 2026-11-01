@@ -15,6 +15,7 @@ from app.banco import conectar
 from app.config import valores_iniciais
 from app.lancamentos import MES_EM_QUE_CONTA, Lancamento, ler_por_ids, url_do_banco
 from app.login import UsuarioLogado
+from app.partes import e_estorno
 from app.transferencias import Transferencia
 
 router = APIRouter(prefix="/api")
@@ -346,10 +347,7 @@ def _qualquer(*condicoes: str | bool) -> str:
 
 def _soma(tipo: str, situacao: str, valor: str) -> str:
     if tipo == "despesa":
-        valor = (
-            "CASE WHEN lancamentos.estorno_de IS NULL"
-            f" AND NOT COALESCE(lancamentos.estorno_avulso, false) THEN {valor} ELSE -{valor} END"
-        )
+        valor = f"CASE WHEN NOT {e_estorno()} THEN {valor} ELSE -{valor} END"
     return (
         f"COALESCE(sum(CASE WHEN lancamentos.tipo = '{tipo}'"
         f" AND lancamentos.situacao = '{situacao}' THEN {valor} END), 0)"

@@ -17,6 +17,7 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual_das_partes, guardar_item_atual_do_lancamento
 from app.login import UsuarioLogado
+from app.partes import e_estorno
 from app.pessoas import configuradas
 
 router = APIRouter(prefix="/api")
@@ -167,6 +168,12 @@ class DadosDoLancamento(BaseModel):
     # fatura traz sem compra identificável. Diminui a fatura e o mês como o estorno, mas não tem o
     # limite do valor de uma compra, e a categoria, as tags e a pessoa são opcionais.
     estorno_avulso: bool | None = None
+    # O estorno de uma parte da compra (ticket 138, ADR 0022): com `estorno_de` na compra com partes,
+    # diz qual parte foi devolvida. Herda as categorias e tags dela e vai até o valor dela.
+    estorno_parte_id: UUID | None = None
+    # O estorno de todas as parcelas (ticket 138, ADR 0016): um crédito só ligado ao parcelamento,
+    # sem `estorno_de`, até a soma das parcelas menos o já estornado.
+    estorno_parcelamento_id: UUID | None = None
     # A escolha do casal do item do planejamento em que o lançamento conta, pela categoria dele
     # que tem o item; sem ela, conta sozinho quando só uma das categorias tem item no mês
     # (ADR 0006). Escolha explícita nunca muda sozinha.
@@ -179,6 +186,11 @@ class DadosDoLancamento(BaseModel):
     _categorias = field_validator("categoria_ids")(sem_repetidas)
     _fatura = field_validator("fatura_mes")(_primeiro_dia)
 
+    @property
+    def estorno_ligado(self) -> bool:
+        """O estorno que devolve uma compra, uma parte dela ou todas as parcelas."""
+        return bool(self.estorno_de or self.estorno_parcelamento_id)
+
 
 class NovoLancamento(DadosDoLancamento):
     # A hora em que a pessoa fez a ação no aparelho; sem ela, a da chegada ao servidor.
@@ -189,11 +201,13 @@ class NovoLancamento(DadosDoLancamento):
         if self.partes:
             if self.categoria_ids or self.tags or self.pessoa or self.item_categoria_id:
                 raise ValueError(SEM_CLASSIFICACAO_PROPRIA)
-            if self.estorno_de or self.estorno_avulso:
+            if self.estorno_de or self.estorno_avulso or self.estorno_parcelamento_id:
                 raise ValueError("estorno não tem partes")
             conferir_partes(self.partes, self.valor_centavos, self.tipo)
             return self
-        if not self.categoria_ids and not self.estorno_avulso:
+        # O estorno ligado a uma compra, a uma parte ou a um parcelamento leva a classificação
+        # deles, e o servidor ignora a que o cliente mandar.
+        if not self.categoria_ids and not (self.estorno_avulso or self.estorno_ligado):
             raise ValueError("lançamento sem categoria")
         if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
             raise ValueError(ITEM_FORA_DAS_CATEGORIAS)
@@ -201,8 +215,12 @@ class NovoLancamento(DadosDoLancamento):
 
     @model_validator(mode="after")
     def _avulso_sem_compra(self):
-        if self.estorno_avulso and self.estorno_de:
+        if self.estorno_avulso and self.estorno_ligado:
             raise ValueError("o estorno avulso não é ligado a uma compra")
+        if self.estorno_de and self.estorno_parcelamento_id:
+            raise ValueError("o estorno é de uma compra ou de todas as parcelas, não dos dois")
+        if self.estorno_parte_id and not (self.estorno_de or self.estorno_parcelamento_id):
+            raise ValueError("a parte estornada é de uma compra")
         return self
 
 
@@ -358,7 +376,7 @@ MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
 # (crédito) diminuem.
 VALOR_COM_SINAL = (
     "CASE WHEN lancamentos.tipo = 'despesa' AND NOT "
-    + "(lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
+    + e_estorno()
     + " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
 )
 # O valor com o sinal do saldo de uma conta, no lançamento `l`: a receita entra, a despesa sai.
@@ -405,7 +423,8 @@ _COLUNAS = (
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
     f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de, parcelamento_id, parcela,"
-    f" {PARCELAS}, item_categoria_id, {ALTERADA_A_MAO}, COALESCE(estorno_avulso, false)"
+    f" {PARCELAS}, item_categoria_id, {ALTERADA_A_MAO}, COALESCE(estorno_avulso, false),"
+    " estorno_parte_id, estorno_parcelamento_id"
 )
 
 
@@ -768,28 +787,33 @@ def apagar_partes(conn, ids: list[UUID], so_as_ligacoes: bool = False) -> None:
 def acompanhar_estornos(conn, compra_id: UUID) -> None:
     """Os estornos de uma compra valem o que ela tem agora: categorias, tags (mesmo arquivadas) e o
     item do planejamento. O estorno não guarda classificação própria (ticket 133, ADR 0016): esta
-    cópia roda onde a compra muda, e a leitura segue igual para quem soma."""
-    estornos = [
-        id
-        for (id,) in conn.execute(
-            "SELECT id FROM lancamentos WHERE estorno_de = %s AND excluido_em IS NULL", (compra_id,)
-        )
-    ]
+    cópia roda onde a compra muda, e a leitura segue igual para quem soma. O estorno de uma parte
+    segue a parte (ticket 138). O que foi estornado antes de a compra ser dividida fica com o que
+    tinha: não há parte a seguir."""
+    estornos = conn.execute(
+        "SELECT id, estorno_parte_id FROM lancamentos WHERE estorno_de = %s"
+        " AND excluido_em IS NULL",
+        (compra_id,),
+    ).fetchall()
     if not estornos:
         return
-    conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = ANY(%s)", (estornos,))
-    conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = ANY(%s)", (estornos,))
-    conn.execute(
-        "INSERT INTO lancamento_categorias (lancamento_id, categoria_id)"
-        " SELECT e, categoria_id FROM unnest(%s::uuid[]) AS e,"
-        " (SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s) AS c",
-        (estornos, compra_id),
-    )
-    conn.execute(
-        "INSERT INTO lancamento_tags (lancamento_id, tag_id)"
-        " SELECT e, tag_id FROM unnest(%s::uuid[]) AS e,"
-        " (SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s) AS t",
-        (estornos, compra_id),
+    (com_partes,) = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM lancamento_partes WHERE lancamento_id = %s)", (compra_id,)
+    ).fetchone()
+    if not com_partes:
+        _copiar_da_compra(conn, [e for e, _ in estornos], compra_id)
+        return
+    for parte_id in {p for _, p in estornos if p}:
+        _copiar_da_parte(conn, [e for e, p in estornos if p == parte_id], parte_id)
+
+
+def _copiar_da_compra(conn, estornos: list[UUID], compra_id: UUID) -> None:
+    _trocar_classificacao(
+        conn,
+        estornos,
+        "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
+        "SELECT tag_id FROM lancamento_tags WHERE lancamento_id = %s",
+        compra_id,
     )
     conn.execute(
         # A escolha do estorno é o item em que a compra conta (a escolha dela ou o item em que
@@ -799,6 +823,62 @@ def acompanhar_estornos(conn, compra_id: UUID) -> None:
         " item_atual_categoria_id = c.item_atual_categoria_id"
         " FROM lancamentos c WHERE c.id = %s AND e.id = ANY(%s)",
         (compra_id, estornos),
+    )
+
+
+def _copiar_da_parte(conn, estornos: list[UUID], parte_id: UUID) -> None:
+    _trocar_classificacao(
+        conn,
+        estornos,
+        "SELECT categoria_id FROM parte_categorias WHERE parte_id = %s",
+        "SELECT tag_id FROM parte_tags WHERE parte_id = %s",
+        parte_id,
+    )
+    conn.execute(
+        "UPDATE lancamentos e SET"
+        " item_categoria_id = COALESCE(p.item_categoria_id, p.item_atual_categoria_id),"
+        " item_atual_categoria_id = p.item_atual_categoria_id"
+        " FROM lancamento_partes p WHERE p.id = %s AND e.id = ANY(%s)",
+        (parte_id, estornos),
+    )
+
+
+def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
+    """O estorno de todas as parcelas vale as categorias e as tags que o parcelamento tem agora
+    (ticket 138). Não tem escolha de item: conta no item do mês, como o crédito avulso."""
+    estornos = [
+        id
+        for (id,) in conn.execute(
+            "SELECT id FROM lancamentos WHERE estorno_parcelamento_id = %s AND excluido_em IS NULL",
+            (parcelamento_id,),
+        )
+    ]
+    if estornos:
+        _trocar_classificacao(
+            conn,
+            estornos,
+            "SELECT categoria_id FROM parcelamento_categorias WHERE parcelamento_id = %s",
+            "SELECT tag_id FROM parcelamento_tags WHERE parcelamento_id = %s",
+            parcelamento_id,
+        )
+
+
+def _trocar_classificacao(
+    conn, estornos: list[UUID], categorias: str, tags: str, dono: UUID
+) -> None:
+    """Troca as categorias e as tags dos estornos pelas que `categorias` e `tags` (consultas de
+    uma coluna, com o id do `dono`) devolvem."""
+    conn.execute("DELETE FROM lancamento_categorias WHERE lancamento_id = ANY(%s)", (estornos,))
+    conn.execute("DELETE FROM lancamento_tags WHERE lancamento_id = ANY(%s)", (estornos,))
+    conn.execute(
+        "INSERT INTO lancamento_categorias (lancamento_id, categoria_id)"
+        f" SELECT e, c FROM unnest(%s::uuid[]) AS e, ({categorias}) AS x(c)",
+        (estornos, dono),
+    )
+    conn.execute(
+        "INSERT INTO lancamento_tags (lancamento_id, tag_id)"
+        f" SELECT e, t FROM unnest(%s::uuid[]) AS e, ({tags}) AS x(t)",
+        (estornos, dono),
     )
 
 
@@ -1029,26 +1109,47 @@ def _conferir_estorno(
     conn, id: UUID, dados: DadosDoLancamento, original_id: UUID
 ) -> frozenset[UUID]:
     """O estorno é de uma compra no cartão que ainda existe, vai para um cartão e, somado aos
-    outros estornos dela, não passa do valor da compra. Devolve as categorias da compra, que valem
-    no estorno mesmo arquivadas (as categorias e tags do estorno são as dela, ticket 133)."""
+    outros estornos dela, não passa do valor da compra. Na compra com partes, é de uma parte e vai
+    até o valor dela; na parcela, também respeita o total do parcelamento. Devolve as categorias
+    da compra (ou da parte), que valem no estorno mesmo arquivadas (as categorias e tags do estorno
+    são as dela, tickets 133 e 138)."""
     if dados.tipo != "despesa" or not faturas.ler_cartao(conn, dados.conta_id):
         raise recusar("estorno é um crédito no cartão")
     original = conn.execute(
-        "SELECT tipo, valor_centavos, conta_id, estorno_de FROM lancamentos"
+        "SELECT tipo, valor_centavos, conta_id, estorno_de, parcelamento_id FROM lancamentos"
         " WHERE id = %s AND excluido_em IS NULL",
         (original_id,),
     ).fetchone()
     if not original:
         raise recusar("compra original não encontrada")
-    tipo, valor, conta, estorno_de = original
+    tipo, valor, conta, estorno_de, parcelamento_id = original
     if estorno_de:
         raise recusar("estorno de estorno")
-    if conn.execute(
-        "SELECT 1 FROM lancamento_partes WHERE lancamento_id = %s LIMIT 1", (original_id,)
-    ).fetchone():
-        raise recusar("o estorno de uma parte da compra ainda não existe")
     if tipo != "despesa" or not faturas.ler_cartao(conn, conta):
         raise recusar("só compra no cartão tem estorno")
+    partes = dict(
+        conn.execute(
+            "SELECT id, valor_centavos FROM lancamento_partes WHERE lancamento_id = %s",
+            (original_id,),
+        ).fetchall()
+    )
+    # O estorno de antes da divisão da compra continua da compra inteira e pode ser editado.
+    ja_existe = conn.execute("SELECT 1 FROM lancamentos WHERE id = %s", (id,)).fetchone()
+    if partes and not dados.estorno_parte_id and not ja_existe:
+        raise recusar("a compra tem partes: escolha a parte que foi estornada")
+    if dados.estorno_parte_id and not partes:
+        raise recusar("a compra não tem partes")
+    if dados.estorno_parte_id and dados.estorno_parte_id not in partes:
+        raise recusar("a parte não é desta compra")
+    if dados.estorno_parte_id:
+        (da_parte,) = conn.execute(
+            "SELECT COALESCE(SUM(valor_centavos), 0) FROM lancamentos"
+            " WHERE estorno_de = %s AND estorno_parte_id = %s AND excluido_em IS NULL"
+            " AND id <> %s",
+            (original_id, dados.estorno_parte_id, id),
+        ).fetchone()
+        if da_parte + dados.valor_centavos > partes[dados.estorno_parte_id]:
+            raise recusar("estornos somam mais que a parte")
     (outros,) = conn.execute(
         "SELECT COALESCE(SUM(valor_centavos), 0) FROM lancamentos"
         " WHERE estorno_de = %s AND excluido_em IS NULL AND id <> %s",
@@ -1056,11 +1157,59 @@ def _conferir_estorno(
     ).fetchone()
     if outros + dados.valor_centavos > valor:
         raise recusar("estornos somam mais que a compra")
+    if parcelamento_id:
+        _conferir_total_do_parcelamento(conn, id, dados.valor_centavos, parcelamento_id)
+    origem = (
+        "SELECT categoria_id FROM parte_categorias WHERE parte_id = %s"
+        if dados.estorno_parte_id
+        else "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s"
+    )
+    return frozenset(c for (c,) in conn.execute(origem, (dados.estorno_parte_id or original_id,)))
+
+
+def _conferir_total_do_parcelamento(
+    conn, id: UUID, valor: int, parcelamento_id: UUID, total: int | None = None
+) -> None:
+    """Os estornos de um parcelamento (de cada parcela e de todas) não passam da soma das parcelas."""
+    if total is None:
+        (total,) = conn.execute(
+            "SELECT valor_total_centavos FROM parcelamentos WHERE id = %s", (parcelamento_id,)
+        ).fetchone()
+    (estornado,) = conn.execute(
+        "SELECT COALESCE(SUM(valor_centavos), 0) FROM lancamentos"
+        " WHERE excluido_em IS NULL AND id <> %s AND (estorno_parcelamento_id = %s"
+        " OR estorno_de IN (SELECT id FROM lancamentos WHERE parcelamento_id = %s))",
+        (id, parcelamento_id, parcelamento_id),
+    ).fetchone()
+    if estornado + valor > total:
+        raise recusar("estornos somam mais que o parcelamento")
+
+
+def _conferir_estorno_de_todas(
+    conn, id: UUID, dados: DadosDoLancamento, parcelamento_id: UUID
+) -> frozenset[UUID]:
+    """O estorno de todas as parcelas é de um parcelamento no cartão, para um cartão, até a soma
+    das parcelas menos o já estornado (de cada parcela e de todas). Devolve as categorias do
+    parcelamento, que valem no estorno (ticket 138)."""
+    if dados.tipo != "despesa" or not faturas.ler_cartao(conn, dados.conta_id):
+        raise recusar("estorno é um crédito no cartão")
+    if dados.estorno_parte_id:
+        raise recusar("o parcelamento ainda não tem partes")
+    achado = conn.execute(
+        "SELECT conta_id, valor_total_centavos FROM parcelamentos WHERE id = %s",
+        (parcelamento_id,),
+    ).fetchone()
+    if not achado:
+        raise recusar("parcelamento não encontrado")
+    conta, total = achado
+    if not faturas.ler_cartao(conn, conta):
+        raise recusar("só compra no cartão tem estorno")
+    _conferir_total_do_parcelamento(conn, id, dados.valor_centavos, parcelamento_id, total)
     return frozenset(
         c
         for (c,) in conn.execute(
-            "SELECT categoria_id FROM lancamento_categorias WHERE lancamento_id = %s",
-            (original_id,),
+            "SELECT categoria_id FROM parcelamento_categorias WHERE parcelamento_id = %s",
+            (parcelamento_id,),
         )
     )
 
@@ -1076,12 +1225,17 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
         )
     ) | categorias_das_partes(conn, novo.id)
     if (
-        novo.estorno_de
+        novo.estorno_ligado
         and not conn.execute("SELECT 1 FROM lancamentos WHERE id = %s", (novo.id,)).fetchone()
     ):
-        da_compra = _conferir_estorno(conn, novo.id, novo, novo.estorno_de)
-        # O estorno não tem categoria nem tag próprias: vale o que a compra tem (arquivadas
-        # incluídas), e o que a pessoa mandou nesses campos não conta.
+        if novo.estorno_de:
+            da_compra = _conferir_estorno(conn, novo.id, novo, novo.estorno_de)
+        else:
+            da_compra = _conferir_estorno_de_todas(
+                conn, novo.id, novo, novo.estorno_parcelamento_id
+            )
+        # O estorno não tem categoria nem tag próprias: vale o que a compra (a parte, o
+        # parcelamento) tem, arquivadas incluídas, e o que a pessoa mandou nesses campos não conta.
         novo = novo.model_copy(update={"categoria_ids": sorted(da_compra)})
         ja_ligadas |= da_compra
     if novo.estorno_avulso and (
@@ -1091,12 +1245,14 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
     mes, _, a_mao = _onde_conta(conn, novo)
     momento = _momento(novo.acao_em)
-    escolhida = None if novo.estorno_de else novo.item_categoria_id
+    escolhida = None if novo.estorno_ligado else novo.item_categoria_id
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
         " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte,"
-        " mes, fatura_a_mao, estorno_de, item_categoria_id, estorno_avulso)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s, %s, %s, %s)"
+        " mes, fatura_a_mao, estorno_de, item_categoria_id, estorno_avulso, estorno_parte_id,"
+        " estorno_parcelamento_id)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s, %s, %s, %s,"
+        " %s, %s)"
         " ON CONFLICT (id) DO NOTHING",
         (
             novo.id,
@@ -1116,11 +1272,15 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             novo.estorno_de,
             escolhida,
             bool(novo.estorno_avulso),
+            novo.estorno_parte_id,
+            novo.estorno_parcelamento_id,
         ),
     ).rowcount
     if gravados and novo.estorno_de:
         guardar_item_atual_do_lancamento(conn, novo.estorno_de)
         acompanhar_estornos(conn, novo.estorno_de)
+    elif gravados and novo.estorno_parcelamento_id:
+        acompanhar_estornos_do_parcelamento(conn, novo.estorno_parcelamento_id)
     elif gravados:
         gravar_categorias(conn, novo.id, novo.categoria_ids)
         _gravar_tags(conn, novo.id, novo.tags, usuario)
@@ -1175,9 +1335,12 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     editado = _com_mudancas(atual, mudancas)
     if editado.partes:
         _conferir_compra_com_partes(conn, atual, editado)
-    elif not editado.categoria_ids and not atual.estorno_avulso:
-        raise recusar("lançamento sem categoria")
-    if atual.estorno_de:
+    else:
+        if atual.partes and "partes" in mudancas:
+            _conferir_juntar_partes(conn, id)
+        if not editado.categoria_ids and not atual.estorno_avulso:
+            raise recusar("lançamento sem categoria")
+    if atual.estorno_de or atual.estorno_parcelamento_id:
         if "tipo" in mudancas:
             raise recusar("estorno é um crédito no cartão")
         if {"categoria_ids", "tags"} & mudancas.keys():
@@ -1185,7 +1348,10 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
         if "item_categoria_id" in mudancas:
             raise recusar("estorno conta no item do planejamento em que a compra conta")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
-            _conferir_estorno(conn, id, editado, atual.estorno_de)
+            if atual.estorno_de:
+                _conferir_estorno(conn, id, editado, atual.estorno_de)
+            else:
+                _conferir_estorno_de_todas(conn, id, editado, atual.estorno_parcelamento_id)
     if atual.estorno_avulso and (
         editado.tipo != "despesa" or not faturas.ler_cartao(conn, editado.conta_id)
     ):
@@ -1270,13 +1436,40 @@ def _conferir_compra_com_partes(conn, atual: Lancamento, editado: DadosDoLancame
         raise recusar(str(e))
     if atual.parcelamento_id or atual.recorrencia_id:
         raise recusar(SO_A_VISTA)
-    if atual.estorno_de or atual.estorno_avulso:
+    if atual.estorno_de or atual.estorno_avulso or atual.estorno_parcelamento_id:
         raise recusar("estorno não tem partes")
+    _conferir_partes_com_estorno(conn, atual.id, editado.partes)
+
+
+def _conferir_juntar_partes(conn, id: UUID) -> None:
     if conn.execute(
-        "SELECT 1 FROM lancamentos WHERE estorno_de = %s AND excluido_em IS NULL LIMIT 1",
-        (atual.id,),
+        "SELECT 1 FROM lancamentos WHERE estorno_de = %s AND estorno_parte_id IS NOT NULL"
+        " AND excluido_em IS NULL LIMIT 1",
+        (id,),
     ).fetchone():
-        raise recusar("a compra tem estorno; exclua o estorno antes de dividi-la em partes")
+        raise recusar("a compra tem estorno de parte; exclua o estorno antes de juntar as partes")
+
+
+def _conferir_partes_com_estorno(conn, id: UUID, partes: list[Parte]) -> None:
+    """A parte que tem estorno não some nem encolhe abaixo do que foi estornado nela. A compra
+    com estorno pode ser dividida: o que foi estornado antes fica ligado à compra inteira."""
+    estornado = dict(
+        conn.execute(
+            "SELECT estorno_parte_id, SUM(valor_centavos)::bigint FROM lancamentos"
+            " WHERE estorno_de = %s AND estorno_parte_id IS NOT NULL AND excluido_em IS NULL"
+            " GROUP BY estorno_parte_id",
+            (id,),
+        ).fetchall()
+    )
+    valores = {p.id: p.valor_centavos for p in partes}
+    for parte_id, centavos in estornado.items():
+        if parte_id not in valores:
+            raise recusar("a parte tem estorno; exclua o estorno antes de tirá-la")
+        if valores[parte_id] < centavos:
+            raise recusar(
+                f"a parte tem estornos de {centavos} centavos: o valor dela não pode ficar"
+                " abaixo disso"
+            )
 
 
 def _parte_normalizada(parte) -> tuple:
@@ -1299,6 +1492,16 @@ def conferir_sem_estorno(conn, ids: list[UUID]) -> None:
         (ids,),
     ).fetchone():
         raise recusar("a compra tem estorno; exclua o estorno antes")
+
+
+def conferir_parcelamento_sem_estorno(conn, parcelamento_id: UUID) -> None:
+    """O parcelamento com estorno de todas as parcelas não se exclui: exclui-se o estorno antes."""
+    if conn.execute(
+        "SELECT 1 FROM lancamentos WHERE estorno_parcelamento_id = %s AND excluido_em IS NULL"
+        " LIMIT 1",
+        (parcelamento_id,),
+    ).fetchone():
+        raise recusar("o parcelamento tem estorno; exclua o estorno antes")
 
 
 def excluir(
@@ -1436,6 +1639,8 @@ def _todos(
             item_categoria_id=l[24],
             alterada_a_mao=l[25],
             estorno_avulso=l[26],
+            estorno_parte_id=l[27],
+            estorno_parcelamento_id=l[28],
             partes=partes.get(l[0], []),
         )
         for l in linhas
