@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  camposQueMudam,
   favoritar,
   identidadeDe,
+  mudarParcela,
   oferecerFavoritar,
   salvarLancamento,
   salvarParcelamento,
@@ -15,18 +17,21 @@ import {
   usePessoas,
   useSugestao,
   useTags,
+  type AlcanceDaMudanca,
+  type AvisoDeRealizadas,
   type Favorito,
   type LancamentoNaTela,
+  type NovoLancamento,
   type Sugestao,
 } from "../dados";
-import { indiceDeEstornos, nomePorId, restanteDaCompra, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
+import { indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaCompra, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
 import { pagaPeloPagamento } from "../cartoes/apresentacao";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
 import { formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
-import { divisao, pedidoDo, problemaDo, rotuloDasParcelas, type ParcelamentoNaFolha } from "./parcelamento";
+import { avisoDasMantidas, comoMuda, divisao, pedidoDo, problemaDo, rotuloDasParcelas, type ParcelamentoNaFolha } from "./parcelamento";
 import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
 import { avisoDasPuladas, ocorrenciasPuladas, parcelasPuladas } from "./puladas";
 import { Teclado } from "./Teclado";
@@ -98,6 +103,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
   const [favoritarAoSalvar, setFavoritarAoSalvar] = useState(false);
   const [favoritoAplicado, setFavoritoAplicado] = useState(false);
   const [estornoAplicado, setEstornoAplicado] = useState(false);
+  // A parcela que muda pergunta o alcance ao salvar (ticket 136); "só esta" é a edição de sempre.
+  const [escolhendoAlcance, setEscolhendoAlcance] = useState(false);
+  // O alcance pedido que muda parcelas já realizadas: nada foi gravado até confirmar.
+  const [realizadas, setRealizadas] = useState<{ alcance: AlcanceComOutras; aviso: AvisoDeRealizadas } | null>(null);
+  // Gravada a mudança, as parcelas que ficaram como estavam porque alguém as mudou à mão.
+  const [mantidas, setMantidas] = useState("");
 
   // Um lançamento novo começa sem a oferta "Favoritar" do anterior.
   useEffect(() => oferecerFavoritar(null), []);
@@ -319,6 +330,44 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     );
   }
 
+  /** O lançamento como a tela o tem, para salvar. */
+  const daTela = (): NovoLancamento => ({
+    id: existente?.id ?? novoId,
+    tipo,
+    valor_centavos: centavos,
+    data,
+    descricao,
+    conta_id: conta,
+    categoria_ids: categoriaIds,
+    pessoa,
+    fatura_mes: noCartao ? faturaMes : null,
+    ...(compraId && { estorno_de: compraId }),
+    item_categoria_id: itemEscolhido,
+    ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
+    tags,
+  });
+
+  // A parcela que o servidor tem pergunta o alcance; a situação é sempre só dela, e não pergunta.
+  const parcelaDoServidor = !!existente?.parcelamento_id && !existente.naoEnviado && !existente.conflito && existente.versao !== undefined;
+  function aoSalvar() {
+    if (parcelaDoServidor && existente && camposQueMudam(daTela(), existente).some((campo) => campo !== "situacao")) return setEscolhendoAlcance(true);
+    void salvar();
+  }
+
+  /** "Esta e as próximas" ou "Todas": muda o parcelamento e precisa de internet, fora da fila. */
+  async function mudarComAlcance(alcance: AlcanceComOutras, confirmarRealizadas: boolean) {
+    if (!existente) return;
+    setErro("");
+    setEnviando(true);
+    const { aviso, motivo, mantidas: quantas } = await mudarParcela(existente, daTela(), alcance, confirmarRealizadas);
+    setEnviando(false);
+    if (aviso) return setRealizadas({ alcance, aviso });
+    setRealizadas(null);
+    if (motivo) return setErro(`Não foi possível mudar as parcelas: ${motivo}.`);
+    if (quantas) return setMantidas(avisoDasMantidas(quantas));
+    window.location.hash = "#/historico";
+  }
+
   async function salvar() {
     setErro("");
     setEnviando(true);
@@ -351,26 +400,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           pessoa,
           ...regraDa(recorrencia, data),
         });
-      else
-        await salvarLancamento(
-          {
-            id: existente?.id ?? novoId,
-            tipo,
-            valor_centavos: centavos,
-            data,
-            descricao,
-            conta_id: conta,
-            categoria_ids: categoriaIds,
-            pessoa,
-            fatura_mes: noCartao ? faturaMes : null,
-            ...(compraId && { estorno_de: compraId }),
-            item_categoria_id: itemEscolhido,
-            ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
-            tags,
-          },
-          !existente,
-          existente ?? undefined,
-        );
+      else await salvarLancamento(daTela(), !existente, existente ?? undefined);
       if (!existente && !estornando) {
         // Favoritar precisa de internet (ADR 0011): sem ela, nem a ⭐ vale nem se oferece.
         const modelo = { id: crypto.randomUUID(), descricao: descricao.trim(), tipo, conta_id: conta, categoria_ids: categoriaIds, tags, pessoa, valor_centavos: centavos };
@@ -384,6 +414,15 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
       setEnviando(false);
     }
   }
+
+  if (mantidas)
+    return (
+      <section className="lancamento">
+        <h2>Editar lançamento</h2>
+        <p role="status">Parcelas mudadas. {mantidas}</p>
+        <a href="#/historico">Voltar ao Histórico</a>
+      </section>
+    );
 
   return (
     <section className="lancamento">
@@ -508,13 +547,61 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
           {erro}
         </p>
       )}
-      <button type="button" disabled={!podeSalvar} onClick={() => void salvar()}>
+      {escolhendoAlcance && existente && (
+        <div className="aviso" role="group" aria-label="Mudar quais parcelas?">
+          <p>Mudar só esta parcela{existente.parcela && existente.parcelas ? ` (${numeroDaParcela(existente.parcela, existente.parcelas)})` : ""} ou as outras também?</p>
+          <div className="acoes">
+            <button type="button" disabled={enviando} onClick={() => void salvar()}>
+              Só esta
+            </button>
+            <button type="button" disabled={enviando || !online} onClick={() => void mudarComAlcance("esta_e_as_proximas", false)}>
+              Esta e as próximas
+            </button>
+            <button type="button" disabled={enviando || !online} onClick={() => void mudarComAlcance("todas", false)}>
+              Todas (inclusive as já realizadas)
+            </button>
+            <button
+              type="button"
+              className="secundario"
+              onClick={() => {
+                setEscolhendoAlcance(false);
+                setRealizadas(null);
+              }}
+            >
+              Voltar
+            </button>
+          </div>
+          {!online && <p className="vazio">Sem internet: só esta parcela muda agora; mudar as outras precisa de internet.</p>}
+          <p className="vazio">Nas outras, o que alguém mudou à mão fica como está.</p>
+        </div>
+      )}
+      {realizadas && existente && (
+        <div className="aviso" role="group" aria-label="Parcelas realizadas que mudam">
+          <p>Estas parcelas já foram realizadas e mudam também; nada foi gravado ainda.</p>
+          <ul>
+            {realizadas.aviso.parcelas.map((m) => (
+              <li key={m.id}>{comoMuda(m, existente.parcelas ?? m.parcela)}</li>
+            ))}
+          </ul>
+          <div className="acoes">
+            <button type="button" disabled={enviando || !online} onClick={() => void mudarComAlcance(realizadas.alcance, true)}>
+              Mudar mesmo assim
+            </button>
+            <button type="button" className="secundario" onClick={() => setRealizadas(null)}>
+              Voltar
+            </button>
+          </div>
+        </div>
+      )}
+      <button type="button" disabled={!podeSalvar || escolhendoAlcance} onClick={aoSalvar}>
         Salvar
       </button>
       <a href="#/historico">Cancelar</a>
     </section>
   );
 }
+
+type AlcanceComOutras = Exclude<AlcanceDaMudanca, "so_esta">;
 
 /** A fatura em que o estorno vai cair: a escolhida à mão ou a primeira que fecha depois da data (ADR 0015). */
 function FaturaDoEstorno({ cartaoId, data, faturaMes }: { cartaoId: string; data: string; faturaMes: string | null }) {

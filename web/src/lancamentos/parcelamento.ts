@@ -1,5 +1,7 @@
 import { config } from "../config";
-import type { NovoParcelamento } from "../dados";
+import type { AvisoDeRealizadas, NovoParcelamento } from "../dados";
+import { numeroDaParcela } from "./apresentacao";
+import { dataPorExtenso } from "./datas";
 import { dividirEmParcelas, formatarCentavos } from "./dinheiro";
 
 /** Sem juros, o total se divide pelas parcelas; com juros, cada parcela vale o digitado. */
@@ -46,4 +48,19 @@ export function rotuloDasParcelas(valores: Valores): string {
   const { total, primeira, outras } = divisao(valores);
   const parcelas = primeira === outras ? `${valores.parcelas}x de ${formatarCentavos(outras)}` : `${valores.parcelas}x: ${formatarCentavos(primeira)} na 1ª e ${formatarCentavos(outras)} nas outras`;
   return valores.valor_total_centavos == null ? `${parcelas}, total ${formatarCentavos(total)}` : parcelas;
+}
+
+/** Quantas das outras parcelas ficaram como estavam, numa frase; vazio quando nenhuma ficou. */
+export function avisoDasMantidas(mantidas: number | undefined): string {
+  if (!mantidas) return "";
+  return mantidas === 1
+    ? "1 parcela ficou como estava: alguém a mudou à mão."
+    : `${mantidas} parcelas ficaram como estavam: alguém as mudou à mão.`;
+}
+
+/** "01/06 · R$ 100,00 → R$ 200,00 · 01/08/2026", ou "· sai": uma parcela realizada que a mudança muda. */
+export function comoMuda(m: AvisoDeRealizadas["parcelas"][number], parcelas: number): string {
+  const valor = m.valor_novo_centavos != null && m.valor_novo_centavos !== m.valor_centavos ? `${formatarCentavos(m.valor_centavos)} → ${formatarCentavos(m.valor_novo_centavos)}` : formatarCentavos(m.valor_centavos);
+  const data = m.data_nova && m.data_nova !== m.data ? `${dataPorExtenso(m.data)} → ${dataPorExtenso(m.data_nova)}` : dataPorExtenso(m.data);
+  return [numeroDaParcela(m.parcela, parcelas), valor, data, m.sai ? "sai" : ""].filter(Boolean).join(" · ");
 }

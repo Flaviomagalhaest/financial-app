@@ -45,6 +45,7 @@ import {
   pelaData,
   regraAceita,
   RELIDAS_DEPOIS_DE_REGRA,
+  alteracao as alteracaoDo,
   type Ajustes,
   type Remessa,
 } from "./fila";
@@ -83,6 +84,8 @@ export type Historico = components["schemas"]["Historico"];
 export type Parcelamento = components["schemas"]["Parcelamento"];
 export type AlteracaoDeParcelamento = components["schemas"]["AlteracaoDeParcelamento"];
 export type AvisoDeRealizadas = components["schemas"]["AvisoDeRealizadas"];
+/** "Só esta", "Esta e as próximas" ou "Todas (inclusive as já realizadas)" (ticket 136). */
+export type AlcanceDaMudanca = components["schemas"]["AlteracaoDaParcela"]["alcance"];
 export { oQueSobra, type Aviso } from "./aviso";
 export type { Ajustes, Campo } from "./fila";
 export type { ContextoDaSugestao, FonteDeSugestao, Sugestao } from "./sugestao";
@@ -1005,8 +1008,11 @@ async function relerAsParcelas() {
   await Promise.all([...caminhos.map((c) => buscarEGuardar<unknown>(c, LEITURAS[c])), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
 }
 
-/** O que o servidor disse da correção: gravou (`{}`), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`). */
-export type Correcao = { aviso?: AvisoDeRealizadas; motivo?: string };
+/**
+ * O que o servidor disse da correção: gravou (`mantidas`, as parcelas que ficaram como estavam por
+ * terem sido mudadas à mão), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`).
+ */
+export type Correcao = { mantidas?: number; aviso?: AvisoDeRealizadas; motivo?: string };
 
 /**
  * Corrigir o parcelamento muda uma regra e precisa de internet (ADR 0011): não entra na fila. Se
@@ -1018,11 +1024,43 @@ export async function corrigirParcelamento(id: string, alteracao: AlteracaoDePar
     const { data, error, response } = await api.PATCH("/api/parcelamentos/{id}", { params: { path: { id } }, body: alteracao });
     if (data) {
       await relerAsParcelas();
-      return {};
+      return { mantidas: data.parcelas_mantidas };
     }
     if (response.status === 409) return { aviso: error as AvisoDeRealizadas };
     const detalhe = (error as { detail?: unknown } | undefined)?.detail;
     return { motivo: typeof detalhe === "string" ? detalhe : "o servidor recusou a correção" };
+  } catch {
+    return { motivo: "sem resposta do servidor" };
+  }
+}
+
+/** Os campos que a edição muda no lançamento que a tela mostrava (sem a versão). */
+export function camposQueMudam(lancamento: NovoLancamento, mostrado: LancamentoNaTela): string[] {
+  return Object.keys(alteracaoDo(lancamento, baseDe(mostrado))).filter((campo) => campo !== "versao");
+}
+
+/**
+ * Muda a parcela nela e nas próximas ou em todas (ticket 136). Muda o parcelamento, então precisa
+ * de internet, como a correção dele (ADR 0011): não entra na fila. "Só esta" é a edição comum, pela
+ * fila (`salvarLancamento`). Só os campos que mudaram vão, sobre a versão que a tela mostrava.
+ */
+export async function mudarParcela(
+  mostrado: LancamentoNaTela,
+  lancamento: NovoLancamento,
+  alcance: Exclude<AlcanceDaMudanca, "so_esta">,
+  confirmarRealizadas: boolean,
+): Promise<Correcao> {
+  const corpo = { ...alteracaoDo(lancamento, baseDe(mostrado)), alcance, confirmar_realizadas: confirmarRealizadas };
+  try {
+    const { data, error, response } = await api.PATCH("/api/parcelas/{id}", { params: { path: { id: mostrado.id } }, body: corpo });
+    if (data) {
+      await relerAsParcelas();
+      return { mantidas: data.parcelas_mantidas };
+    }
+    if (response.status === 409) return { aviso: error as AvisoDeRealizadas };
+    if (response.status === 410) return { motivo: "a parcela foi excluída" };
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return { motivo: typeof detalhe === "string" ? detalhe : "o servidor recusou a mudança" };
   } catch {
     return { motivo: "sem resposta do servidor" };
   }
