@@ -95,6 +95,7 @@ def test_compra_com_juros_pelo_valor_da_parcela_e_reenvio_devolve_o_gravado(casa
         "alterado_por": "flavio",
         "alterado_em": None,
         "parcelas_puladas": 0,
+        "mudanca_recusada": None,
     }
     assert casal.pedir("esposa", "GET", "/api/parcelamentos").json() == [primeira.json()]
     geradas = parcelas(casal, novo["id"])
