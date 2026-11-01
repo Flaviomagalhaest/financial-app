@@ -4,6 +4,9 @@ import type { Cartao, NovoLancamento } from "../dados";
 
 type ComNome = { id: string; nome: string };
 
+/** `3` e "conta atrasada"/"contas atrasadas" vira "3 contas atrasadas". */
+export const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
 export const nomePorId = (lista: ComNome[], id: string) => lista.find((i) => i.id === id)?.nome ?? "?";
 
 /** A descrição, ou as categorias quando não há descrição. */

@@ -8863,6 +8863,27 @@
         ],
         "title": "PreviaDaEdicaoEmLote"
       },
+      "ProximoPrevisto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "data"
+        ],
+        "title": "ProximoPrevisto",
+        "description": "O previsto de hoje em diante com que a regra segue: a tela abre a recorrência por ele."
+      },
       "PuladoNoDesfazer": {
         "properties": {
           "lancamento_id": {
@@ -9163,6 +9184,16 @@
             "type": "string",
             "format": "date-time",
             "title": "Alterado Em"
+          },
+          "proximo_previsto": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProximoPrevisto"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
