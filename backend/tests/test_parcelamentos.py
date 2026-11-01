@@ -89,6 +89,7 @@ def test_compra_com_juros_pelo_valor_da_parcela_e_reenvio_devolve_o_gravado(casa
         "tags": ["casa nova"],
         "pessoa": "esposa",
         "item_categoria_id": None,
+        "dia_do_lancamento": "2026-10-28",
         "criado_por": "flavio",
         "criado_em": None,
         "alterado_por": "flavio",
@@ -184,6 +185,47 @@ def test_boleto_com_todas_as_parcelas_antes_de_hoje_e_recusado_sem_gravar(casal:
     assert resposta.status_code == 422
     assert resposta.json()["detail"] == "o parcelamento termina antes de hoje"
     assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
+
+
+def test_boleto_enviado_no_dia_seguinte_tem_a_parcela_do_dia_do_lancamento_realizada(
+    casal: Casal,
+):
+    # Lançado sem internet em 27/10, com a 1ª parcela nesse dia; a fila só subiu em 28/10.
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], data="2026-10-27", dia_do_lancamento="2026-10-27")
+    lote = {"acoes": [{"acao": "criar_parcelamento", "parcelamento": novo}]}
+
+    [aceita] = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json=lote).json()[
+        "resultados"
+    ]
+
+    assert aceita["resultado"] == "aceita"
+    assert (
+        aceita["parcelamento"]["dia_do_lancamento"],
+        aceita["parcelamento"]["parcelas_puladas"],
+    ) == (
+        "2026-10-27",
+        0,
+    )
+    assert [(l["parcela"], l["data"], l["situacao"]) for l in parcelas(casal, novo["id"])] == [
+        (1, "2026-10-27", "realizado"),
+        (2, "2026-11-27", "previsto"),
+        (3, "2026-12-27", "previsto"),
+    ]
+
+
+def test_boleto_cuja_ultima_parcela_cai_no_dia_do_lancamento_nao_e_recusado(casal: Casal):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(
+        conta, [emprestimo], data="2026-09-27", parcelas=2, dia_do_lancamento="2026-10-27"
+    )
+
+    resposta = casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+
+    assert (resposta.status_code, resposta.json()["parcelas_puladas"]) == (201, 1)
+    assert [(l["parcela"], l["situacao"]) for l in parcelas(casal, novo["id"])] == [
+        (2, "realizado")
+    ]
 
 
 def test_boleto_automatico_com_data_no_passado_nao_realiza_o_que_passou(casal: Casal):
@@ -1391,3 +1433,46 @@ def test_a_tarefa_diaria_e_os_automaticos_com_o_parcelamento_excluido_nao_fazem_
     assert automaticos.realizar_automaticos(database_url, UUID(novo["id"])) == 0
     assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
     assert casal.pedir("flavio", "GET", "/api/lancamentos").json() == []
+
+
+def test_a_correcao_que_para_no_meio_pula_as_mesmas_parcelas_quando_a_tarefa_a_retoma_noutro_dia(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    # A 1ª está em 30/10: hoje (28/10) ela ainda não chegou, mas no dia 31 já passou.
+    novo = criar_geladeira(casal, casal.conta(), data="2026-10-30")
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        with pytest.raises(RuntimeError):
+            mudar(casal, novo["id"], data="2026-08-30")
+
+    no_dia(monkeypatch, "2026-10-31")
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 1
+
+    # Como se terminasse no dia do pedido: nenhuma prevista fica atrasada na data nova.
+    assert valores(casal, novo["id"]) == []
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 0
+
+
+def test_a_busca_das_puladas_nao_le_as_parcelas_do_boleto_que_nao_pulou_nenhuma(
+    casal: Casal, database_url: str
+):
+    from app import parcelamentos
+
+    criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    original = parcelamentos._puladas_que_chegaram
+    with parcelamentos.conectar(database_url) as conn:
+        [(id,)] = conn.execute("SELECT id FROM parcelamentos").fetchall()
+        regra = parcelamentos._ler(conn, "id = %s", (id,))[0]
+        executadas = []
+        executar = conn.execute
+
+        class Espia:
+            def __getattr__(self, nome):
+                return getattr(conn, nome)
+
+            def execute(self, sql, *args, **kw):
+                executadas.append(sql)
+                return executar(sql, *args, **kw)
+
+        assert original(Espia(), regra, 3) == []
+    assert not any("SELECT parcela FROM lancamentos" in sql for sql in executadas)

@@ -32,7 +32,7 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
-from app.recorrencias import mais_meses
+from app.recorrencias import com_o_dia_do_lancamento, dia_do_lancamento_vigente, mais_meses
 
 router = APIRouter(prefix="/api")
 
@@ -58,6 +58,9 @@ class DadosDoParcelamento(BaseModel):
     # A escolha do item do planejamento, pela categoria dele, com que as parcelas nascem
     # (ADR 0006).
     item_categoria_id: UUID | None = None
+    # O dia (São Paulo) em que o casal lançou no aparelho; sem ele, o da chegada. No boleto, o
+    # "antes de hoje" se conta a partir dele e a parcela desse dia nasce realizada (ticket 127).
+    dia_do_lancamento: date | None = None
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
@@ -166,7 +169,7 @@ class RealizadasMudam(Exception):
 
 _COLUNAS = (
     "id, valor_total_centavos, parcelas, data, automatico, descricao, conta_id, pessoa,"
-    " criado_por, criado_em, alterado_por, alterado_em, item_categoria_id"
+    " criado_por, criado_em, alterado_por, alterado_em, item_categoria_id, dia_do_lancamento"
 )
 _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
 
@@ -174,6 +177,15 @@ _NOMES_DAS_COLUNAS = _COLUNAS.replace(" ", "").split(",")
 def valor_da_parcela(total: int, parcelas: int, n: int) -> int:
     """O total dividido por igual; os centavos que sobram vão na 1ª."""
     return total // parcelas + (total % parcelas if n == 1 else 0)
+
+
+def parcelas_puladas(parcelas: int, data: date, hoje: date, no_cartao: bool) -> int:
+    """Quantas parcelas do boleto caem antes de `hoje` e não viram lançamento (ticket 87); o
+    cartão não pula nenhuma. O app repete esta conta para avisar (ADR 0018); a tabela
+    `tabelas-de-teste/puladas.json` vale para os dois."""
+    if no_cartao:
+        return 0
+    return sum(1 for n in range(1, parcelas + 1) if mais_meses(data, n - 1) < hoje)
 
 
 def realiza_em(conn, conta_id: UUID, parcela: int, mes: date, data: date) -> date:
@@ -229,12 +241,14 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
     ]
 
 
-def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
+def _gerar_um_lote(conn, id: UUID) -> bool:
     """Grava as próximas parcelas, quantas cabem numa transação, e devolve se pode faltar
     alguma. O id de cada parcela vem do parcelamento e do número dela: gerar de novo não
-    duplica. No boleto, a parcela de antes de hoje não vira lançamento (ticket 87) e a de hoje
-    nasce realizada `na_criacao`; o cartão segue o ticket 99. Antes das próximas, nascem as
-    puladas que uma correção trouxe para hoje ou depois (ticket 126)."""
+    duplica. No boleto, a parcela de antes de hoje não vira lançamento (ticket 87); enquanto o
+    parcelamento é o que o casal lançou, o "hoje" é o dia do lançamento
+    (`dia_do_lancamento_vigente`), e a parcela desse dia nasce realizada. O cartão segue o
+    ticket 99. Antes das próximas, nascem as puladas que uma correção trouxe para hoje ou
+    depois (ticket 126)."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         return False  # excluído no meio da geração
     [regra] = lidos
@@ -259,17 +273,19 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     else:
         return False
     dia_de_hoje = lancamentos.hoje()
+    lancado = dia_do_lancamento_vigente(regra)
+    desde = lancado or dia_de_hoje
     for n in numeros:
         lancamento_id = uuid5(id, str(n))
         dia = regra.data if no_cartao else mais_meses(regra.data, n - 1)
-        if not no_cartao and dia < dia_de_hoje:
+        if not no_cartao and dia < desde:
             continue
         mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia, n)
         # A parcela automática que já chegou nasce realizada; o resto, prevista.
         chegou = realiza_em(conn, regra.conta_id, n, mes, dia) <= dia_de_hoje
         situacao = (
             "realizado"
-            if chegou and (regra.automatico or (na_criacao and not no_cartao))
+            if chegou and (regra.automatico or (dia == lancado and not no_cartao))
             else "previsto"
         )
         gravado = conn.execute(
@@ -319,10 +335,21 @@ def _gerar_um_lote(conn, id: UUID, na_criacao: bool) -> bool:
     return proximas[-1] < regra.parcelas
 
 
-def _puladas_que_chegaram(conn, regra: Parcelamento, geradas: int) -> list[int]:
+def _puladas_que_chegaram(
+    conn, regra: Parcelamento, geradas: int, lancamentos_existentes: int | None = None
+) -> list[int]:
     """As parcelas do boleto que a geração pulou por estarem antes de hoje (não têm lançamento,
-    nem excluído) e que a data corrigida pôs em hoje ou depois. O cartão não pula nenhuma."""
+    nem excluído) e que a data corrigida pôs em hoje ou depois. O cartão não pula nenhuma.
+    Só lê as parcelas do boleto quando falta alguma: `geradas` maior que o número de
+    lançamentos (ticket 131)."""
     if faturas.ler_cartao(conn, regra.conta_id) is not None:
+        return []
+    if lancamentos_existentes is None:
+        (lancamentos_existentes,) = conn.execute(
+            "SELECT count(*) FROM lancamentos WHERE parcelamento_id = %s AND parcela <= %s",
+            (regra.id, regra.parcelas),
+        ).fetchone()
+    if lancamentos_existentes >= min(geradas, regra.parcelas):
         return []
     existem = {
         n
@@ -358,10 +385,10 @@ def _reviver_as_que_a_correcao_tirou(
             _aplicar(conn, regra, correcao, tags, regra.alterado_por, agora)
 
 
-def gerar_as_parcelas(url: str | None, id: UUID, na_criacao: bool = False) -> None:
+def gerar_as_parcelas(url: str | None, id: UUID) -> None:
     """Gera, em lotes de uma transação cada, as parcelas que faltam. Se parar no meio, o reenvio
     ou a tarefa diária continuam de onde parou."""
-    while em_transacao(url, lambda conn: _gerar_um_lote(conn, id, na_criacao)):
+    while em_transacao(url, lambda conn: _gerar_um_lote(conn, id)):
         pass
 
 
@@ -449,8 +476,9 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
     no_cartao = faturas.ler_cartao(conn, novo.conta_id) is not None
     if no_cartao and novo.automatico is False:
         raise recusar("o parcelamento no cartão é automático")
+    novo = com_o_dia_do_lancamento(novo)
     # Como a recorrência (ticket 87): o boleto que já venceu inteiro não teria parcela nenhuma.
-    if not no_cartao and mais_meses(novo.data, novo.parcelas - 1) < lancamentos.hoje():
+    if not no_cartao and mais_meses(novo.data, novo.parcelas - 1) < novo.dia_do_lancamento:
         raise recusar("o parcelamento termina antes de hoje")
     # A fatura da 1ª parcela (no cartão sem dia de fechamento, não há como escolher) é
     # conferida antes de gravar: senão a regra ficaria sem parcelas, e a tarefa diária
@@ -461,7 +489,7 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
     tags = ids_das_tags(conn, novo.tags, usuario, set())
     gravado = conn.execute(
         f"INSERT INTO parcelamentos ({_COLUNAS}, geradas)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, 0)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s, now(), %s, %s, 0)"
         # Dois reenvios ao mesmo tempo: o segundo fica com o que o primeiro gravou.
         " ON CONFLICT (id) DO NOTHING",
         (
@@ -476,6 +504,7 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
             usuario,
             usuario,
             novo.item_categoria_id,
+            novo.dia_do_lancamento,
         ),
     ).rowcount
     if not gravado:
@@ -496,7 +525,7 @@ def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bo
 def criar(url: str | None, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bool]:
     """Grava o parcelamento e gera as parcelas; serve à rota e ao lote da fila."""
     criado, gravado = em_transacao(url, lambda conn: gravar(conn, novo, usuario))
-    gerar_as_parcelas(url, novo.id, na_criacao=True)
+    gerar_as_parcelas(url, novo.id)
     # Lido de novo depois da geração: as parcelas puladas só se sabem com ela. Excluído por
     # outra sessão no meio, fica o que foi gravado.
     with conectar(url) as conn:
@@ -590,7 +619,11 @@ CLASSIFICACAO = frozenset({"descricao", "categoria_ids", "tags", "pessoa", "item
 
 
 def _correcoes(
-    conn, regra: Parcelamento, geradas: int, classificacao: frozenset[str]
+    conn,
+    regra: Parcelamento,
+    geradas: int,
+    classificacao: frozenset[str],
+    dia_da_correcao: date | None = None,
 ) -> list[_Correcao]:
     """As parcelas que não estão como o parcelamento manda, na ordem do número. A que uma pessoa
     editou à mão (valor, data, conta ou fatura) fica como está nessas coisas. A classificação só
@@ -600,7 +633,9 @@ def _correcoes(
     No boleto, nada da correção vira lançamento antes de hoje (ticket 87): a prevista que a data
     nova leva de hoje ou depois para antes sai como pulada (`excluido_pela_regra`), e volta se
     outra correção a trouxer de novo para hoje ou depois. A atrasada (já antes de hoje) segue
-    prevista com a data nova; a realizada muda, com a confirmação."""
+    prevista com a data nova; a realizada muda, com a confirmação. O "de hoje ou depois" é do dia
+    em que a correção foi pedida (`corrigido_em`), não do dia em que o lote roda: a que para no
+    meio termina igual noutro dia (ticket 131)."""
     parcelas = conn.execute(
         f"SELECT id, parcela, data, valor_centavos, descricao, pessoa, situacao,"
         f" excluido_em IS NOT NULL, {lancamentos.VERSAO}, item_categoria_id, mes,"
@@ -626,6 +661,11 @@ def _correcoes(
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     dia_de_hoje = lancamentos.hoje()
+    if dia_da_correcao is None:
+        linha = conn.execute(
+            "SELECT corrigido_em FROM parcelamentos WHERE id = %s", (regra.id,)
+        ).fetchone()
+        dia_da_correcao = (linha[0] if linha else None) or dia_de_hoje
     quer = {
         "descricao": regra.descricao,
         "pessoa": regra.pessoa,
@@ -685,7 +725,7 @@ def _correcoes(
                 if pulada:
                     continue
                 acao = "pular"  # a que o encolher tirou volta, mas já passou
-            elif acao == "atualizar" and situacao == "previsto" and dia_antes >= dia_de_hoje:
+            elif acao == "atualizar" and situacao == "previsto" and dia_antes >= dia_da_correcao:
                 acao = "pular"
         if acao != "atualizar" or mudou:
             feitas.append(
@@ -748,7 +788,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
     classificacao = frozenset(CLASSIFICACAO & pedidas.keys()) | _classificacao_pendente(conn, id)
     realizadas = [
         t.aviso
-        for t in _correcoes(conn, nova, geradas_depois, classificacao)
+        for t in _correcoes(conn, nova, geradas_depois, classificacao, lancamentos.hoje())
         # A que sai pulada sendo realizada já estava excluída (o encolher a tirou): nada muda.
         if t.realizada and t.acao not in ("reviver", "pular") and t.muda_o_cronograma
     ]
@@ -763,7 +803,8 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
     if not conn.execute(
         "UPDATE parcelamentos SET valor_total_centavos = %s, parcelas = %s, data = %s,"
         " descricao = %s, pessoa = %s, item_categoria_id = %s, geradas = %s, alterado_por = %s,"
-        " classificacao_pendente = %s, alterado_em = now() WHERE id = %s AND geradas = %s",
+        " classificacao_pendente = %s, corrigido_em = %s, alterado_em = now()"
+        " WHERE id = %s AND geradas = %s",
         (
             nova.valor_total_centavos,
             nova.parcelas,
@@ -774,6 +815,7 @@ def _mudar(conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str) -> 
             geradas_depois,
             usuario,
             ",".join(sorted(classificacao)),
+            lancamentos.hoje(),
             id,
             geradas,
         ),

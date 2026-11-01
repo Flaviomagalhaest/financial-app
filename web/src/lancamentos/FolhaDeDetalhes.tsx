@@ -38,7 +38,7 @@ type Props = {
     valor: RecorrenciaNaFolha | null;
     problema: string | null; onMudar: (recorrencia: RecorrenciaNaFolha | null) => void;
     /** Quantas ocorrências caem antes de hoje e não serão lançadas, dito antes de salvar. */
-    aviso: string | null;
+    aviso: string;
   };
   /**
    * Só na despesa nova: o "Parcelado" de "Repete?". Com ele, salvar cria o parcelamento, e a data é a
@@ -50,7 +50,7 @@ type Props = {
     rotulo: string;
     problema: string | null;
     /** Quantas parcelas vencem antes de hoje e não serão lançadas, dito antes de salvar. */
-    aviso: string | null;
+    aviso: string;
     onMudar: (parcelamento: ParcelamentoNaFolha | null) => void;
   };
   onFechar: () => void;

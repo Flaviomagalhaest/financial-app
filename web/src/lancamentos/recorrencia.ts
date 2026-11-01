@@ -1,5 +1,5 @@
 import type { AlteracaoDeRecorrencia, NovaRecorrencia } from "../dados";
-import { dataPorExtenso, maisDias, maisMeses } from "./datas";
+import { dataPorExtenso } from "./datas";
 
 /** O "Repete? Recorrente" da folha de detalhes, como a tela o edita. */
 export type RecorrenciaNaFolha = {
@@ -76,27 +76,4 @@ export function oQueMuda(alteracao: AlteracaoDeRecorrencia): string {
   else if (alteracao.ate) partes.push(`termina em ${dataPorExtenso(alteracao.ate)}`);
   else if ("ate" in alteracao || "vezes" in alteracao) partes.push("sem fim");
   return partes.join(", ");
-}
-
-/**
- * Quantas ocorrências caem antes de `hoje` e por isso não viram lançamento. A conta repete a do
- * servidor (`_gerar_um_lote`: o calendário é contado do início, o fim por `vezes` ou `ate` vale)
- * só para mostrar, como a ADR 0018.
- */
-export function ocorrenciasPuladas(r: RecorrenciaNaFolha, inicio: string, hoje: string): number {
-  if (problemaDa(r, inicio)) return 0;
-  let puladas = 0;
-  for (let n = 0; ; n++) {
-    if (r.fim === "vezes" && n >= r.vezes) break;
-    const dia = r.unidade === "semanas" ? maisDias(inicio, n * r.aCada * 7) : maisMeses(inicio, n * r.aCada);
-    if (dia >= hoje || (r.fim === "data" && dia > r.ate)) break;
-    puladas++;
-  }
-  return puladas;
-}
-
-/** "1 ocorrência não será lançada: cai antes de hoje.", ou `null` sem puladas. */
-export function avisoDasPuladas(puladas: number, termo: { um: string; varios: string }): string | null {
-  if (puladas <= 0) return null;
-  return puladas === 1 ? `1 ${termo.um} não será lançada: cai antes de hoje.` : `${puladas} ${termo.varios} não serão lançadas: caem antes de hoje.`;
 }

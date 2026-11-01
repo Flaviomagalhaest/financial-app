@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from app import lancamentos
+from app import lancamentos, recorrencias
 from app.tarefa_diaria import fazer_tarefa_diaria
 from tests.conftest import Casal
 
@@ -126,6 +126,116 @@ def test_inicio_no_passado_so_lanca_de_hoje_em_diante_e_a_de_hoje_nasce_realizad
     assert saldo == -18990
 
 
+def test_enviada_no_dia_seguinte_a_ocorrencia_do_dia_do_lancamento_nasce_realizada(
+    casal: Casal,
+):
+    # Lançada sem internet em 27/10, com a 1ª ocorrência nesse dia; a fila só subiu em 28/10.
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-09-27", dia_do_lancamento="2026-10-27")
+
+    resposta = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    assert resposta.status_code == 201
+    assert resposta.json()["dia_do_lancamento"] == "2026-10-27"
+    assert [(l["ocorrencia"], l["data"], l["situacao"]) for l in gerados(casal, nova["id"])][
+        :2
+    ] == [(2, "2026-10-27", "realizado"), (3, "2026-11-27", "previsto")]
+
+
+def test_o_dia_do_lancamento_conta_no_fim_e_nao_passa_de_hoje(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    ontem = recorrencia(
+        conta, [luz], inicio="2026-10-27", ate="2026-10-27", dia_do_lancamento="2026-10-27"
+    )
+    # O relógio do aparelho adiantado não lança nada antes da hora: vale hoje.
+    adiantado = recorrencia(conta, [luz], inicio="2026-10-29", dia_do_lancamento="2026-10-29")
+
+    assert casal.pedir("flavio", "POST", "/api/recorrencias", json=ontem).status_code == 201
+    adiantada = casal.pedir("flavio", "POST", "/api/recorrencias", json=adiantado)
+
+    assert [(l["data"], l["situacao"]) for l in gerados(casal, ontem["id"])] == [
+        ("2026-10-27", "realizado")
+    ]
+    assert adiantada.json()["dia_do_lancamento"] == "2026-10-28"
+    assert gerados(casal, adiantado["id"])[0]["situacao"] == "previsto"
+
+
+def test_pelo_lote_da_fila_a_ocorrencia_de_ontem_nasce_realizada(casal: Casal):
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-10-27", vezes=2, dia_do_lancamento="2026-10-27")
+    lote = {"acoes": [{"acao": "criar_recorrencia", "recorrencia": nova}]}
+
+    [aceita] = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json=lote).json()[
+        "resultados"
+    ]
+
+    assert (aceita["resultado"], aceita["recorrencia"]["dia_do_lancamento"]) == (
+        "aceita",
+        "2026-10-27",
+    )
+    assert [(l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-10-27", "realizado"),
+        ("2026-11-27", "previsto"),
+    ]
+
+
+def test_a_tarefa_diaria_termina_a_geracao_parada_a_partir_do_dia_do_lancamento(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    # O envio gravou a regra em 28/10, mas a geração caiu antes do primeiro lote.
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-10-28", vezes=3)
+
+    def cai(conn, id):
+        raise RuntimeError("a Lambda acabou")
+
+    monkeypatch.setattr(recorrencias, "_gerar_um_lote", cai)
+    with pytest.raises(RuntimeError):
+        casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    monkeypatch.undo()
+    no_dia(monkeypatch, "2026-10-29")
+
+    fazer_tarefa_diaria(database_url)
+
+    assert [(l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-10-28", "realizado"),
+        ("2026-11-28", "previsto"),
+        ("2026-12-28", "previsto"),
+    ]
+
+
+def test_mudada_a_regra_a_geracao_nao_volta_ao_dia_do_lancamento(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    # Lançada em 27/10 por 1 vez; em 28/10 o casal a estende para 3 vezes, a partir da 2ª.
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(
+        conta,
+        [luz],
+        inicio="2026-10-27",
+        a_cada=1,
+        unidade="semanas",
+        vezes=1,
+        dia_do_lancamento="2026-10-27",
+    )
+    casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    no_dia(monkeypatch, "2026-11-04")
+
+    resposta = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/recorrencias/{nova['id']}",
+        json={"a_partir_da_ocorrencia": 2, "vezes": 3},
+    )
+
+    assert resposta.status_code == 200
+    # A 2ª (03/11) já tinha passado quando a regra mudou: não vira lançamento.
+    assert [(l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-10-27", "realizado"),
+        ("2026-11-10", "previsto"),
+    ]
+
+
 def test_automatico_com_inicio_no_passado_nao_realiza_o_que_passou(casal: Casal):
     conta, assinatura = casal.conta(), casal.categoria("Assinaturas")
     nova = recorrencia(
@@ -190,6 +300,8 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
         "ate": None,
         "item_categoria_id": None,
         "ocorrencia_do_inicio": 1,
+        # Sem o dia no pedido, vale o da chegada.
+        "dia_do_lancamento": "2026-10-28",
         "criado_por": "flavio",
         "alterado_por": "flavio",
         "criado_em": None,
@@ -227,6 +339,7 @@ def test_sem_internet_a_recorrencia_sobe_no_lote_como_um_pedido_so(casal: Casal)
         "pessoa": None,
         "item_categoria_id": None,
         "ocorrencia_do_inicio": 1,
+        "dia_do_lancamento": "2026-10-28",
         "criado_por": "esposa",
         "alterado_por": "esposa",
         "criado_em": None,
