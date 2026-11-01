@@ -1,7 +1,7 @@
 # Sugestão no aparelho até o índice ser buscado de novo
 
 Type: task
-Status: needs-triage
+Status: resolved
 Blocked by: —
 Skills: `triage`; depois `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -19,6 +19,9 @@ Decidir na triagem se alguma destas imprecisões vale o código que custa e, se 
 
 ## Checklist
 
-- [ ] Triagem: o que corrigir e o que fica como está (anotar aqui)
-- [ ] O que for corrigido, com teste de navegador (`web/e2e/sugestao.spec.ts`) ou de API (`backend/tests/test_sugestao.py`)
+- [x] Triagem: o que corrigir e o que fica como está (anotar aqui)
+  - **Mudar só o valor**: fica como está. Só põe a sugestão primeiro até o índice ser buscado de novo, e corrigir exigiria o aparelho saber o que mudou no enviado, o que o contrato não traz.
+  - **Sugestão antiga de lançamento corrigido/excluído offline**: fica como está. Exigiria o índice dizer de quais lançamentos veio cada sugestão (mudança de contrato e de tamanho); ela fica atrás da nova e some na próxima busca.
+  - **Normalização**: corrigido o dígito (`\d` do Python agora é ASCII, como o do aparelho). As marcas (`combining` contra `\p{M}`) só diferem em escritas fora do português e ficam como estão.
+- [x] O que for corrigido, com teste de navegador (`web/e2e/sugestao.spec.ts`) ou de API (`backend/tests/test_sugestao.py`): `test_chave_so_tira_parcela_com_digitos_ascii`
 - [ ] Verificações do projeto rodando e PR aberto para `main`
