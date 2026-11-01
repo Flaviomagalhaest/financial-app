@@ -307,7 +307,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, tipoInicial = "des
     itemTocado,
   );
   // Só a despesa à vista se divide em partes (a parcelada e a recorrente vêm nos tickets 139 e 140).
-  const podeDividir = tipo === "despesa" && !estornando && !recorrencia && !parcelamento && !existente?.parcelamento_id && !existente?.recorrencia_id && !partes;
+  const podeDividir = !aCarregar && tipo === "despesa" && !estornando && !recorrencia && !parcelamento && !existente?.parcelamento_id && !existente?.recorrencia_id && !partes;
 
   /** A compra se divide em duas partes: a primeira com o que ela tinha, a segunda vazia, com o resto do valor. */
   function dividir() {
