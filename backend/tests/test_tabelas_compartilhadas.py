@@ -1,6 +1,6 @@
 """As regras que o app repete para o aviso de planejamento sem internet (ticket 52) e para mostrar
-a divisão do parcelamento (ticket 98), contra as mesmas tabelas que `web/e2e/tabelas.spec.ts`
-roda no código do app."""
+a divisão do parcelamento (ticket 98) e das partes da recorrência (ticket 140), contra as mesmas
+tabelas que `web/e2e/tabelas.spec.ts` roda no código do app."""
 
 import json
 from datetime import date
@@ -12,7 +12,9 @@ from fastapi import HTTPException
 
 from app.faturas import Titular, escolher_fatura
 from app.item_em_que_conta import onde_conta
+from app.lancamentos import Parte
 from app.parcelamentos import parcelas_puladas, valor_da_parcela
+from app.partes import redividir
 from app.planejamento import percentual
 from app.recorrencias import NovaRecorrencia, ocorrencias_puladas
 
@@ -43,6 +45,18 @@ def test_divisao_das_parcelas(caso: dict):
     assert {valor_da_parcela(total, parcelas, n) for n in range(2, parcelas + 1)} == {
         caso["outras"]
     }
+
+
+@pytest.mark.parametrize("caso", casos("redivisao-das-partes"), ids=lambda c: c["caso"])
+def test_redivisao_das_partes(caso: dict):
+    partes = [Parte.model_construct(id=uuid4(), valor_centavos=peso) for peso in caso["pesos"]]
+    if caso["resultado"] is None:
+        with pytest.raises(ValueError):
+            redividir(partes, caso["valor"])
+        return
+    divididas = redividir(partes, caso["valor"])
+    assert [p.valor_centavos for p in divididas] == caso["resultado"]
+    assert [p.id for p in divididas] == [p.id for p in partes]
 
 
 @pytest.mark.parametrize("caso", casos("mes-da-compra"), ids=lambda c: c["caso"])

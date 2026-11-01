@@ -252,7 +252,7 @@ def test_parcela_ainda_nao_se_divide_em_partes(casal: Casal):
 
     assert (dividida.status_code, dividida.json()["detail"]) == (
         422,
-        "por enquanto, só a compra à vista tem partes",
+        "por enquanto, só a compra à vista e a recorrência têm partes",
     )
 
 

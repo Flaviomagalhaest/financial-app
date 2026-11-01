@@ -112,6 +112,14 @@ export function partesParaSalvar(partes: ParteEmEdicao[], total: number): Parte[
   return partes.map(({ valor: _, ...p }, i) => ({ ...p, valor_centavos: valores[i] }));
 }
 
+/** A parte como o servidor a compara (`parte_normalizada`): categorias e tags sem ordem, tags sem maiúsculas. */
+function comparavel(p: Parte): string {
+  return JSON.stringify([p.id, p.descricao ?? "", p.valor_centavos, [...p.categoria_ids].sort(), (p.tags ?? []).map(chaveDaTag).sort(), p.pessoa ?? null, p.item_categoria_id ?? null]);
+}
+
+/** As duas listas têm as mesmas partes, na mesma ordem. */
+export const mesmasPartes = (a: Parte[], b: Parte[]) => a.length === b.length && a.every((p, i) => comparavel(p) === comparavel(b[i]));
+
 type PropsDoEditor = {
   partes: ParteEmEdicao[];
   total: number;

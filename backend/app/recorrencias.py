@@ -13,15 +13,22 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from app import faturas, lancamentos
+from app import faturas, lancamentos, partes_da_regra
 from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.lancamentos import (
+    SEM_CLASSIFICACAO_PROPRIA,
+    Parte,
+    apagar_partes,
     conferir_ligacoes,
+    conferir_partes,
     excluir,
     gravar_categorias,
+    gravar_partes,
     ids_das_tags,
+    o_que_as_partes_mudam,
+    parte_normalizada,
     recusar,
     registrar_mudancas,
     sem_repetidas,
@@ -30,6 +37,7 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
+from app.partes import NAO_DA_PARA_DIVIDIR, redividir
 
 router = APIRouter(prefix="/api")
 
@@ -44,7 +52,8 @@ class NovaRecorrencia(BaseModel):
     automatico: bool = False
     descricao: str = ""
     conta_id: UUID
-    categoria_ids: list[UUID] = Field(min_length=1)
+    # Vazia só na regra com partes, que não tem classificação própria.
+    categoria_ids: list[UUID] = []
     tags: list[str] = []
     # O id de uma pessoa do casal, que os previstos herdam; sem ela, a regra é do conjunto.
     pessoa: str | None = None
@@ -62,9 +71,23 @@ class NovaRecorrencia(BaseModel):
     # fila pode subir no dia seguinte: "antes de hoje" se conta a partir dele (ticket 127), e a
     # ocorrência desse dia nasce realizada. Depois de hoje não vale: o relógio estava adiantado.
     dia_do_lancamento: date | None = None
+    # As partes da despesa que junta coisas diferentes (o combo de celular e internet), no valor
+    # da regra: cada ocorrência se divide por elas na proporção (ADR 0022). Com partes, a regra
+    # não tem categoria, tag, pessoa nem item próprios.
+    partes: list[Parte] = []
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
+
+    @model_validator(mode="after")
+    def _classificacao(self):
+        if self.partes:
+            if self.categoria_ids or self.tags or self.pessoa or self.item_categoria_id:
+                raise ValueError(SEM_CLASSIFICACAO_PROPRIA)
+            conferir_partes(self.partes, self.valor_centavos, self.tipo)
+        elif not self.categoria_ids:
+            raise ValueError("recorrência sem categoria")
+        return self
 
     @model_validator(mode="after")
     def _regra_coerente(self):
@@ -105,12 +128,14 @@ class CamposDaRecorrencia(BaseModel):
 
     # Sem `None` no tipo: mandar null num campo obrigatório da regra é erro, não "limpar".
     tipo: Literal["despesa", "receita"] = Field(default=None)
+    # Sem as partes na mudança, a regra com partes as divide de novo pelo valor novo.
     valor_centavos: int = Field(default=None, gt=0)
     tipo_do_valor: Literal["fixo", "estimado"] = Field(default=None)
     automatico: bool = Field(default=None)
     descricao: str = Field(default=None)
     conta_id: UUID = Field(default=None)
-    categoria_ids: list[UUID] = Field(default=None, min_length=1)
+    # Vazia só junto com as partes, que tiram a classificação própria da regra.
+    categoria_ids: list[UUID] = Field(default=None)
     tags: list[str] = Field(default=None)
     pessoa: str | None = None
     # Vazio tira a escolha; ela também sai com a categoria dela.
@@ -124,6 +149,9 @@ class CamposDaRecorrencia(BaseModel):
     # null tira o fim.
     ate: date | None = None
     vezes: int | None = Field(default=None, ge=1)
+    # A lista inteira de partes, como no lançamento: duas ou mais dividem a regra; uma só é tirar
+    # a penúltima, e a regra volta a ser uma com a classificação dela (ADR 0022).
+    partes: list[Parte] = Field(default=None)
 
     _tags = field_validator("tags")(tags_limpas)
     _categorias = field_validator("categoria_ids")(sem_repetidas)
@@ -155,6 +183,7 @@ _NOMES_DOS_CAMPOS = {
     "inicio": "calendário",
     "ate": "fim",
     "vezes": "fim",
+    "partes": "partes",
 }
 
 
@@ -167,6 +196,8 @@ def _comparavel(campo: str, valor):
         return frozenset(t.casefold() for t in valor or ())
     if campo == "pessoa":
         return valor or None
+    if campo == "partes":
+        return tuple(map(parte_normalizada, valor or ()))
     return valor
 
 
@@ -182,6 +213,9 @@ def _mudou_depois(
         novos.setdefault("vezes", None)
     if novos.get("vezes") is not None:
         novos.setdefault("ate", None)
+    # Dividir ou juntar mexe também na classificação própria da regra (ADR 0022).
+    if alteracao.partes is not None:
+        novos |= o_que_as_partes_mudam(alteracao.partes, novos)
     mudados = [
         campo
         for campo in _NOMES_DOS_CAMPOS
@@ -313,12 +347,14 @@ def _ler(
         (ids,),
     ):
         tags.setdefault(recorrencia_id, []).append(nome)
+    partes = partes_da_regra.ler(conn, ids)
     proximos = _proximos_previstos(conn, ids) if com_proximo else {}
     return [
         Recorrencia(
             **dict(zip(_NOMES_DAS_COLUNAS, linha)),
             categoria_ids=categorias.get(linha[0], []),
             tags=tags.get(linha[0], []),
+            partes=partes.get(linha[0], []),
             proximo_previsto=proximos.get(linha[0]),
         )
         for linha in linhas
@@ -339,8 +375,13 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
     tags = _tags_da_regra(conn, id)
+    tags_das_partes = partes_da_regra.tags(conn, id)
     # O DSQL aceita até 3.000 linhas por transação: a mesma folga da restauração.
-    por_lote = max(1, LINHAS_POR_LOTE // (1 + len(categorias) + len(tags)))
+    por_lote = max(
+        1,
+        LINHAS_POR_LOTE
+        // (1 + len(categorias) + len(tags) + 2 * partes_da_regra.linhas(regra.partes)),
+    )
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     lancada = dia_do_lancamento_vigente(regra)
     desde = lancada or dia_de_hoje
@@ -403,7 +444,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
             registrar_mudancas(
                 conn,
                 lancamento_id,
-                [*_campos_da_regra(regra), "data"],
+                [*_campos_da_regra(regra), "data", "partes"],
                 nova,
                 regra.alterado_por,
                 datetime.now(UTC),
@@ -438,6 +479,16 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
             ).rowcount
         if not gravado:
             continue
+        # O excluído que volta ainda guarda as partes de quando saiu: valem as da regra de hoje.
+        apagar_partes(conn, [lancamento_id])
+        if regra.partes:
+            gravar_partes(
+                conn,
+                lancamento_id,
+                partes_da_regra.do_lancamento(lancamento_id, regra.partes),
+                regra.alterado_por,
+                tags_das_partes,
+            )
         for categoria in categorias:
             conn.execute(
                 "INSERT INTO lancamento_categorias (lancamento_id, categoria_id) VALUES (%s, %s)",
@@ -555,6 +606,7 @@ def _gravar(conn, nova: NovaRecorrencia, usuario: str) -> tuple[Recorrencia, boo
             "INSERT INTO recorrencia_tags (recorrencia_id, tag_id) VALUES (%s, %s)",
             (nova.id, tag),
         )
+    partes_da_regra.gravar(conn, nova.id, nova.partes, usuario, set())
     return _ler(conn, "id = %s", (nova.id,))[0], True
 
 
@@ -595,7 +647,15 @@ def _fora_do_fim(regra: Recorrencia, n: int, dia: date) -> bool:
 def _por_lote(regra: Recorrencia) -> int:
     """Quantos previstos cabem numa transação, pelas linhas que cada um mexe (a folga do DSQL é a
     mesma da geração)."""
-    return max(1, LINHAS_POR_LOTE // (10 + 2 * (len(regra.categoria_ids) + len(regra.tags))))
+    return max(
+        1,
+        LINHAS_POR_LOTE
+        // (
+            10
+            + 2 * (len(regra.categoria_ids) + len(regra.tags))
+            + 3 * partes_da_regra.linhas(regra.partes)
+        ),
+    )
 
 
 class _Retirada(NamedTuple):
@@ -667,6 +727,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         (ids,),
     ):
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
+    partes = lancamentos.ler_partes(conn, ids)
     regras = _campos_da_regra(regra)
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     trabalho: list[tuple[UUID, int, list[str], date, bool] | _Retirada] = []
@@ -699,6 +760,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             "categoria_ids": categorias.get(lancamento_id, set()),
             "tags": tags.get(lancamento_id, set()),
             "item_categoria_id": item_categoria_id,
+            "partes": list(map(parte_normalizada, partes.get(lancamento_id, []))),
         }
         # Antes da última mudança de calendário a regra não sabe mais a data: fica a que tem.
         dia_novo = data_da_ocorrencia(regra, n) if n >= regra.ocorrencia_do_inicio else dia
@@ -708,12 +770,19 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         if dia_novo < dia_de_hoje <= dia:
             trabalho.append(_Retirada(lancamento_id, n, antes_de_hoje=True))
             continue
-        quer = regras | {"data": dia_novo}
+        quer = regras | {
+            "data": dia_novo,
+            "partes": [
+                parte_normalizada(p)
+                for p in partes_da_regra.do_lancamento(lancamento_id, regra.partes)
+            ],
+        }
         mudou = [campo for campo in quer if quer[campo] != tem[campo]]
         fica_automatico = regra.automatico and (automatico or dia_novo >= dia_de_hoje)
         if mudou or automatico != fica_automatico:
             trabalho.append((lancamento_id, versao, mudou, quer["data"], fica_automatico))
     tags_da_regra = _tags_da_regra(conn, id)
+    tags_das_partes = partes_da_regra.tags(conn, id)
     agora = datetime.now(UTC)
     por_lote = _por_lote(regra)
     for item in trabalho[:por_lote]:
@@ -763,6 +832,14 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
                     "INSERT INTO lancamento_tags (lancamento_id, tag_id) VALUES (%s, %s)",
                     (lancamento_id, tag),
                 )
+        if "partes" in mudou:
+            gravar_partes(
+                conn,
+                lancamento_id,
+                partes_da_regra.do_lancamento(lancamento_id, regra.partes),
+                usuario,
+                tags_das_partes,
+            )
         lancamentos.acompanhar_estornos(conn, lancamento_id)
     return len(trabalho) > por_lote
 
@@ -799,6 +876,14 @@ def _mudar(
         pedidas.setdefault("vezes", None)
     if pedidas.get("vezes") is not None:
         pedidas.setdefault("ate", None)
+    if alteracao.partes is not None:
+        pedidas |= o_que_as_partes_mudam(alteracao.partes, pedidas)
+    elif "valor_centavos" in pedidas and atual.partes:
+        # O valor novo divide as partes de novo, na proporção que tinham (ADR 0022).
+        try:
+            pedidas["partes"] = redividir(atual.partes, pedidas["valor_centavos"])
+        except ValueError as erro:
+            raise recusar(NAO_DA_PARA_DIVIDIR) from erro
     if {"a_cada", "unidade", "inicio"} & pedidas.keys():
         if n < atual.ocorrencia_do_inicio:
             raise recusar("o calendário já mudou depois dessa ocorrência")
@@ -810,9 +895,14 @@ def _mudar(
         nova = Recorrencia(**(atual.model_dump() | pedidas))
     except ValidationError as erro:
         raise recusar("; ".join(e["msg"] for e in erro.errors())) from erro
-    conferir_ligacoes(conn, nova, atual.conta_id, frozenset(atual.categoria_ids))
+    conferir_ligacoes(
+        conn,
+        nova,
+        atual.conta_id,
+        frozenset(atual.categoria_ids) | partes_da_regra.categorias(conn, id),
+    )
     tags_de_antes = set(_tags_da_regra(conn, id))
-    tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes)
+    tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes | partes_da_regra.tags(conn, id))
     if not conn.execute(
         "UPDATE recorrencias SET tipo = %s, valor_centavos = %s, tipo_do_valor = %s,"
         " automatico = %s, descricao = %s, conta_id = %s, pessoa = %s, item_id = %s,"
@@ -853,6 +943,10 @@ def _mudar(
             conn.execute(
                 "INSERT INTO recorrencia_tags (recorrencia_id, tag_id) VALUES (%s, %s)", (id, tag)
             )
+    if _comparavel("partes", nova.partes) != _comparavel("partes", atual.partes):
+        partes_da_regra.gravar(
+            conn, id, nova.partes, usuario, tags_de_antes | partes_da_regra.tags(conn, id)
+        )
     return _ler(conn, "id = %s", (id,))[0]
 
 
@@ -930,6 +1024,7 @@ def excluir_regra(url: str | None, id: UUID, usuario: str) -> None:
     def tirar(conn) -> None:
         conn.execute("DELETE FROM recorrencia_categorias WHERE recorrencia_id = %s", (id,))
         conn.execute("DELETE FROM recorrencia_tags WHERE recorrencia_id = %s", (id,))
+        partes_da_regra.apagar(conn, [id])
         conn.execute("DELETE FROM recorrencias WHERE id = %s", (id,))
 
     em_transacao(url, tirar)

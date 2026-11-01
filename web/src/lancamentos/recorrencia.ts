@@ -66,6 +66,7 @@ const NOMES_DOS_CAMPOS: Partial<Record<keyof AlteracaoDeRecorrencia, string>> = 
   a_cada: "calendário",
   unidade: "calendário",
   inicio: "calendário",
+  partes: "partes",
 };
 
 /** "valor, descrição", "termina na 3ª vez", "termina em 10/12/2026": o que a mudança não enviada faz. */

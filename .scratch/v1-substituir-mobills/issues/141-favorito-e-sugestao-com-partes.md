@@ -23,3 +23,4 @@ O favorito e a sugestão por descrição passam a levar as partes da compra.
 ## Notas
 
 - Decisão Q45 do ticket 94; ADR 0022.
+- O 140 trouxe a conta da proporção: `redividir` em `backend/app/partes.py` e em `web/src/lancamentos/dinheiro.ts`, presas por `tabelas-de-teste/redivisao-das-partes.json`. O favorito pode dividir as partes pelo valor com ela.

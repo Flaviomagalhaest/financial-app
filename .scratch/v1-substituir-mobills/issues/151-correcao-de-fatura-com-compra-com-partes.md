@@ -18,3 +18,7 @@ Na correção de fatura paga (`#/cartoes/<cartão>/<mês>`, "Corrigir fatura"), 
 - [ ] Decidir na tela como a diferença se divide entre as partes (a última parte, como na tela de lançar)
 - [ ] `compras_editadas` leva as partes acertadas
 - [ ] Teste de API e de navegador; verificações do projeto e PR para `main`
+
+## Notas
+
+- Desde o 140, a ocorrência da recorrência com partes divide as partes de novo quando só o valor muda (`editar` em `backend/app/lancamentos.py`), e a correção de fatura já funciona para ela; falta a compra à vista (e a parcela, quando o 139 chegar).
