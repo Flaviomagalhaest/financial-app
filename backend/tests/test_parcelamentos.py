@@ -1476,3 +1476,39 @@ def test_a_busca_das_puladas_nao_le_as_parcelas_do_boleto_que_nao_pulou_nenhuma(
 
         assert original(Espia(), regra, 3) == []
     assert not any("SELECT parcela FROM lancamentos" in sql for sql in executadas)
+
+
+def test_mudar_so_a_classificacao_nao_tira_a_parcela_do_dia_do_lancamento(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    # Boleto lançado ontem cuja geração parou antes do primeiro lote; antes da tarefa diária, a
+    # classificação do parcelamento muda (como a edição em lote grava: `alterado_em` anda, o
+    # calendário fica). A edição em lote só alcança o parcelamento por uma parcela gerada, por
+    # isso a mudança vai direto no banco (ticket 132).
+    import psycopg
+
+    from app import parcelamentos
+
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], data="2026-10-27", dia_do_lancamento="2026-10-27")
+    with monkeypatch.context() as queda:
+        queda.setattr(parcelamentos, "_gerar_um_lote", lambda *_: False)
+        resposta = casal.pedir("esposa", "POST", "/api/parcelamentos", json=novo)
+        assert resposta.status_code == 201, resposta.text
+    assert parcelas(casal, novo["id"]) == []
+    with psycopg.connect(database_url) as conn:
+        conn.execute(
+            "UPDATE parcelamentos SET item_categoria_id = NULL, alterado_por = 'esposa',"
+            " alterado_em = alterado_em + interval '1 minute' WHERE id = %s",
+            (novo["id"],),
+        )
+
+    fazer_tarefa_diaria(database_url)
+
+    assert [(l["parcela"], l["data"], l["situacao"]) for l in parcelas(casal, novo["id"])] == [
+        (1, "2026-10-27", "realizado"),
+        (2, "2026-11-27", "previsto"),
+        (3, "2026-12-27", "previsto"),
+    ]
+    [gravado] = casal.pedir("esposa", "GET", "/api/parcelamentos").json()
+    assert gravado["parcelas_puladas"] == 0
