@@ -1,7 +1,7 @@
 # Correção só de classificação faz o parcelamento perder o dia do lançamento
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,5 +15,5 @@ O ticket 132 diz que o parcelamento continua "o que o casal lançou" até uma co
 
 ## Checklist
 
-- [ ] O dia do lançamento só deixa de valer quando a correção muda valor, parcelas ou data. Conferir antes se `corrigido_em` também serve ao refazer de uma correção que parou no meio (ticket 131).
-- [ ] Teste: boleto lançado ontem com a geração parada, correção só da descrição, tarefa diária: a parcela de ontem nasce realizada.
+- [x] O dia do lançamento só deixa de valer quando a correção muda valor, parcelas ou data. Conferir antes se `corrigido_em` também serve ao refazer de uma correção que parou no meio (ticket 131).
+- [x] Teste: boleto lançado ontem com a geração parada, correção só da descrição, tarefa diária: a parcela de ontem nasce realizada.

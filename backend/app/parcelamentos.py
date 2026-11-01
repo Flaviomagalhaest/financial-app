@@ -249,7 +249,7 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
 
 def _dia_do_lancamento_vigente(conn, regra: Parcelamento) -> date | None:
     """O dia do lançamento, enquanto o parcelamento não foi corrigido (`corrigido_em`, que só a
-    correção grava). A classificação que a edição em lote muda também mexe em `alterado_em` e
+    correção de valor, parcelas ou data grava). A classificação que a edição em lote muda também mexe em `alterado_em` e
     não no calendário, por isso não conta (ticket 132)."""
     return regra.dia_do_lancamento if _corrigido_em(conn, regra.id) is None else None
 
@@ -936,7 +936,11 @@ def gravar_correcao(
             geradas_depois,
             usuario,
             _gravar_classificacao(classificacao),
-            lancamentos.hoje(),
+            # Só a correção de valor, parcelas ou data tira o dia do lançamento (ticket 144).
+            lancamentos.hoje()
+            if (nova.valor_total_centavos, nova.parcelas, nova.data)
+            != (atual.valor_total_centavos, atual.parcelas, atual.data)
+            else _corrigido_em(conn, id),
             id,
             geradas,
         ),

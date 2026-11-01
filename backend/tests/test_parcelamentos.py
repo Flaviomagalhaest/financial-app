@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app import lancamentos
+from app import lancamentos, parcelamentos
 from app.tarefa_diaria import fazer_tarefa_diaria
 from tests.conftest import Casal
 
@@ -1518,6 +1518,28 @@ def test_mudar_so_a_classificacao_nao_tira_a_parcela_do_dia_do_lancamento(
     ]
     [gravado] = casal.pedir("esposa", "GET", "/api/parcelamentos").json()
     assert gravado["parcelas_puladas"] == 0
+
+
+def test_corrigir_so_a_descricao_nao_tira_a_parcela_do_dia_do_lancamento(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    # Boleto lançado ontem cuja geração parou antes do primeiro lote; antes da tarefa diária, a
+    # correção muda só a descrição: o calendário fica, o dia do lançamento segue valendo (ticket 144).
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], data="2026-10-27", dia_do_lancamento="2026-10-27")
+    with monkeypatch.context() as queda:
+        queda.setattr(parcelamentos, "_gerar_um_lote", lambda *_: False)
+        assert casal.pedir("esposa", "POST", "/api/parcelamentos", json=novo).status_code == 201
+        assert mudar(casal, novo["id"], descricao="Outro nome").status_code == 200
+    assert parcelas(casal, novo["id"]) == []
+
+    fazer_tarefa_diaria(database_url)
+
+    assert [(l["parcela"], l["data"], l["situacao"]) for l in parcelas(casal, novo["id"])] == [
+        (1, "2026-10-27", "realizado"),
+        (2, "2026-11-27", "previsto"),
+        (3, "2026-12-27", "previsto"),
+    ]
 
 
 def test_parcelamento_com_parcela_estornada_nao_se_exclui_e_fica_como_estava(casal: Casal):
