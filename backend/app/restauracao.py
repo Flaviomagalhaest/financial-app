@@ -1,9 +1,12 @@
 """Restauração pela linha de comando, rodada pelo dono com a credencial dele (ADR 0012).
 
-    uv run python -m app.restauracao <arquivo.zip> [--esvaziar]
+    uv run python -m app.restauracao <arquivo.zip> [--esvaziar | --refazer-importacao]
 
 Use pelo `scripts/restaurar-backup.sh`, que acha o banco do ambiente. Depois de gravar, exporta
 de novo e exige o mesmo zip: a ida e volta do CI, agora no banco de verdade.
+
+`--refazer-importacao` troca a importação do Mobills gravada pela do zip, em qualquer ambiente,
+até a virada (ticket 91): recusa, sem apagar nada, se o banco ou o zip tiver uso pelo app.
 """
 
 import argparse
@@ -20,6 +23,7 @@ from app.backup import (
     RestauracaoRecusada,
     esvaziar_banco,
     gerar_backup,
+    refazer_importacao,
     restaurar_backup,
 )
 from app.banco import conectar
@@ -28,10 +32,16 @@ from app.banco import conectar
 def main(argumentos: list[str] | None = None) -> int:
     leitor = argparse.ArgumentParser(prog="python -m app.restauracao")
     leitor.add_argument("arquivo", type=Path, help="o zip do backup")
-    leitor.add_argument(
+    modo = leitor.add_mutually_exclusive_group()
+    modo.add_argument(
         "--esvaziar",
         action="store_true",
         help="apaga os dados do banco antes de restaurar; só com AMBIENTE=dev",
+    )
+    modo.add_argument(
+        "--refazer-importacao",
+        action="store_true",
+        help="troca a importação do Mobills pela do zip; recusa se o banco tiver uso pelo app",
     )
     opcoes = leitor.parse_args(argumentos)
     # Esvaziar é o ensaio no dev com o backup de prod; em prod, só se restaura num banco vazio.
@@ -43,10 +53,17 @@ def main(argumentos: list[str] | None = None) -> int:
         if opcoes.esvaziar:
             esvaziar_banco(conn)
             print("banco esvaziado")
+        perdidos: list[str] = []
         try:
-            manifesto = restaurar_backup(conn, backup)
+            if opcoes.refazer_importacao:
+                manifesto, perdidos = refazer_importacao(conn, backup)
+            else:
+                manifesto = restaurar_backup(conn, backup)
         except RestauracaoRecusada as erro:
-            print(f"recusada, nada foi gravado: {erro}", file=sys.stderr)
+            nada = (
+                "nada foi apagado nem gravado" if opcoes.refazer_importacao else "nada foi gravado"
+            )
+            print(f"recusada, {nada}: {erro}", file=sys.stderr)
             return 1
         except RestauracaoDesfeita as erro:
             print(f"falhou e foi desfeita, o banco está vazio: {erro}", file=sys.stderr)
@@ -54,6 +71,10 @@ def main(argumentos: list[str] | None = None) -> int:
         for tabela, conferido in sorted(manifesto["tabelas"].items()):
             print(f"{tabela}: {conferido['linhas']} linhas")
         print("restaurado e conferido contra o manifesto")
+        if opcoes.refazer_importacao:
+            print("importação refeita: banco esvaziado e restaurado")
+        for perdido in perdidos:
+            print(f"informe de novo: {perdido}")
         with conn.transaction():
             de_novo = gerar_backup(conn)
     if de_novo == backup:

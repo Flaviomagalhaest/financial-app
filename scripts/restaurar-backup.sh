@@ -3,12 +3,15 @@
 #
 #   scripts/restaurar-backup.sh <prod|dev> <arquivo.zip>              # banco vazio
 #   scripts/restaurar-backup.sh dev <arquivo.zip> --esvaziar          # ensaio com o backup de prod
+#   scripts/restaurar-backup.sh <prod|dev> <importado.zip> --refazer-importacao  # até a virada
 #
 # Só grava num banco vazio, tudo ou nada, e confere contagens e somas contra o manifesto. Com
-# --esvaziar (só no dev), apaga antes os dados do banco. Depois exporta de novo e exige o mesmo zip.
+# --esvaziar (só no dev), apaga antes os dados do banco. Com --refazer-importacao, troca a
+# importação do Mobills gravada pela do zip e recusa, sem apagar nada, se o banco ou o zip tiver
+# uso pelo app (ticket 91). Depois exporta de novo e exige o mesmo zip.
 set -euo pipefail
 
-uso() { sed -n '4,5s/^#   //p' "$0" >&2; exit 2; }
+uso() { sed -n '4,6s/^#   //p' "$0" >&2; exit 2; }
 [ $# -ge 2 ] || uso
 AMBIENTE=$1
 ARQUIVO=$(realpath "$2")

@@ -612,6 +612,12 @@ def conferir_backup(conn: psycopg.Connection, backup: bytes) -> None:
                 )
 
 
+# A autoria de tudo o que o importador do Mobills grava (`app.mobills.backup`).
+IMPORTADO_DO_MOBILLS = "mobills"
+# As colunas de quem criou, mudou, excluiu ou desfez: `criado_por`, `alterado_por`...
+_AUTORIA = "_por"
+
+
 def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> dict:
     """Grava o zip num banco vazio com as mesmas tabelas, tudo ou nada, e confere as contagens
     e as somas do banco contra o manifesto. Um backup de versão antiga é convertido antes.
@@ -622,6 +628,95 @@ def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> dict:
     Uma falha depois do primeiro lote apaga tudo o que foi gravado (`RestauracaoDesfeita`).
     Devolve o manifesto conferido, já na versão atual.
     """
+    manifesto, tabelas = _preparar(conn, backup)
+    com_dados = [
+        tabela
+        for tabela in _tabelas(conn)
+        if conn.execute(f"SELECT EXISTS (SELECT FROM {_identificador(tabela)})").fetchone()[0]
+    ]
+    if com_dados:
+        raise RestauracaoRecusada(f"o banco já tem dados em {', '.join(com_dados)}")
+    _gravar(conn, manifesto, tabelas)
+    return manifesto
+
+
+def refazer_importacao(conn: psycopg.Connection, backup: bytes) -> tuple[dict, list[str]]:
+    """Troca a importação do Mobills gravada pela do zip, até a virada (ticket 91): esvazia o
+    banco e restaura. Só vale quando tudo, no banco e no zip, tem a autoria da importação:
+    uma linha com outro `criado_por`, `alterado_por`, `excluido_por` ou `desfeita_por` é uso
+    pelo app, e o refazer recusa sem apagar nada (`RestauracaoRecusada`). As tabelas sem coluna
+    de autoria (faturas, ligações, exportações) não contam. Devolve o manifesto conferido e o
+    que se perdeu da preparação da virada (`_preparacao_da_virada`), para o dono informar de novo.
+    """
+    manifesto, tabelas = _preparar(conn, backup)
+    if no_zip := [
+        tabela
+        for tabela, (colunas, linhas) in sorted(tabelas.items())
+        if any(
+            linha[i] is not None and linha[i] != IMPORTADO_DO_MOBILLS
+            for linha in linhas
+            for i, coluna in enumerate(colunas)
+            if coluna.endswith(_AUTORIA)
+        )
+    ]:
+        raise RestauracaoRecusada(
+            f"o backup não é só da importação: tem outra autoria em {', '.join(no_zip)}"
+        )
+    no_banco = []
+    for tabela in _tabelas(conn):
+        if autoria := [c for c in _colunas(conn, tabela) if c.endswith(_AUTORIA)]:
+            outra = " OR ".join(f"{_identificador(c)} <> %(autor)s" for c in autoria)
+            consulta = f"SELECT EXISTS (SELECT FROM {_identificador(tabela)} WHERE {outra})"
+            if conn.execute(consulta, {"autor": IMPORTADO_DO_MOBILLS}).fetchone()[0]:
+                no_banco.append(tabela)
+    if no_banco:
+        raise RestauracaoRecusada(
+            f"o banco tem uso pelo app em {', '.join(no_banco)}: o refazer só troca um banco"
+            " que tem só a importação"
+        )
+    perdidos = _preparacao_da_virada(conn, tabelas)
+    esvaziar_banco(conn)
+    _gravar(conn, manifesto, tabelas)
+    return manifesto, perdidos
+
+
+def _preparacao_da_virada(conn: psycopg.Connection, tabelas: Tabelas) -> list[str]:
+    """O que o dono informou no app depois de restaurar a importação e que não muda a autoria:
+    saldo de abertura, limite e titular, datas das faturas. O refazer não leva isso adiante."""
+    colunas, linhas = tabelas["faturas"]
+    datas_no_zip = {
+        (linha[colunas.index("cartao_id")], linha[colunas.index("mes")]): (
+            linha[colunas.index("fechamento")],
+            linha[colunas.index("vencimento")],
+        )
+        for linha in linhas
+    }
+    faturas = sum(
+        1
+        for cartao, mes, *datas in conn.execute(
+            "SELECT cartao_id::text, mes::text, fechamento::text, vencimento::text FROM faturas"
+            " WHERE fechamento IS NOT NULL OR vencimento IS NOT NULL"
+        )
+        if datas_no_zip.get((cartao, mes)) != tuple(datas)
+    )
+    (contas,) = conn.execute(
+        "SELECT count(*) FROM contas"
+        " WHERE saldo_abertura_centavos IS NOT NULL OR data_abertura IS NOT NULL"
+    ).fetchone()
+    (cartoes,) = conn.execute(
+        "SELECT count(*) FROM cartoes WHERE limite_centavos IS NOT NULL OR titular_id IS NOT NULL"
+    ).fetchone()
+    contagens = [
+        ("saldo de abertura", contas, "conta", "contas"),
+        ("limite ou titular", cartoes, "cartão", "cartões"),
+        ("datas", faturas, "fatura", "faturas"),
+    ]
+    return [f"{o_que} em {n} {um if n == 1 else varios}" for o_que, n, um, varios in contagens if n]
+
+
+def _preparar(conn: psycopg.Connection, backup: bytes) -> tuple[dict, Tabelas]:
+    """Tudo o que dá para conferir sem gravar nem apagar: a versão (convertendo o backup
+    antigo), os CSVs contra o manifesto, o esquema do banco e as chaves primárias."""
     if not conn.autocommit:
         raise ValueError("a restauração grava um lote por transação: abra a conexão em autocommit")
     manifesto, tabelas = _abrir_backup(backup)
@@ -654,16 +749,13 @@ def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> dict:
         raise RestauracaoRecusada(
             f"{', '.join(sem_chave)} sem chave primária: a restauração não daria para desfazer"
         )
-    com_dados = [
-        tabela
-        for tabela in no_banco
-        if conn.execute(f"SELECT EXISTS (SELECT FROM {_identificador(tabela)})").fetchone()[0]
-    ]
-    if com_dados:
-        raise RestauracaoRecusada(f"o banco já tem dados em {', '.join(com_dados)}")
-    ordem = _ordem_de_gravacao(conn)
+    return manifesto, tabelas
+
+
+def _gravar(conn: psycopg.Connection, manifesto: dict, tabelas: Tabelas) -> None:
+    """Grava num banco vazio em lotes e confere; se falhar, apaga o que gravou."""
     try:
-        for tabela in ordem:
+        for tabela in _ordem_de_gravacao(conn):
             colunas, linhas = tabelas[tabela]
             inserir = (
                 f"INSERT INTO {_identificador(tabela)}"
@@ -681,7 +773,6 @@ def restaurar_backup(conn: psycopg.Connection, backup: bytes) -> dict:
     except BaseException:
         esvaziar_banco(conn)
         raise
-    return manifesto
 
 
 def _lotes(linhas: list[list[str | None]]):

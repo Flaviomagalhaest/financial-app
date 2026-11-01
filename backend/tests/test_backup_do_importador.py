@@ -3,14 +3,23 @@ ticket 68). Só exports fictícios (ADR 0007)."""
 
 from datetime import UTC, date, datetime
 from pathlib import Path
+from uuid import uuid4
 
 import psycopg
 import pytest
 
-from app import lancamentos
-from app.backup import gerar_backup, restaurar_backup
+from app import lancamentos, restauracao
+from app.automaticos import realizar_automaticos
+from app.backup import (
+    RestauracaoRecusada,
+    esvaziar_banco,
+    gerar_backup,
+    refazer_importacao,
+    restaurar_backup,
+)
 from app.mobills import gerar_backup_da_importacao, importar
 from app.mobills.__main__ import main
+from tests.exemplo_ficticio import trocar_arquivo
 from tests.mobills_ficticio import editar_aba, escrever_fatura, escrever_geral, linha
 
 AGORA = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
@@ -204,3 +213,163 @@ def test_linha_de_comando_grava_o_backup_so_sem_impedimentos(exports, client, da
     assert main([str(geral), str(faturas), str(revisao), "--backup", str(backup)]) == 2
     assert "backup não gravado" in capsys.readouterr().err
     assert not backup.exists()
+
+
+def restaurar(database_url: str, backup: bytes) -> None:
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        restaurar_backup(conn, backup)
+
+
+def refazer(database_url: str, backup: bytes):
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        return refazer_importacao(conn, backup)
+
+
+def exportar(database_url: str) -> bytes:
+    with psycopg.connect(database_url) as conn:
+        return gerar_backup(conn)
+
+
+def test_refazer_num_banco_so_com_o_importado_grava_o_importado_novo(
+    importacao, client, database_url
+):
+    restaurar(database_url, gerar_backup_da_importacao(importacao, AGORA))
+    novo = gerar_backup_da_importacao(importacao, datetime(2026, 9, 2, 12, 0, tzinfo=UTC))
+
+    _, perdidos = refazer(database_url, novo)
+
+    assert exportar(database_url) == novo
+    assert perdidos == []
+
+
+def test_refazer_recusa_depois_de_lancar_pelo_app_e_o_lancado_continua(
+    importacao, casal, database_url
+):
+    restaurar(database_url, gerar_backup_da_importacao(importacao, AGORA))
+    lancar_pelo_app(casal)
+    antes = exportar(database_url)
+
+    with pytest.raises(RestauracaoRecusada, match="uso pelo app em lancamentos"):
+        refazer(database_url, gerar_backup_da_importacao(importacao, AGORA))
+
+    assert exportar(database_url) == antes
+
+
+def lancar_pelo_app(casal) -> None:
+    [conta] = casal.pedir("flavio", "GET", "/api/contas").json()
+    [casa] = [
+        c for c in casal.pedir("flavio", "GET", "/api/categorias").json() if c["nome"] == "Casa"
+    ]
+    lancado = {"id": str(uuid4()), "tipo": "despesa", "valor_centavos": 4500}
+    lancado |= {"data": "2026-09-03", "descricao": "Padaria", "conta_id": conta["id"]}
+    lancado |= {"categoria_ids": [casa["id"]]}
+    assert casal.pedir("flavio", "POST", "/api/lancamentos", json=lancado).status_code == 201
+
+
+def test_refazer_recusa_um_backup_que_nao_e_so_da_importacao(importacao, casal, database_url):
+    importado = gerar_backup_da_importacao(importacao, AGORA)
+    restaurar(database_url, importado)
+    lancar_pelo_app(casal)
+    com_o_app = exportar(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        esvaziar_banco(conn)
+    restaurar(database_url, importado)
+
+    with pytest.raises(RestauracaoRecusada, match="não é só da importação: .* em lancamentos"):
+        refazer(database_url, com_o_app)
+
+    assert exportar(database_url) == importado
+
+
+def test_refazer_confere_o_zip_novo_antes_de_apagar(importacao, client, database_url):
+    importado = gerar_backup_da_importacao(importacao, AGORA)
+    restaurar(database_url, importado)
+    sem_manifesto = trocar_arquivo(importado, "manifesto.json", b"{}")
+
+    with pytest.raises(RestauracaoRecusada):
+        refazer(database_url, sem_manifesto)
+
+    assert exportar(database_url) == importado
+
+
+def test_refazer_avisa_a_preparacao_da_virada_que_se_perdeu(importacao, casal, database_url):
+    importado = gerar_backup_da_importacao(importacao, AGORA)
+    restaurar(database_url, importado)
+    [conta] = casal.pedir("flavio", "GET", "/api/contas").json()
+    cartoes = {c["nome"]: c for c in casal.pedir("flavio", "GET", "/api/cartoes").json()}
+    abertura = {"saldo_abertura_centavos": 150000, "data_abertura": "2026-09-01"}
+    corpo = {"nome": conta["nome"], "tipo": conta["tipo"]} | abertura
+    assert casal.pedir("flavio", "PUT", f"/api/contas/{conta['id']}", json=corpo).status_code == 200
+    cartao = cartoes["Cartao A"]
+    corpo = {"nome": cartao["nome"], "dia_fechamento": 25, "dia_vencimento": 5}
+    corpo |= {"limite_centavos": 800000}
+    assert (
+        casal.pedir("flavio", "PUT", f"/api/cartoes/{cartao['id']}", json=corpo).status_code == 200
+    )
+    datas = {"fechamento": "2026-08-25", "vencimento": "2026-09-05"}
+    caminho = f"/api/cartoes/{cartao['id']}/faturas/2026-08-01"
+    assert casal.pedir("flavio", "PATCH", caminho, json=datas).status_code == 200
+
+    _, perdidos = refazer(database_url, importado)
+
+    assert perdidos == [
+        "saldo de abertura em 1 conta",
+        "limite ou titular em 1 cartão",
+        "datas em 1 fatura",
+    ]
+    assert exportar(database_url) == importado
+
+
+def test_a_tarefa_diaria_nas_parcelas_importadas_nao_impede_o_refazer(
+    importacao, client, database_url, monkeypatch
+):
+    importado = gerar_backup_da_importacao(importacao, AGORA)
+    restaurar(database_url, importado)
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 9, 1))
+    assert realizar_automaticos(database_url) > 0
+
+    refazer(database_url, importado)
+
+    assert exportar(database_url) == importado
+
+
+def test_linha_de_comando_refaz_a_importacao_em_prod_e_recusa_depois_do_app(
+    importacao, casal, database_url, monkeypatch, capsys, tmp_path
+):
+    monkeypatch.setenv("AMBIENTE", "prod")
+    zip = tmp_path / "importado.zip"
+    zip.write_bytes(gerar_backup_da_importacao(importacao, AGORA))
+    restaurar(database_url, zip.read_bytes())
+
+    assert restauracao.main([str(zip), "--refazer-importacao"]) == 0
+    saida = capsys.readouterr().out
+    assert "importação refeita: banco esvaziado e restaurado" in saida
+    assert "exportado de novo: mesmo zip" in saida
+
+    lancar_pelo_app(casal)
+    assert restauracao.main([str(zip), "--refazer-importacao"]) == 1
+    erro = capsys.readouterr().err
+    assert "recusada, nada foi apagado nem gravado: o banco tem uso pelo app em" in erro
+
+
+def test_linha_de_comando_avisa_o_que_o_refazer_perdeu(
+    importacao, casal, database_url, capsys, tmp_path
+):
+    zip = tmp_path / "importado.zip"
+    zip.write_bytes(gerar_backup_da_importacao(importacao, AGORA))
+    restaurar(database_url, zip.read_bytes())
+    [conta] = casal.pedir("flavio", "GET", "/api/contas").json()
+    corpo = {"nome": conta["nome"], "tipo": conta["tipo"], "saldo_abertura_centavos": 100}
+    corpo |= {"data_abertura": "2026-09-01"}
+    assert casal.pedir("flavio", "PUT", f"/api/contas/{conta['id']}", json=corpo).status_code == 200
+
+    assert restauracao.main([str(zip), "--refazer-importacao"]) == 0
+
+    assert "informe de novo: saldo de abertura em 1 conta" in capsys.readouterr().out
+
+
+def test_linha_de_comando_nao_junta_esvaziar_e_refazer(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("AMBIENTE", "dev")
+    with pytest.raises(SystemExit):
+        restauracao.main([str(tmp_path / "x.zip"), "--esvaziar", "--refazer-importacao"])
+    assert "not allowed with argument --esvaziar" in capsys.readouterr().err
