@@ -394,3 +394,24 @@ def test_planilha_vazia_traz_so_o_cabecalho():
 
     assert linhas[0].startswith("data;descricao;valor;")
     assert linhas[1:] == [""]
+
+
+def test_planilha_traz_o_estorno_avulso_como_credito_mesmo_sem_categoria(
+    database_url: str, emissor: Emissor, casal: Casal
+):
+    cartao = novo_cartao(casal)["id"]
+    credito = lancamento(
+        cartao, [], valor_centavos=37, data="2026-03-28", descricao="Centavos", estorno_avulso=True
+    )
+    assert casal.pedir("flavio", "POST", "/api/lancamentos", json=credito).status_code == 201
+    s3 = S3Falso()
+
+    _cliente(database_url, emissor, s3).post(
+        "/api/exportacoes", json={"formato": "planilha"}, headers=emissor.cabecalho("flavio")
+    )
+
+    linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")
+    assert linhas[1:] == [
+        "2026-03-28;Centavos;0,37;Nubank;2026-04;;;;efetivado;Flávio;Flávio",
+        "",
+    ]

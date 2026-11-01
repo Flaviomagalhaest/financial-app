@@ -96,7 +96,8 @@ class DadosDoLancamento(BaseModel):
     descricao: str = ""
     # A conta ou o cartão; no cartão, `data` é a data da compra.
     conta_id: UUID
-    categoria_ids: list[UUID] = Field(min_length=1)
+    # Pelo menos uma, menos no estorno avulso, onde a categoria é opcional.
+    categoria_ids: list[UUID] = []
     # Sem situação, a data decide: futura nasce prevista, de hoje ou do passado, realizada.
     situacao: Literal["previsto", "realizado"] | None = None
     # Pelo nome: a tag que ainda não existe nasce junto com o lançamento.
@@ -109,6 +110,10 @@ class DadosDoLancamento(BaseModel):
     # O estorno: crédito de uma compra no cartão, ligado a ela (ADR 0016). É uma despesa que
     # diminui, com as mesmas categorias e tags da compra original, na fatura em que aparece.
     estorno_de: UUID | None = None
+    # O estorno avulso (ticket 135, ADR 0016): crédito no cartão sem compra ligada, para o que a
+    # fatura traz sem compra identificável. Diminui a fatura e o mês como o estorno, mas não tem o
+    # limite do valor de uma compra, e a categoria, as tags e a pessoa são opcionais.
+    estorno_avulso: bool = False
     # A escolha do casal do item do planejamento em que o lançamento conta, pela categoria dele
     # que tem o item; sem ela, conta sozinho quando só uma das categorias tem item no mês
     # (ADR 0006). Escolha explícita nunca muda sozinha.
@@ -130,6 +135,14 @@ class NovoLancamento(DadosDoLancamento):
     def _item_de_uma_das_categorias(self):
         if self.item_categoria_id and self.item_categoria_id not in self.categoria_ids:
             raise ValueError(ITEM_FORA_DAS_CATEGORIAS)
+        return self
+
+    @model_validator(mode="after")
+    def _categoria_so_falta_no_avulso(self):
+        if not self.categoria_ids and not self.estorno_avulso:
+            raise ValueError("o lançamento precisa de uma categoria")
+        if self.estorno_avulso and self.estorno_de:
+            raise ValueError("o estorno avulso não é ligado a uma compra")
         return self
 
 
@@ -193,7 +206,8 @@ class AlteracaoDeLancamento(BaseModel):
     data: date | None = None
     descricao: str | None = None
     conta_id: UUID | None = None
-    categoria_ids: list[UUID] | None = Field(default=None, min_length=1)
+    # Vazia só no estorno avulso, que pode ficar sem categoria.
+    categoria_ids: list[UUID] | None = None
     # Sem situação, só mudar a data refaz a inferência, se ninguém mudou a situação depois.
     situacao: Literal["previsto", "realizado"] | None = None
     tags: list[str] | None = None
@@ -277,8 +291,9 @@ MES_EM_QUE_CONTA = "COALESCE(mes, date_trunc('month', data)::date)"
 # O valor com o sinal de quem soma despesas (fatura, mês): a despesa soma, o estorno e a receita
 # (crédito) diminuem.
 VALOR_COM_SINAL = (
-    "CASE WHEN lancamentos.tipo = 'despesa' AND lancamentos.estorno_de IS NULL"
-    " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
+    "CASE WHEN lancamentos.tipo = 'despesa' AND NOT "
+    + "(lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
+    + " THEN lancamentos.valor_centavos ELSE -lancamentos.valor_centavos END"
 )
 # O valor com o sinal do saldo de uma conta, no lançamento `l`: a receita entra, a despesa sai.
 VALOR_NA_CONTA = "CASE l.tipo WHEN 'receita' THEN l.valor_centavos ELSE -l.valor_centavos END"
@@ -324,7 +339,7 @@ _COLUNAS = (
     f" criado_por, criado_em, alterado_por, alterado_em, {VERSAO}, pessoa, fonte,"
     " recorrencia_id, ocorrencia, COALESCE(automatico, false),"
     f" {_REPETIDO_DE}, {MES_EM_QUE_CONTA}, {NO_CARTAO}, estorno_de, parcelamento_id, parcela,"
-    f" {PARCELAS}, item_categoria_id, {ALTERADA_A_MAO}"
+    f" {PARCELAS}, item_categoria_id, {ALTERADA_A_MAO}, COALESCE(estorno_avulso, false)"
 )
 
 
@@ -875,6 +890,10 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
         # incluídas), e o que a pessoa mandou nesses campos não conta.
         novo = novo.model_copy(update={"categoria_ids": sorted(da_compra)})
         ja_ligadas |= da_compra
+    if novo.estorno_avulso and (
+        novo.tipo != "despesa" or not faturas.ler_cartao(conn, novo.conta_id)
+    ):
+        raise recusar("estorno é um crédito no cartão")
     conferir_ligacoes(conn, novo, categorias_atuais=ja_ligadas)
     mes, _, a_mao = _onde_conta(conn, novo)
     momento = _momento(novo.acao_em)
@@ -882,8 +901,8 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     gravados = conn.execute(
         "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
         " conta_id, criado_por, alterado_por, versao, pessoa, criado_em, alterado_em, fonte,"
-        " mes, fatura_a_mao, estorno_de, item_categoria_id)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s, %s, %s)"
+        " mes, fatura_a_mao, estorno_de, item_categoria_id, estorno_avulso)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, 'app', %s, %s, %s, %s, %s)"
         " ON CONFLICT (id) DO NOTHING",
         (
             novo.id,
@@ -902,6 +921,7 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             a_mao,
             novo.estorno_de,
             escolhida,
+            novo.estorno_avulso,
         ),
     ).rowcount
     if gravados and novo.estorno_de:
@@ -947,6 +967,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     ):
         mudancas["situacao"] = situacao_pela_data(mudancas["data"])
     categorias = mudancas.get("categoria_ids", atual.categoria_ids)
+    if not categorias and not atual.estorno_avulso:
+        raise recusar("o lançamento precisa de uma categoria")
     if mudancas.get("item_categoria_id") not in (None, *categorias):
         raise recusar(ITEM_FORA_DAS_CATEGORIAS)
     if "item_categoria_id" not in mudancas and atual.item_categoria_id not in (None, *categorias):
@@ -964,6 +986,10 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
             raise recusar("estorno conta no item do planejamento em que a compra conta")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             _conferir_estorno(conn, id, editado, atual.estorno_de)
+    if atual.estorno_avulso and (
+        editado.tipo != "despesa" or not faturas.ler_cartao(conn, editado.conta_id)
+    ):
+        raise recusar("estorno é um crédito no cartão")
     momento = _momento(alteracao.acao_em)
     conferir_ligacoes(conn, editado, atual.conta_id, frozenset(atual.categoria_ids))
     mes, a_mao = _fatura_depois(conn, atual, editado, mudancas)
@@ -1141,6 +1167,7 @@ def _todos(
             parcelas=l[23],
             item_categoria_id=l[24],
             alterada_a_mao=l[25],
+            estorno_avulso=l[26],
         )
         for l in linhas
     ]

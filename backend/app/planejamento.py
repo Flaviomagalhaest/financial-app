@@ -106,8 +106,9 @@ def _movimentos_por_item(conn, mes: date, categorias_com_item: dict[UUID, UUID])
     por_lancamento: dict[UUID, tuple[str, int, UUID | None, UUID | None, set[UUID]]] = {}
     for id, situacao, valor, escolhida, atual, categoria_id in conn.execute(
         "SELECT l.id, l.situacao,"
-        # O estorno diminui o item da compra que ele devolve.
-        " CASE WHEN l.estorno_de IS NULL THEN l.valor_centavos ELSE -l.valor_centavos END,"
+        # O estorno diminui o item da compra que ele devolve; o avulso, o que ele escolhe.
+        " CASE WHEN l.estorno_de IS NULL AND NOT COALESCE(l.estorno_avulso, false)"
+        " THEN l.valor_centavos ELSE -l.valor_centavos END,"
         " l.item_categoria_id, l.item_atual_categoria_id,"
         " lc.categoria_id FROM lancamentos l"
         " JOIN lancamento_categorias lc ON lc.lancamento_id = l.id"

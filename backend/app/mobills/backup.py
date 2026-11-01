@@ -202,6 +202,7 @@ class _Linhas:
             ("criado_por", CRIADO_POR),
             ("criado_em", self.agora),
             ("excluido_pela_regra", False),
+            ("estorno_avulso", False),
             ("classificacao_pendente", ""),
             ("corrigido_em", None),
         ):

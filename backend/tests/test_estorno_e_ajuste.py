@@ -508,3 +508,186 @@ def test_ajuste_absurdo_e_recusado(casal: Casal):
     cartao = novo_cartao(casal)["id"]
 
     assert ajustar(casal, cartao, "2026-04-01", 10**15).status_code == 422
+
+
+# O estorno avulso (ticket 135, ADR 0016): crédito no cartão sem compra ligada.
+def creditar(casal: Casal, cartao: str, data: str, **campos):
+    return casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(cartao, [], data=data, valor_centavos=37, estorno_avulso=True) | campos,
+    )
+
+
+def test_credito_avulso_sem_categoria_diminui_a_fatura_e_o_mes_mas_nao_categoria_tag_nem_item(
+    casal: Casal,
+):
+    cartao = novo_cartao(casal)["id"]
+    mercado = casal.categoria("Mercado")
+    comprar(
+        casal, cartao, "2026-03-28", valor_centavos=12000, categoria_ids=[mercado], tags=["viagem"]
+    )
+    casal.pedir(
+        "flavio",
+        "POST",
+        "/api/planejamento/2026-04/itens",
+        json={
+            "id": "00000000-0000-0000-0000-0000000000a1",
+            "categoria_id": mercado,
+            "valor_centavos": 40000,
+        },
+    )
+
+    credito = creditar(casal, cartao, "2026-03-30", valor_centavos=250)
+
+    assert credito.status_code == 201, credito.text
+    assert credito.json()["estorno_avulso"] is True
+    assert credito.json()["estorno_de"] is None
+    assert credito.json()["categoria_ids"] == []
+    assert credito.json()["fatura_mes"] == "2026-04-01"
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 11750
+    abril = totais(casal, "2026-04")
+    assert abril["despesas_centavos"] == 11750
+    assert abril["por_categoria"] == [{"categoria_id": mercado, "centavos": 12000}]
+    assert abril["por_tag"] == [{"tag": "viagem", "centavos": 12000}]
+    [item] = casal.pedir("flavio", "GET", "/api/planejamento/2026-04").json()["itens"]
+    assert item["realizado_centavos"] == 12000
+
+
+def test_credito_avulso_com_categoria_e_tag_desconta_nelas_e_no_item_e_nao_tem_limite_de_valor(
+    casal: Casal,
+):
+    cartao = novo_cartao(casal)["id"]
+    mercado = casal.categoria("Mercado")
+    comprar(casal, cartao, "2026-03-28", valor_centavos=1000, categoria_ids=[mercado])
+    casal.pedir(
+        "flavio",
+        "POST",
+        "/api/planejamento/2026-04/itens",
+        json={
+            "id": "00000000-0000-0000-0000-0000000000a1",
+            "categoria_id": mercado,
+            "valor_centavos": 40000,
+        },
+    )
+
+    credito = creditar(
+        casal,
+        cartao,
+        "2026-03-30",
+        valor_centavos=5000,
+        categoria_ids=[mercado],
+        tags=["loja"],
+        pessoa="esposa",
+    )
+
+    assert credito.status_code == 201, credito.text
+    assert (credito.json()["categoria_ids"], credito.json()["tags"], credito.json()["pessoa"]) == (
+        [mercado],
+        ["loja"],
+        "esposa",
+    )
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == -4000
+    abril = totais(casal, "2026-04")
+    assert abril["despesas_centavos"] == -4000
+    assert abril["por_categoria"] == [{"categoria_id": mercado, "centavos": -4000}]
+    assert abril["por_tag"] == [{"tag": "loja", "centavos": -5000}]
+    [item] = casal.pedir("flavio", "GET", "/api/planejamento/2026-04").json()["itens"]
+    assert item["realizado_centavos"] == -4000
+
+
+def test_credito_avulso_so_no_cartao_e_como_despesa(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    na_conta = creditar(casal, casal.conta(), "2026-03-30")
+    como_receita = creditar(
+        casal,
+        cartao,
+        "2026-03-30",
+        tipo="receita",
+        categoria_ids=[casal.categoria("Bônus", "receita")],
+    )
+    ligado = creditar(
+        casal, cartao, "2026-03-30", estorno_de="00000000-0000-0000-0000-0000000000ff"
+    )
+    sem_categoria_e_sem_ser_avulso = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(cartao, [], data="2026-03-30"),
+    )
+
+    assert na_conta.status_code == 422
+    assert na_conta.json()["detail"] == "estorno é um crédito no cartão"
+    assert como_receita.status_code == 422
+    assert ligado.status_code == 422
+    assert sem_categoria_e_sem_ser_avulso.status_code == 422
+
+
+def test_credito_avulso_se_edita_e_exclui_e_a_categoria_pode_sair_mas_nao_vira_receita(
+    casal: Casal,
+):
+    cartao = novo_cartao(casal)["id"]
+    mercado = casal.categoria("Mercado")
+    credito = creditar(
+        casal, cartao, "2026-03-28", valor_centavos=250, categoria_ids=[mercado], tags=["loja"]
+    ).json()
+
+    editado = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{credito['id']}",
+        json={"versao": credito["versao"], "valor_centavos": 900, "categoria_ids": [], "tags": []},
+    )
+    como_receita = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{credito['id']}",
+        json={"versao": 2, "tipo": "receita"},
+    )
+    na_conta = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{credito['id']}",
+        json={"versao": 2, "conta_id": casal.conta()},
+    )
+
+    assert editado.status_code == 200, editado.text
+    assert (editado.json()["categoria_ids"], editado.json()["tags"]) == ([], [])
+    assert editado.json()["estorno_avulso"] is True
+    assert como_receita.status_code == 422
+    assert na_conta.status_code == 422
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == -900
+    assert totais(casal, "2026-04")["por_categoria"] == []
+
+    excluido = casal.pedir("flavio", "DELETE", f"/api/lancamentos/{credito['id']}")
+
+    assert excluido.status_code == 204
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 0
+
+
+def test_compra_comum_continua_sem_poder_ficar_sem_categoria_na_edicao(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    compra = comprar(casal, cartao, "2026-03-28")
+
+    sem_categoria = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{compra['id']}",
+        json={"versao": compra["versao"], "categoria_ids": []},
+    )
+
+    assert sem_categoria.status_code == 422
+
+
+def test_credito_avulso_chega_pelo_lote_da_fila_e_o_reenvio_nao_duplica(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    novo = lancamento(cartao, [], data="2026-03-28", valor_centavos=300, estorno_avulso=True)
+    lote = {"acoes": [{"acao": "criar", "lancamento": novo}]}
+
+    primeiro = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json=lote)
+    reenvio = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json=lote)
+
+    assert primeiro.json()["resultados"][0]["resultado"] == "aceita"
+    assert reenvio.json()["resultados"][0]["resultado"] == "aceita"
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == -300
