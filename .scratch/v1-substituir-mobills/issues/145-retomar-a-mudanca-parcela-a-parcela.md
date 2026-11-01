@@ -1,7 +1,7 @@
 # Retomar a mudança parcela a parcela que parou no meio
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
