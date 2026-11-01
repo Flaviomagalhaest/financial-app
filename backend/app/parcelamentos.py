@@ -972,6 +972,8 @@ def gravar_correcao(
                 "INSERT INTO parcelamento_tags (parcelamento_id, tag_id) VALUES (%s, %s)",
                 (id, tag),
             )
+    # O estorno de todas as parcelas segue a classificação do parcelamento (ticket 138).
+    lancamentos.acompanhar_estornos_do_parcelamento(conn, id)
     return CorrecaoGravada(classificacao, mantidas)
 
 
@@ -1223,6 +1225,7 @@ def excluir_parcelamento(
 
     def conferir(conn) -> None:
         # Antes de fechar o parcelamento: a parcela com estorno impediria a exclusão no meio dela.
+        lancamentos.conferir_parcelamento_sem_estorno(conn, id)
         conferir_sem_estorno(
             conn,
             [

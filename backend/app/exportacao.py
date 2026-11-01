@@ -21,6 +21,7 @@ from app import lancamentos
 from app.backup import conferir_backup, gerar_backup
 from app.banco import conectar, em_transacao
 from app.lancamentos import MES_EM_QUE_CONTA, NO_CARTAO, PARCELAS
+from app.partes import e_estorno
 from app.pessoas import configuradas
 
 Formato = Literal["backup", "planilha"]
@@ -164,11 +165,7 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
                 l["criado_por"],
                 l["alterado_por"],
                 descricao=descricao_do_pedaco,
-                valor=_reais(
-                    -valor
-                    if l["tipo"] == "despesa" and not l["estorno_de"] and not l["estorno_avulso"]
-                    else valor
-                ),
+                valor=_reais(-valor if l["tipo"] == "despesa" and not l["estorno"] else valor),
                 conta_ou_cartao=contas.get(l["conta_id"], ""),
                 fatura=l["mes"].strftime("%Y-%m") if l["no_cartao"] else "",
                 categorias=categorias_do_pedaco,
@@ -182,8 +179,8 @@ def ler_lancamentos(conn: psycopg.Connection) -> list[dict]:
         linha_do_lancamento
         for l in _dicionarios(
             conn,
-            "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id, estorno_de,"
-            " COALESCE(estorno_avulso, false) AS estorno_avulso,"
+            "SELECT id, tipo, situacao, valor_centavos AS valor, data, descricao, conta_id,"
+            f" {e_estorno('lancamentos')} AS estorno,"
             f" pessoa, criado_por, alterado_por, criado_em, {MES_EM_QUE_CONTA} AS mes,"
             f" {NO_CARTAO} AS no_cartao, parcela, {PARCELAS} AS parcelas"
             # As parcelas no cartão têm a mesma data: a ordem delas fica a do número.
