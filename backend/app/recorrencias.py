@@ -205,6 +205,19 @@ def _depois_do_inicio(regra: NovaRecorrencia, periodos: int) -> date:
     return mais_meses(regra.inicio, periodos * regra.a_cada)
 
 
+def ocorrencias_puladas(regra: NovaRecorrencia, hoje: date) -> int:
+    """Quantas ocorrências, do início, caem antes de `hoje` dentro do fim da regra e por isso não
+    viram lançamento (ticket 87). O app repete esta conta para avisar (ADR 0018); a tabela
+    `tabelas-de-teste/puladas.json` vale para os dois."""
+    puladas = 0
+    while True:
+        n = puladas + 1
+        dia = _depois_do_inicio(regra, n - 1)
+        if dia >= hoje or _fora_do_fim(regra, n, dia):  # type: ignore[arg-type]
+            return puladas
+        puladas += 1
+
+
 def data_da_ocorrencia(regra: Recorrencia, n: int) -> date:
     """A data da n-ésima ocorrência (1, 2...), contada do início e nunca da anterior: o dia 31
     passa por 30/11 e volta a 31/12."""

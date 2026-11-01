@@ -176,6 +176,15 @@ def valor_da_parcela(total: int, parcelas: int, n: int) -> int:
     return total // parcelas + (total % parcelas if n == 1 else 0)
 
 
+def parcelas_puladas(parcelas: int, data: date, hoje: date, no_cartao: bool) -> int:
+    """Quantas parcelas do boleto caem antes de `hoje` e não viram lançamento (ticket 87); o
+    cartão não pula nenhuma. O app repete esta conta para avisar (ADR 0018); a tabela
+    `tabelas-de-teste/puladas.json` vale para os dois."""
+    if no_cartao:
+        return 0
+    return sum(1 for n in range(1, parcelas + 1) if mais_meses(data, n - 1) < hoje)
+
+
 def realiza_em(conn, conta_id: UUID, parcela: int, mes: date, data: date) -> date:
     """O dia em que a parcela automática vira realizada. No cartão, a parcela n > 1 entra na
     fatura aberta quando a fatura de antes fecha (a importada, sem datas, já está fechada, e

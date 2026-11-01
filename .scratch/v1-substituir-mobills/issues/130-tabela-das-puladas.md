@@ -1,7 +1,7 @@
 # Tabela de casos compartilhada para a conta das puladas
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ A [ADR 0018](../../../docs/adr/0018-aviso-de-planejamento-repete-regras-do-servi
 
 ## Checklist
 
-- [ ] `tabelas-de-teste/puladas.json`: casos de recorrência (meses, semanas, dia 31, fim por `vezes` e por `ate`, início hoje/ontem) e de boleto/cartão, com `hoje` fixo
-- [ ] pytest roda a tabela no servidor e `web/e2e/tabelas.spec.ts` no código do app
-- [ ] Simplificar `avisoDasPuladas` (módulo certo, sem `?? null` nos usos)
+- [x] `tabelas-de-teste/puladas.json`: casos de recorrência (meses, semanas, dia 31, fim por `vezes` e por `ate`, início hoje/ontem) e de boleto/cartão, com `hoje` fixo
+- [x] pytest roda a tabela no servidor e `web/e2e/tabelas.spec.ts` no código do app
+- [x] Simplificar `avisoDasPuladas` (módulo certo, sem `?? null` nos usos)

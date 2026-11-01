@@ -12,14 +12,15 @@ from fastapi import HTTPException
 
 from app.faturas import Titular, escolher_fatura
 from app.item_em_que_conta import onde_conta
-from app.parcelamentos import valor_da_parcela
+from app.parcelamentos import parcelas_puladas, valor_da_parcela
 from app.planejamento import percentual
+from app.recorrencias import NovaRecorrencia, ocorrencias_puladas
 
 TABELAS = Path(__file__).resolve().parents[2] / "tabelas-de-teste"
 
 
-def casos(nome: str) -> list[dict]:
-    return json.loads((TABELAS / f"{nome}.json").read_text())["casos"]
+def casos(nome: str, chave: str = "casos") -> list[dict]:
+    return json.loads((TABELAS / f"{nome}.json").read_text())[chave]
 
 
 @pytest.mark.parametrize("caso", casos("onde-conta"), ids=lambda c: c["caso"])
@@ -64,3 +65,34 @@ def test_mes_da_compra(caso: dict):
             escolher_fatura(titular, gravados, data)
     else:
         assert escolher_fatura(titular, gravados, data) == date.fromisoformat(caso["mes"])
+
+
+@pytest.mark.parametrize("caso", casos("puladas", "recorrencias"), ids=lambda c: c["caso"])
+def test_ocorrencias_puladas(caso: dict):
+    regra = NovaRecorrencia(
+        id=uuid4(),
+        tipo="despesa",
+        valor_centavos=100,
+        tipo_do_valor="estimado",
+        conta_id=uuid4(),
+        categoria_ids=[uuid4()],
+        inicio=date.fromisoformat(caso["inicio"]),
+        a_cada=caso["a_cada"],
+        unidade=caso["unidade"],
+        ate=date.fromisoformat(caso["ate"]) if caso["ate"] else None,
+        vezes=caso["vezes"],
+    )
+    assert ocorrencias_puladas(regra, date.fromisoformat(caso["hoje"])) == caso["puladas"]
+
+
+@pytest.mark.parametrize("caso", casos("puladas", "parcelamentos"), ids=lambda c: c["caso"])
+def test_parcelas_puladas(caso: dict):
+    assert (
+        parcelas_puladas(
+            caso["parcelas"],
+            date.fromisoformat(caso["data"]),
+            date.fromisoformat(caso["hoje"]),
+            caso["no_cartao"],
+        )
+        == caso["puladas"]
+    )
