@@ -1,7 +1,7 @@
 # Sugestão no aparelho até o índice ser buscado de novo
 
 Type: task
-Status: needs-triage
+Status: claimed
 Blocked by: —
 Skills: `triage`; depois `implement`, `tdd`
 Modelo recomendado: Sonnet
