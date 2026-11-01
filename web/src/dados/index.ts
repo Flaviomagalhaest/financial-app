@@ -640,7 +640,7 @@ export function useSugestao(): FonteDeSugestao {
       const sugestao = em && (l.naoEnviado || em > desde) ? sugestaoDe(l, em) : null;
       return sugestao ? [sugestao] : [];
     });
-    return fonteDoHistorico([...depois, ...(indice?.sugestoes ?? [])]);
+    return fonteDoHistorico([...depois, ...(indice?.sugestoes ?? [])].map((s) => ({ ...s, partes: s.partes ?? [] })));
   }, [indice, lancamentos]);
 }
 
@@ -803,9 +803,9 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
 export function useFavoritos() {
   const { dados, atualizadoEm, semDados, buscar } = useResposta("/api/favoritos");
   const { lancamentos, filaLida } = useLancamentos();
-  const favoritos = useMemo(() => comValorPadrao(dados?.favoritos ?? [], lancamentos ?? [], hoje()), [dados, lancamentos]);
+  const favoritos = useMemo(() => comValorPadrao((dados?.favoritos ?? []).map((f) => ({ ...f, partes: f.partes ?? [] })), lancamentos ?? [], hoje()), [dados, lancamentos]);
   // `carregado` espera os lançamentos do aparelho: sem eles e sem a fila o valor padrão ainda não é o do último.
-  return { favoritos, sugeridos: dados?.sugeridos ?? [], carregado: !!dados && lancamentos !== null && filaLida, atualizadoEm, semDados, recarregar: buscar };
+  return { favoritos, sugeridos: (dados?.sugeridos ?? []).map((s) => ({ ...s, partes: s.partes ?? [] })), carregado: !!dados && lancamentos !== null && filaLida, atualizadoEm, semDados, recarregar: buscar };
 }
 
 /** Os filtros salvos do casal (ticket 60): a lista que o servidor mandou por último, legível sem internet. */

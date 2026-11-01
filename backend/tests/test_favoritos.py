@@ -415,3 +415,15 @@ def test_recusa_favorito_com_partes_invalidas(casal: Casal):
     }
     assert codigos == {422}
     assert listar(casal)["favoritos"] == []
+
+
+def test_arquivar_a_categoria_de_uma_parte_tira_o_pacote_dos_sugeridos(casal: Casal):
+    conta, roupa, fone = casal.conta(), casal.categoria("Roupa"), casal.categoria("Eletrônico")
+    partes = [parte_do_modelo([roupa], 600), parte_do_modelo([fone], 400)]
+    for _ in range(5):
+        compra_ml(casal, conta, partes)
+    assert len(listar(casal)["sugeridos"]) == 1
+
+    casal.pedir("flavio", "PATCH", f"/api/categorias/{fone}", json={"arquivada": True})
+
+    assert listar(casal)["sugeridos"] == []

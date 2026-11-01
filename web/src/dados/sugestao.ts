@@ -5,7 +5,7 @@
 import type { components } from "../api/schema";
 import { config } from "../config";
 import type { NovoLancamento } from "./armazem";
-import { identidadeDaParte } from "./favoritos";
+import { chaveDaDescricao, identidadeDaParte } from "./identidade";
 
 /** Categorias, tags, conta e pessoa de um lançamento anterior; escolher preenche esses campos. */
 export type Sugestao = components["schemas"]["Sugestao"];
@@ -15,19 +15,7 @@ export type ContextoDaSugestao = Partial<Pick<NovoLancamento, "tipo" | "valor_ce
 
 export type FonteDeSugestao = (descricao: string, contexto?: ContextoDaSugestao) => Sugestao[];
 
-const PARCELA = /\(\s*\d+\s*\/\s*\d+\s*\)/g;
-
-/** Como o servidor compara (`chave` em `app/sugestao.py`): sem acento, sem maiúscula, sem `(n/total)`. */
-export function chaveDaDescricao(descricao: string): string {
-  return descricao
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(PARCELA, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .join(" ");
-}
+export { chaveDaDescricao };
 
 /**
  * A sugestão de um lançamento que o aparelho mudou depois do índice; `em` é a hora da mudança (ms).

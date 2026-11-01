@@ -9,7 +9,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
@@ -155,14 +155,18 @@ def _grupos(conn) -> dict[str, _Grupo]:
         (hoje(),),
     ):
         if id in partes:
-            # A compra com partes não tem classificação própria: vale a das partes.
-            dados = DadosDoFavorito(
-                descricao=descricao or "",
-                tipo=tipo,
-                conta_id=conta_id,
-                valor_centavos=valor,
-                partes=partes[id],
-            )
+            # A compra com partes não tem classificação própria: vale a das partes. A que não
+            # fecha (dado antigo, parte sem categoria) fica de fora em vez de derrubar a lista.
+            try:
+                dados = DadosDoFavorito(
+                    descricao=descricao or "",
+                    tipo=tipo,
+                    conta_id=conta_id,
+                    valor_centavos=valor,
+                    partes=partes[id],
+                )
+            except ValidationError:
+                continue
         elif id in categorias:
             dados = DadosDoFavorito(
                 descricao=descricao or "",
@@ -235,6 +239,7 @@ def _sugeridos(conn, favoritos: list[Favorito]) -> list[Sugerido]:
         if chave_ not in fora
         and grupo.usos >= config["usosMinimos"]
         and not arquivadas.intersection(grupo.dados.categoria_ids)
+        and not any(arquivadas.intersection(p.categoria_ids) for p in grupo.dados.partes)
     ]
     # Mais usados primeiro; o empate fica com o que foi lançado por último (a ordem dos grupos).
     candidatos.sort(key=lambda c: -c[1].usos)

@@ -248,11 +248,17 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setDescricao(u.descricao ?? "");
     setTags(u.tags ?? []);
     setPessoa(u.pessoa ?? null);
+    if (u.partes?.length) usarPartes(u.partes, u.valor_centavos);
+    else {
+      setPartes(null);
+      setProporcao(null);
+    }
   }
 
   /** A compra com partes: as partes do modelo dividem o total na proporção, e a compra não tem classificação própria. */
   function usarPartes(modelo: { descricao?: string; valor_centavos: number; categoria_ids: string[]; tags?: string[]; pessoa?: string | null }[], total: number) {
-    setPartes(emEdicaoNaProporcao(modelo, total));
+    // A categoria que não se pode mais escolher sai; a parte que ficar sem nenhuma pede uma nova.
+    setPartes(emEdicaoNaProporcao(modelo, total).map((p) => ({ ...p, categoria_ids: escolhiveis(p.categoria_ids).map((c) => c.id) })));
     setProporcao(modelo.map((p) => p.valor_centavos));
     setCategoriaIds([]);
     setTags([]);

@@ -54,10 +54,10 @@ class ParteDoModelo(BaseModel):
 
 
 def proporcao(valor_centavos: int, total: int) -> int:
-    """A fatia da parte no total, em pontos-base: o que faz 500+250+250 e 1000+500+500 serem a
-    mesma divisão."""
+    """A fatia da parte no total, em percentual inteiro: o que faz 500+250+250 e 1000+500+500
+    serem a mesma divisão, e a sobra de centavos da redivisão não separar a compra do favorito."""
     # Inteiro, com a metade para cima, para o aparelho (`proporcao`) chegar ao mesmo número.
-    return (2 * valor_centavos * 10_000 + total) // (2 * total)
+    return (2 * valor_centavos * 100 + total) // (2 * total)
 
 
 def identidade_da_parte(parte, total: int) -> list:
