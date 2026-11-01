@@ -104,6 +104,7 @@ export function FormularioDeCorrecao({
         conta_id: cartaoId,
         categoria_ids: [c.categoria_id],
         tags: [],
+        partes: [],
         fatura_mes: fatura.mes,
       })),
     };

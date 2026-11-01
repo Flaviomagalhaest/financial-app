@@ -1132,6 +1132,8 @@ export interface components {
              * Format: uuid
              */
             lancamento_id: string;
+            /** Parte Id */
+            parte_id?: string | null;
             /** Item Categoria Id */
             item_categoria_id: string | null;
             /** Categorias Com Item */
@@ -1267,6 +1269,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][] | null;
             /** Acao Em */
             acao_em?: string | null;
             /**
@@ -1333,6 +1337,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][] | null;
             /** Acao Em */
             acao_em?: string | null;
         };
@@ -1502,7 +1508,7 @@ export interface components {
              * Campo
              * @enum {string}
              */
-            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa" | "fatura_mes" | "item_categoria_id";
+            campo: "tipo" | "situacao" | "valor_centavos" | "data" | "descricao" | "conta_id" | "categoria_ids" | "tags" | "pessoa" | "fatura_mes" | "item_categoria_id" | "partes";
             /** Alterado Por */
             alterado_por: string;
             /**
@@ -1652,6 +1658,8 @@ export interface components {
             fatura_mes?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][] | null;
             /** Acao Em */
             acao_em?: string | null;
             /**
@@ -2273,6 +2281,11 @@ export interface components {
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
+            /**
              * Mes
              * Format: date
              */
@@ -2371,6 +2384,8 @@ export interface components {
          */
         LinhaDaBusca: {
             lancamento?: components["schemas"]["Lancamento"] | null;
+            /** Partes Achadas */
+            partes_achadas?: string[] | null;
             parcelamento?: components["schemas"]["ParcelamentoNaBusca"] | null;
             transferencia?: components["schemas"]["Transferencia"] | null;
         };
@@ -2396,6 +2411,11 @@ export interface components {
             centavos: number;
             /** Lancamento Ids */
             lancamento_ids: string[];
+            /**
+             * Parte Ids
+             * @default []
+             */
+            parte_ids: string[];
         };
         /** Lote */
         Lote: {
@@ -2791,6 +2811,11 @@ export interface components {
             estorno_de?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /** Acao Em */
             acao_em?: string | null;
         };
@@ -3084,6 +3109,36 @@ export interface components {
             /** Lancamentos */
             lancamentos: components["schemas"]["Lancamento"][];
         };
+        /**
+         * Parte
+         * @description Um pedaço da compra que junta coisas diferentes, com classificação própria (ADR 0022). Quem
+         *     soma por categoria, tag, pessoa ou item lê a parte; a fatura, o mês e o saldo leem a compra.
+         */
+        Parte: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /** Valor Centavos */
+            valor_centavos: number;
+            /** Categoria Ids */
+            categoria_ids: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Pessoa */
+            pessoa?: string | null;
+            /** Item Categoria Id */
+            item_categoria_id?: string | null;
+        };
         /** PedidoDeBusca */
         PedidoDeBusca: {
             /**
@@ -3222,6 +3277,11 @@ export interface components {
             trocam_de_item: number;
             /** Estornos Fora */
             estornos_fora: number;
+            /**
+             * Com Partes Fora
+             * @default 0
+             */
+            com_partes_fora: number;
             /** Amostra */
             amostra: components["schemas"]["AntesEDepois"][];
             /** Recusa */

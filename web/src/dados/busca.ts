@@ -27,6 +27,8 @@ export type LancamentoDaBusca = {
   parcelamento_id?: string | null;
   parcela?: number | null;
   parcelas?: number | null;
+  /** As partes da compra (ADR 0022): os filtros de classificação olham cada uma. */
+  partes?: { id: string; descricao?: string; valor_centavos: number; categoria_ids: string[]; tags: string[]; pessoa?: string | null }[] | null;
 };
 
 export type ParcelamentoNaTela<L> = {
@@ -38,7 +40,8 @@ export type ParcelamentoNaTela<L> = {
   lancamentos: L[];
 };
 
-export type LinhaNaTela<L> = { lancamento: L } | { parcelamento: ParcelamentoNaTela<L> } | { transferencia: Transferencia };
+/** `partes_achadas`: com filtro de categoria, tag ou pessoa, as partes da compra que batem; a linha vale a soma delas. */
+export type LinhaNaTela<L> = { lancamento: L; partes_achadas?: string[] | null } | { parcelamento: ParcelamentoNaTela<L> } | { transferencia: Transferencia };
 
 export type ResultadoNaTela<L> = { totais: TotaisDaBusca; linhas: LinhaNaTela<L>[] };
 
@@ -121,9 +124,6 @@ export function semAcento(texto: string): string {
   return texto.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
 }
 
-/** O valor com o sinal de quem soma despesas: o estorno diminui (ADR 0016). */
-const comSinal = (l: LancamentoDaBusca) => (l.estorno_de ? -l.valor_centavos : l.valor_centavos);
-
 /** O mês em que o lançamento conta: o da fatura no cartão, o da data no resto (ADR 0003). */
 const mesEmQueConta = (l: LancamentoDaBusca) => l.mes ?? l.fatura_mes ?? `${l.data.slice(0, 7)}-01`;
 
@@ -147,14 +147,24 @@ export function buscarNoAparelho<L extends LancamentoDaBusca>(lancamentos: L[], 
   const tags = new Set((criterios.tags ?? []).map((t) => t.trim().toLowerCase()));
   const doCartao = criterios.fatura?.cartao_id ? new Set(cartoes.filter((c) => c.id === criterios.fatura!.cartao_id || c.titular_id === criterios.fatura!.cartao_id).map((c) => c.id)) : null;
   const algum = <T>(lista: T[] | undefined, teste: (valor: T) => boolean) => !lista?.length || lista.some(teste);
+  // Os filtros de categoria, tag e pessoa, sobre o lançamento sem partes ou sobre uma parte.
+  const classifica = !!(criterios.categoria_ids?.length || criterios.sem_categoria || tags.size || criterios.sem_tag || criterios.pessoas?.length || criterios.conjunto);
+  const bate = (c: { categoria_ids: string[]; tags?: string[]; pessoa?: string | null }) =>
+    (!(criterios.categoria_ids?.length || criterios.sem_categoria) || c.categoria_ids.some((id) => criterios.categoria_ids?.includes(id)) || (!!criterios.sem_categoria && !c.categoria_ids.length)) &&
+    (!(tags.size || criterios.sem_tag) || (c.tags ?? []).some((t) => tags.has(t.toLowerCase())) || (!!criterios.sem_tag && !c.tags?.length)) &&
+    (!(criterios.pessoas?.length || criterios.conjunto) || (!!c.pessoa && !!criterios.pessoas?.includes(c.pessoa)) || (!!criterios.conjunto && !c.pessoa));
+  // A compra com partes bate pelas partes que batem com todos os filtros de classificação (ADR 0022).
+  const achadasDe = (l: L) => (classifica && l.partes?.length ? l.partes.filter(bate) : null);
+  const valorDe = (l: L) => {
+    const achadas = achadasDe(l);
+    return achadas ? achadas.reduce((soma, p) => soma + p.valor_centavos, 0) : l.valor_centavos;
+  };
 
   const achados = lancamentos.filter((l) => {
-    if (texto && !semAcento(l.descricao ?? "").includes(texto)) return false;
-    if ((criterios.categoria_ids?.length || criterios.sem_categoria) && !(l.categoria_ids.some((c) => criterios.categoria_ids?.includes(c)) || (criterios.sem_categoria && !l.categoria_ids.length)))
-      return false;
-    if ((tags.size || criterios.sem_tag) && !((l.tags ?? []).some((t) => tags.has(t.toLowerCase())) || (criterios.sem_tag && !l.tags?.length))) return false;
+    if (texto && !semAcento(l.descricao ?? "").includes(texto) && !(l.partes ?? []).some((p) => semAcento(p.descricao ?? "").includes(texto))) return false;
+    const achadas = achadasDe(l);
+    if (achadas ? achadas.length === 0 : !bate(l)) return false;
     if (!algum(criterios.conta_ids, (c) => c === l.conta_id)) return false;
-    if ((criterios.pessoas?.length || criterios.conjunto) && !((l.pessoa && criterios.pessoas?.includes(l.pessoa)) || (criterios.conjunto && !l.pessoa))) return false;
     if (criterios.periodo_de && dataDaLinha(l) < criterios.periodo_de) return false;
     if (criterios.periodo_ate && dataDaLinha(l) > criterios.periodo_ate) return false;
     if (criterios.fatura && (mesEmQueConta(l) !== criterios.fatura.mes || (doCartao && !doCartao.has(l.conta_id)))) return false;
@@ -169,7 +179,7 @@ export function buscarNoAparelho<L extends LancamentoDaBusca>(lancamentos: L[], 
   }
   const linhas = [...grupos.entries()]
     .map(([chave, doGrupo]) => {
-      const valor = doGrupo.reduce((soma, l) => soma + l.valor_centavos, 0);
+      const valor = doGrupo.reduce((soma, l) => soma + valorDe(l), 0);
       const primeira = doGrupo[0];
       const linha: LinhaNaTela<L> =
         agrupar && primeira.parcelamento_id
@@ -183,7 +193,7 @@ export function buscarNoAparelho<L extends LancamentoDaBusca>(lancamentos: L[], 
                 lancamentos: [...doGrupo].sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0)),
               },
             }
-          : { lancamento: primeira };
+          : { lancamento: primeira, partes_achadas: achadasDe(primeira)?.map((p) => p.id) ?? null };
       return { linha, doGrupo, valor, data: dataDaLinha(primeira) };
     })
     .filter(({ valor }) => (criterios.valor_minimo_centavos == null || valor >= criterios.valor_minimo_centavos) && (criterios.valor_maximo_centavos == null || valor <= criterios.valor_maximo_centavos))
@@ -191,7 +201,7 @@ export function buscarNoAparelho<L extends LancamentoDaBusca>(lancamentos: L[], 
     .sort((a, b) => (criterios.ordem === "valor" && b.valor !== a.valor ? b.valor - a.valor : b.data.localeCompare(a.data)));
 
   const somas = { despesa: { realizado: 0, previsto: 0 }, receita: { realizado: 0, previsto: 0 } };
-  for (const { doGrupo } of linhas) for (const l of doGrupo) somas[l.tipo][l.situacao] += l.tipo === "despesa" ? comSinal(l) : l.valor_centavos;
+  for (const { doGrupo } of linhas) for (const l of doGrupo) somas[l.tipo][l.situacao] += (l.tipo === "despesa" && l.estorno_de ? -1 : 1) * valorDe(l);
   const porSituacao = (s: { realizado: number; previsto: number }) => ({ realizado_centavos: s.realizado, previsto_centavos: s.previsto });
   return {
     totais: {

@@ -24,6 +24,7 @@ import { mesPorExtenso } from "./datas";
 import { dataPorExtenso, quando } from "./datas";
 import { divisao, rotuloDasParcelas } from "./parcelamento";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
+import { PartesDaCompra } from "./partes";
 
 /** A recorrência ou o parcelamento que ainda não subiu, como a lista o mostra. */
 type RegraNaLista = {
@@ -243,14 +244,15 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
                 <ValorComSinal l={l} />
               </div>
               <p className="vazio">
-                {dataPorExtenso(l.data)} · {nome(contasECartoes, l.conta_id)} · {l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}
+                {dataPorExtenso(l.data)} · {nome(contasECartoes, l.conta_id)}
+                {!l.partes?.length && ` · ${l.categoria_ids.map((c) => nome(categorias, c)).join(", ")}`}
                 {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
                 {ligacao && ` · ${ligacao}`}
                 {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
                 {l.alterada_a_mao && " · alterada à mão"}
-                {" · "}
-                {l.pessoa ? nomeDe(l.pessoa) : "conjunto"}
+                {!l.partes?.length && ` · ${l.pessoa ? nomeDe(l.pessoa) : "conjunto"}`}
               </p>
+              {!!l.partes?.length && <PartesDaCompra partes={l.partes} categorias={categorias} nomeDe={nomeDe} titulo={titulo} />}
               {l.parece_repetido_de && euId && l.criado_por !== euId && !l.naoEnviado && (
                 <div className="aviso" role="group" aria-label={`Parece repetido ${titulo}`}>
                   <p className="erro">Parece repetido: {nomeDe(l.criado_por)} lançou o mesmo valor na mesma conta.</p>

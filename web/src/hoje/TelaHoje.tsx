@@ -8,11 +8,15 @@ import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 
 
-/** Escolher o item é uma mudança do lançamento: vai pela fila, sobre o que a tela mostrava. */
-function escolher(l: LancamentoNaTela | LeituraDaHoje["lancamentos_a_escolher"][number], itemCategoriaId: string, mostrado?: LancamentoNaTela) {
+/**
+ * Escolher o item é uma mudança do lançamento: vai pela fila, sobre o que a tela mostrava. Na compra
+ * com partes, a escolha é de uma parte (`parteId`) e vai nas partes, que são um campo só (ADR 0022).
+ */
+function escolher(l: LancamentoNaTela | LeituraDaHoje["lancamentos_a_escolher"][number], itemCategoriaId: string, mostrado?: LancamentoNaTela, parteId?: string | null) {
   const { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa } = l;
+  const partes = (l.partes ?? []).map((p) => (p.id === parteId ? { ...p, item_categoria_id: itemCategoriaId } : p));
   return salvarLancamento(
-    { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, item_categoria_id: itemCategoriaId },
+    { id, tipo, valor_centavos, data, descricao, conta_id, categoria_ids, situacao, tags, pessoa, partes, item_categoria_id: parteId ? null : itemCategoriaId },
     false,
     mostrado,
   );
@@ -25,8 +29,10 @@ function AEscolher({ hoje }: { hoje: LeituraDaHoje }) {
   const pendentes = hoje.a_escolher.flatMap((a) => {
     const lancamento = hoje.lancamentos_a_escolher.find((l) => l.id === a.lancamento_id);
     const mostrado = naTela?.find((l) => l.id === a.lancamento_id);
-    if (!lancamento || mostrado?.item_categoria_id) return [];
-    return [{ a, lancamento, mostrado }];
+    // Na compra com partes, quem está a escolher é a parte.
+    const parte = a.parte_id ? (mostrado ?? lancamento)?.partes?.find((p) => p.id === a.parte_id) : undefined;
+    if (!lancamento || (a.parte_id ? !parte || parte.item_categoria_id : mostrado?.item_categoria_id)) return [];
+    return [{ a, lancamento, mostrado, parte }];
   });
   if (pendentes.length === 0) return null;
 
@@ -35,13 +41,13 @@ function AEscolher({ hoje }: { hoje: LeituraDaHoje }) {
       <h3 id="a-escolher">A escolher</h3>
       <p className="vazio">{plural(pendentes.length, "lançamento", "lançamentos")} com mais de um item do planejamento: em qual conta?</p>
       <ul className="lista">
-        {pendentes.map(({ a, lancamento, mostrado }) => {
-          const titulo = tituloDoLancamento(lancamento, categorias);
+        {pendentes.map(({ a, lancamento, mostrado, parte }) => {
+          const titulo = [tituloDoLancamento(lancamento, categorias), parte?.descricao].filter(Boolean).join(" — ");
           return (
-            <li key={a.lancamento_id}>
+            <li key={`${a.lancamento_id}/${a.parte_id ?? ""}`}>
               <div>
                 <strong>{titulo}</strong>
-                <span>{formatarCentavos(lancamento.valor_centavos)}</span>
+                <span>{formatarCentavos(parte?.valor_centavos ?? lancamento.valor_centavos)}</span>
               </div>
               <p className="vazio">{dataPorExtenso(lancamento.data)}</p>
               <div className="fileira" role="group" aria-label={`Item de ${titulo}`}>
@@ -50,7 +56,7 @@ function AEscolher({ hoje }: { hoje: LeituraDaHoje }) {
                     type="button"
                     key={categoriaId}
                     className={`ficha${categoriaId === a.item_categoria_id ? " marcada" : ""}`}
-                    onClick={() => void escolher(mostrado ?? lancamento, categoriaId, mostrado)}
+                    onClick={() => void escolher(mostrado ?? lancamento, categoriaId, mostrado, a.parte_id)}
                   >
                     {nomePorId(categorias, categoriaId)}
                   </button>

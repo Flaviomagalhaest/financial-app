@@ -96,11 +96,23 @@ export type Contagem = {
   situacao: "previsto" | "realizado";
   /** O mês em que conta (`AAAA-MM-01`); `null` quando o aparelho não sabe (cartão sem fatura). */
   mes: string | null;
+  /** Na compra com partes, cada parte conta no item dela (ADR 0022). */
+  partes?: { id: string; valor_centavos: number; categoria_ids: string[]; item_categoria_id?: string | null }[] | null;
 };
+
+/** O que conta num item: o lançamento sem partes, ou cada parte da compra que tem partes. */
+type Pedaco = { parte_id: string | null; valor_centavos: number; categoria_ids: string[]; item_categoria_id?: string | null };
+
+function pedacosDe(l: Contagem): Pedaco[] {
+  if (!l.partes?.length) return [{ parte_id: null, valor_centavos: l.valor_centavos, categoria_ids: l.categoria_ids, item_categoria_id: l.item_categoria_id }];
+  return l.partes.map((p) => ({ parte_id: p.id, valor_centavos: p.valor_centavos, categoria_ids: p.categoria_ids, item_categoria_id: p.item_categoria_id }));
+}
 
 export type EstadoDoItem = Pick<Planejamento["itens"][number], "percentual" | "ainda_da_para_gastar_centavos">;
 
 export type Aviso = {
+  /** Na compra com partes, a parte de que é o aviso (uma linha por parte). */
+  parte_id?: string;
   /** O mês em que o lançamento conta (`AAAA-MM-01`). */
   mes: string;
   /** As categorias do lançamento que têm item no mês, na ordem dele: as que se pode escolher. */
@@ -119,23 +131,25 @@ export function categoriasComItem(p: Planejamento, categorias: string[]): string
   return categorias.filter((c) => comItem.has(c));
 }
 
-/** O item em que o lançamento ficou quando surgiu a ambiguidade, que só o servidor sabe. */
-export const itemAtual = (p: Planejamento, id: string) => p.a_escolher.find((a) => a.lancamento_id === id)?.item_categoria_id;
+/** O item em que o lançamento (ou a parte dele) ficou quando surgiu a ambiguidade, que só o servidor sabe. */
+export const itemAtual = (p: Planejamento, id: string, parteId: string | null = null) =>
+  p.a_escolher.find((a) => a.lancamento_id === id && (a.parte_id ?? null) === parteId)?.item_categoria_id;
 
 /** O planejamento sem a versão `antes` do lançamento e com a `depois`, somado como no servidor. */
 function trocar(p: Planejamento, antes?: Contagem | null, depois?: Contagem | null): Planejamento {
   const id = (antes ?? depois)?.id;
   if (!id) return p;
-  const atual = itemAtual(p, id);
   const somas = new Map(p.itens.map((i) => [i.categoria_id, { realizado: i.realizado_centavos, previsto: i.previsto_centavos }]));
   let aEscolher: AEscolher[] = p.a_escolher.filter((a) => a.lancamento_id !== id);
   for (const [l, sinal] of [[antes, -1], [depois, 1]] as const) {
     if (!l || !doMes(p, l)) continue;
-    const comItem = categoriasComItem(p, l.categoria_ids);
-    const [conta, fica] = ondeConta(new Set(comItem), l.item_categoria_id, atual);
-    // O estorno diminui o item da compra que ele devolve.
-    if (conta) somas.get(conta)![l.situacao] += sinal * (l.estorno_de ? -l.valor_centavos : l.valor_centavos);
-    if (sinal > 0 && fica) aEscolher = [...aEscolher, { lancamento_id: id, item_categoria_id: conta, categorias_com_item: [...comItem].sort() }];
+    for (const pedaco of pedacosDe(l)) {
+      const comItem = categoriasComItem(p, pedaco.categoria_ids);
+      const [conta, fica] = ondeConta(new Set(comItem), pedaco.item_categoria_id, itemAtual(p, id, pedaco.parte_id));
+      // O estorno diminui o item da compra que ele devolve.
+      if (conta) somas.get(conta)![l.situacao] += sinal * (l.estorno_de ? -pedaco.valor_centavos : pedaco.valor_centavos);
+      if (sinal > 0 && fica) aEscolher = [...aEscolher, { lancamento_id: id, ...(pedaco.parte_id && { parte_id: pedaco.parte_id }), item_categoria_id: conta, categorias_com_item: [...comItem].sort() }];
+    }
   }
   const itens = p.itens.map((i) => {
     const { realizado, previsto } = somas.get(i.categoria_id)!;
@@ -185,10 +199,21 @@ export function comAFila(p: Planejamento, mudancas: Mudanca[]): Planejamento {
  * em `p` (na edição), `depois` a que está na tela. `null` quando `p` é de outro mês.
  */
 export function avisoDePlanejamento(p: Planejamento, antes: Contagem | null, depois: Contagem): Aviso | null {
-  if (!doMes(p, depois)) return null;
-  const comItem = categoriasComItem(p, depois.categoria_ids);
-  const [conta, aEscolher] = ondeConta(new Set(comItem), depois.item_categoria_id, itemAtual(p, depois.id));
-  const aviso: Aviso = { mes: depois.mes!, categoriasComItem: comItem, aEscolher, item: null };
+  return doMes(p, depois) ? avisoDoPedaco(p, antes, depois, pedacosDe({ ...depois, partes: null })[0]) : null;
+}
+
+/**
+ * O aviso da compra com partes: uma linha por parte, no item dela, com o efeito da compra inteira
+ * (duas partes no mesmo item somam). Vazio quando `p` é de outro mês.
+ */
+export function avisosDasPartes(p: Planejamento, antes: Contagem | null, depois: Contagem): Aviso[] {
+  return doMes(p, depois) ? pedacosDe(depois).map((pedaco) => avisoDoPedaco(p, antes, depois, pedaco)) : [];
+}
+
+function avisoDoPedaco(p: Planejamento, antes: Contagem | null, depois: Contagem, pedaco: Pedaco): Aviso {
+  const comItem = categoriasComItem(p, pedaco.categoria_ids);
+  const [conta, aEscolher] = ondeConta(new Set(comItem), pedaco.item_categoria_id, itemAtual(p, depois.id, pedaco.parte_id));
+  const aviso: Aviso = { ...(pedaco.parte_id && { parte_id: pedaco.parte_id }), mes: depois.mes!, categoriasComItem: comItem, aEscolher, item: null };
   if (!conta) return aviso;
   const estado = (q: Planejamento): EstadoDoItem => {
     const { percentual, ainda_da_para_gastar_centavos } = q.itens.find((i) => i.categoria_id === conta)!;
