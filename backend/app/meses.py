@@ -308,7 +308,9 @@ def _variacao_da_sobra(atual: int, antiga: int) -> int | None:
 
 def _fechamento(conn, dia: date, do_mes: Planejamento) -> Fechamento:
     receitas, despesas = (s.realizado_centavos for s in _somas(conn, dia))
-    rec_ant, desp_ant = (s.realizado_centavos for s in _somas(conn, primeiro_dia(_outro_mes(dia, -1))))
+    rec_ant, desp_ant = (
+        s.realizado_centavos for s in _somas(conn, primeiro_dia(_outro_mes(dia, -1)))
+    )
     rec_ano, desp_ano = (
         s.realizado_centavos for s in _somas(conn, primeiro_dia(_outro_mes(dia, -12)))
     )
