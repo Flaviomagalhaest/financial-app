@@ -427,3 +427,31 @@ def test_arquivar_a_categoria_de_uma_parte_tira_o_pacote_dos_sugeridos(casal: Ca
     casal.pedir("flavio", "PATCH", f"/api/categorias/{fone}", json={"arquivada": True})
 
     assert listar(casal)["sugeridos"] == []
+
+
+def test_a_identidade_bate_com_os_vetores_comuns_do_app():
+    """Os mesmos vetores rodam no app (`web/e2e/identidade.spec.ts`): as duas identidades coincidem."""
+    import json
+    from pathlib import Path
+
+    from app.favoritos import identidade_de
+    from app.sugestao import chave
+
+    vetores = json.loads(
+        (Path(__file__).parents[2] / "docs/vetores/identidade.json").read_text(encoding="utf-8")
+    )
+    for v in vetores:
+        e = v["entrada"]
+        esperado = json.dumps(
+            [
+                chave(e["descricao"]),
+                e["tipo"],
+                e["conta_id"],
+                sorted(e["categoria_ids"]),
+                sorted(t.lower() for t in e["tags"]),
+                e["pessoa"],
+            ]
+        )
+        assert identidade_de(
+            e["descricao"], e["tipo"], e["conta_id"], e["categoria_ids"], e["tags"], e["pessoa"]
+        ) == esperado, v["nome"]

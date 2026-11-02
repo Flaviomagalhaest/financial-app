@@ -1,7 +1,7 @@
 # Favoritos: decisões e acabamentos que sobraram do 62
 
 Type: grilling
-Status: claimed
+Status: resolved
 Blocked by: 62
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd`; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -26,6 +26,11 @@ Origem: [ticket 62](62-favoritos.md) (revisão e escolhas provisórias da implem
 
 ## Checklist
 
-- [ ] O dono responde as perguntas e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste em `backend/tests/test_favoritos.py` e ajuste em `backend/app/favoritos.py`
-- [ ] Teste de paridade da identidade (servidor e app) e tratamento da categoria juntada
+- [x] O dono responde as perguntas e a resposta vai para `## Answer`
+- [x] Se uma regra mudar: nenhuma mudou
+- [x] Teste de paridade da identidade (`docs/vetores/identidade.json`, `test_favoritos.py` e `web/e2e/identidade.spec.ts`); servidor passou a usar `lower` nas tags
+- [ ] Categoria juntada e pacote único: ticket [162](162-favoritos-categoria-juntada-e-pacote-unico.md)
+
+## Answer
+
+O dono confirmou as cinco escolhas provisórias, sem mudar regra: (1) remover dispensa o favorito; (2) identidade inteira; (3) sugeridos na Hoje e nas configurações; (4) reordenar por ↑/↓; (5) oferta "Favoritar" de 15 s, só online. Pendências técnicas restantes: ticket 162. As falhas intermitentes seguem no ticket 90.

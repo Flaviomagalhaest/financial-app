@@ -1,0 +1,8 @@
+[
+  {"nome": "tags em caixa diferente e fora de ordem",
+   "entrada": {"descricao": "Café (1/3)", "tipo": "despesa", "conta_id": "c1", "categoria_ids": ["b", "a"], "tags": ["Rua", "AMIGOS"], "pessoa": null}},
+  {"nome": "acento e espaços na descrição",
+   "entrada": {"descricao": "  Pão   de AÇÚCAR ", "tipo": "despesa", "conta_id": "c1", "categoria_ids": [], "tags": [], "pessoa": "Ana"}},
+  {"nome": "tag com ß",
+   "entrada": {"descricao": "x", "tipo": "despesa", "conta_id": "c1", "categoria_ids": [], "tags": ["Straße"], "pessoa": null}}
+]
