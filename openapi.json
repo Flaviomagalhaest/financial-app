@@ -6117,6 +6117,50 @@
               }
             ],
             "title": "Variacao Ano Passado Percentual"
+          },
+          "variacao_receitas_anterior_percentual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Receitas Anterior Percentual"
+          },
+          "variacao_receitas_ano_passado_percentual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Receitas Ano Passado Percentual"
+          },
+          "variacao_sobra_anterior_percentual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Sobra Anterior Percentual"
+          },
+          "variacao_sobra_ano_passado_percentual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Sobra Ano Passado Percentual"
           }
         },
         "type": "object",
@@ -6130,7 +6174,11 @@
           "itens_acima",
           "itens_de_despesa",
           "variacao_anterior_percentual",
-          "variacao_ano_passado_percentual"
+          "variacao_ano_passado_percentual",
+          "variacao_receitas_anterior_percentual",
+          "variacao_receitas_ano_passado_percentual",
+          "variacao_sobra_anterior_percentual",
+          "variacao_sobra_ano_passado_percentual"
         ],
         "title": "Fechamento",
         "description": "O fechamento do mês (glossário), para o texto corrido do mês que já passou. Conta só o que\naconteceu (o realizado): o previsto que ficou sem confirmar fica fora, e `previstos` diz\nquantos lançamentos são."

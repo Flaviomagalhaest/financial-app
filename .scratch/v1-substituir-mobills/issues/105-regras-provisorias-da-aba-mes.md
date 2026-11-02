@@ -1,7 +1,7 @@
 # Conferir as regras provisórias da aba Mês
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: 54
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se uma regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -20,5 +20,16 @@ Origem: [ticket 54](54-aba-mes.md): a spec, o [ticket 11](11-dashboards-e-fecham
 
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste de API em `backend/tests/test_aba_mes.py`, ajuste em `backend/app/meses.py` e, no texto, em `web/src/mes/apresentacao.ts`; o README (seção Planejamento) acompanha
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] Se uma regra mudar: teste de API em `backend/tests/test_aba_mes.py`, ajuste em `backend/app/meses.py` e, no texto, em `web/src/mes/apresentacao.ts`; o README (seção Planejamento) acompanha
+
+## Answer
+
+1. **Guardado**: mantém. Transferências realizadas com categoria, soma simples.
+2. **Fechamento só do realizado**: mantém, com o aviso dos previstos sem confirmar.
+3. **Variação**: muda. O fechamento compara **despesas, receitas e sobra** contra o mês anterior e o mesmo mês do ano passado. A base da variação da sobra é o módulo da sobra antiga; sem base (zero), não há porcentagem. Campos novos `variacao_receitas_*` e `variacao_sobra_*` em `Fechamento`; texto com um parágrafo de comparação por assunto.
+4. **Livre x ainda dá para gastar**: mantém os dois como estão, sem explicação na tela.
+5. **Meses futuros**: mantém as setas para o futuro.
+6. **Avisos extras**: ficam os dois.
+
+Mudanças: `backend/app/meses.py`, `backend/tests/test_aba_mes.py`, `web/src/mes/apresentacao.ts`, `openapi.json`, `web/src/api/schema.d.ts` e README (seção Planejamento).

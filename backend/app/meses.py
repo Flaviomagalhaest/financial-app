@@ -169,10 +169,14 @@ class Fechamento(BaseModel):
     # Os itens de despesa que passaram do planejado, do que mais passou ao que menos passou.
     itens_acima: list[ItemAcima]
     itens_de_despesa: int
-    # As despesas realizadas contra as do mês anterior e as do mesmo mês do ano passado; sem
-    # despesa lá, não há.
+    # As despesas, as receitas e a sobra realizadas contra as do mês anterior e as do mesmo mês
+    # do ano passado; sem valor lá (ou sobra zero), não há. As de despesa ficam sem prefixo.
     variacao_anterior_percentual: int | None
     variacao_ano_passado_percentual: int | None
+    variacao_receitas_anterior_percentual: int | None
+    variacao_receitas_ano_passado_percentual: int | None
+    variacao_sobra_anterior_percentual: int | None
+    variacao_sobra_ano_passado_percentual: int | None
 
 
 class LeituraDoMes(BaseModel):
@@ -297,10 +301,20 @@ def _porcentagem(parte: int, todo: int) -> int | None:
     return round(parte * 100 / todo) if todo else None
 
 
+def _variacao_da_sobra(atual: int, antiga: int) -> int | None:
+    # Sobra negativa antes: a base é o módulo, para "subir" continuar querendo dizer "melhorar".
+    return _porcentagem(atual - antiga, abs(antiga))
+
+
 def _fechamento(conn, dia: date, do_mes: Planejamento) -> Fechamento:
     receitas, despesas = (s.realizado_centavos for s in _somas(conn, dia))
-    anterior = _somas(conn, primeiro_dia(_outro_mes(dia, -1)))[1].realizado_centavos
-    ano_passado = _somas(conn, primeiro_dia(_outro_mes(dia, -12)))[1].realizado_centavos
+    rec_ant, desp_ant = (
+        s.realizado_centavos for s in _somas(conn, primeiro_dia(_outro_mes(dia, -1)))
+    )
+    rec_ano, desp_ano = (
+        s.realizado_centavos for s in _somas(conn, primeiro_dia(_outro_mes(dia, -12)))
+    )
+    sobra = receitas - despesas
     (guardado,) = conn.execute(
         "SELECT COALESCE(SUM(valor_centavos), 0)::bigint FROM transferencias"
         " WHERE categoria_id IS NOT NULL AND situacao = 'realizado' AND data >= %s AND data < %s",
@@ -336,8 +350,12 @@ def _fechamento(conn, dia: date, do_mes: Planejamento) -> Fechamento:
         previstos=previstos,
         itens_acima=acima,
         itens_de_despesa=len(itens),
-        variacao_anterior_percentual=_porcentagem(despesas - anterior, anterior),
-        variacao_ano_passado_percentual=_porcentagem(despesas - ano_passado, ano_passado),
+        variacao_anterior_percentual=_porcentagem(despesas - desp_ant, desp_ant),
+        variacao_ano_passado_percentual=_porcentagem(despesas - desp_ano, desp_ano),
+        variacao_receitas_anterior_percentual=_porcentagem(receitas - rec_ant, rec_ant),
+        variacao_receitas_ano_passado_percentual=_porcentagem(receitas - rec_ano, rec_ano),
+        variacao_sobra_anterior_percentual=_variacao_da_sobra(sobra, rec_ant - desp_ant),
+        variacao_sobra_ano_passado_percentual=_variacao_da_sobra(sobra, rec_ano - desp_ano),
     )
 
 
