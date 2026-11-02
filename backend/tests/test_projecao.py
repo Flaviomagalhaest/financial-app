@@ -291,3 +291,34 @@ def test_ajuste_de_fatura_sai_na_fatura_e_come_o_que_falta_do_planejamento(casal
     assert linha(projecao, "faturas_centavos")["2026-04-01"] == 23000
     assert linha(projecao, "planejamento_centavos")["2026-04-01"] == 77000
     assert linha(projecao, "com_planejamento_centavos")["2026-04-01"] == -100000
+
+
+def test_mes_sem_planejamento_usa_o_modelo_padrao_e_desconta_o_que_ja_foi_lancado(casal: Casal):
+    conta = casal.conta()
+    alimentacao, lazer = casal.categoria("Alimentação"), casal.categoria("Lazer")
+    reserva = casal.categoria("Reserva", "transferencia")
+    modelo = casal.pedir(
+        "flavio",
+        "PUT",
+        "/api/planejamento/modelo",
+        json={
+            "itens": [
+                {"categoria_id": alimentacao, "valor_centavos": 80000},
+                {"categoria_id": lazer, "valor_centavos": 10000},
+                {"categoria_id": reserva, "valor_centavos": 50000},
+            ]
+        },
+    )
+    assert modelo.status_code == 200, modelo.text
+    # Maio tem planejamento próprio: o modelo não entra.
+    planejar(casal, "2026-05", alimentacao, 20000)
+    # Junho não tem: vale o modelo, e o previsto de lazer estoura o item sem compensar.
+    lancar(casal, conta, "2026-06-03", 30000, categoria=alimentacao, situacao="previsto")
+    lancar(casal, conta, "2026-06-04", 15000, categoria=lazer, situacao="previsto")
+
+    projecao = futuro(casal)
+
+    a_lancar = linha(projecao, "planejamento_centavos")
+    assert a_lancar["2026-05-01"] == 20000
+    assert a_lancar["2026-06-01"] == 50000
+    assert a_lancar["2026-07-01"] == 90000
