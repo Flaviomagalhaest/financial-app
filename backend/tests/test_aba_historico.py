@@ -127,14 +127,14 @@ def test_por_ano_desde_o_primeiro_ano_com_lancamento_e_o_ano_corrente_parcial(ca
     anos = ler_historico(casal, metrica="despesas")["por_ano"]
 
     assert anos == [
-        {"ano": 2019, "centavos": 3000, "parcial": False},
-        {"ano": 2020, "centavos": 0, "parcial": False},
-        {"ano": 2021, "centavos": 5000, "parcial": False},
-        {"ano": 2022, "centavos": 0, "parcial": False},
-        {"ano": 2023, "centavos": 0, "parcial": False},
-        {"ano": 2024, "centavos": 0, "parcial": False},
-        {"ano": 2025, "centavos": 0, "parcial": False},
-        {"ano": 2026, "centavos": 7000, "parcial": True},
+        {"ano": 2019, "centavos": 3000, "parcial": False, "previsto_centavos": 0},
+        {"ano": 2020, "centavos": 0, "parcial": False, "previsto_centavos": 0},
+        {"ano": 2021, "centavos": 5000, "parcial": False, "previsto_centavos": 0},
+        {"ano": 2022, "centavos": 0, "parcial": False, "previsto_centavos": 0},
+        {"ano": 2023, "centavos": 0, "parcial": False, "previsto_centavos": 0},
+        {"ano": 2024, "centavos": 0, "parcial": False, "previsto_centavos": 0},
+        {"ano": 2025, "centavos": 0, "parcial": False, "previsto_centavos": 0},
+        {"ano": 2026, "centavos": 7000, "parcial": True, "previsto_centavos": 0},
     ]
 
 
@@ -168,7 +168,7 @@ def test_banco_vazio_devolve_o_ano_corrente_e_12_meses_zerados(casal: Casal):
 
     assert len(historico["doze_meses"]) == 12
     assert {m["centavos"] for m in historico["doze_meses"]} == {0}
-    assert historico["por_ano"] == [{"ano": 2026, "centavos": 0, "parcial": True}]
+    assert historico["por_ano"] == [{"ano": 2026, "centavos": 0, "parcial": True, "previsto_centavos": 0}]
     assert historico["mesmo_mes"]["anos"] == [{"ano": 2026, "centavos": 0}]
 
 
@@ -198,3 +198,22 @@ def test_categoria_exige_o_id_e_o_id_existente(casal: Casal):
 
 def test_exige_login(casal: Casal):
     assert casal.client.get("/api/historico", params={"metrica": "despesas"}).status_code == 401
+
+
+def test_ano_corrente_projeta_o_previsto_do_resto_do_ano_sem_mexer_no_realizado(casal: Casal):
+    conta, mercado = casal.conta(), casal.categoria("Mercado")
+    lancar(casal, conta, [mercado], valor_centavos=7000, data="2026-10-02")
+    # Previsto de hoje em diante, no ano corrente: entra na projeção.
+    lancar(casal, conta, [mercado], valor_centavos=2000, data="2026-10-20")
+    lancar(casal, conta, [mercado], valor_centavos=500, data="2026-12-05")
+    # Previsto de outro ano: fora.
+    lancar(casal, conta, [mercado], valor_centavos=800, data="2027-01-05")
+
+    historico = ler_historico(casal, metrica="despesas")
+
+    corrente = historico["por_ano"][-1]
+    assert corrente["centavos"] == 7000
+    assert corrente["previsto_centavos"] == 2500
+    assert {a["previsto_centavos"] for a in historico["por_ano"][:-1]} == {0}
+    # Os 12 meses seguem só com o realizado.
+    assert historico["total_centavos"] == 7000

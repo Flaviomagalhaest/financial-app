@@ -84,14 +84,14 @@ function Resultado({ metrica, categoriaId, visao, mesDoAno, nomeDaCategoria }: {
             </>
           )}
           {visao === "por-ano" && (
-            <Barras linhas={dados.por_ano.map((a) => ({ chave: String(a.ano), nome: a.parcial ? `${a.ano} (até agora)` : String(a.ano), centavos: a.centavos }))} />
+            <Barras linhas={dados.por_ano.map((a) => ({ chave: String(a.ano), nome: a.parcial ? `${a.ano} (até agora${a.previsto_centavos ? `; com o previsto até dezembro, ${formatarCentavos(a.centavos + a.previsto_centavos)}` : ""})` : String(a.ano), centavos: a.centavos }))} />
           )}
           {visao === "mesmo-mes" && (
             <Barras
               linhas={dados.mesmo_mes.anos.map((a) => ({ chave: String(a.ano), nome: `${MESES[dados.mesmo_mes.mes_do_ano - 1]} de ${a.ano}`, centavos: a.centavos }))}
             />
           )}
-          <p className="vazio">Conta só o realizado, pelo mês em que cada lançamento conta (no cartão, o da fatura).</p>
+          <p className="vazio">Conta só o realizado (o ano corrente mostra também a projeção com o previsto até dezembro), pelo mês em que cada lançamento conta (no cartão, o da fatura).</p>
         </>
       )}
     </>
