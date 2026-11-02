@@ -218,6 +218,8 @@ def test_fechamento_do_mes_passado_resume_sobra_guardado_itens_estourados_e_vari
     transferir(casal, corrente, poupanca, valor_centavos=7000, data="2026-09-11")
     lancar(casal, corrente, [mercado], valor_centavos=80000, data="2026-08-06")
     lancar(casal, corrente, [mercado], valor_centavos=125000, data="2025-09-06")
+    lancar(casal, corrente, [salario], tipo="receita", valor_centavos=400000, data="2026-08-05")
+    lancar(casal, corrente, [salario], tipo="receita", valor_centavos=1000000, data="2025-09-05")
 
     setembro = ler_mes(casal, "2026-09")
 
@@ -236,6 +238,10 @@ def test_fechamento_do_mes_passado_resume_sobra_guardado_itens_estourados_e_vari
         "itens_de_despesa": 2,
         "variacao_anterior_percentual": 25,
         "variacao_ano_passado_percentual": -20,
+        "variacao_receitas_anterior_percentual": 25,
+        "variacao_receitas_ano_passado_percentual": -50,
+        "variacao_sobra_anterior_percentual": 25,
+        "variacao_sobra_ano_passado_percentual": -54,
     }
     assert ler_mes(casal, "2026-10")["fechamento"] is None
 
@@ -256,6 +262,8 @@ def test_fechamento_sem_receitas_nem_mes_de_comparacao_nao_inventa_porcentagem(c
     assert fechamento["previstos"] == 1
     assert fechamento["variacao_anterior_percentual"] is None
     assert fechamento["variacao_ano_passado_percentual"] is None
+    assert fechamento["variacao_receitas_anterior_percentual"] is None
+    assert fechamento["variacao_sobra_ano_passado_percentual"] is None
 
 
 def test_a_lista_a_escolher_vem_na_leitura_e_sai_dela_com_a_escolha(casal: Casal):

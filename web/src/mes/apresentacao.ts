@@ -33,10 +33,15 @@ function lista(itens: string[]): string {
   return itens.length < 2 ? (itens[0] ?? "") : `${itens.slice(0, -1).join(", ")} e ${itens.at(-1)}`;
 }
 
-function frasesDaVariacao(porcentagem: number | null | undefined, outro: string): string {
-  if (porcentagem === null || porcentagem === undefined) return `${capitular(outro)} não teve despesas para comparar.`;
-  if (porcentagem === 0) return `Em relação a ${outro}, as despesas ficaram iguais.`;
-  return `Em relação a ${outro}, as despesas ${porcentagem > 0 ? "subiram" : "caíram"} ${Math.abs(porcentagem)}%.`;
+function frasesDaVariacao(
+  porcentagem: number | null | undefined,
+  outro: string,
+  coisa: string,
+  verbos: [string, string],
+): string {
+  if (porcentagem === null || porcentagem === undefined) return `${capitular(outro)} não teve ${coisa} para comparar.`;
+  if (porcentagem === 0) return `Em relação a ${outro}, ${coisa} ficou igual.`;
+  return `Em relação a ${outro}, ${coisa} ${porcentagem > 0 ? verbos[0] : verbos[1]} ${Math.abs(porcentagem)}%.`;
 }
 
 /** O fechamento do mês (glossário) em texto corrido, um parágrafo por assunto. */
@@ -63,8 +68,18 @@ export function textoDoFechamento(leitura: LeituraDoMes, nomeDaCategoria: (id: s
   } else {
     paragrafos.push("O mês não teve planejamento de despesas.");
   }
+  const anterior = nomeDoMes(leitura.comparacao.anterior);
+  const anoPassado = nomeDoMes(leitura.comparacao.ano_passado);
+  const comparar = (
+    coisa: string,
+    verbos: [string, string],
+    contraAnterior: number | null | undefined,
+    contraAnoPassado: number | null | undefined,
+  ) => `${frasesDaVariacao(contraAnterior, anterior, coisa, verbos)} ${frasesDaVariacao(contraAnoPassado, anoPassado, coisa, verbos)}`;
   paragrafos.push(
-    `${frasesDaVariacao(f.variacao_anterior_percentual, nomeDoMes(leitura.comparacao.anterior))} ${frasesDaVariacao(f.variacao_ano_passado_percentual, nomeDoMes(leitura.comparacao.ano_passado))}`,
+    comparar("as despesas", ["subiram", "caíram"], f.variacao_anterior_percentual, f.variacao_ano_passado_percentual),
+    comparar("as receitas", ["subiram", "caíram"], f.variacao_receitas_anterior_percentual, f.variacao_receitas_ano_passado_percentual),
+    comparar("a sobra", ["subiu", "caiu"], f.variacao_sobra_anterior_percentual, f.variacao_sobra_ano_passado_percentual),
   );
   if (f.previstos > 0) {
     paragrafos.push(`${f.previstos === 1 ? "1 previsto ficou sem confirmar e não entra" : `${f.previstos} previstos ficaram sem confirmar e não entram`} nas contas acima.`);

@@ -2095,6 +2095,14 @@ export interface components {
             variacao_anterior_percentual: number | null;
             /** Variacao Ano Passado Percentual */
             variacao_ano_passado_percentual: number | null;
+            /** Variacao Receitas Anterior Percentual */
+            variacao_receitas_anterior_percentual: number | null;
+            /** Variacao Receitas Ano Passado Percentual */
+            variacao_receitas_ano_passado_percentual: number | null;
+            /** Variacao Sobra Anterior Percentual */
+            variacao_sobra_anterior_percentual: number | null;
+            /** Variacao Sobra Ano Passado Percentual */
+            variacao_sobra_ano_passado_percentual: number | null;
         };
         /**
          * FiltroDeFatura
