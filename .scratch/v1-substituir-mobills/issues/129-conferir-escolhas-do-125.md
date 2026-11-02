@@ -1,7 +1,7 @@
 # Conferir as escolhas do ticket 125 sem decisão do dono
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se a regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
