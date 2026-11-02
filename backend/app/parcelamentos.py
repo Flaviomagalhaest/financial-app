@@ -1558,6 +1558,7 @@ def excluir_parcelamento(
         _apagar_partes(conn, id)
         conn.execute("DELETE FROM parcelamento_categorias WHERE parcelamento_id = %s", (id,))
         conn.execute("DELETE FROM parcelamento_tags WHERE parcelamento_id = %s", (id,))
+        conn.execute("DELETE FROM antecipacoes WHERE parcelamento_id = %s", (id,))
         conn.execute("DELETE FROM parcelamentos WHERE id = %s", (id,))
 
     em_transacao(url, tirar)
@@ -1574,6 +1575,9 @@ class Antecipacao(BaseModel):
     # O que foi pago pelas parcelas juntas (o desconto é a diferença); sem o campo, o valor
     # delas. Os centavos que sobram da divisão vão na primeira das antecipadas.
     valor_total_centavos: int | None = Field(default=None, gt=0)
+    # Chave de idempotência (por exemplo o id da antecipação gerado no aparelho): repetir o pedido
+    # com a mesma chave devolve as parcelas já antecipadas, sem antecipar as K seguintes.
+    id: UUID | None = None
 
 
 class Quitacao(BaseModel):
@@ -1584,17 +1588,32 @@ class Quitacao(BaseModel):
 
 
 def _antecipar(
-    conn, id: UUID, quantas: int | None, data: date | None, valor: int | None, usuario: str
+    conn,
+    id: UUID,
+    quantas: int | None,
+    data: date | None,
+    valor: int | None,
+    usuario: str,
+    chave: UUID | None = None,
 ) -> list[UUID]:
     """Realiza as últimas `quantas` parcelas previstas (todas, se `quantas` é `None`) no dia do
     pagamento, com o valor pago dividido entre elas. No cartão, a parcela conta na fatura em
     que foi paga (a que fecha depois do dia), marcada como troca à mão para as datas do
-    cartão e a data da compra não a levarem de volta à fatura dela."""
+    cartão e a data da compra não a levarem de volta à fatura dela. Com `chave` já usada neste
+    parcelamento, devolve as parcelas daquela antecipação sem pagar mais nenhuma (ticket 154)."""
     gravado = conn.execute(
         "SELECT geradas, parcelas FROM parcelamentos WHERE id = %s", (id,)
     ).fetchone()
     if not gravado:
         raise HTTPException(status_code=404, detail="parcelamento não encontrado")
+    if chave is not None:
+        feita = conn.execute(
+            "SELECT lancamento_id, parcelamento_id FROM antecipacoes WHERE id = %s", (chave,)
+        ).fetchall()
+        if feita:
+            if any(parcelamento != id for _, parcelamento in feita):
+                raise lancamentos.recusar("a chave já foi usada em outro parcelamento")
+            return [lancamento for lancamento, _ in feita]
     (geradas, total) = gravado
     dia = data or lancamentos.hoje()
     if dia > lancamentos.hoje():
@@ -1638,7 +1657,14 @@ def _antecipar(
         campos = ["situacao", "valor_centavos", "data"] + (["fatura_mes"] if no_cartao else [])
         lancamentos.registrar_mudancas(conn, lancamento_id, campos, nova, usuario, momento)
         lancamentos.redividir_partes(conn, lancamento_id, valor_da_parcela(pago, quantas, posicao))
-    return [linha[0] for linha in escolhidas]
+    antecipadas = [linha[0] for linha in escolhidas]
+    if chave is not None:
+        for lancamento_id in antecipadas:
+            conn.execute(
+                "INSERT INTO antecipacoes (id, lancamento_id, parcelamento_id) VALUES (%s, %s, %s)",
+                (chave, lancamento_id, id),
+            )
+    return antecipadas
 
 
 def _responder(url: str | None, antecipadas: list[UUID]) -> list[lancamentos.Lancamento]:
@@ -1657,7 +1683,8 @@ def antecipar_parcelas(
     id: UUID, antecipacao: Antecipacao, usuario: UsuarioLogado, request: Request
 ) -> list[lancamentos.Lancamento]:
     """Paga adiantado as últimas K parcelas por pagar, no dia de hoje ou em outro, pelo valor
-    informado (o desconto). Devolve as parcelas antecipadas."""
+    informado (o desconto). Devolve as parcelas antecipadas. Repetir o pedido com o mesmo `id`
+    devolve as parcelas já antecipadas, sem antecipar as seguintes (ticket 154)."""
     url = url_do_banco(request)
     antecipadas = em_transacao(
         url,
@@ -1669,6 +1696,7 @@ def antecipar_parcelas(
                 antecipacao.data,
                 antecipacao.valor_total_centavos,
                 usuario,
+                antecipacao.id,
             )
         ),
     )

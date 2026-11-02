@@ -186,6 +186,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
         assert {
             tabela: conferido["linhas"] for tabela, conferido in manifesto["tabelas"].items()
         } == {
+            "antecipacoes": 0,
             "cartoes": 0,
             "categorias": 0,
             "contas": 0,

@@ -2644,7 +2644,7 @@
     "/api/parcelamentos/{id}/antecipacoes": {
       "post": {
         "summary": "Antecipar Parcelas",
-        "description": "Paga adiantado as últimas K parcelas por pagar, no dia de hoje ou em outro, pelo valor\ninformado (o desconto). Devolve as parcelas antecipadas.",
+        "description": "Paga adiantado as últimas K parcelas por pagar, no dia de hoje ou em outro, pelo valor\ninformado (o desconto). Devolve as parcelas antecipadas. Repetir o pedido com o mesmo `id`\ndevolve as parcelas já antecipadas, sem antecipar as seguintes (ticket 154).",
         "operationId": "antecipar_parcelas",
         "security": [
           {
@@ -4438,6 +4438,18 @@
               }
             ],
             "title": "Valor Total Centavos"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           }
         },
         "type": "object",

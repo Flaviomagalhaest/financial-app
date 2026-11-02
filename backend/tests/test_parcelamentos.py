@@ -496,6 +496,55 @@ def test_antecipar_parcelas_do_fim_com_desconto_no_boleto(casal: Casal):
     assert saldo == -180001
 
 
+def test_reenvio_da_antecipacao_com_a_mesma_chave_nao_antecipa_de_novo(casal: Casal):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], parcelas=4, valor_total_centavos=400000)
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    url = f"/api/parcelamentos/{novo['id']}/antecipacoes"
+    corpo = {"id": str(uuid4()), "parcelas": 1}
+
+    primeira = casal.pedir("flavio", "POST", url, json=corpo)
+    segunda = casal.pedir("flavio", "POST", url, json=corpo)
+
+    assert primeira.status_code == segunda.status_code == 200
+    assert [l["parcela"] for l in primeira.json()] == [4]
+    assert segunda.json() == primeira.json()
+    assert [l["situacao"] for l in parcelas(casal, novo["id"])] == [
+        "previsto",
+        "previsto",
+        "previsto",
+        "realizado",
+    ]
+    # Outra chave é outra antecipação.
+    terceira = casal.pedir("flavio", "POST", url, json={"id": str(uuid4()), "parcelas": 1})
+    assert [l["parcela"] for l in terceira.json()] == [3]
+
+
+def test_chave_de_antecipacao_de_outro_parcelamento_e_recusada(casal: Casal):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    um = parcelamento(conta, [emprestimo], parcelas=3, valor_total_centavos=300000)
+    outro = parcelamento(conta, [emprestimo], parcelas=3, valor_total_centavos=300000)
+    for novo in (um, outro):
+        casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    chave = str(uuid4())
+    casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/parcelamentos/{um['id']}/antecipacoes",
+        json={"id": chave, "parcelas": 1},
+    )
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/parcelamentos/{outro['id']}/antecipacoes",
+        json={"id": chave, "parcelas": 1},
+    )
+
+    assert resposta.status_code == 422
+    assert all(l["situacao"] == "previsto" for l in parcelas(casal, outro["id"]))
+
+
 def test_antecipar_na_outra_data_e_no_cartao_conta_na_fatura_em_que_foi_paga(casal: Casal):
     nubank, eletro = cartao(casal), casal.categoria("Eletrodomésticos")
     novo = parcelamento(

@@ -833,7 +833,8 @@ export interface paths {
         /**
          * Antecipar Parcelas
          * @description Paga adiantado as últimas K parcelas por pagar, no dia de hoje ou em outro, pelo valor
-         *     informado (o desconto). Devolve as parcelas antecipadas.
+         *     informado (o desconto). Devolve as parcelas antecipadas. Repetir o pedido com o mesmo `id`
+         *     devolve as parcelas já antecipadas, sem antecipar as seguintes (ticket 154).
          */
         post: operations["antecipar_parcelas"];
         delete?: never;
@@ -1464,6 +1465,8 @@ export interface components {
             data?: string | null;
             /** Valor Total Centavos */
             valor_total_centavos?: number | null;
+            /** Id */
+            id?: string | null;
         };
         /** AntesEDepois */
         AntesEDepois: {
