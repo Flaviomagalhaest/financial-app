@@ -294,6 +294,18 @@ def juntar_tag(id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Reques
             (destino.id, origem.id),
         )
         conn.execute("DELETE FROM regra_parte_tags WHERE tag_id = %s", (origem.id,))
+        conn.execute(
+            "INSERT INTO recorrencia_tags (recorrencia_id, tag_id)"
+            " SELECT recorrencia_id, %s FROM recorrencia_tags WHERE tag_id = %s ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM recorrencia_tags WHERE tag_id = %s", (origem.id,))
+        conn.execute(
+            "INSERT INTO parcelamento_tags (parcelamento_id, tag_id)"
+            " SELECT parcelamento_id, %s FROM parcelamento_tags WHERE tag_id = %s ON CONFLICT DO NOTHING",
+            (destino.id, origem.id),
+        )
+        conn.execute("DELETE FROM parcelamento_tags WHERE tag_id = %s", (origem.id,))
         conn.execute("DELETE FROM tags WHERE id = %s", (origem.id,))
         return destino
 

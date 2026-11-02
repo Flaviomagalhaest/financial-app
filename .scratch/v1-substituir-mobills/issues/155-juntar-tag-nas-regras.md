@@ -1,7 +1,7 @@
 # Juntar tag leva também as tags da recorrência e do parcelamento
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `diagnosing-bugs` para confirmar o caso
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ Origem: [ticket 140](140-partes-na-recorrencia.md): lendo `juntar_tag` (`backend
 
 ## Checklist
 
-- [ ] Confirmar o caso com um teste de API (recorrência com a tag, juntar, ler a regra e gerar de novo)
-- [ ] `juntar_tag` move `recorrencia_tags` e `parcelamento_tags` para o destino, sem repetir a que já estava lá
-- [ ] Testes de API; verificações do projeto e PR para `main`
+- [x] Confirmar o caso com um teste de API (recorrência com a tag, juntar, ler a regra e gerar de novo)
+- [x] `juntar_tag` move `recorrencia_tags` e `parcelamento_tags` para o destino, sem repetir a que já estava lá
+- [x] Testes de API; verificações do projeto e PR para `main`

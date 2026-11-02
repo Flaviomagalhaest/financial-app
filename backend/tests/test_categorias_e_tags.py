@@ -218,3 +218,27 @@ def test_excluir_tag_so_sem_lancamentos(casal: Casal):
     assert recusada.status_code == 409
     assert excluida.status_code == 204
     assert list(tags_de(casal)) == ["usada"]
+
+
+def test_juntar_tags_leva_as_da_recorrencia_e_do_parcelamento(casal: Casal):
+    from tests.test_parcelamentos import parcelamento
+    from tests.test_recorrencias import recorrencia
+
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    regra = recorrencia(conta, [luz], tags=["obra", "novo ap"], vezes=2)
+    compra = parcelamento(conta, [luz], tags=["obra"], parcelas=2)
+    assert casal.pedir("flavio", "POST", "/api/recorrencias", json=regra).status_code == 201
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=compra).status_code == 201
+    tags = tags_de(casal)
+
+    casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/tags/{tags['obra']['id']}/juntar",
+        json={"destino_id": tags["novo ap"]["id"]},
+    )
+
+    regras = casal.pedir("flavio", "GET", "/api/recorrencias").json()
+    assert [r["tags"] for r in regras] == [["novo ap"]]
+    compras = casal.pedir("flavio", "GET", "/api/parcelamentos").json()
+    assert [c["tags"] for c in compras] == [["novo ap"]]
