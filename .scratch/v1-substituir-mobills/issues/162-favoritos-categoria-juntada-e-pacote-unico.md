@@ -1,7 +1,7 @@
 # Favoritos: categoria juntada e pacote único para lançar
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
