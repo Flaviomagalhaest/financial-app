@@ -1,7 +1,7 @@
 # Favoritos: decisões e acabamentos que sobraram do 62
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: 62
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd`; HITL (decisão de produto)
 Modelo recomendado: Sonnet
