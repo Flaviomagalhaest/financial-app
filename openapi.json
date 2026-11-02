@@ -4404,13 +4404,18 @@
           "parcial": {
             "type": "boolean",
             "title": "Parcial"
+          },
+          "previsto_centavos": {
+            "type": "integer",
+            "title": "Previsto Centavos"
           }
         },
         "type": "object",
         "required": [
           "ano",
           "centavos",
-          "parcial"
+          "parcial",
+          "previsto_centavos"
         ],
         "title": "AnoDaSerie"
       },

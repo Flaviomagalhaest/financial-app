@@ -1460,6 +1460,8 @@ export interface components {
             centavos: number;
             /** Parcial */
             parcial: boolean;
+            /** Previsto Centavos */
+            previsto_centavos: number;
         };
         /** AnoDoMesmoMes */
         AnoDoMesmoMes: {

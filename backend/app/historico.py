@@ -33,6 +33,8 @@ class AnoDaSerie(BaseModel):
     centavos: int
     # O ano corrente, que ainda não acabou.
     parcial: bool
+    # Só no ano corrente: o previsto de hoje até dezembro, a projeção que vai por cima do realizado.
+    previsto_centavos: int
 
 
 class AnoDoMesmoMes(BaseModel):
@@ -62,10 +64,13 @@ class Historico(BaseModel):
     mesmo_mes: MesmoMesEmCadaAno
 
 
-_DO_REALIZADO = (
-    f"FROM lancamentos WHERE lancamentos.excluido_em IS NULL"
-    f" AND lancamentos.situacao = 'realizado' AND {MES_EM_QUE_CONTA} <= %s"
-)
+def _do_periodo(situacao: str) -> str:
+    return (
+        f"FROM lancamentos WHERE lancamentos.excluido_em IS NULL"
+        f" AND lancamentos.situacao = '{situacao}' AND {MES_EM_QUE_CONTA} BETWEEN %s AND %s"
+    )
+
+
 _VALOR = f"CASE WHEN lancamentos.tipo = 'receita' THEN lancamentos.valor_centavos ELSE {VALOR_COM_SINAL} END"
 
 
@@ -73,31 +78,35 @@ def _somar(conn, sql: str, parametros: tuple) -> dict[date, int]:
     return {mes: centavos for mes, centavos in conn.execute(sql, parametros)}
 
 
-def _despesas(conn, ate: date) -> dict[date, int]:
+def _despesas(conn, desde: date, ate: date, situacao: str) -> dict[date, int]:
     por_mes = _somar(
         conn,
-        f"SELECT {MES_EM_QUE_CONTA}, SUM({VALOR_COM_SINAL})::bigint {_DO_REALIZADO}"
+        f"SELECT {MES_EM_QUE_CONTA}, SUM({VALOR_COM_SINAL})::bigint {_do_periodo(situacao)}"
         f" AND lancamentos.tipo = 'despesa' GROUP BY 1",
-        (ate,),
+        (desde, ate),
     )
+    # O ajuste de fatura é do que já aconteceu: a projeção do previsto não o leva.
     for mes, ajuste in conn.execute(
-        "SELECT mes, COALESCE(SUM(ajuste_centavos), 0)::bigint FROM faturas WHERE mes <= %s GROUP BY mes",
-        (ate,),
+        "SELECT mes, COALESCE(SUM(ajuste_centavos), 0)::bigint FROM faturas"
+        " WHERE mes BETWEEN %s AND %s AND %s = 'realizado' GROUP BY mes",
+        (desde, ate, situacao),
     ):
         por_mes[mes] = por_mes.get(mes, 0) + ajuste
     return por_mes
 
 
-def _receitas(conn, ate: date) -> dict[date, int]:
+def _receitas(conn, desde: date, ate: date, situacao: str) -> dict[date, int]:
     return _somar(
         conn,
-        f"SELECT {MES_EM_QUE_CONTA}, SUM(lancamentos.valor_centavos)::bigint {_DO_REALIZADO}"
+        f"SELECT {MES_EM_QUE_CONTA}, SUM(lancamentos.valor_centavos)::bigint {_do_periodo(situacao)}"
         f" AND lancamentos.tipo = 'receita' GROUP BY 1",
-        (ate,),
+        (desde, ate),
     )
 
 
-def _da_categoria(conn, categoria_id: UUID, ate: date) -> dict[date, int]:
+def _da_categoria(
+    conn, categoria_id: UUID, desde: date, ate: date, situacao: str
+) -> dict[date, int]:
     return _somar(
         conn,
         # A compra com partes conta só a parte da categoria (ADR 0022).
@@ -105,24 +114,31 @@ def _da_categoria(conn, categoria_id: UUID, ate: date) -> dict[date, int]:
         f" THEN {partes.valor('lc')} ELSE {partes.com_sinal('lc')} END)::bigint FROM lancamentos"
         f" JOIN {CATEGORIAS_QUE_CONTAM} lc"
         f" ON lc.lancamento_id = lancamentos.id AND lc.categoria_id = %s"
-        f" WHERE lancamentos.excluido_em IS NULL AND lancamentos.situacao = 'realizado'"
-        f" AND {MES_EM_QUE_CONTA} <= %s GROUP BY 1",
-        (categoria_id, ate),
+        f" WHERE lancamentos.excluido_em IS NULL AND lancamentos.situacao = '{situacao}'"
+        f" AND {MES_EM_QUE_CONTA} BETWEEN %s AND %s GROUP BY 1",
+        (categoria_id, desde, ate),
     )
 
 
-def _serie(conn, metrica: Metrica, categoria_id: UUID | None, ate: date) -> dict[date, int]:
-    """O valor da métrica em cada mês até `ate` (os meses sem lançamento ficam de fora)."""
+def _serie(
+    conn,
+    metrica: Metrica,
+    categoria_id: UUID | None,
+    ate: date,
+    desde: date = date.min,
+    situacao: str = "realizado",
+) -> dict[date, int]:
+    """O valor da métrica em cada mês de `desde` até `ate` (os meses sem lançamento ficam de fora)."""
     if metrica == "despesas":
-        return _despesas(conn, ate)
+        return _despesas(conn, desde, ate, situacao)
     if metrica == "receitas":
-        return _receitas(conn, ate)
+        return _receitas(conn, desde, ate, situacao)
     if metrica == "categoria":
         assert categoria_id
-        return _da_categoria(conn, categoria_id, ate)
-    despesas = _despesas(conn, ate)
+        return _da_categoria(conn, categoria_id, desde, ate, situacao)
+    despesas = _despesas(conn, desde, ate, situacao)
     sobra = {mes: -centavos for mes, centavos in despesas.items()}
-    for mes, centavos in _receitas(conn, ate).items():
+    for mes, centavos in _receitas(conn, desde, ate, situacao).items():
         sobra[mes] = sobra.get(mes, 0) + centavos
     return sobra
 
@@ -149,6 +165,9 @@ def _ler_historico(
     por_ano = {ano: 0 for ano in range(primeiro_ano, atual.year + 1)}
     for mes, centavos in serie.items():
         por_ano[mes.year] = por_ano.get(mes.year, 0) + centavos
+    previsto = _serie(
+        conn, metrica, categoria_id, date(atual.year, 12, 1), desde=atual, situacao="previsto"
+    )
     mes_pedido = mes_do_ano or atual.month
     return Historico(
         metrica=metrica,
@@ -157,7 +176,12 @@ def _ler_historico(
         total_centavos=sum(m.centavos for m in doze),
         total_anterior_centavos=sum(m.anterior_centavos for m in doze),
         por_ano=[
-            AnoDaSerie(ano=ano, centavos=centavos, parcial=ano == atual.year)
+            AnoDaSerie(
+                ano=ano,
+                centavos=centavos,
+                parcial=ano == atual.year,
+                previsto_centavos=sum(previsto.values()) if ano == atual.year else 0,
+            )
             for ano, centavos in sorted(por_ano.items())
         ],
         mesmo_mes=MesmoMesEmCadaAno(
