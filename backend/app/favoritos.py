@@ -70,7 +70,7 @@ def identidade_de(
         tipo,
         str(conta_id),
         sorted(str(c) for c in categoria_ids),
-        sorted(t.casefold() for t in tags),
+        sorted(t.lower() for t in tags),
         pessoa,
     ]
     if partes:
