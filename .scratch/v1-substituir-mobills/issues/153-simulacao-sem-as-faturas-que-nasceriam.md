@@ -1,7 +1,7 @@
 # Simulação da fatura paga sem as faturas que a mudança faria nascer
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -20,8 +20,8 @@ Nesses casos, a regra "o pagamento passa do valor da fatura" de uma fatura segui
 
 ## Checklist
 
-- [ ] Simular a fatura que nasceria (datas padrão, saldo anterior da paga de antes) e o `_garantir_a_seguinte`
-- [ ] Teste de API com a parcela que cai num mês sem fatura, depois de uma paga que passa saldo adiante
+- [x] Simular a fatura que nasceria (datas padrão, saldo anterior da paga de antes) e o `_garantir_a_seguinte`
+- [x] Teste de API com a parcela que cai num mês sem fatura, depois de uma paga que passa saldo adiante
 
 ## Notas
 

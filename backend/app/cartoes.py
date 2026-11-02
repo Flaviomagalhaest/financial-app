@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
+import psycopg
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 
@@ -391,19 +392,45 @@ def protegida[T](
 def conferir_sem_gravar(conn, passos: list[dict[tuple[UUID, date], int]]) -> None:
     """As regras de `protegida` em passos ainda não gravados, cada um uma transação: as compras
     que mudam (com sinal) em cada fatura, por titular e mês. Recusa o que um dos passos
-    recusaria ao gravar, antes de gravar o primeiro."""
+    recusaria ao gravar, antes de gravar o primeiro. As faturas que os passos fariam nascer (a do
+    mês ainda sem fatura que recebe a compra e a seguinte de `_garantir_a_seguinte`) nascem num
+    savepoint desfeito no fim."""
+    with conn.transaction():
+        _conferir_os_passos(conn, passos)
+        raise psycopg.Rollback()
+
+
+def _conferir_os_passos(conn, passos: list[dict[tuple[UUID, date], int]]) -> None:
     a_mais: dict[UUID, Counter] = {}
     antes = {
         t: _por_chave(faturas_do_titular(conn, t))
         for t in {titular for passo in passos for titular, _ in passo}
     }
+    donos = {t: faturas.ler_cartao(conn, t).titular for t in antes}
     for passo in passos:
         for (titular, mes), valor in passo.items():
+            # A compra que cai num mês sem fatura a faz nascer, como ao gravar.
+            faturas.garantir_fatura(conn, donos[titular], mes)
             a_mais.setdefault(titular, Counter())[mes] += valor
-        for titular in {t for t, _ in passo}:
-            depois = _por_chave(faturas_do_titular(conn, titular, compras_a_mais=a_mais[titular]))
-            _conferir_o_que_mudou(conn, antes[titular], depois, None)
-            antes[titular] = depois
+        mudados = {t for t, _ in passo}
+        depois = _simuladas(conn, mudados, a_mais)
+        if _garantir_a_seguinte(conn, depois):
+            # A seguinte que nasceu recebe o saldo anterior: as faturas mudam.
+            depois = _simuladas(conn, mudados, a_mais)
+        for titular in mudados:
+            do_titular = {k: f for k, f in depois.items() if k[0] == titular}
+            _conferir_o_que_mudou(conn, antes[titular], do_titular, None)
+            antes[titular] = do_titular
+
+
+def _simuladas(
+    conn, titulares: set[UUID], a_mais: dict[UUID, Counter]
+) -> dict[tuple[UUID, date], Fatura]:
+    return {
+        k: f
+        for t in titulares
+        for k, f in _por_chave(faturas_do_titular(conn, t, compras_a_mais=a_mais[t])).items()
+    }
 
 
 def _por_chave(lista: list[Fatura]) -> dict[tuple[UUID, date], Fatura]:
