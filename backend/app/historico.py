@@ -69,6 +69,8 @@ def _do_periodo(situacao: str) -> str:
         f"FROM lancamentos WHERE lancamentos.excluido_em IS NULL"
         f" AND lancamentos.situacao = '{situacao}' AND {MES_EM_QUE_CONTA} BETWEEN %s AND %s"
     )
+
+
 _VALOR = f"CASE WHEN lancamentos.tipo = 'receita' THEN lancamentos.valor_centavos ELSE {VALOR_COM_SINAL} END"
 
 
@@ -102,7 +104,9 @@ def _receitas(conn, desde: date, ate: date, situacao: str) -> dict[date, int]:
     )
 
 
-def _da_categoria(conn, categoria_id: UUID, desde: date, ate: date, situacao: str) -> dict[date, int]:
+def _da_categoria(
+    conn, categoria_id: UUID, desde: date, ate: date, situacao: str
+) -> dict[date, int]:
     return _somar(
         conn,
         # A compra com partes conta só a parte da categoria (ADR 0022).

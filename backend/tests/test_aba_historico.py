@@ -168,7 +168,9 @@ def test_banco_vazio_devolve_o_ano_corrente_e_12_meses_zerados(casal: Casal):
 
     assert len(historico["doze_meses"]) == 12
     assert {m["centavos"] for m in historico["doze_meses"]} == {0}
-    assert historico["por_ano"] == [{"ano": 2026, "centavos": 0, "parcial": True, "previsto_centavos": 0}]
+    assert historico["por_ano"] == [
+        {"ano": 2026, "centavos": 0, "parcial": True, "previsto_centavos": 0}
+    ]
     assert historico["mesmo_mes"]["anos"] == [{"ano": 2026, "centavos": 0}]
 
 
