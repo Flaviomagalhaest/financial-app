@@ -1,6 +1,6 @@
 # Tornar o repositório público
 
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `wizard` (se quiser um roteiro guiado dos passos do dono); HITL: só o dono mexe nas configurações do repositório no GitHub
 Modelo recomendado: Sonnet
@@ -35,3 +35,7 @@ Do dono, nesta ordem:
 - [ ] Settings → Emails do GitHub: ligar "Keep my email addresses private" para os commits futuros usarem o endereço `noreply` (o histórico antigo mantém o e-mail em 92 commits)
 - [ ] Settings → General → Danger Zone → Change visibility → Public
 - [ ] Depois: abrir um PR de teste e conferir em Billing que os minutos do Actions deixaram de contar, e que o deploy da `main` passa com os secrets
+
+## Fechamento
+
+Fechado por decisão do dono em 02/11. O repositório já está público. Os itens do dono sem marca não foram confirmados na sessão.

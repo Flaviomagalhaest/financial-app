@@ -1,7 +1,7 @@
 # Ticket só entra no projeto pela main
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `writing-for-agents` (AGENTS.md); HITL: o dono desliga o "Auto-add to project" do projeto
 Modelo recomendado: Sonnet
@@ -28,3 +28,7 @@ A branch move o que já está no projeto (TODO para DOING, ou outra coluna); só
 Sem opção, o script continua pondo a issue no projeto, como na rodada à mão. A primeira rodada da `main` depois do merge tira do projeto as issues que entraram por branches ainda abertas; elas voltam no merge de cada uma.
 
 O script não basta para a regra: a issue #258, deste ticket, apareceu no projeto em TODO logo ao ser criada, antes de qualquer sincronização (a primeira, run 41167782098, já a achou lá). Quem a pôs foi o próprio projeto, quase certamente o workflow nativo "Auto-add to project", que adiciona as issues novas do repositório e as deixa em TODO. Ele só se desliga na tela do projeto. Enquanto estiver ligado, a issue de um ticket novo aparece em TODO no momento em que a sessão a cria, e só sai na sincronização seguinte da `main`.
+
+## Fechamento
+
+Fechado por decisão do dono em 02/11. O passo do "Auto-add to project" não foi confirmado na sessão.

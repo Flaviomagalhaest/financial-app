@@ -1,7 +1,7 @@
 # Dois tickets com o número 95 na `main`
 
 Type: task
-Status: ready-for-human
+Status: wontfix
 Blocked by: —
 Skills: decisão do dono (HITL); depois edição simples dos arquivos, das issues e dos links
 Modelo recomendado: Sonnet
@@ -17,3 +17,7 @@ Origem: sessão do ticket 95 (recorrência): o pedido "ticket 95" era ambíguo
 
 - [ ] O dono escolhe qual dos dois ganha novo número (o próximo livre no mapa) e se a regra de reserva do número precisa mudar (por exemplo, checar `origin` antes de criar um ticket)
 - [ ] Renomear o arquivo, o título e o `Issue:`/título da issue, e os links dos tickets que o citam (o 45 cita o da recorrência; o 55 cita o dos cartões)
+
+## Fechamento
+
+Fechado sem fazer (`wontfix`) por decisão do dono em 02/11. Em 02/11 a V1 tinha 16 números de ticket repetidos, e nenhum foi renumerado.
