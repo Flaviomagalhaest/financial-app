@@ -1,9 +1,19 @@
 name: CI
 
+# PR ou push que mude só spec e tickets não precisa passar pelo CI.
+# Se mudar qualquer outro arquivo, o CI roda inteiro.
 on:
   pull_request:
+    paths-ignore:
+      - ".scratch/**"
+      - "docs/**"
+      - "GLOSSARY.md"
   push:
     branches: [main]
+    paths-ignore:
+      - ".scratch/**"
+      - "docs/**"
+      - "GLOSSARY.md"
 
 permissions:
   contents: read
