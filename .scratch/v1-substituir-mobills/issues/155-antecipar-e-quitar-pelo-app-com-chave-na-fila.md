@@ -1,7 +1,7 @@
 # Antecipar e quitar pelo app, com a chave na fila sem internet
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
