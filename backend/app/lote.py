@@ -27,10 +27,11 @@ from app.lancamentos import (
     criar,
     editar,
     excluir,
+    recusar,
     url_do_banco,
 )
 from app.login import UsuarioLogado
-from app.parcelamentos import NovoParcelamento, Parcelamento
+from app.parcelamentos import Antecipacao, NovoParcelamento, Parcelamento
 from app.recorrencias import (
     AlteracaoDeRecorrencia,
     CamposDaRecorrencia,
@@ -75,6 +76,13 @@ class AcaoCriarParcelamento(BaseModel):
     parcelamento: NovoParcelamento
 
 
+class AcaoAnteciparParcelas(BaseModel):
+    acao: Literal["antecipar_parcelas"]
+    parcelamento_id: UUID
+    # Com o `id` gerado no aparelho, o reenvio não antecipa as K parcelas seguintes (ticket 154).
+    antecipacao: Antecipacao
+
+
 class AcaoCriarRecorrencia(BaseModel):
     acao: Literal["criar_recorrencia"]
     recorrencia: NovaRecorrencia
@@ -100,6 +108,7 @@ Acao = (
     | AcaoExcluir
     | AcaoConfirmar
     | AcaoCriarParcelamento
+    | AcaoAnteciparParcelas
     | AcaoCriarRecorrencia
     | AcaoAlterarRecorrencia
     | AcaoExcluirRecorrencia
@@ -155,6 +164,8 @@ def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
         # A regra que o aparelho mudou já não existe: a outra pessoa a excluiu.
         if erro.status_code == 404 and isinstance(acao, AcaoAlterarRecorrencia):
             return Resultado(resultado="recusada", motivo="a recorrência foi excluída")
+        if erro.status_code == 404 and isinstance(acao, AcaoAnteciparParcelas):
+            return Resultado(resultado="recusada", motivo="parcelamento não encontrado")
         if erro.status_code == 422:
             return Resultado(resultado="recusada", motivo=erro.detail)
         raise
@@ -193,6 +204,24 @@ def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
             # Grava numa transação e gera as parcelas em outras (o limite de linhas do DSQL).
             criado, _ = parcelamentos.criar(url, novo, usuario)
             return Resultado(resultado="aceita", parcelamento=criado)
+        case AcaoAnteciparParcelas(parcelamento_id=id, antecipacao=antecipacao):
+            if antecipacao.id is None:
+                raise recusar("a antecipação da fila leva o id do aparelho")
+            em_transacao(
+                url,
+                cartoes.protegida(
+                    lambda conn: parcelamentos._antecipar(
+                        conn,
+                        id,
+                        antecipacao.parcelas,
+                        antecipacao.data,
+                        antecipacao.valor_total_centavos,
+                        usuario,
+                        antecipacao.id,
+                    )
+                ),
+            )
+            return Resultado(resultado="aceita")
         case AcaoCriarRecorrencia(recorrencia=nova):
             # Grava numa transação e gera os previstos em outras, como o parcelamento.
             criada, _ = recorrencias.criar(url, nova, usuario)

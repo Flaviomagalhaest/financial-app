@@ -1155,6 +1155,20 @@ export interface components {
             alteracao: components["schemas"]["AlteracaoDeRecorrencia"];
             antes?: components["schemas"]["CamposDaRecorrencia"] | null;
         };
+        /** AcaoAnteciparParcelas */
+        AcaoAnteciparParcelas: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            acao: "antecipar_parcelas";
+            /**
+             * Parcelamento Id
+             * Format: uuid
+             */
+            parcelamento_id: string;
+            antecipacao: components["schemas"]["Antecipacao"];
+        };
         /** AcaoConfirmar */
         AcaoConfirmar: {
             /**
@@ -2451,7 +2465,7 @@ export interface components {
         /** Lote */
         Lote: {
             /** Acoes */
-            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoCriarRecorrencia"] | components["schemas"]["AcaoAlterarRecorrencia"] | components["schemas"]["AcaoExcluirRecorrencia"])[];
+            acoes: (components["schemas"]["AcaoCriar"] | components["schemas"]["AcaoEditar"] | components["schemas"]["AcaoExcluir"] | components["schemas"]["AcaoConfirmar"] | components["schemas"]["AcaoCriarParcelamento"] | components["schemas"]["AcaoAnteciparParcelas"] | components["schemas"]["AcaoCriarRecorrencia"] | components["schemas"]["AcaoAlterarRecorrencia"] | components["schemas"]["AcaoExcluirRecorrencia"])[];
         };
         /** MesDaProjecao */
         MesDaProjecao: {

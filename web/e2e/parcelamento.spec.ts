@@ -441,3 +441,61 @@ test("a tela do parcelamento mostra a mudança nas parcelas que uma recusa parou
 
   await expect(page.getByText(`Uma mudança nas parcelas parou no meio: ${motivo}. Para terminar, mude de novo uma das parcelas que faltaram, em “Esta e as próximas” ou “Todas”.`)).toBeVisible();
 });
+
+test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave não antecipa as seguintes", async ({ page, context }) => {
+  const { api, id, descricao } = await prepararParcelamento(page);
+  await page.reload();
+  await aba(page, "Histórico");
+  await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(6);
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+
+  await context.setOffline(true);
+  const antecipar = page.getByRole("region", { name: "Antecipar ou quitar" });
+  // Quitar tudo precisa de internet; antecipar vale sem ela.
+  await antecipar.getByRole("button", { name: "Quitar tudo" }).click();
+  await expect(antecipar.getByRole("button", { name: "Quitar parcelamento" })).toBeDisabled();
+  await antecipar.getByRole("button", { name: "Antecipar", exact: true }).click();
+  await antecipar.getByLabel(/^Parcelas a antecipar/).fill("2");
+  await antecipar.getByLabel("Valor total pago").fill("180,00");
+  await antecipar.getByRole("button", { name: "Antecipar parcelas" }).click();
+  await expect(antecipar.getByRole("list", { name: "Antecipações não enviadas" })).toContainText("Antecipar 2 parcelas, não enviado");
+
+  // O servidor grava o lote, mas a resposta não chega: o reenvio leva a mesma chave.
+  let perdidas = 0;
+  const chaves: string[] = [];
+  await page.route("**/api/lancamentos/lote", async (rota) => {
+    for (const acao of rota.request().postDataJSON().acoes) if (acao.acao === "antecipar_parcelas") chaves.push(acao.antecipacao.id);
+    if (perdidas > 0) return rota.continue();
+    perdidas++;
+    await rota.fetch();
+    await rota.abort("connectionreset");
+  });
+  await context.setOffline(false);
+  await expect.poll(() => perdidas).toBe(1);
+  await aba(page, "Hoje");
+  await page.getByRole("button", { name: "Enviar agora" }).click();
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+
+  expect(chaves).toHaveLength(2);
+  expect(new Set(chaves).size).toBe(1);
+  const parcelas: { situacao: string; valor_centavos: number }[] = (await api.ler("/api/lancamentos")).filter((l: { descricao: string }) => l.descricao === descricao);
+  expect(parcelas.filter((l) => l.situacao === "previsto")).toHaveLength(3);
+  const antecipadas = parcelas.filter((l) => l.situacao === "realizado").slice(-2);
+  expect(antecipadas.map((l) => l.valor_centavos)).toEqual([9000, 9000]);
+});
+
+test("quita o parcelamento pela tela, com desconto", async ({ page }) => {
+  const { api, id, descricao } = await prepararParcelamento(page);
+  await page.reload();
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  const antecipar = page.getByRole("region", { name: "Antecipar ou quitar" });
+  await antecipar.getByRole("button", { name: "Quitar tudo" }).click();
+  await antecipar.getByLabel("Valor total pago").fill("450,00");
+  await antecipar.getByRole("button", { name: "Quitar parcelamento" }).click();
+  await expect(antecipar.getByText("Parcelamento quitado.")).toBeVisible();
+  await expect(antecipar.getByText("Não há parcelas por pagar.")).toBeVisible();
+  const parcelas: { situacao: string; valor_centavos: number }[] = (await api.ler("/api/lancamentos")).filter((l: { descricao: string }) => l.descricao === descricao);
+  expect(parcelas.every((l) => l.situacao === "realizado")).toBe(true);
+  expect(parcelas.reduce((soma, l) => soma + l.valor_centavos, 0)).toBe(55000);
+});

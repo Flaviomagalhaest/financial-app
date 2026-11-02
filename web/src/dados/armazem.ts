@@ -9,6 +9,7 @@ export type NovaRecorrencia = components["schemas"]["NovaRecorrencia"];
 export type Recorrencia = components["schemas"]["Recorrencia"];
 export type AlteracaoDeRecorrencia = components["schemas"]["AlteracaoDeRecorrencia"];
 export type NovoParcelamento = components["schemas"]["NovoParcelamento"];
+export type Antecipacao = components["schemas"]["Antecipacao"];
 export type Conflito = components["schemas"]["Conflito"];
 export type Exclusao = components["schemas"]["Exclusao"];
 /** O lançamento numa versão do servidor: a edição sobe só o que mudou desde ela (ADR 0011). */
@@ -61,6 +62,18 @@ export interface ItemDeParcelamento extends PedidoNaFila {
 }
 
 /**
+ * A antecipação de parcelas de um parcelamento do servidor. O `id` da fila é o da antecipação, gerado
+ * no aparelho e enviado como a chave (ticket 154): o reenvio não antecipa as K parcelas seguintes.
+ */
+export interface ItemDeAntecipacao extends PedidoNaFila {
+  acao: "antecipar_parcelas";
+  parcelamento_id: string;
+  /** Para a tela dizer qual; o servidor só recebe o id. */
+  descricao: string;
+  antecipacao: Antecipacao;
+}
+
+/**
  * A mudança "daqui para frente" (ou o fim) de uma recorrência que está no servidor. Cada mudança é
  * um pedido, com id próprio; o servidor reajusta os previstos ao receber.
  */
@@ -80,7 +93,7 @@ export interface ItemDeExclusaoDaRecorrencia extends PedidoNaFila {
 }
 
 /** A regra vai como um pedido só e não se edita no aparelho, só se descarta. */
-export type ItemDeRegra = ItemDeRecorrencia | ItemDeParcelamento | ItemDeMudancaDaRecorrencia | ItemDeExclusaoDaRecorrencia;
+export type ItemDeRegra = ItemDeRecorrencia | ItemDeParcelamento | ItemDeAntecipacao | ItemDeMudancaDaRecorrencia | ItemDeExclusaoDaRecorrencia;
 
 /** Um pedido não enviado: a mudança de um lançamento ou a de uma regra, pela `acao`. */
 export type ItemDaFila = ItemDeLancamento | ItemDeRegra;

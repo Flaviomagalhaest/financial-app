@@ -1,7 +1,7 @@
 # Antecipar e quitar pelo app, com a chave na fila sem internet
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -15,7 +15,7 @@ Antecipar (K parcelas) e quitar pela tela do parcelamento. A antecipação entra
 
 ## Checklist
 
-- [ ] Ação `antecipar_parcelas` na fila (`web/src/dados/fila.ts`, `armazem.ts`), com o id da antecipação
-- [ ] Tela para antecipar/quitar, com data e valor total
-- [ ] Teste e2e do reenvio
-- [ ] Verificações do projeto e PR para `main`
+- [x] Ação `antecipar_parcelas` na fila (`web/src/dados/fila.ts`, `armazem.ts`), com o id da antecipação; o lote do backend (`backend/app/lote.py`) ganhou a ação e o teste em `test_parcelamentos.py`
+- [x] Tela para antecipar/quitar, com data e valor total (`TelaDoParcelamento.tsx`); a quitação vai direto à API e precisa de internet
+- [x] Teste e2e do reenvio (`web/e2e/parcelamento.spec.ts`)
+- [x] Verificações do projeto e PR para `main`

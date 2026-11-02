@@ -3516,6 +3516,30 @@
         ],
         "title": "AcaoAlterarRecorrencia"
       },
+      "AcaoAnteciparParcelas": {
+        "properties": {
+          "acao": {
+            "type": "string",
+            "const": "antecipar_parcelas",
+            "title": "Acao"
+          },
+          "parcelamento_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parcelamento Id"
+          },
+          "antecipacao": {
+            "$ref": "#/components/schemas/Antecipacao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acao",
+          "parcelamento_id",
+          "antecipacao"
+        ],
+        "title": "AcaoAnteciparParcelas"
+      },
       "AcaoConfirmar": {
         "properties": {
           "acao": {
@@ -7071,6 +7095,9 @@
                   "$ref": "#/components/schemas/AcaoCriarParcelamento"
                 },
                 {
+                  "$ref": "#/components/schemas/AcaoAnteciparParcelas"
+                },
+                {
                   "$ref": "#/components/schemas/AcaoCriarRecorrencia"
                 },
                 {
@@ -7084,6 +7111,7 @@
                 "propertyName": "acao",
                 "mapping": {
                   "alterar_recorrencia": "#/components/schemas/AcaoAlterarRecorrencia",
+                  "antecipar_parcelas": "#/components/schemas/AcaoAnteciparParcelas",
                   "confirmar": "#/components/schemas/AcaoConfirmar",
                   "criar": "#/components/schemas/AcaoCriar",
                   "criar_parcelamento": "#/components/schemas/AcaoCriarParcelamento",
