@@ -22,8 +22,9 @@ from app.login import UsuarioLogado
 
 router = APIRouter(prefix="/api")
 
-# O número da parcela que o banco e o Mobills põem na descrição: "Geladeira (2/10)".
-_PARCELA = re.compile(r"\(\s*\d+\s*/\s*\d+\s*\)")
+# O número da parcela que o banco e o Mobills põem na descrição: "Geladeira (2/10)". Só dígitos
+# ASCII, como o `\d` do aparelho (`chaveDaDescricao`); o `\d` do Python pegaria também os de outras escritas.
+_PARCELA = re.compile(r"\(\s*\d+\s*/\s*\d+\s*\)", re.ASCII)
 
 
 def chave(descricao: str) -> str:

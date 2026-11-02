@@ -24,6 +24,7 @@ import {
   type LancamentoNaTela,
   type NovoLancamento,
   type Sugestao,
+  chaveDaDescricao,
 } from "../dados";
 import { eEstorno, indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaParte, restanteDoEstorno, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
 import { pagaPeloPagamento } from "../cartoes/apresentacao";
@@ -349,10 +350,14 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   });
 
   /**
-   * Preenche conta, categorias, tags e pessoa da sugestão, e o tipo que as categorias têm; o valor,
-   * a data e a descrição ficam como estão.
+   * Preenche conta, categorias, tags e pessoa da sugestão, e o tipo que as categorias têm; o valor e
+   * a data ficam como estão. A descrição só é completada quando o digitado é o começo da dela (sem
+   * a parcela `(n/total)`); se o casamento foi por uma palavra do meio, fica o digitado (ticket 100).
    */
   function escolher(s: Sugestao) {
+    if (chaveDaDescricao(s.descricao).startsWith(chaveDaDescricao(descricao))) {
+      setDescricao(s.descricao.replace(/\(\s*\d+\s*\/\s*\d+\s*\)/g, " ").replace(/\s+/g, " ").trim());
+    }
     setTipo(s.tipo);
     if (contasECartoes.some((c) => c.id === s.conta_id)) trocarConta(s.conta_id);
     setSugerindo(false);

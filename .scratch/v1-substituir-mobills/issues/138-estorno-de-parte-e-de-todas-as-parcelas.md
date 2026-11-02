@@ -35,4 +35,4 @@ O estorno passa a ser de uma parte da compra e, na compra parcelada, de uma parc
 - Backup na versão 30 (migrations 0068 e 0069), `e_estorno()` em `app/partes.py` para quem soma, OpenAPI e tipos regenerados.
 - Telas: "Parte estornada" (escolha da parte) e "Só esta parcela" / "Todas as parcelas" ao estornar; o restante vem do aparelho (lançamentos e parcelamentos guardados), também sem internet.
 - Testes: `test_estorno_de_parte_e_de_parcelas.py`, `test_restauracao.py` (versão 27) e `e2e/estorno-de-parte-e-parcelas.spec.ts`.
-- Pendência: [ticket 154](154-estorno-de-parte-e-de-parcelas-pendencias.md) (decisões provisórias, ready-for-human).
+- Pendência: [ticket 159](159-estorno-de-parte-e-de-parcelas-pendencias.md) (decisões provisórias, ready-for-human).
