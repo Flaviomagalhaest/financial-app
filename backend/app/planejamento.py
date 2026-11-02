@@ -194,7 +194,7 @@ def a_lancar_nas_despesas(conn, mes: date) -> int:
     """O que ainda falta lançar dos itens de despesa do mês (o planejado menos o realizado e o
     previsto), sem compensar o item estourado com a sobra de outro, menos os ajustes de fatura,
     como o "ainda dá para gastar". O item de transferência fica de fora: guardar na reserva move
-    dinheiro entre contas e não muda a soma delas. O mês sem planejamento vale pelo modelo
+    dinheiro entre contas e não muda a soma delas. O mês vazio vale pelo modelo
     padrão, para a projeção não subir de repente depois do último mês planejado."""
     plano = ler_mes(conn, mes.strftime("%Y-%m"))
     if plano.itens:
@@ -217,6 +217,7 @@ def _faltas_do_modelo(conn, mes: date) -> dict[UUID, int]:
     valores = {i.categoria_id: i.valor_centavos for i in _modelo(conn).itens}
     if not valores:
         return {}
+    # Sem itens, cada categoria do modelo faz de item.
     movimentos, _ = _movimentos_por_item(conn, mes, {id: id for id in valores})
     for categoria_id, _situacao, valor in movimentos:
         valores[categoria_id] -= valor
