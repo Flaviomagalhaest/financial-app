@@ -1,7 +1,7 @@
 # Conferir as regras do item do lançamento escolhidas no ticket 51
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: 51
 Skills: `grilling`, `domain-modeling` (HITL: decisões do dono)
 Modelo recomendado: Opus
