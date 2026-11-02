@@ -1,7 +1,7 @@
 # Limite do cartão: o que a lista dos próximos 12 meses mostra
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se a leitura mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
