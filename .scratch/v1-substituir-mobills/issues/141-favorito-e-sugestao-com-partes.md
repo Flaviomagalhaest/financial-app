@@ -23,3 +23,4 @@ O favorito e a sugestão por descrição passam a levar as partes da compra.
 ## Notas
 
 - Decisão Q45 do ticket 94; ADR 0022.
+- No merge com o 140, a divisão na proporção do app (`dividirNaProporcao`) passou para `web/src/lancamentos/dinheiro.ts`, junto do `redividir` da recorrência, e a tabela `tabelas-de-teste/redivisao-das-partes.json` prende as duas contas ao servidor.

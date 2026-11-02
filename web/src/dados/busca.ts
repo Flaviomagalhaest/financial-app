@@ -2,6 +2,7 @@
 // aparelho aplica os mesmos critérios ao que guarda (os lançamentos da última lista e os não
 // enviados), sem as transferências, e a tela avisa que o resultado é parcial.
 import type { components } from "../api/schema";
+import { eEstorno } from "../lancamentos/apresentacao";
 
 type PedidoDeBusca = components["schemas"]["PedidoDeBusca"];
 /** Sem um critério, ele não restringe. */
@@ -25,6 +26,7 @@ export type LancamentoDaBusca = {
   mes?: string;
   estorno_de?: string | null;
   estorno_avulso?: boolean | null;
+  estorno_parcelamento_id?: string | null;
   parcelamento_id?: string | null;
   parcela?: number | null;
   parcelas?: number | null;
@@ -202,7 +204,7 @@ export function buscarNoAparelho<L extends LancamentoDaBusca>(lancamentos: L[], 
     .sort((a, b) => (criterios.ordem === "valor" && b.valor !== a.valor ? b.valor - a.valor : b.data.localeCompare(a.data)));
 
   const somas = { despesa: { realizado: 0, previsto: 0 }, receita: { realizado: 0, previsto: 0 } };
-  for (const { doGrupo } of linhas) for (const l of doGrupo) somas[l.tipo][l.situacao] += (l.tipo === "despesa" && (l.estorno_de || l.estorno_avulso) ? -1 : 1) * valorDe(l);
+  for (const { doGrupo } of linhas) for (const l of doGrupo) somas[l.tipo][l.situacao] += (l.tipo === "despesa" && eEstorno(l) ? -1 : 1) * valorDe(l);
   const porSituacao = (s: { realizado: number; previsto: number }) => ({ realizado_centavos: s.realizado, previsto_centavos: s.previsto });
   return {
     totais: {

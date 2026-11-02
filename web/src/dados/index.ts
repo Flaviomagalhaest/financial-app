@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/cliente";
 import type { components } from "../api/schema";
 import { hoje, mesDepois } from "../lancamentos/datas";
+import { redividir } from "../lancamentos/dinheiro";
 import {
   apagarTudo,
   comTrava,
@@ -123,6 +124,8 @@ export type LancamentoNaTela = NovoLancamento & {
   parcelas?: Lancamento["parcelas"];
   /** A parcela que uma pessoa mudou: a correção do parcelamento preserva valor, data, conta e fatura dela. */
   alterada_a_mao?: Lancamento["alterada_a_mao"];
+  /** A proporção em que as partes da parcela se dividem quando o valor muda (ticket 139). */
+  proporcao_das_partes?: Lancamento["proporcao_das_partes"];
   /** O lançamento da outra pessoa que este parece repetir. */
   parece_repetido_de?: string | null;
   /** A hora da última ação no aparelho, enquanto a mudança não subiu. */
@@ -509,6 +512,13 @@ export function comAMudanca(regra: Recorrencia, { a_partir_da_ocorrencia, ...mud
   if (mudou.ate) nova.vezes = null;
   if (mudou.vezes) nova.ate = null;
   if ("pessoa" in mudou) nova.pessoa = mudou.pessoa || null;
+  // As partes (ADR 0022): duas ou mais tiram a classificação própria da regra; uma só a devolve.
+  if (mudou.partes?.length === 1) {
+    const [fica] = mudou.partes;
+    Object.assign(nova, { partes: [], categoria_ids: fica.categoria_ids, tags: fica.tags ?? [], pessoa: fica.pessoa ?? null, item_categoria_id: fica.item_categoria_id ?? null });
+  } else if (mudou.partes?.length) Object.assign(nova, { categoria_ids: [], tags: [], pessoa: null, item_categoria_id: null });
+  // Sem partes na mudança, o valor novo as divide de novo, como o servidor.
+  else if (!mudou.partes && mudou.valor_centavos && regra.partes?.length) nova.partes = redividir(regra.partes, mudou.valor_centavos) ?? regra.partes;
   return nova;
 }
 
@@ -710,6 +720,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
       // escolha do item (a confirmação não a leva), fica a do servidor, como em `alteracao`.
       estorno_de: l.estorno_de ?? antes?.estorno_de,
       estorno_avulso: l.estorno_avulso ?? antes?.estorno_avulso,
+      estorno_parcelamento_id: l.estorno_parcelamento_id ?? antes?.estorno_parcelamento_id,
       parcela: antes?.parcela,
       item_categoria_id: l.item_categoria_id || antes?.item_categoria_id,
       situacao: situacaoNoAparelho(l, antes),
@@ -778,6 +789,7 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
           item_categoria_id: escolha ?? antes?.item_categoria_id,
           estorno_de: antes?.estorno_de,
           estorno_avulso: antes?.estorno_avulso,
+          estorno_parcelamento_id: antes?.estorno_parcelamento_id,
           mes,
         })
       : null;

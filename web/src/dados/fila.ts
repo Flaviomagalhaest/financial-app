@@ -4,6 +4,7 @@
 import type { components } from "../api/schema";
 import { config } from "../config";
 import { diaEmSaoPaulo, hoje } from "../lancamentos/datas";
+import { redividir } from "../lancamentos/dinheiro";
 import {
   comTrava,
   deLancamento,
@@ -149,7 +150,9 @@ export function enfileirarConfirmar(mostrado: NovoLancamento, ajustes: Ajustes, 
   return mudar(mostrado.id, (atual, aceito) => {
     base ??= aceito;
     const antes = atual?.lancamento && !atual.conflito ? atual.lancamento : comoNovo(mostrado);
-    const lancamento: NovoLancamento = { ...antes, ...ajustes, situacao: "realizado" };
+    // O valor de verdade divide as partes de novo, como o servidor faz ao receber (ADR 0022).
+    const partes = ajustes.valor_centavos && antes.partes?.length ? (redividir(antes.partes, ajustes.valor_centavos) ?? antes.partes) : antes.partes;
+    const lancamento: NovoLancamento = { ...antes, ...ajustes, partes, situacao: "realizado" };
     return !atual || (atual.acao === "confirmar" && !atual.conflito)
       ? { acao: "confirmar", lancamento, base: atual?.base ?? base }
       : pedidoDeSalvar(atual, lancamento, false, base);
@@ -293,11 +296,14 @@ function acoesDo(item: ItemDaFila): Acao[] {
 
 /**
  * Os campos que a mudança traz, como a tela os mostrava: o servidor recusa se a outra pessoa mexeu
- * neles depois. O fim é um campo só (a data e as vezes), porque um tira o outro.
+ * neles depois. O fim é um campo só (a data e as vezes), porque um tira o outro. Dividir ou juntar
+ * as partes mexe também na classificação própria da regra (ADR 0022): ela vai junto, para a troca
+ * de categoria que a outra pessoa fez depois não sumir em silêncio.
  */
 function comoAntes({ base, alteracao }: { base: Recorrencia; alteracao: AlteracaoDeRecorrencia }) {
   const campos = new Set(Object.keys(alteracao).filter((campo) => campo !== "a_partir_da_ocorrencia") as (keyof AlteracaoDeRecorrencia & keyof Recorrencia)[]);
   if (campos.has("ate") || campos.has("vezes")) ["ate", "vezes"].forEach((campo) => campos.add(campo as "ate" | "vezes"));
+  if (campos.has("partes")) (["categoria_ids", "tags", "pessoa", "item_categoria_id"] as const).forEach((campo) => campos.add(campo));
   return Object.fromEntries([...campos].map((campo) => [campo, base[campo] ?? null]));
 }
 

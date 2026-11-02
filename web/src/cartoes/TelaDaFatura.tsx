@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
-import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, usePessoas, type Fatura } from "../dados";
+import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, useParcelamentos, usePessoas, type Fatura } from "../dados";
 import { eCredito, eEstorno, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { mesEmQueConta } from "../dados/aviso";
 import { dataPorExtenso, mesPorExtenso } from "../lancamentos/datas";
@@ -109,7 +109,8 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
       }),
     [lancamentos, mes, doCartao, cartao, faturas],
   );
-  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
+  const { dados: parcelamentos } = useParcelamentos();
+  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? [], parcelamentos ?? []), [lancamentos, parcelamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
   const estornosCentavos = compras.filter((l) => eEstorno(l) && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
   const ligacoes = useMemo(() => new Map(compras.map((l) => [l.id, ligacaoDoEstorno(l, indice, categorias)])), [compras, indice, categorias]);

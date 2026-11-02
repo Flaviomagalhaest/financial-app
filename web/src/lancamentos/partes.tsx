@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { components } from "../api/schema";
 import { chaveDaTag, type Categoria, type Pessoa } from "../dados";
 import { nomePorId } from "./apresentacao";
-import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
+import { comoDigitado, dividirNaProporcao, emCentavos, formatarCentavos } from "./dinheiro";
 import { SeletorDeTags } from "./SeletorDeTags";
 
 export type Parte = components["schemas"]["Parte"];
@@ -88,18 +88,6 @@ export type ParteEmEdicao = Omit<Parte, "valor_centavos"> & { valor: string };
 
 export const emEdicao = (p: Parte): ParteEmEdicao => ({ ...p, valor: comoDigitado(p.valor_centavos) });
 
-/**
- * Divide o total na proporção das partes de um favorito ou sugestão (o valor da última compra).
- * Os centavos do arredondamento vão para a maior parte, a primeira no empate (ADR 0022).
- */
-export function dividirNaProporcao(base: number[], total: number): number[] {
-  const soma = base.reduce((a, b) => a + b, 0);
-  const valores = base.map((v) => Math.floor((total * v) / soma));
-  const sobra = total - valores.reduce((a, b) => a + b, 0);
-  valores[base.indexOf(Math.max(...base))] += sobra;
-  return valores;
-}
-
 /** As partes de um favorito ou sugestão como a tela as edita, com novos ids e o total dividido na proporção. */
 export function emEdicaoNaProporcao(modelo: { descricao?: string; valor_centavos: number; categoria_ids: string[]; tags?: string[]; pessoa?: string | null }[], total: number): ParteEmEdicao[] {
   const valores = dividirNaProporcao(modelo.map((p) => p.valor_centavos), total);
@@ -115,12 +103,13 @@ export function valoresDasPartes(partes: ParteEmEdicao[], total: number): number
   return [...digitados, total - digitados.reduce((soma, v) => soma + v, 0)];
 }
 
-/** Por que as partes ainda não salvam; vazio quando estão prontas. */
-export function problemaDasPartes(partes: ParteEmEdicao[], total: number): string {
+/** Por que as partes ainda não salvam; vazio quando estão prontas. No parcelado, `menorParcela` também se divide por elas. */
+export function problemaDasPartes(partes: ParteEmEdicao[], total: number, menorParcela?: number): string {
   const valores = valoresDasPartes(partes, total);
   if (partes.slice(0, -1).some((p) => !emCentavos(p.valor) || emCentavos(p.valor)! <= 0)) return "Cada parte precisa de um valor.";
   if (valores[valores.length - 1] <= 0) return "As partes passam do valor da compra.";
   if (partes.some((p) => p.categoria_ids.length === 0)) return "Cada parte precisa de uma categoria.";
+  if (menorParcela !== undefined && Math.min(...dividirNaProporcao(valores, menorParcela)) <= 0) return "A parcela não chega a um centavo por parte.";
   return "";
 }
 
@@ -130,9 +119,19 @@ export function partesParaSalvar(partes: ParteEmEdicao[], total: number): Parte[
   return partes.map(({ valor: _, ...p }, i) => ({ ...p, valor_centavos: valores[i] }));
 }
 
+/** A parte como o servidor a compara (`parte_normalizada`): categorias e tags sem ordem, tags sem maiúsculas. */
+function comparavel(p: Parte): string {
+  return JSON.stringify([p.id, p.descricao ?? "", p.valor_centavos, [...p.categoria_ids].sort(), (p.tags ?? []).map(chaveDaTag).sort(), p.pessoa ?? null, p.item_categoria_id ?? null]);
+}
+
+/** As duas listas têm as mesmas partes, na mesma ordem. */
+export const mesmasPartes = (a: Parte[], b: Parte[]) => a.length === b.length && a.every((p, i) => comparavel(p) === comparavel(b[i]));
+
 type PropsDoEditor = {
   partes: ParteEmEdicao[];
   total: number;
+  /** No parcelado, a menor parcela, que também se divide pelas partes. */
+  menorParcela?: number;
   categorias: Categoria[];
   pessoas: Pessoa[];
   opcoesDeTags: string[];
@@ -146,7 +145,7 @@ type PropsDoEditor = {
 /** As partes da compra na tela de lançar: cada uma com descrição, valor, categorias, tags e pessoa. */
 export function EditorDePartes(props: PropsDoEditor) {
   const valores = valoresDasPartes(props.partes, props.total);
-  const problema = problemaDasPartes(props.partes, props.total);
+  const problema = problemaDasPartes(props.partes, props.total, props.menorParcela);
 
   function mudar(id: string, mudanca: Partial<ParteEmEdicao>) {
     props.onMudar(props.partes.map((p) => (p.id === id ? { ...p, ...mudanca } : p)));

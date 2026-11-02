@@ -25,6 +25,7 @@ from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import (
     Lancamento,
+    acompanhar_estornos_do_parcelamento,
     gravar_categorias,
     ids_das_tags,
     ler_por_ids,
@@ -393,8 +394,20 @@ class _Plano:
 def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
     mudancas = _Mudancas(conn, pedido)
     lancamentos, estornos_fora = _selecionados(conn, pedido.selecao)
-    com_partes = [l for l in lancamentos if l.partes]
-    lancamentos = [l for l in lancamentos if not l.partes]
+    # A parcela de um parcelamento com partes também fica de fora, mesmo a que uma pessoa juntou
+    # só nela: o lote levaria a categoria ao parcelamento, que não tem classificação própria.
+    parcelamentos_com_partes = {
+        id
+        for (id,) in conn.execute(
+            "SELECT DISTINCT parcelamento_id FROM parcelamento_partes WHERE parcelamento_id = ANY(%s)",
+            ([l.parcelamento_id for l in lancamentos if l.parcelamento_id],),
+        )
+    }
+    com_partes = [
+        l for l in lancamentos if l.partes or l.parcelamento_id in parcelamentos_com_partes
+    ]
+    fora = {l.id for l in com_partes}
+    lancamentos = [l for l in lancamentos if l.id not in fora]
     mudam, ja_estao, de_outro_tipo, sem_categoria = [], 0, 0, 0
     for l in lancamentos:
         categorias, tags, outro_tipo = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
@@ -564,6 +577,7 @@ def _mudar_parcelamento(
         conn, "parcelamento_categorias", "parcelamento_id", "categoria_id", id, novas_categorias
     )
     _religar(conn, "parcelamento_tags", "parcelamento_id", "tag_id", id, tag_ids)
+    acompanhar_estornos_do_parcelamento(conn, id)
     conn.execute(
         "UPDATE parcelamentos SET item_categoria_id = %s, alterado_por = %s, alterado_em = %s"
         " WHERE id = %s",
@@ -699,6 +713,7 @@ def _desfazer_parcelamento(conn, registro: tuple) -> str:
         return "saiu"
     _religar(conn, "parcelamento_categorias", "parcelamento_id", "categoria_id", id, categorias)
     _religar(conn, "parcelamento_tags", "parcelamento_id", "tag_id", id, tags)
+    acompanhar_estornos_do_parcelamento(conn, id)
     conn.execute("UPDATE parcelamentos SET item_categoria_id = %s WHERE id = %s", (escolhida, id))
     return "desfeito"
 

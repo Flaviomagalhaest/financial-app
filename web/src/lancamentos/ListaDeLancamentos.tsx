@@ -11,6 +11,7 @@ import {
   useCartoesComArquivados,
   useLancamentos,
   useMudancasDaRecorrenciaNaoEnviadas,
+  useParcelamentos,
   useParcelamentosNaoEnviados,
   usePessoas,
   useRecorrencias,
@@ -18,7 +19,7 @@ import {
   type LancamentoNaTela,
   type NovoLancamento,
 } from "../dados";
-import { indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, numeroDaParcela, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
+import { eEstorno, indiceDeEstornos, ligacaoDoEstorno, nomePorId as nome, numeroDaParcela, podeEstornar, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { formatarCentavos } from "./dinheiro";
 import { mesPorExtenso } from "./datas";
 import { dataPorExtenso, quando } from "./datas";
@@ -109,7 +110,8 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   const [sugerindoEstorno, setSugerindoEstorno] = useState<string | null>(null);
   // A compra com estorno que se pediu para excluir: o servidor a recusa, e a tela mostra o porquê antes.
   const [comEstorno, setComEstorno] = useState<string | null>(null);
-  const estornos = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
+  const { dados: parcelamentosDoServidor } = useParcelamentos();
+  const estornos = useMemo(() => indiceDeEstornos(lancamentos ?? [], parcelamentosDoServidor ?? []), [lancamentos, parcelamentosDoServidor]);
   const estornosDe = (id: string) => (estornos.estornos.get(id) ?? []).filter((e) => !e.exclusao);
 
   async function excluir(l: LancamentoNaTela, mesmoFechada = false) {
@@ -120,7 +122,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
     const cartao = cartoes.find((c) => c.id === l.conta_id);
     if (!mesmoFechada && cartao && l.mes && !l.naoEnviado) {
       const situacao = await situacaoDaFatura(cartao.titular_id ?? cartao.id, l.mes);
-      if (situacao && situacao !== "aberta" && !l.estorno_de && !l.estorno_avulso) return setSugerindoEstorno(l.id);
+      if (situacao && situacao !== "aberta" && !eEstorno(l)) return setSugerindoEstorno(l.id);
     }
     if (!window.confirm(`Excluir "${l.descricao || "este lançamento"}"?`)) return;
     setErro("");

@@ -20,13 +20,15 @@ export function tituloDoLancamento(l: Pick<NovoLancamento, "descricao" | "catego
 /** `3` de `10` vira `03/10`, como a fatura mostra a parcela. */
 export const numeroDaParcela = (parcela: number, parcelas: number) => `${String(parcela).padStart(2, "0")}/${String(parcelas).padStart(2, "0")}`;
 
-/** O estorno, ligado a uma compra ou avulso, é uma despesa que devolve dinheiro (ADR 0016). */
-export const eEstorno = (l: Pick<NovoLancamento, "estorno_de" | "estorno_avulso">) => !!l.estorno_de || !!l.estorno_avulso;
+type DoEstorno = Pick<NovoLancamento, "estorno_de" | "estorno_avulso" | "estorno_parcelamento_id">;
+
+/** O estorno, ligado a uma compra (ou à parte dela), a todas as parcelas ou avulso, é uma despesa que devolve dinheiro (ADR 0016). */
+export const eEstorno = (l: DoEstorno) => !!l.estorno_de || !!l.estorno_avulso || !!l.estorno_parcelamento_id;
 
 /** O estorno é uma despesa que devolve dinheiro: aparece como crédito (ADR 0016). */
-export const eCredito = (l: Pick<NovoLancamento, "tipo" | "estorno_de" | "estorno_avulso">) => l.tipo !== "despesa" || eEstorno(l);
+export const eCredito = (l: Pick<NovoLancamento, "tipo"> & DoEstorno) => l.tipo !== "despesa" || eEstorno(l);
 
-export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_centavos" | "estorno_de" | "estorno_avulso"> }) {
+export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_centavos"> & DoEstorno }) {
   return (
     <span className={eCredito(l) ? "receita" : "despesa"}>
       {eCredito(l) ? "+" : "−"} {formatarCentavos(l.valor_centavos)}
@@ -34,33 +36,93 @@ export function ValorComSinal({ l }: { l: Pick<NovoLancamento, "tipo" | "valor_c
   );
 }
 
-type ParaEstorno = Pick<NovoLancamento, "id" | "tipo" | "valor_centavos" | "data" | "estorno_de" | "estorno_avulso" | "descricao" | "categoria_ids"> & Partial<Pick<NovoLancamento, "partes">>;
+type ParaEstorno = Pick<NovoLancamento, "id" | "tipo" | "valor_centavos" | "data" | "estorno_de" | "estorno_avulso" | "descricao" | "categoria_ids"> &
+  Partial<Pick<NovoLancamento, "partes" | "estorno_parte_id" | "estorno_parcelamento_id">> & {
+    /** A parcela de um parcelamento (lançamento lido do servidor). */
+    parcelamento_id?: string | null;
+    parcela?: number | null;
+    parcelas?: number | null;
+    tags?: string[];
+    pessoa?: string | null;
+  };
 
-/** Os estornos de cada compra, pelo id da compra, e as compras pelo id, para ligar uma ponta à outra. */
-export function indiceDeEstornos<L extends ParaEstorno>(lancamentos: L[]) {
+/**
+ * Os estornos de cada compra, pelo id da compra, e as compras pelo id, para ligar uma ponta à outra.
+ * `todas` são os estornos de todas as parcelas, pelo id do parcelamento, `parcelas` as parcelas de cada parcelamento e `totais`
+ * o total de cada um (que o aparelho guarda com a lista dos parcelamentos).
+ */
+export function indiceDeEstornos<L extends ParaEstorno>(lancamentos: L[], parcelamentos: { id: string; valor_total_centavos: number }[] = []) {
   const compras = new Map<string, L>();
   const estornos = new Map<string, L[]>();
+  const todas = new Map<string, L[]>();
+  const parcelas = new Map<string, L[]>();
   for (const l of lancamentos) {
     compras.set(l.id, l);
     if (l.estorno_de) estornos.set(l.estorno_de, [...(estornos.get(l.estorno_de) ?? []), l]);
+    if (l.estorno_parcelamento_id) todas.set(l.estorno_parcelamento_id, [...(todas.get(l.estorno_parcelamento_id) ?? []), l]);
+    if (l.parcelamento_id) parcelas.set(l.parcelamento_id, [...(parcelas.get(l.parcelamento_id) ?? []), l]);
   }
-  return { compras, estornos };
+  const totais = new Map(parcelamentos.map((p) => [p.id, p.valor_total_centavos]));
+  return { compras, estornos, todas, parcelas, totais };
 }
 
 export type IndiceDeEstornos = ReturnType<typeof indiceDeEstornos>;
 
+const soma = (lista: { id: string; valor_centavos: number }[], exceto?: string) => lista.filter((e) => e.id !== exceto).reduce((total, e) => total + e.valor_centavos, 0);
+
 /** Quanto da compra ainda pode ser estornado: o valor menos os estornos, sem contar `exceto` (o que se edita). */
 export function restanteDaCompra(compra: ParaEstorno, indice: IndiceDeEstornos, exceto?: string): number {
-  const estornado = (indice.estornos.get(compra.id) ?? []).filter((e) => e.id !== exceto).reduce((soma, e) => soma + e.valor_centavos, 0);
-  return compra.valor_centavos - estornado;
+  return compra.valor_centavos - soma(indice.estornos.get(compra.id) ?? [], exceto);
+}
+
+/** Quanto de uma parte da compra ainda pode ser estornado: o valor dela menos os estornos dela (ticket 138). */
+export function restanteDaParte(compra: ParaEstorno, parteId: string, indice: IndiceDeEstornos, exceto?: string): number {
+  const parte = compra.partes?.find((p) => p.id === parteId);
+  if (!parte) return 0;
+  return parte.valor_centavos - soma((indice.estornos.get(compra.id) ?? []).filter((e) => e.estorno_parte_id === parteId), exceto);
+}
+
+/**
+ * Quanto do parcelamento ainda pode ser estornado, entre uma parcela e todas: o total menos o estornado em cada parcela e em
+ * todas (ticket 138). O `total` é o do parcelamento, que o aparelho guarda com a lista dele.
+ */
+export function restanteDoParcelamento(total: number, parcelamentoId: string, indice: IndiceDeEstornos, exceto?: string): number {
+  const dasParcelas = (indice.parcelas.get(parcelamentoId) ?? []).flatMap((p) => indice.estornos.get(p.id) ?? []);
+  return total - soma(dasParcelas, exceto) - soma(indice.todas.get(parcelamentoId) ?? [], exceto);
+}
+
+/** O que cabe no estorno de uma compra ou parcela: o que resta dela e, na parcela, do parcelamento (se o aparelho já o conhece). */
+export function restanteDaParcela(parcela: ParaEstorno, indice: IndiceDeEstornos, exceto?: string): number {
+  const dela = restanteDaCompra(parcela, indice, exceto);
+  const total = parcela.parcelamento_id ? indice.totais.get(parcela.parcelamento_id) : undefined;
+  return total === undefined ? dela : Math.min(dela, restanteDoParcelamento(total, parcela.parcelamento_id!, indice, exceto));
+}
+
+/** O que cabe no estorno que a tela monta: de uma parte, de todas as parcelas ou da compra (ou da parcela). */
+export function restanteDoEstorno(
+  compra: ParaEstorno | undefined,
+  parteId: string | null,
+  todas: boolean,
+  parcelamentoId: string | undefined,
+  indice: IndiceDeEstornos,
+  exceto?: string,
+): number {
+  const total = parcelamentoId ? indice.totais.get(parcelamentoId) : undefined;
+  if (todas) return parcelamentoId && total !== undefined ? restanteDoParcelamento(total, parcelamentoId, indice, exceto) : 0;
+  if (!compra) return 0;
+  const daParcela = restanteDaParcela(compra, indice, exceto);
+  return parteId ? Math.min(restanteDaParte(compra, parteId, indice, exceto), daParcela) : daParcela;
 }
 
 /** "estorno de ..." no estorno, "estorno avulso" no avulso e "estornada em ..." na compra; vazio no resto. */
 export function ligacaoDoEstorno(l: ParaEstorno, indice: IndiceDeEstornos, categorias: ComNome[]): string {
   if (l.estorno_avulso) return "estorno avulso";
+  if (l.estorno_parcelamento_id) return "estorno de todas as parcelas";
   if (l.estorno_de) {
     const compra = indice.compras.get(l.estorno_de);
-    return `estorno de ${compra ? tituloDoLancamento(compra, categorias) : "uma compra"}`;
+    const parte = l.estorno_parte_id ? compra?.partes?.find((p) => p.id === l.estorno_parte_id) : undefined;
+    const daParte = parte ? ` — ${parte.descricao || parte.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")}` : "";
+    return `estorno de ${compra ? tituloDoLancamento(compra, categorias) : "uma compra"}${daParte}`;
   }
   const estornos = indice.estornos.get(l.id);
   if (!estornos?.length) return "";
@@ -73,14 +135,12 @@ export function podeEstornar(l: ParaEstorno & { conta_id: string; naoEnviado?: b
   return (
     l.tipo === "despesa" &&
     !eEstorno(l) &&
-    // O estorno de uma parte da compra é do ticket 138 (ADR 0022).
-    !l.partes?.length &&
     !l.naoEnviado &&
     !l.conflito &&
     !l.exclusao &&
     !l.recusa &&
     cartoes.some((c) => c.id === l.conta_id) &&
-    restanteDaCompra(l, indice) > 0
+    restanteDaParcela(l, indice) > 0
   );
 }
 
