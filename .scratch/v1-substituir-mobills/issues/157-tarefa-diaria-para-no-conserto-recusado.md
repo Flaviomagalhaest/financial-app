@@ -1,7 +1,7 @@
 # Tarefa diária para no parcelamento que um conserto recusa
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
