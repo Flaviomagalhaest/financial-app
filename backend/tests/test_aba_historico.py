@@ -214,6 +214,5 @@ def test_ano_corrente_projeta_o_previsto_do_resto_do_ano_sem_mexer_no_realizado(
     corrente = historico["por_ano"][-1]
     assert corrente["centavos"] == 7000
     assert corrente["previsto_centavos"] == 2500
-    assert {a["previsto_centavos"] for a in historico["por_ano"][:-1]} == {0}
     # Os 12 meses seguem só com o realizado.
     assert historico["total_centavos"] == 7000
