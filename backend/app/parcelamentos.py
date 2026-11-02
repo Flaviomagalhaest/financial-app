@@ -619,10 +619,32 @@ def completar_todos(url: str | None) -> int:
     """Conserta os parcelamentos que um pedido deixou pela metade: gera as parcelas que faltam
     (a geração parou no meio) e refaz as que destoam do parcelamento (a correção parou no
     meio), inclusive a classificação (descrição, categorias, tags, pessoa, item) que o pedido
-    trouxe, gravada no parcelamento até o refazer terminar. Devolve quantos consertou."""
+    trouxe, gravada no parcelamento até o refazer terminar. Devolve quantos consertou; o que uma
+    recusa trava (a fatura de uma parcela foi paga no meio) sai do pendente e mostra a recusa
+    no parcelamento, sem parar a tarefa nos outros."""
     with conectar(url) as conn:
         ids = [id for (id,) in conn.execute("SELECT id FROM parcelamentos")]
-    return sum(completar(url, id) for id in ids)
+    consertados = 0
+    for id in ids:
+        try:
+            consertados += completar(url, id)
+        except HTTPException as recusa:
+            em_transacao(
+                url, lambda conn, id=id, recusa=recusa: _desistir_do_conserto(conn, id, recusa)
+            )
+    return consertados
+
+
+def _desistir_do_conserto(conn, id: UUID, recusa: HTTPException) -> None:
+    """Tira a classificação pendente que o refazer não consegue levar e grava a recusa no
+    parcelamento, para o casal ver (ticket 157)."""
+    conn.execute(
+        "UPDATE parcelamentos SET classificacao_pendente = '', mudanca_recusada = %s WHERE id = %s",
+        (
+            f"{recusa.detail}. A correção do parcelamento parou: as parcelas ficaram como estavam",
+            id,
+        ),
+    )
 
 
 def completar(url: str | None, id: UUID) -> bool:

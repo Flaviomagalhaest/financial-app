@@ -1678,3 +1678,38 @@ def test_excluir_o_parcelamento_so_com_previstas_nao_pede_confirmacao(casal: Cas
 
     assert excluir_parcelamento(casal, novo["id"]).status_code == 204
     assert parcelas(casal, novo["id"]) == []
+
+
+def test_a_tarefa_diaria_segue_quando_o_conserto_de_um_parcelamento_e_recusado(
+    casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
+):
+    from fastapi import HTTPException
+
+    from app import parcelamentos
+
+    recusado = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    outro = criar_geladeira(casal, casal.conta(), data="2026-11-10")
+    with monkeypatch.context() as queda:
+        interromper_o_refazer(queda)
+        for id in (recusado["id"], outro["id"]):
+            with pytest.raises(RuntimeError):
+                mudar(casal, id, descricao="Nova")
+    original = parcelamentos._reajustar_um_lote
+
+    def recusa_so_um(conn, id, *args):
+        if str(id) == recusado["id"]:
+            raise HTTPException(409, "a fatura da parcela já foi paga")
+        return original(conn, id, *args)
+
+    monkeypatch.setattr(parcelamentos, "_reajustar_um_lote", recusa_so_um)
+
+    assert fazer_tarefa_diaria(database_url)["parcelamentos"] == 1
+
+    assert {l["descricao"] for l in parcelas(casal, outro["id"])} == {"Nova"}
+    with parcelamentos.conectar(database_url) as conn:
+        pendente, recusada = conn.execute(
+            "SELECT classificacao_pendente, mudanca_recusada FROM parcelamentos WHERE id = %s",
+            (recusado["id"],),
+        ).fetchone()
+    assert pendente == ""
+    assert "já foi paga" in recusada

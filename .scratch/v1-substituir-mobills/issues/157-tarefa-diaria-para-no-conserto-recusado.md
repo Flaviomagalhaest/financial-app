@@ -1,7 +1,7 @@
 # Tarefa diária para no parcelamento que um conserto recusa
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ Origem: [ticket 139](139-partes-na-compra-parcelada.md): revisão de spec
 
 ## Checklist
 
-- [ ] `completar_todos` segue para os outros parcelamentos quando um é recusado, e o recusado sai do pendente (como `_desistir`) ou fica registrado
-- [ ] A tarefa diária chega aos passos seguintes mesmo com um parcelamento recusado
-- [ ] Teste de API; verificações do projeto e PR para `main`
+- [x] `completar_todos` segue para os outros parcelamentos quando um é recusado, e o recusado sai do pendente (como `_desistir`) ou fica registrado
+- [x] A tarefa diária chega aos passos seguintes mesmo com um parcelamento recusado
+- [x] Teste de API; verificações do projeto e PR para `main`
