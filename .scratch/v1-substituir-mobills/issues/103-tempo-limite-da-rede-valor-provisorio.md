@@ -1,7 +1,7 @@
 # Tempo limite da rede: valor provisório para o dono confirmar
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement` se o valor mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
