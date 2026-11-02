@@ -1,7 +1,7 @@
 # Histórico sem a lista inteira: páginas, janela de meses ou virtualização
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: a decisão é do dono e mexe no ADR 0011); apoio: `research` (limites de resposta da Lambda e da HTTP API), `prototype` se a escolha pedir ver a tela
 Modelo recomendado: Opus
