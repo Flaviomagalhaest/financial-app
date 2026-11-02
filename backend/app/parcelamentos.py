@@ -1253,6 +1253,7 @@ def excluir_parcelamento(
     def tirar(conn) -> None:
         conn.execute("DELETE FROM parcelamento_categorias WHERE parcelamento_id = %s", (id,))
         conn.execute("DELETE FROM parcelamento_tags WHERE parcelamento_id = %s", (id,))
+        conn.execute("DELETE FROM antecipacoes WHERE parcelamento_id = %s", (id,))
         conn.execute("DELETE FROM parcelamentos WHERE id = %s", (id,))
 
     em_transacao(url, tirar)
