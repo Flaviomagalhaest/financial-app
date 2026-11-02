@@ -172,7 +172,7 @@ Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: 
 _Avoid_: teto, limite, meta
 
 **Escolha do item**:
-A categoria, entre as do lançamento, cujo item do planejamento o casal escolheu para ele contar quando duas ou mais têm item no mês. Vale em qualquer mês em que essa categoria tem item, nunca muda sozinha e sai quando a categoria sai do lançamento; a recorrência e o parcelamento a guardam, e seus lançamentos já nascem com ela.
+A categoria, entre as do lançamento, cujo item do planejamento o casal escolheu para ele contar quando duas ou mais têm item no mês. Vale em qualquer mês em que essa categoria tem item, nunca muda sozinha e sai quando a categoria sai do lançamento; a recorrência e o parcelamento a guardam, e seus lançamentos já nascem com ela. O estorno não tem escolha própria: conta no item em que a compra conta.
 _Avoid_: item principal, categoria principal
 
 **A escolher**:

@@ -1,7 +1,7 @@
 # Conferir as regras do item do lançamento escolhidas no ticket 51
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: 51
 Skills: `grilling`, `domain-modeling` (HITL: decisões do dono)
 Modelo recomendado: Opus
@@ -11,12 +11,16 @@ Origem: [ticket 51](51-item-do-lancamento-e-a-escolher.md): a spec, o [ticket 04
 
 ## O que decidir
 
-- [ ] **Escolha sem item no mês.** O lançamento escolheu Viagem, mas o mês não tem item de Viagem (o planejamento foi copiado sem ele, ou o item foi excluído). Hoje ele conta sozinho na única outra categoria com item; com duas ou mais, entra em "a escolher" sem item. A escolha continua guardada e volta a valer quando a Viagem tem item. Fica assim, ou o lançamento não conta em nada enquanto o item da escolha faltar?
-- [ ] **Voltar ao automático.** Não há como desfazer uma escolha explícita para o lançamento voltar a contar sozinho: dá para trocar a escolha, ou ela sai quando a categoria dela sai do lançamento. Precisa de "deixar o app escolher"?
-- [ ] **Estorno.** O estorno nasce com a escolha da compra ou, sem ela, com o item em que a compra contava sozinha, para diminuir o mesmo item. Mudar a escolha da compra depois não muda a do estorno. Fica assim?
-- [ ] **Regras na junção de categorias.** Juntar categorias passou a mover também as categorias das recorrências e dos parcelamentos (antes elas ficavam com a categoria apagada, e a recorrência gerava previstos com ela). Confirmar.
-- [ ] **Recorrência mudada "daqui para frente".** A escolha nova vale para os previstos que ninguém alterou à mão (como os outros campos da regra, ticket 45), e tirar a categoria escolhida da regra tira a escolha. Confirmar.
-- [ ] **Escolha ao lançar sem histórico** ([ticket 52](52-aviso-de-planejamento-ao-lancar.md)). Num lançamento novo com duas ou mais categorias com item e sem escolha anterior para o conjunto, "Conta no planejamento em:" não marca nada, e o lançamento é salvo "a escolher" (no item em que estava, se estava). A primeira categoria marcada não vira escolha sozinha, porque a escolha "nunca muda sozinha". Fica assim, ou o app propõe uma (a primeira tocada) já marcada?
-- [ ] **"Aquele conjunto"** (história 29, ticket 52). A última escolha vem do lançamento mais recente que tem, entre as categorias com item no mês, exatamente as mesmas do lançamento novo. Categorias sem item não contam: {Mercado, Casa, Padaria sem item} é o mesmo conjunto que {Mercado, Casa}. "Mais recente" é a última mudança do lançamento, qualquer que seja o campo, porque a API não diz quando a escolha mudou. Confirmar.
-- [ ] **Edição do que está "a escolher"** (ticket 52). Editar um lançamento "a escolher" sem tocar no item mantém ele lá. A última escolha para o conjunto só é proposta no lançamento novo. Confirmar.
-- [ ] Gravar as decisões (ADR 0006 ou nova) e abrir os tickets de mudança que saírem delas
+- [x] **Escolha sem item no mês.** O lançamento escolheu Viagem, mas o mês não tem item de Viagem (o planejamento foi copiado sem ele, ou o item foi excluído). Hoje ele conta sozinho na única outra categoria com item; com duas ou mais, entra em "a escolher" sem item. A escolha continua guardada e volta a valer quando a Viagem tem item. Fica assim, ou o lançamento não conta em nada enquanto o item da escolha faltar?
+- [x] **Voltar ao automático.** Não há como desfazer uma escolha explícita para o lançamento voltar a contar sozinho: dá para trocar a escolha, ou ela sai quando a categoria dela sai do lançamento. Precisa de "deixar o app escolher"?
+- [x] **Estorno.** O estorno nasce com a escolha da compra ou, sem ela, com o item em que a compra contava sozinha, para diminuir o mesmo item. Mudar a escolha da compra depois não muda a do estorno. Fica assim? (Desatualizado: desde o ticket 133 o estorno acompanha a escolha da compra quando ela muda; foi isso que o dono confirmou.)
+- [x] **Regras na junção de categorias.** Juntar categorias passou a mover também as categorias das recorrências e dos parcelamentos (antes elas ficavam com a categoria apagada, e a recorrência gerava previstos com ela). Confirmar.
+- [x] **Recorrência mudada "daqui para frente".** A escolha nova vale para os previstos que ninguém alterou à mão (como os outros campos da regra, ticket 45), e tirar a categoria escolhida da regra tira a escolha. Confirmar.
+- [x] **Escolha ao lançar sem histórico** ([ticket 52](52-aviso-de-planejamento-ao-lancar.md)). Num lançamento novo com duas ou mais categorias com item e sem escolha anterior para o conjunto, "Conta no planejamento em:" não marca nada, e o lançamento é salvo "a escolher" (no item em que estava, se estava). A primeira categoria marcada não vira escolha sozinha, porque a escolha "nunca muda sozinha". Fica assim, ou o app propõe uma (a primeira tocada) já marcada?
+- [x] **"Aquele conjunto"** (história 29, ticket 52). A última escolha vem do lançamento mais recente que tem, entre as categorias com item no mês, exatamente as mesmas do lançamento novo. Categorias sem item não contam: {Mercado, Casa, Padaria sem item} é o mesmo conjunto que {Mercado, Casa}. "Mais recente" é a última mudança do lançamento, qualquer que seja o campo, porque a API não diz quando a escolha mudou. Confirmar.
+- [x] **Edição do que está "a escolher"** (ticket 52). Editar um lançamento "a escolher" sem tocar no item mantém ele lá. A última escolha para o conjunto só é proposta no lançamento novo. Confirmar.
+- [x] Gravar as decisões (ADR 0006 ou nova) e abrir os tickets de mudança que saírem delas
+
+## Decisão
+
+Decidido pelo dono em 2026-11-02: tudo fica como o ticket 51 deixou, e o estorno acompanha a escolha da compra quando ela muda (comportamento de hoje, ticket 133). As regras foram gravadas na [ADR 0006](../../../docs/adr/0006-varias-categorias-e-um-item-do-planejamento.md), seção "Regras conferidas com o dono". Nenhuma mudança de código, então nenhum ticket de mudança foi aberto.
