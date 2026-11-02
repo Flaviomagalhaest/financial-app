@@ -118,11 +118,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const [realizadas, setRealizadas] = useState<{ alcance: AlcanceComOutras; aviso: AvisoDeRealizadas } | null>(null);
   // Gravada a mudança, as parcelas que ficaram como estavam porque alguém as mudou à mão.
   const [mantidas, setMantidas] = useState("");
-  // As partes da compra à vista ou da recorrência (ADR 0022); sem elas, a compra é uma só.
+  // As partes da compra à vista, parcelada ou da recorrência (ADR 0022); sem elas, a compra é uma só.
   const [partes, setPartes] = useState<ParteEmEdicao[] | null>(null);
-  // As partes que vieram de um favorito ou sugestão dividem o valor na proporção da última compra,
-  // e as da ocorrência da recorrência, na proporção que ela tem (ticket 140): mudar o valor
-  // redivide. Mexer no valor de uma parte, ou tirar ou pôr uma, solta a proporção.
+  // As partes que vieram de um favorito ou sugestão dividem o valor na proporção da última compra;
+  // as da parcela, na proporção que o servidor guardou nela (ticket 139); e as da ocorrência da
+  // recorrência, na proporção que ela tem (ticket 140): mudar o valor redivide. Mexer no valor de
+  // uma parte, ou tirar ou pôr uma, solta a proporção.
   const [proporcao, setProporcao] = useState<number[] | null>(null);
 
   // Um lançamento novo começa sem a oferta "Favoritar" do anterior.
@@ -149,6 +150,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setFaturaMes(achado.fatura_mes ?? null);
     setPartes(achado.partes?.length ? achado.partes.map(emEdicao) : null);
     if (achado.recorrencia_id && achado.partes?.length) setProporcao(achado.partes.map((p) => p.valor_centavos));
+    // A parcela com partes acompanha o valor digitado na proporção guardada (a do aparelho, sem ela,
+    // é a dos valores), e as partes dela continuam as do parcelamento.
+    if (achado.parcelamento_id && achado.partes?.length) {
+      const guardada = achado.proporcao_das_partes;
+      setProporcao(guardada?.length === achado.partes.length ? guardada : achado.partes.map((p) => p.valor_centavos));
+    }
   }, [id, existente, lancamentos, semDados]);
 
   // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra; o de todas as
@@ -226,10 +233,14 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const estornoPronto = estornando && (!estornoDe || estornoAplicado);
   const problemaDaRecorrencia = recorrencia && problemaDa(recorrencia, data);
   const problemaDoParcelamento = parcelamento && problemaDo(parcelamento, centavos);
+  const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
+  const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
+  // No parcelado, a menor parcela também precisa dar um centavo a cada parte, como no servidor.
+  const menorParcela = parcelas ? divisao(parcelas).outras : undefined;
   const comPartes = !!partes;
   const podeSalvar =
     centavos > 0 &&
-    (partes ? !problemaDasPartes(partes, centavos) : categoriaIds.length > 0 || avulso) &&
+    (partes ? !problemaDasPartes(partes, centavos, menorParcela) : categoriaIds.length > 0 || avulso) &&
     conta !== "" &&
     !enviando &&
     (!id || existente !== null) &&
@@ -238,8 +249,6 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     (!estornoDe || estornoAplicado) &&
     (!estornando || (!compra && !parcelamentoDoEstorno) || centavos <= restante);
 
-  const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
-  const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
   const avisoDaRecorrencia = recorrencia ? avisoDasPuladas(ocorrenciasPuladas(recorrencia, data, hoje()), { um: "ocorrência", varios: "ocorrências" }) : "";
   const avisoDoParcelamento = parcelamento ? avisoDasPuladas(parcelasPuladas(parcelamento.parcelas, data, hoje(), noCartao), { um: "parcela", varios: "parcelas" }) : "";
   const rotuloDoParcelamento = parcelamento && (parcelas ? rotuloDasParcelas(parcelas) : `${parcelamento.parcelas}x`);
@@ -383,7 +392,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
 
-  // No parcelado, o aviso mostra a 1ª parcela, na fatura que a data dá.
+  // No parcelado, o aviso mostra a 1ª parcela, na fatura que a data dá, e as partes divididas por ela.
+  const partesDoAviso = partes && centavos > 0 && !problemaDasPartes(partes, centavos) ? partesParaSalvar(partes, centavos) : undefined;
   const planejamento = useAvisoDePlanejamento(
     {
       id: existente?.id ?? novoId,
@@ -393,16 +403,17 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       data,
       fatura_mes: noCartao && !parcelamento ? faturaMes : null,
       situacao,
-      partes: partes && centavos > 0 ? partesParaSalvar(partes, centavos) : undefined,
+      partes: partesDoAviso && parcelas ? divididasPor(partesDoAviso, divisao(parcelas).primeira) : partesDoAviso,
     },
     itemTocado,
   );
-  // A despesa à vista e a recorrente se dividem em partes (a parcelada vem no ticket 139).
-  const podeDividir = !aCarregar && tipo === "despesa" && !estornando && !parcelamento && !existente?.parcelamento_id && !partes && !avulso;
+  // A despesa à vista, a parcelada e a recorrente se dividem em partes.
+  const podeDividir = !aCarregar && tipo === "despesa" && !estornando && !partes && !avulso;
 
 
   /** A compra se divide em duas partes: a primeira com o que ela tinha, a segunda vazia, com o resto do valor. */
   function dividir() {
+    setProporcao(null);
     setPartes([{ ...parteNova(), categoria_ids: categoriaIds, tags, pessoa }, parteNova()]);
     setCategoriaIds([]);
     setTags([]);
@@ -520,10 +531,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           data,
           descricao,
           conta_id: conta,
-          categoria_ids: categoriaIds,
-          item_categoria_id: itemEscolhido,
-          tags,
-          pessoa,
+          // A compra parcelada com partes também não tem classificação própria (ADR 0022).
+          categoria_ids: partes ? [] : categoriaIds,
+          item_categoria_id: partes ? null : itemEscolhido,
+          tags: partes ? [] : tags,
+          pessoa: partes ? null : pessoa,
+          partes: partesASalvar(),
           ...pedidoDo(parcelamento, centavos, noCartao),
         });
       else if (recorrencia)
@@ -669,6 +682,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
         <EditorDePartes
           partes={partes}
           total={centavos}
+          menorParcela={menorParcela}
           categorias={categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || partes.some((p) => p.categoria_ids.includes(c.id)) || !!existente?.partes?.some((p) => p.categoria_ids.includes(c.id))))}
           pessoas={pessoas}
           opcoesDeTags={opcoesDeTags}
@@ -688,7 +702,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
                 escolha={planejamento.partesComEscolha?.[i]?.item_categoria_id ?? null}
                 tipo={tipo}
                 nomeDaCategoria={(c) => nomePorId(categorias, c)}
-                onEscolher={(c) => setPartes(partes.map((x) => (x.id === p.id ? { ...x, item_categoria_id: c } : x)))}
+                onEscolher={(c) => mudarPartes(partes.map((x) => (x.id === p.id ? { ...x, item_categoria_id: c } : x)))}
               />
             );
           }}
@@ -752,7 +766,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
           recorrencia={id || estornando || avulso ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
           parcelamento={
-            id || estornando || avulso || tipo !== "despesa" || partes
+            id || estornando || avulso || tipo !== "despesa"
               ? undefined
               : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, aviso: avisoDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
           }
@@ -819,6 +833,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
 }
 
 type AlcanceComOutras = Exclude<AlcanceDaMudanca, "so_esta">;
+
+/** As partes com `valor` dividido na proporção dos valores delas (a 1ª parcela, no aviso do parcelado). */
+function divididasPor<P extends { valor_centavos: number }>(partes: P[], valor: number): P[] {
+  const valores = dividirNaProporcao(partes.map((p) => p.valor_centavos), valor);
+  return partes.map((p, i) => ({ ...p, valor_centavos: valores[i] }));
+}
 
 /** A fatura em que o estorno vai cair: a escolhida à mão ou a primeira que fecha depois da data (ADR 0015). */
 function FaturaDoEstorno({ cartaoId, data, faturaMes }: { cartaoId: string; data: string; faturaMes: string | null }) {

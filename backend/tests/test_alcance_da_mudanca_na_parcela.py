@@ -257,7 +257,7 @@ def um_lote_por_parcela(monkeypatch: pytest.MonkeyPatch) -> None:
     perto de 80 parcelas."""
     from app import parcelamentos
 
-    monkeypatch.setattr(parcelamentos, "parcelas_por_lote", lambda regra: 1)
+    monkeypatch.setattr(parcelamentos, "parcelas_por_lote", lambda conn, regra: 1)
 
 
 def interromper_depois_do_primeiro_lote(monkeypatch: pytest.MonkeyPatch) -> None:

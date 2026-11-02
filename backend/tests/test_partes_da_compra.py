@@ -210,27 +210,6 @@ def test_dividir_conflita_com_a_categoria_que_o_outro_lado_mudou(casal: Casal):
     assert [c["campo"] for c in dividida.json()["campos"]] == ["categoria_ids"]
 
 
-def test_parcela_ainda_nao_se_divide_em_partes(casal: Casal):
-    from tests.test_parcelamentos import parcelamento, parcelas
-
-    conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
-    novo = parcelamento(conta, [roupa], parcelas=2, data="2099-01-10")
-    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
-    [primeira, _] = parcelas(casal, novo["id"])
-
-    dividida = editar(
-        casal,
-        primeira["id"],
-        versao=primeira["versao"],
-        partes=[parte([roupa], 1), parte([casa], primeira["valor_centavos"] - 1)],
-    )
-
-    assert (dividida.status_code, dividida.json()["detail"]) == (
-        422,
-        "por enquanto, só a compra à vista e a recorrência têm partes",
-    )
-
-
 def test_tag_e_categoria_de_uma_parte_contam_como_usadas_ate_a_compra_sair(casal: Casal):
     conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
     compra = compra_com_partes(

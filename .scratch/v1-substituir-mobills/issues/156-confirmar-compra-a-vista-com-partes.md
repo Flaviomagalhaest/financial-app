@@ -7,7 +7,7 @@ Skills: `grilling` (HITL: o dono escolhe como as partes se acertam), depois `imp
 Modelo recomendado: Sonnet
 Effort recomendado: medium
 Issue: #368
-Origem: [ticket 140](140-partes-na-recorrencia.md): a revisão viu que `confirmar` (`backend/app/lancamentos.py`) não mexe nas partes da compra à vista
+Origem: [ticket 140](140-partes-na-recorrencia.md): a revisão viu que `confirmar` (`backend/app/lancamentos.py`) não mexe nas partes da compra à vista; o [ticket 139](139-partes-na-compra-parcelada.md) achou a mesma pendência (a parcela com partes confirmada com outro valor já se redivide na proporção; a compra à vista não)
 
 ## O que decidir
 
@@ -15,6 +15,6 @@ A compra à vista com partes que ainda é prevista (data futura) pode ser confir
 
 ## Checklist
 
-- [ ] O dono escolhe: a diferença vai na última parte (como a correção de fatura e a tela de lançar) ou divide na proporção (como a recorrência)
+- [ ] O dono escolhe: a diferença vai na última parte (como a correção de fatura e a tela de lançar), divide na proporção (como a recorrência e a parcela) ou recusa o ajuste de valor (422) e manda editar as partes
 - [ ] `confirmar` acerta as partes da compra à vista; o aparelho mostra igual enquanto a confirmação não sobe (`enfileirarConfirmar` em `web/src/dados/fila.ts`)
 - [ ] Testes de API e de navegador; verificações do projeto e PR para `main`
