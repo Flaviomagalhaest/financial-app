@@ -513,3 +513,46 @@ def test_a_recusa_achada_ao_terminar_o_pedido_anterior_fica_no_parcelamento(
         "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
         " Da 3ª parcela em diante, as que faltavam mudar ficaram como estavam"
     )
+
+
+def test_a_parcela_que_faria_nascer_uma_fatura_tirando_o_saldo_da_seguinte_recusa_antes_de_gravar(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_cartoes import comprar
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/06. No Itaú, abril está paga com 60,00 faltando, que passam a junho (aberta, sem
+    # fatura em maio); junho tem 100,00 de compras e recebeu os 160,00 que deve.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    conta = nova_conta(casal)["id"]
+    nubank, itau = cartao(casal), cartao(casal, nome="Itaú")
+    comprar(casal, itau, "2026-04-20", valor_centavos=10000)
+    comprar(casal, itau, "2026-06-01", valor_centavos=10000)
+    abril = pagar(
+        casal, conta, itau, fatura_mes="2026-04-01", valor_centavos=4000, data="2026-05-05"
+    )
+    junho = pagar(
+        casal, conta, itau, fatura_mes="2026-06-01", valor_centavos=16000, data="2026-06-05"
+    )
+    assert abril.status_code == 201, abril.text
+    assert junho.status_code == 201, junho.text
+    # A geladeira do Nubank cai de março a junho; a 2ª foi para a conta à mão e fica nela.
+    novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=4, valor_total_centavos=4000)
+    [_, segunda, _, _] = parcelas(casal, novo["id"])
+    editar_so_nela(casal, segunda, conta_id=conta)
+
+    # A 4ª vai para junho e a 1ª faz nascer março, no primeiro lote; a 3ª, no seguinte, faria
+    # nascer maio, que levaria os 60,00 de abril e deixaria junho devendo menos que o pago.
+    resposta = mudar_parcela(
+        casal,
+        parcelas(casal, novo["id"])[3],
+        "todas",
+        conta_id=itau,
+        confirmar_realizadas=True,
+    )
+
+    assert resposta.status_code == 422, resposta.text
+    assert resposta.json()["detail"] == "o pagamento passa do valor da fatura"
+    assert [l["conta_id"] for l in parcelas(casal, novo["id"])] == [nubank, conta, nubank, nubank]
