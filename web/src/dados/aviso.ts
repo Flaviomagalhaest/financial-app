@@ -2,6 +2,7 @@
 // lançamento em edição, para rodar igual com e sem internet. Repete do servidor só o que o aviso
 // precisa, conferido pelas mesmas tabelas (`tabelas-de-teste/`).
 import type { components } from "../api/schema";
+import { eEstorno } from "../lancamentos/apresentacao";
 import { mesDepois } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 
@@ -94,6 +95,7 @@ export type Contagem = {
   item_categoria_id?: string | null;
   estorno_de?: string | null;
   estorno_avulso?: boolean | null;
+  estorno_parcelamento_id?: string | null;
   situacao: "previsto" | "realizado";
   /** O mês em que conta (`AAAA-MM-01`); `null` quando o aparelho não sabe (cartão sem fatura). */
   mes: string | null;
@@ -148,7 +150,7 @@ function trocar(p: Planejamento, antes?: Contagem | null, depois?: Contagem | nu
       const comItem = categoriasComItem(p, pedaco.categoria_ids);
       const [conta, fica] = ondeConta(new Set(comItem), pedaco.item_categoria_id, itemAtual(p, id, pedaco.parte_id));
       // O estorno diminui o item da compra que ele devolve; o avulso, o que ele escolhe.
-      if (conta) somas.get(conta)![l.situacao] += sinal * (l.estorno_de || l.estorno_avulso ? -pedaco.valor_centavos : pedaco.valor_centavos);
+      if (conta) somas.get(conta)![l.situacao] += sinal * (eEstorno(l) ? -pedaco.valor_centavos : pedaco.valor_centavos);
       if (sinal > 0 && fica) aEscolher = [...aEscolher, { lancamento_id: id, ...(pedaco.parte_id && { parte_id: pedaco.parte_id }), item_categoria_id: conta, categorias_com_item: [...comItem].sort() }];
     }
   }

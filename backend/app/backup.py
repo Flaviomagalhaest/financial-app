@@ -18,7 +18,7 @@ import psycopg
 
 from app.faturas import datas_padrao, ler_cartao
 
-VERSAO_FORMATO = 30
+VERSAO_FORMATO = 33
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -591,7 +591,81 @@ def _da_versao_28_para_a_29(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
 
 
 def _da_versao_29_para_a_30(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
-    """A versão 30 (ticket 154) guarda as antecipações pela chave de idempotência, uma linha por
+    """A versão 30 (ticket 138) liga o estorno a uma parte da compra (`estorno_parte_id`) ou a
+    todas as parcelas de um parcelamento (`estorno_parcelamento_id`). Antes dela, nenhum estorno
+    era de uma parte nem de um parcelamento."""
+    colunas, linhas = tabelas["lancamentos"]
+    novas = [c for c in ("estorno_parte_id", "estorno_parcelamento_id") if c not in colunas]
+    if novas:
+        tabelas["lancamentos"] = (
+            [*colunas, *novas],
+            [[*linha, *[None] * len(novas)] for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
+def _da_versao_30_para_a_31(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 31 (ticket 140) traz as partes da regra que gera lançamentos (a recorrência), com
+    as categorias e as tags de cada uma (ADR 0022). Backup antigo entra sem nenhuma."""
+    novas = {
+        "regra_partes": (
+            [
+                "id",
+                "regra_id",
+                "ordem",
+                "descricao",
+                "valor_centavos",
+                "pessoa",
+                "item_categoria_id",
+            ],
+            {"ordem": "0", "valor_centavos": "0"},
+        ),
+        "regra_parte_categorias": (["parte_id", "categoria_id"], {}),
+        "regra_parte_tags": (["parte_id", "tag_id"], {}),
+    }
+    for tabela, (colunas, somas) in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
+def _da_versao_31_para_a_32(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 32 (ticket 139) traz as partes da compra parcelada, guardadas no parcelamento
+    como proporção, e a proporção que cada parte de uma parcela recebeu dele. Backup antigo entra
+    sem nenhuma: só a compra à vista tinha partes, e a proporção dela é o valor."""
+    colunas, linhas = tabelas["lancamento_partes"]
+    if "proporcao" not in colunas:
+        tabelas["lancamento_partes"] = (
+            [*colunas, "proporcao"],
+            [[*linha, None] for linha in linhas],
+        )
+        manifesto["tabelas"]["lancamento_partes"]["somas"]["proporcao"] = "0"
+    novas = {
+        "parcelamento_partes": (
+            [
+                "id",
+                "parcelamento_id",
+                "ordem",
+                "descricao",
+                "valor_centavos",
+                "pessoa",
+                "item_categoria_id",
+            ],
+            {"ordem": "0", "valor_centavos": "0"},
+        ),
+        "parcelamento_parte_categorias": (["parte_id", "categoria_id"], {}),
+        "parcelamento_parte_tags": (["parte_id", "tag_id"], {}),
+    }
+    for tabela, (colunas, somas) in novas.items():
+        if tabela not in tabelas:
+            tabelas[tabela] = (colunas, [])
+            manifesto["tabelas"][tabela] = {"linhas": 0, "somas": somas}
+    return manifesto, tabelas
+
+
+def _da_versao_32_para_a_33(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 33 (ticket 154) guarda as antecipações pela chave de idempotência, uma linha por
     parcela antecipada. Antes dela nenhuma chave ficava gravada."""
     if "antecipacoes" not in tabelas:
         tabelas["antecipacoes"] = (["id", "lancamento_id", "parcelamento_id"], [])
@@ -631,6 +705,9 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     27: _da_versao_27_para_a_28,
     28: _da_versao_28_para_a_29,
     29: _da_versao_29_para_a_30,
+    30: _da_versao_30_para_a_31,
+    31: _da_versao_31_para_a_32,
+    32: _da_versao_32_para_a_33,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

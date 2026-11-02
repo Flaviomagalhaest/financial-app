@@ -30,6 +30,15 @@ PESSOAS_QUE_CONTAM = (
 )
 
 
+def e_estorno(tabela: str = "lancamentos") -> str:
+    """O teste SQL do crédito que diminui (ADR 0016): o estorno de uma compra ou de uma parte, o de
+    todas as parcelas (ticket 138) e o avulso (ticket 135). Quem soma despesas o usa."""
+    return (
+        f"({tabela}.estorno_de IS NOT NULL OR {tabela}.estorno_parcelamento_id IS NOT NULL"
+        f" OR COALESCE({tabela}.estorno_avulso, false))"
+    )
+
+
 def valor(apelido: str) -> str:
     """O valor de uma linha de um dos fragmentos (`apelido`): o da parte, ou o do lançamento."""
     return f"COALESCE({apelido}.valor_da_parte, lancamentos.valor_centavos)"
@@ -38,7 +47,39 @@ def valor(apelido: str) -> str:
 def com_sinal(apelido: str) -> str:
     """O valor da linha com o sinal de quem soma despesas, como `lancamentos.VALOR_COM_SINAL`."""
     return (
-        "CASE WHEN lancamentos.tipo = 'despesa' AND NOT"
-        " (lancamentos.estorno_de IS NOT NULL OR COALESCE(lancamentos.estorno_avulso, false))"
+        f"CASE WHEN lancamentos.tipo = 'despesa' AND NOT {e_estorno()}"
         f" THEN {valor(apelido)} ELSE -{valor(apelido)} END"
     )
+
+
+NAO_DA_PARA_DIVIDIR = "o valor não dá para dividir pelas partes: cada uma precisa de um centavo"
+
+
+def redividir[P](partes: list[P], valor_centavos: int) -> list[P]:
+    """As partes divididas de novo para um valor, na proporção que têm (ADR 0022): na parcela e na
+    ocorrência da recorrência, o que vale é o valor dela. Cada parte fica com a parte inteira da
+    conta, e os centavos que sobram vão para a maior (a primeira, no empate). O app repete a conta
+    para mostrar as partes antes de o servidor responder (ADR 0018);
+    `tabelas-de-teste/redivisao-das-partes.json` prende as duas juntas. A parte que ficaria sem
+    nenhum centavo recusa (`ValueError`)."""
+    pesos = [p.valor_centavos for p in partes]
+    total = sum(pesos)
+    valores = [valor_centavos * peso // total for peso in pesos]
+    maior = pesos.index(max(pesos))
+    valores[maior] += valor_centavos - sum(valores)
+    if min(valores) <= 0:
+        raise ValueError(NAO_DA_PARA_DIVIDIR)
+    return [p.model_copy(update={"valor_centavos": v}) for p, v in zip(partes, valores)]
+
+
+def dividir(valor: int, proporcao: list[int]) -> list[int]:
+    """O valor de uma parcela dividido pelas partes, na `proporcao` delas (ADR 0022): cada
+    parte fica com a sua fatia, sem os centavos, e os centavos que sobram vão para a maior parte
+    (a primeira, no empate). A soma é sempre o valor."""
+    if not proporcao:
+        return []
+    total = sum(proporcao)
+    valores = [valor * fatia // total for fatia in proporcao]
+    maior = max(range(len(proporcao)), key=lambda i: (proporcao[i], -i))
+    valores[maior] += valor - sum(valores)
+    return valores

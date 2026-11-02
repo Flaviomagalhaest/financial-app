@@ -14,6 +14,7 @@ import {
   useFaturas,
   useFavoritos,
   useLancamentos,
+  useParcelamentos,
   usePessoas,
   useSugestao,
   useTags,
@@ -25,18 +26,18 @@ import {
   type Sugestao,
   chaveDaDescricao,
 } from "../dados";
-import { indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaCompra, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
+import { eEstorno, indiceDeEstornos, nomePorId, numeroDaParcela, restanteDaParte, restanteDoEstorno, tituloDoFavorito, tituloDoLancamento } from "./apresentacao";
 import { pagaPeloPagamento } from "../cartoes/apresentacao";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { hoje, mesDepois, rotuloDaData, rotuloDaFatura } from "./datas";
-import { comoDigitado, formatarCentavos } from "./dinheiro";
+import { comoDigitado, dividirNaProporcao, formatarCentavos } from "./dinheiro";
 import { EscolhaDoTipo } from "./EscolhaDoTipo";
 import { FolhaDeDetalhes, type SugestaoNaFolha } from "./FolhaDeDetalhes";
 import { avisoDasMantidas, comoMuda, divisao, pedidoDo, problemaDo, rotuloDasParcelas, type ParcelamentoNaFolha } from "./parcelamento";
 import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
 import { avisoDasPuladas, ocorrenciasPuladas, parcelasPuladas } from "./puladas";
 import { Teclado } from "./Teclado";
-import { dividirNaProporcao, EditorDePartes, emEdicao, emEdicaoNaProporcao, parteNova, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
+import { EditorDePartes, emEdicao, emEdicaoNaProporcao, parteNova, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
 
 type Tipo = "despesa" | "receita";
 type Situacao = LancamentoNaTela["situacao"];
@@ -46,7 +47,7 @@ function ultimoCriado(lancamentos: LancamentoNaTela[], euId?: string): Lancament
   // O criado só no aparelho ainda não tem autor nem hora do servidor: é deste aparelho, e o mais novo.
   const criadoEm = (l: LancamentoNaTela) => (l.criado_em ? Date.parse(l.criado_em) : (l.feitoEm ?? Infinity));
   const meus = lancamentos.filter(
-    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && !l.estorno_de && !l.estorno_avulso && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
+    (l) => !l.conflito && !l.exclusao && !l.recorrencia_id && !eEstorno(l) && (l.criado_por ? !euId || l.criado_por === euId : l.naoEnviado),
   );
   return meus.reduce<LancamentoNaTela | undefined>((ultimo, l) => (!ultimo || criadoEm(l) > criadoEm(ultimo) ? l : ultimo), undefined);
 }
@@ -70,6 +71,7 @@ type Props = {
 export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
   const { contas, cartoes, contasECartoes, categorias, carregado } = useCadastro();
   const { lancamentos, semDados } = useLancamentos();
+  const { dados: parcelamentos } = useParcelamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
   const opcoesDeTags = useTags();
   const sugerir = useSugestao();
@@ -107,6 +109,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const [favoritarAoSalvar, setFavoritarAoSalvar] = useState(false);
   const [favoritoAplicado, setFavoritoAplicado] = useState(false);
   const [estornoAplicado, setEstornoAplicado] = useState(false);
+  // O que o estorno novo devolve: uma parte da compra com partes, ou todas as parcelas da compra parcelada (ticket 138).
+  const [parteEstornada, setParteEstornada] = useState<string | null>(null);
+  const [todasAsParcelas, setTodasAsParcelas] = useState(false);
   const [creditoAplicado, setCreditoAplicado] = useState(false);
   // A parcela que muda pergunta o alcance ao salvar (ticket 136); "só esta" é a edição de sempre.
   const [escolhendoAlcance, setEscolhendoAlcance] = useState(false);
@@ -114,10 +119,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const [realizadas, setRealizadas] = useState<{ alcance: AlcanceComOutras; aviso: AvisoDeRealizadas } | null>(null);
   // Gravada a mudança, as parcelas que ficaram como estavam porque alguém as mudou à mão.
   const [mantidas, setMantidas] = useState("");
-  // As partes da compra à vista (ADR 0022); sem elas, a compra é uma só.
+  // As partes da compra à vista, parcelada ou da recorrência (ADR 0022); sem elas, a compra é uma só.
   const [partes, setPartes] = useState<ParteEmEdicao[] | null>(null);
-  // As partes que vieram de um favorito ou sugestão dividem o valor na proporção da última compra:
-  // mudar o valor redivide. Mexer no valor de uma parte, ou tirar ou pôr uma, solta a proporção.
+  // As partes que vieram de um favorito ou sugestão dividem o valor na proporção da última compra;
+  // as da parcela, na proporção que o servidor guardou nela (ticket 139); e as da ocorrência da
+  // recorrência, na proporção que ela tem (ticket 140): mudar o valor redivide. Mexer no valor de
+  // uma parte, ou tirar ou pôr uma, solta a proporção.
   const [proporcao, setProporcao] = useState<number[] | null>(null);
 
   // Um lançamento novo começa sem a oferta "Favoritar" do anterior.
@@ -143,19 +150,53 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setPessoa(achado.pessoa ?? null);
     setFaturaMes(achado.fatura_mes ?? null);
     setPartes(achado.partes?.length ? achado.partes.map(emEdicao) : null);
+    if (achado.recorrencia_id && achado.partes?.length) setProporcao(achado.partes.map((p) => p.valor_centavos));
+    // A parcela com partes acompanha o valor digitado na proporção guardada (a do aparelho, sem ela,
+    // é a dos valores), e as partes dela continuam as do parcelamento.
+    if (achado.parcelamento_id && achado.partes?.length) {
+      const guardada = achado.proporcao_das_partes;
+      setProporcao(guardada?.length === achado.partes.length ? guardada : achado.partes.map((p) => p.valor_centavos));
+    }
   }, [id, existente, lancamentos, semDados]);
 
-  // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra.
+  // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra; o de todas as
+  // parcelas (`existente.estorno_parcelamento_id`) é ligado ao parcelamento, sem compra.
   const compraId = estornoDe ?? existente?.estorno_de ?? undefined;
-  const estornando = !!compraId;
+  const estornando = !!compraId || !!existente?.estorno_parcelamento_id;
   // O estorno avulso (novo ou o que se edita) não tem compra: leva cartão, valor e data, e o resto é opcional.
   const avulso = !!creditoNoCartao || !!existente?.estorno_avulso;
-  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? []), [lancamentos]);
+  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? [], parcelamentos ?? []), [lancamentos, parcelamentos]);
   const compra = compraId ? indice.compras.get(compraId) : undefined;
-  // O que ainda cabe: o valor da compra menos os outros estornos dela.
-  const restante = compra ? restanteDaCompra(compra, indice, existente?.id ?? novoId) : 0;
+  // O que o estorno devolve: no que se edita, o que ele já é; no novo, o que a pessoa escolheu.
+  const parteDoEstorno = existente ? (existente.estorno_parte_id ?? null) : parteEstornada;
+  const eTodas = existente ? !!existente.estorno_parcelamento_id : todasAsParcelas;
+  const parcelamentoDoEstorno = parcelamentos?.find((p) => p.id === (existente?.estorno_parcelamento_id ?? compra?.parcelamento_id));
+  // O que ainda cabe: o valor da compra (da parte, do parcelamento) menos os outros estornos dela.
+  const restante = restanteDoEstorno(compra, parteDoEstorno, eTodas, parcelamentoDoEstorno?.id, indice, existente?.id ?? novoId);
 
-  // O estorno novo começa com o que a compra tem; o valor, no máximo o que ainda cabe. Preenche uma vez só.
+  /** Preenche o estorno com o que o alvo dele tem (compra, parte ou parcelamento); o valor é o que ainda cabe. */
+  function preencherEstorno(c: NonNullable<typeof compra>, parteId: string | null, todas: boolean) {
+    const parte = parteId ? c.partes?.find((p) => p.id === parteId) : undefined;
+    const parcelamento = todas ? parcelamentos?.find((p) => p.id === c.parcelamento_id) : undefined;
+    const origem = parte ?? parcelamento ?? c;
+    const doEstorno = restanteDoEstorno(c, parteId, todas, c.parcelamento_id ?? undefined, indice, novoId);
+    setTipo("despesa");
+    setCentavos(Math.max(0, doEstorno));
+    setCategoriaIds(origem.categoria_ids);
+    setTags(origem.tags ?? []);
+    setDescricao(parte?.descricao || c.descricao ? `Estorno ${parte?.descricao || c.descricao}` : "");
+    setPessoa(origem.pessoa ?? c.pessoa ?? null);
+  }
+
+  /** Troca o que o estorno novo devolve e preenche de novo com o que a escolha tem. */
+  function escolherEstorno(parteId: string | null, todas: boolean) {
+    setParteEstornada(parteId);
+    setTodasAsParcelas(todas);
+    if (compra) preencherEstorno(compra, parteId, todas);
+  }
+
+  // O estorno novo começa com o que a compra tem; na compra com partes, com a primeira parte que ainda tem o que estornar.
+  // Preenche uma vez só.
   useEffect(() => {
     if (!estornoDe || estornoAplicado) return;
     if (!compra) {
@@ -164,14 +205,11 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     }
     setErro("");
     setEstornoAplicado(true);
-    setTipo("despesa");
-    setCentavos(Math.min(compra.valor_centavos, restanteDaCompra(compra, indice, novoId)));
+    const parteId = (compra.partes?.find((p) => restanteDaParte(compra, p.id, indice, novoId) > 0) ?? compra.partes?.[0])?.id ?? null;
+    setParteEstornada(parteId);
     setContaId(compra.conta_id);
-    setCategoriaIds(compra.categoria_ids);
-    setTags(compra.tags ?? []);
-    setDescricao(compra.descricao ? `Estorno ${compra.descricao}` : "");
-    setPessoa(compra.pessoa ?? null);
     setData(hoje());
+    preencherEstorno(compra, parteId, false);
   }, [estornoDe, estornoAplicado, compra, indice, lancamentos, semDados, novoId]);
 
   // O crédito avulso novo abre no cartão da fatura de onde se veio. Preenche uma vez só.
@@ -196,20 +234,22 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const estornoPronto = estornando && (!estornoDe || estornoAplicado);
   const problemaDaRecorrencia = recorrencia && problemaDa(recorrencia, data);
   const problemaDoParcelamento = parcelamento && problemaDo(parcelamento, centavos);
+  const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
+  const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
+  // No parcelado, a menor parcela também precisa dar um centavo a cada parte, como no servidor.
+  const menorParcela = parcelas ? divisao(parcelas).outras : undefined;
   const comPartes = !!partes;
   const podeSalvar =
     centavos > 0 &&
-    (partes ? !problemaDasPartes(partes, centavos) : categoriaIds.length > 0 || avulso) &&
+    (partes ? !problemaDasPartes(partes, centavos, menorParcela) : categoriaIds.length > 0 || avulso) &&
     conta !== "" &&
     !enviando &&
     (!id || existente !== null) &&
     !problemaDaRecorrencia &&
     !problemaDoParcelamento &&
     (!estornoDe || estornoAplicado) &&
-    (!estornando || !compra || centavos <= restante);
+    (!estornando || (!compra && !parcelamentoDoEstorno) || centavos <= restante);
 
-  const noCartao = cartoes.some((c) => c.id === conta) || (!!existente && existente.conta_id === conta && !!existente.fatura_mes);
-  const parcelas = parcelamento && !problemaDoParcelamento && centavos > 0 ? pedidoDo(parcelamento, centavos, noCartao) : null;
   const avisoDaRecorrencia = recorrencia ? avisoDasPuladas(ocorrenciasPuladas(recorrencia, data, hoje()), { um: "ocorrência", varios: "ocorrências" }) : "";
   const avisoDoParcelamento = parcelamento ? avisoDasPuladas(parcelasPuladas(parcelamento.parcelas, data, hoje(), noCartao), { um: "parcela", varios: "parcelas" }) : "";
   const rotuloDoParcelamento = parcelamento && (parcelas ? rotuloDasParcelas(parcelas) : `${parcelamento.parcelas}x`);
@@ -357,7 +397,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   // A da data, as duas seguintes (a compra que o banco lança com atraso, história 73) e a já escolhida.
   const opcoesDeFatura = [...new Set([0, 1, 2].map((n) => mesDepois(data, n)).concat(faturaMes ?? []))].sort();
 
-  // No parcelado, o aviso mostra a 1ª parcela, na fatura que a data dá.
+  // No parcelado, o aviso mostra a 1ª parcela, na fatura que a data dá, e as partes divididas por ela.
+  const partesDoAviso = partes && centavos > 0 && !problemaDasPartes(partes, centavos) ? partesParaSalvar(partes, centavos) : undefined;
   const planejamento = useAvisoDePlanejamento(
     {
       id: existente?.id ?? novoId,
@@ -367,15 +408,17 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       data,
       fatura_mes: noCartao && !parcelamento ? faturaMes : null,
       situacao,
-      partes: partes && centavos > 0 ? partesParaSalvar(partes, centavos) : undefined,
+      partes: partesDoAviso && parcelas ? divididasPor(partesDoAviso, divisao(parcelas).primeira) : partesDoAviso,
     },
     itemTocado,
   );
-  // Só a despesa à vista se divide em partes (a parcelada e a recorrente vêm nos tickets 139 e 140).
-  const podeDividir = !aCarregar && tipo === "despesa" && !estornando && !recorrencia && !parcelamento && !existente?.parcelamento_id && !existente?.recorrencia_id && !partes && !avulso;
+  // A despesa à vista, a parcelada e a recorrente se dividem em partes.
+  const podeDividir = !aCarregar && tipo === "despesa" && !estornando && !partes && !avulso;
+
 
   /** A compra se divide em duas partes: a primeira com o que ela tinha, a segunda vazia, com o resto do valor. */
   function dividir() {
+    setProporcao(null);
     setPartes([{ ...parteNova(), categoria_ids: categoriaIds, tags, pessoa }, parteNova()]);
     setCategoriaIds([]);
     setTags([]);
@@ -448,7 +491,10 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     categoria_ids: partes ? [] : categoriaIds,
     pessoa: partes ? null : pessoa,
     fatura_mes: noCartao ? faturaMes : null,
-    ...(compraId && { estorno_de: compraId }),
+    // O estorno de todas as parcelas é ligado ao parcelamento, sem a parcela (ticket 138).
+    ...(compraId && !eTodas && { estorno_de: compraId }),
+    ...(compraId && !eTodas && parteDoEstorno && { estorno_parte_id: parteDoEstorno }),
+    ...(eTodas && parcelamentoDoEstorno && { estorno_parcelamento_id: parcelamentoDoEstorno.id }),
     ...(avulso && { estorno_avulso: true }),
     item_categoria_id: partes ? null : itemEscolhido,
     ...(situacaoEscolhida && { situacao: situacaoEscolhida }),
@@ -490,10 +536,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           data,
           descricao,
           conta_id: conta,
-          categoria_ids: categoriaIds,
-          item_categoria_id: itemEscolhido,
-          tags,
-          pessoa,
+          // A compra parcelada com partes também não tem classificação própria (ADR 0022).
+          categoria_ids: partes ? [] : categoriaIds,
+          item_categoria_id: partes ? null : itemEscolhido,
+          tags: partes ? [] : tags,
+          pessoa: partes ? null : pessoa,
+          partes: partesASalvar(),
           ...pedidoDo(parcelamento, centavos, noCartao),
         });
       else if (recorrencia)
@@ -503,10 +551,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           valor_centavos: centavos,
           descricao,
           conta_id: conta,
-          categoria_ids: categoriaIds,
-          item_categoria_id: itemEscolhido,
-          tags,
-          pessoa,
+          // A regra com partes não tem categoria, tag, pessoa nem item próprios (ADR 0022).
+          categoria_ids: partes ? [] : categoriaIds,
+          item_categoria_id: partes ? null : itemEscolhido,
+          tags: partes ? [] : tags,
+          pessoa: partes ? null : pessoa,
+          partes: partesASalvar(),
           ...regraDa(recorrencia, data),
         });
       else await salvarLancamento(daTela(), !existente, existente ?? undefined);
@@ -540,10 +590,43 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       <p className="valor" data-testid="valor" aria-live="polite">
         {formatarCentavos(centavos)}
       </p>
-      {estornando && compra && (
+      {estornando && compra && !eTodas && (
         <p className="vazio">
           Compra “{tituloDoLancamento(compra, categorias)}” de {formatarCentavos(compra.valor_centavos)}: ainda dá para estornar até {formatarCentavos(restante)}.
         </p>
+      )}
+      {estornando && eTodas && parcelamentoDoEstorno && (
+        <p className="vazio">
+          Todas as parcelas de “{parcelamentoDoEstorno.descricao || "compra parcelada"}”, {formatarCentavos(parcelamentoDoEstorno.valor_total_centavos)} em {parcelamentoDoEstorno.parcelas}x: ainda dá para estornar até{" "}
+          {formatarCentavos(restante)}. O estorno entra inteiro na fatura em que aparecer.
+        </p>
+      )}
+      {estornoPronto && compra?.partes && compra.partes.length > 0 && (
+        <fieldset aria-label="Parte estornada" disabled={!!existente}>
+          <legend>Parte estornada</legend>
+          {compra.partes.map((p) => {
+            const resta = restanteDaParte(compra, p.id, indice, existente?.id ?? novoId);
+            return (
+              <label key={p.id}>
+                <input type="radio" name="parte-estornada" checked={parteDoEstorno === p.id} disabled={!existente && resta <= 0} onChange={() => escolherEstorno(p.id, false)} />
+                {p.descricao || p.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} — {formatarCentavos(p.valor_centavos)}, ainda dá para estornar {formatarCentavos(Math.max(0, resta))}
+              </label>
+            );
+          })}
+        </fieldset>
+      )}
+      {estornoPronto && !existente && compra?.parcelamento_id && parcelamentoDoEstorno && (
+        <fieldset aria-label="Quanto estornar da compra parcelada">
+          <legend>Quanto estornar</legend>
+          <label>
+            <input type="radio" name="alcance-do-estorno" checked={!eTodas} onChange={() => escolherEstorno(parteDoEstorno, false)} />
+            Só esta parcela{compra.parcela && compra.parcelas ? ` (${numeroDaParcela(compra.parcela, compra.parcelas)})` : ""}
+          </label>
+          <label>
+            <input type="radio" name="alcance-do-estorno" checked={eTodas} onChange={() => escolherEstorno(parteDoEstorno, true)} />
+            Todas as parcelas
+          </label>
+        </fieldset>
       )}
       {estornoPronto && estornoDe && conta === "" && cartoes.length > 0 && (
         <p className="vazio">O cartão da compra está arquivado: marque o cartão que recebe o estorno.</p>
@@ -604,6 +687,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
         <EditorDePartes
           partes={partes}
           total={centavos}
+          menorParcela={menorParcela}
           categorias={categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || partes.some((p) => p.categoria_ids.includes(c.id)) || !!existente?.partes?.some((p) => p.categoria_ids.includes(c.id))))}
           pessoas={pessoas}
           opcoesDeTags={opcoesDeTags}
@@ -623,7 +707,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
                 escolha={planejamento.partesComEscolha?.[i]?.item_categoria_id ?? null}
                 tipo={tipo}
                 nomeDaCategoria={(c) => nomePorId(categorias, c)}
-                onEscolher={(c) => setPartes(partes.map((x) => (x.id === p.id ? { ...x, item_categoria_id: c } : x)))}
+                onEscolher={(c) => mudarPartes(partes.map((x) => (x.id === p.id ? { ...x, item_categoria_id: c } : x)))}
               />
             );
           }}
@@ -685,9 +769,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           situacao={situacao}
           onSituacao={setSituacaoEscolhida}
           fatura={noCartao ? { mes: faturaMes, opcoes: opcoesDeFatura, onMudar: setFaturaMes } : undefined}
-          recorrencia={id || estornando || avulso || partes ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
+          recorrencia={id || estornando || avulso ? undefined : { valor: recorrencia, problema: problemaDaRecorrencia, aviso: avisoDaRecorrencia, onMudar: (r) => repetir({ recorrencia: r }) }}
           parcelamento={
-            id || estornando || avulso || tipo !== "despesa" || partes
+            id || estornando || avulso || tipo !== "despesa"
               ? undefined
               : { valor: parcelamento, noCartao, rotulo: parcelas ? rotuloDasParcelas(parcelas) : "", problema: problemaDoParcelamento, aviso: avisoDoParcelamento, onMudar: (p) => repetir({ parcelamento: p }) }
           }
@@ -754,6 +838,12 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
 }
 
 type AlcanceComOutras = Exclude<AlcanceDaMudanca, "so_esta">;
+
+/** As partes com `valor` dividido na proporção dos valores delas (a 1ª parcela, no aviso do parcelado). */
+function divididasPor<P extends { valor_centavos: number }>(partes: P[], valor: number): P[] {
+  const valores = dividirNaProporcao(partes.map((p) => p.valor_centavos), valor);
+  return partes.map((p, i) => ({ ...p, valor_centavos: valores[i] }));
+}
 
 /** A fatura em que o estorno vai cair: a escolhida à mão ou a primeira que fecha depois da data (ADR 0015). */
 function FaturaDoEstorno({ cartaoId, data, faturaMes }: { cartaoId: string; data: string; faturaMes: string | null }) {

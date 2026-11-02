@@ -1361,6 +1361,8 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][];
             /** Valor Total Centavos */
             valor_total_centavos?: number | null;
             /** Valor Da Parcela Centavos */
@@ -1431,6 +1433,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][];
             /** A Partir Da Ocorrencia */
             a_partir_da_ocorrencia: number;
         };
@@ -1574,6 +1578,8 @@ export interface components {
             ate?: string | null;
             /** Vezes */
             vezes?: number | null;
+            /** Partes */
+            partes?: components["schemas"]["Parte"][];
         };
         /** Cartao */
         Cartao: {
@@ -2294,6 +2300,10 @@ export interface components {
             estorno_de?: string | null;
             /** Estorno Avulso */
             estorno_avulso?: boolean | null;
+            /** Estorno Parte Id */
+            estorno_parte_id?: string | null;
+            /** Estorno Parcelamento Id */
+            estorno_parcelamento_id?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /**
@@ -2350,6 +2360,11 @@ export interface components {
              * @enum {string}
              */
             fonte: "app" | "mobills";
+            /**
+             * Proporcao Das Partes
+             * @default []
+             */
+            proporcao_das_partes: number[];
             /** Parece Repetido De */
             parece_repetido_de?: string | null;
         };
@@ -2620,7 +2635,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2649,6 +2667,11 @@ export interface components {
             item_categoria_id?: string | null;
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
         };
         /** NovaTag */
         NovaTag: {
@@ -2838,6 +2861,10 @@ export interface components {
             estorno_de?: string | null;
             /** Estorno Avulso */
             estorno_avulso?: boolean | null;
+            /** Estorno Parte Id */
+            estorno_parte_id?: string | null;
+            /** Estorno Parcelamento Id */
+            estorno_parcelamento_id?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
             /**
@@ -2883,7 +2910,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2894,6 +2924,11 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
             /** Valor Total Centavos */
@@ -2987,7 +3022,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -2998,6 +3036,11 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
             /** Valor Total Centavos */
@@ -3056,7 +3099,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -3067,6 +3113,11 @@ export interface components {
             pessoa?: string | null;
             /** Item Categoria Id */
             item_categoria_id?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
             /** Valor Total Centavos */
@@ -3445,7 +3496,10 @@ export interface components {
              * Format: uuid
              */
             conta_id: string;
-            /** Categoria Ids */
+            /**
+             * Categoria Ids
+             * @default []
+             */
             categoria_ids: string[];
             /**
              * Tags
@@ -3474,6 +3528,11 @@ export interface components {
             item_categoria_id?: string | null;
             /** Dia Do Lancamento */
             dia_do_lancamento?: string | null;
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
             /**
              * Ocorrencia Do Inicio
              * @default 1
