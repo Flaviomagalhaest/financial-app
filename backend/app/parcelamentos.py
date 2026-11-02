@@ -1301,8 +1301,6 @@ def _antecipar(
     if not gravado:
         raise HTTPException(status_code=404, detail="parcelamento não encontrado")
     if chave is not None:
-        # Trava a chave: um reenvio simultâneo espera este e então a encontra.
-        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (str(chave),))
         feita = conn.execute(
             "SELECT lancamento_id, parcelamento_id FROM antecipacoes WHERE id = %s", (chave,)
         ).fetchall()
