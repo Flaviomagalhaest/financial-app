@@ -1,0 +1,9 @@
+{
+  "sobre": "Quanto cada parte do parcelamento soma nas parcelas (backend/app/lancamentos.py, somas_nas_parcelas, e web/src/lancamentos/apresentacao.tsx, somasDasPartes): cada parcela, com os centavos do total na 1ª, dividida na proporção das partes, com os centavos que sobram na maior (a primeira, no empate). É o limite do estorno de todas as parcelas de uma parte (ticket 160); o app repete a conta para mostrar o que ainda dá para estornar sem internet (ADR 0018).",
+  "casos": [
+    { "caso": "divisão exata", "total": 30000, "parcelas": 3, "pesos": [22500, 7500], "resultado": [22500, 7500] },
+    { "caso": "o centavo de cada parcela vai para a maior", "total": 30000, "parcelas": 3, "pesos": [20000, 10000], "resultado": [20001, 9999] },
+    { "caso": "os centavos do total na 1ª parcela", "total": 10001, "parcelas": 2, "pesos": [5000, 5000], "resultado": [5001, 5000] },
+    { "caso": "a maior não precisa ser a primeira", "total": 1000, "parcelas": 4, "pesos": [1, 1, 2], "resultado": [248, 248, 504] }
+  ]
+}

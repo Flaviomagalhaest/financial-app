@@ -1,4 +1,4 @@
-import { formatarCentavos } from "./dinheiro";
+import { dividirEmParcelas, dividirNaProporcao, formatarCentavos } from "./dinheiro";
 import { dataPorExtenso } from "./datas";
 import type { Cartao, NovoLancamento } from "../dados";
 
@@ -51,7 +51,7 @@ type ParaEstorno = Pick<NovoLancamento, "id" | "tipo" | "valor_centavos" | "data
  * `todas` são os estornos de todas as parcelas, pelo id do parcelamento, `parcelas` as parcelas de cada parcelamento e `totais`
  * o total de cada um (que o aparelho guarda com a lista dos parcelamentos).
  */
-export function indiceDeEstornos<L extends ParaEstorno>(lancamentos: L[], parcelamentos: { id: string; valor_total_centavos: number }[] = []) {
+export function indiceDeEstornos<L extends ParaEstorno>(lancamentos: L[], parcelamentos: ParcelamentoDoEstorno[] = []) {
   const compras = new Map<string, L>();
   const estornos = new Map<string, L[]>();
   const todas = new Map<string, L[]>();
@@ -63,8 +63,17 @@ export function indiceDeEstornos<L extends ParaEstorno>(lancamentos: L[], parcel
     if (l.parcelamento_id) parcelas.set(l.parcelamento_id, [...(parcelas.get(l.parcelamento_id) ?? []), l]);
   }
   const totais = new Map(parcelamentos.map((p) => [p.id, p.valor_total_centavos]));
-  return { compras, estornos, todas, parcelas, totais };
+  const regras = new Map(parcelamentos.map((p) => [p.id, p]));
+  return { compras, estornos, todas, parcelas, totais, regras };
 }
+
+/** O parcelamento como o aparelho o guarda, com as partes dele (ticket 139) quando tem. */
+type ParcelamentoDoEstorno = {
+  id: string;
+  valor_total_centavos: number;
+  parcelas?: number;
+  partes?: { id: string; valor_centavos: number; descricao?: string; categoria_ids?: string[] }[];
+};
 
 export type IndiceDeEstornos = ReturnType<typeof indiceDeEstornos>;
 
@@ -91,6 +100,53 @@ export function restanteDoParcelamento(total: number, parcelamentoId: string, in
   return total - soma(dasParcelas, exceto) - soma(indice.todas.get(parcelamentoId) ?? [], exceto);
 }
 
+/**
+ * Quanto cada parte do parcelamento soma nas parcelas: cada parcela dividida na proporção das partes, como o servidor divide
+ * (`somas_nas_parcelas`, ticket 160). Repete as contas de `dividirEmParcelas` e `dividirNaProporcao` (ADR 0018).
+ */
+export function somasDasPartes(regra: ParcelamentoDoEstorno): Map<string, number> {
+  const partes = regra.partes ?? [];
+  const parcelas = regra.parcelas ?? 0;
+  if (!partes.length || !parcelas) return new Map();
+  const { primeira, outras } = dividirEmParcelas(regra.valor_total_centavos, parcelas);
+  const pesos = partes.map((p) => p.valor_centavos);
+  const daPrimeira = dividirNaProporcao(pesos, primeira);
+  const dasOutras = dividirNaProporcao(pesos, outras);
+  return new Map(partes.map((p, i) => [p.id, daPrimeira[i] + dasOutras[i] * (parcelas - 1)]));
+}
+
+/**
+ * A parte do parcelamento de que veio a parte de uma parcela: a da mesma posição, quando a parcela tem tantas partes quanto ele.
+ * O servidor liga as duas pelo id; o aparelho, só para mostrar, pela posição.
+ */
+export function parteDoParcelamento(parcela: ParaEstorno, parteId: string, regra: ParcelamentoDoEstorno | undefined): string | undefined {
+  const i = parcela.partes?.findIndex((p) => p.id === parteId) ?? -1;
+  if (i < 0 || !regra?.partes || regra.partes.length !== parcela.partes?.length) return undefined;
+  return regra.partes[i].id;
+}
+
+/** A parte da parcela que veio de uma parte do parcelamento, o caminho inverso de `parteDoParcelamento`. */
+export function parteDaParcela(parcela: ParaEstorno, parteId: string, regra: ParcelamentoDoEstorno | undefined): string | undefined {
+  const i = regra?.partes?.findIndex((p) => p.id === parteId) ?? -1;
+  if (i < 0 || regra?.partes?.length !== parcela.partes?.length) return undefined;
+  return parcela.partes?.[i].id;
+}
+
+/**
+ * Quanto de uma parte do parcelamento ainda pode ser estornado: a soma dela nas parcelas menos o estornado nela, em todas as parcelas
+ * e na parte de cada parcela que veio dela (ticket 160).
+ */
+export function restanteDaParteDoParcelamento(parcelamentoId: string, parteId: string, indice: IndiceDeEstornos, exceto?: string): number {
+  const regra = indice.regras.get(parcelamentoId);
+  const total = regra ? somasDasPartes(regra).get(parteId) : undefined;
+  if (total === undefined) return 0;
+  const deTodas = (indice.todas.get(parcelamentoId) ?? []).filter((e) => e.estorno_parte_id === parteId);
+  const dasParcelas = (indice.parcelas.get(parcelamentoId) ?? []).flatMap((p) =>
+    (indice.estornos.get(p.id) ?? []).filter((e) => e.estorno_parte_id && parteDoParcelamento(p, e.estorno_parte_id, regra) === parteId),
+  );
+  return total - soma(deTodas, exceto) - soma(dasParcelas, exceto);
+}
+
 /** O que cabe no estorno de uma compra ou parcela: o que resta dela e, na parcela, do parcelamento (se o aparelho já o conhece). */
 export function restanteDaParcela(parcela: ParaEstorno, indice: IndiceDeEstornos, exceto?: string): number {
   const dela = restanteDaCompra(parcela, indice, exceto);
@@ -108,20 +164,36 @@ export function restanteDoEstorno(
   exceto?: string,
 ): number {
   const total = parcelamentoId ? indice.totais.get(parcelamentoId) : undefined;
-  if (todas) return parcelamentoId && total !== undefined ? restanteDoParcelamento(total, parcelamentoId, indice, exceto) : 0;
+  if (todas) {
+    if (!parcelamentoId || total === undefined) return 0;
+    const doParcelamento = restanteDoParcelamento(total, parcelamentoId, indice, exceto);
+    // No parcelamento com partes, `parteId` é uma parte dele (ticket 160).
+    return parteId ? Math.min(restanteDaParteDoParcelamento(parcelamentoId, parteId, indice, exceto), doParcelamento) : doParcelamento;
+  }
   if (!compra) return 0;
   const daParcela = restanteDaParcela(compra, indice, exceto);
-  return parteId ? Math.min(restanteDaParte(compra, parteId, indice, exceto), daParcela) : daParcela;
+  if (!parteId) return daParcela;
+  const daParte = Math.min(restanteDaParte(compra, parteId, indice, exceto), daParcela);
+  // A parte da parcela também respeita o que resta da parte do parcelamento de que veio.
+  const deQual = compra.parcelamento_id ? parteDoParcelamento(compra, parteId, indice.regras.get(compra.parcelamento_id)) : undefined;
+  return deQual ? Math.min(daParte, restanteDaParteDoParcelamento(compra.parcelamento_id!, deQual, indice, exceto)) : daParte;
 }
+
+/** A descrição da parte, ou as categorias dela. */
+export const nomeDaParte = (parte: { descricao?: string; categoria_ids?: string[] }, categorias: ComNome[]) =>
+  parte.descricao || (parte.categoria_ids ?? []).map((c) => nomePorId(categorias, c)).join(", ");
 
 /** "estorno de ..." no estorno, "estorno avulso" no avulso e "estornada em ..." na compra; vazio no resto. */
 export function ligacaoDoEstorno(l: ParaEstorno, indice: IndiceDeEstornos, categorias: ComNome[]): string {
   if (l.estorno_avulso) return "estorno avulso";
-  if (l.estorno_parcelamento_id) return "estorno de todas as parcelas";
+  if (l.estorno_parcelamento_id) {
+    const parte = l.estorno_parte_id ? indice.regras.get(l.estorno_parcelamento_id)?.partes?.find((p) => p.id === l.estorno_parte_id) : undefined;
+    return `estorno de todas as parcelas${parte ? ` — ${nomeDaParte(parte, categorias)}` : ""}`;
+  }
   if (l.estorno_de) {
     const compra = indice.compras.get(l.estorno_de);
     const parte = l.estorno_parte_id ? compra?.partes?.find((p) => p.id === l.estorno_parte_id) : undefined;
-    const daParte = parte ? ` — ${parte.descricao || parte.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")}` : "";
+    const daParte = parte ? ` — ${nomeDaParte(parte, categorias)}` : "";
     return `estorno de ${compra ? tituloDoLancamento(compra, categorias) : "uma compra"}${daParte}`;
   }
   const estornos = indice.estornos.get(l.id);

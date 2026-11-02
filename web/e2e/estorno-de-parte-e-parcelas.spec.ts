@@ -112,3 +112,53 @@ test("estorna todas as parcelas num estorno só, ligado ao parcelamento, que con
   // Não sobra nada: nenhuma parcela oferece mais "Estornar".
   await expect(page.getByRole("link", { name: `Estornar ${compra}` })).toHaveCount(0);
 });
+
+test("estorna todas as parcelas de uma parte do parcelamento, também sem internet", async ({ page, context }) => {
+  const { s, api, cartao, roupa, casa } = await preparar(page);
+  const compra = `Loja ${s}`;
+  const vestido = randomUUID();
+  await api.criar("/api/parcelamentos", {
+    id: randomUUID(),
+    parcelas: 3,
+    data: hoje(),
+    descricao: compra,
+    conta_id: cartao.id,
+    categoria_ids: [],
+    valor_total_centavos: 30000,
+    automatico: true,
+    partes: [
+      { id: vestido, descricao: "Vestido", valor_centavos: 22500, categoria_ids: [roupa.id], tags: ["presente"] },
+      { id: randomUUID(), descricao: "Cortina", valor_centavos: 7500, categoria_ids: [casa.id] },
+    ],
+  });
+  await page.reload();
+  await expect(page.getByRole("link", { name: `Estornar ${compra}` }).first()).toBeVisible();
+
+  // Sem internet: o aparelho já tem o parcelamento e as partes dele.
+  await context.setOffline(true);
+  await page.getByRole("listitem").filter({ hasText: compra }).first().getByRole("link", { name: `Estornar ${compra}` }).click();
+  await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
+  await page.getByRole("radio", { name: "Todas as parcelas" }).check();
+
+  // As partes passam a ser as do parcelamento, com a soma delas nas 3 parcelas.
+  const partes = page.getByRole("group", { name: "Parte estornada" });
+  await expect(partes.getByRole("radio", { name: /^Vestido — R\$ 225,00, ainda dá para estornar R\$ 225,00/ })).toBeChecked();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 225,00");
+  await expect(page.getByRole("button", { name: roupa.nome })).toHaveAttribute("aria-pressed", "true");
+  await partes.getByRole("radio", { name: /^Cortina/ }).check();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 75,00");
+  await expect(page.getByRole("button", { name: casa.nome })).toHaveAttribute("aria-pressed", "true");
+  await partes.getByRole("radio", { name: /^Vestido/ }).check();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 225,00");
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  // O estorno diz de qual parte é.
+  const estorno = page.getByRole("listitem").filter({ hasText: `Visa ${s}` }).filter({ hasText: "estorno de todas as parcelas — Vestido" });
+  await expect(estorno).toContainText("+ R$ 225,00");
+
+  // Com a rede de volta, a fila sobe o estorno ligado à parte do parcelamento.
+  await context.setOffline(false);
+  await expect
+    .poll(async () => (await api.ler("/api/lancamentos")).find((l: { estorno_parcelamento_id?: string; estorno_parte_id?: string }) => l.estorno_parcelamento_id && l.estorno_parte_id === vestido))
+    .toMatchObject({ valor_centavos: 22500, estorno_de: null, categoria_ids: [roupa.id], tags: ["presente"] });
+});

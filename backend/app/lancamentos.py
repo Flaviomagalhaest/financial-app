@@ -17,7 +17,7 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual_das_partes, guardar_item_atual_do_lancamento
 from app.login import UsuarioLogado
-from app.partes import NAO_DA_PARA_DIVIDIR, e_estorno, redividir
+from app.partes import NAO_DA_PARA_DIVIDIR, e_estorno, id_na_parcela, redividir
 from app.partes import dividir as dividir_pela_proporcao
 from app.pessoas import configuradas
 
@@ -173,7 +173,8 @@ class DadosDoLancamento(BaseModel):
     # diz qual parte foi devolvida. Herda as categorias e tags dela e vai até o valor dela.
     estorno_parte_id: UUID | None = None
     # O estorno de todas as parcelas (ticket 138, ADR 0016): um crédito só ligado ao parcelamento,
-    # sem `estorno_de`, até a soma das parcelas menos o já estornado.
+    # sem `estorno_de`, até a soma das parcelas menos o já estornado. No parcelamento com partes,
+    # `estorno_parte_id` é uma parte dele, e o estorno vai até a soma dela nas parcelas (ticket 160).
     estorno_parcelamento_id: UUID | None = None
     # A escolha do casal do item do planejamento em que o lançamento conta, pela categoria dele
     # que tem o item; sem ela, conta sozinho quando só uma das categorias tem item no mês
@@ -905,21 +906,42 @@ def _copiar_da_parte(conn, estornos: list[UUID], parte_id: UUID) -> None:
 
 def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
     """O estorno de todas as parcelas vale as categorias e as tags que o parcelamento tem agora
-    (ticket 138). Não tem escolha de item: conta no item do mês, como o crédito avulso."""
-    estornos = [
-        id
-        for (id,) in conn.execute(
-            "SELECT id FROM lancamentos WHERE estorno_parcelamento_id = %s AND excluido_em IS NULL",
-            (parcelamento_id,),
-        )
-    ]
-    if estornos:
+    (ticket 138). Não tem escolha de item: conta no item do mês, como o crédito avulso. O de uma
+    parte segue a parte, com a escolha de item dela (ticket 160); o de antes da divisão do
+    parcelamento fica com o que tinha: não há parte a seguir."""
+    estornos = conn.execute(
+        "SELECT id, estorno_parte_id FROM lancamentos WHERE estorno_parcelamento_id = %s"
+        " AND excluido_em IS NULL",
+        (parcelamento_id,),
+    ).fetchall()
+    if not estornos:
+        return
+    (com_partes,) = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM parcelamento_partes WHERE parcelamento_id = %s)",
+        (parcelamento_id,),
+    ).fetchone()
+    if not com_partes:
         _trocar_classificacao(
             conn,
-            estornos,
+            [e for e, _ in estornos],
             "SELECT categoria_id FROM parcelamento_categorias WHERE parcelamento_id = %s",
             "SELECT tag_id FROM parcelamento_tags WHERE parcelamento_id = %s",
             parcelamento_id,
+        )
+        return
+    for parte_id in {p for _, p in estornos if p}:
+        da_parte = [e for e, p in estornos if p == parte_id]
+        _trocar_classificacao(
+            conn,
+            da_parte,
+            "SELECT categoria_id FROM parcelamento_parte_categorias WHERE parte_id = %s",
+            "SELECT tag_id FROM parcelamento_parte_tags WHERE parte_id = %s",
+            parte_id,
+        )
+        conn.execute(
+            "UPDATE lancamentos e SET item_categoria_id = p.item_categoria_id"
+            " FROM parcelamento_partes p WHERE p.id = %s AND e.id = ANY(%s)",
+            (parte_id, da_parte),
         )
 
 
@@ -1222,6 +1244,8 @@ def _conferir_estorno(
         raise recusar("estornos somam mais que a compra")
     if parcelamento_id:
         _conferir_total_do_parcelamento(conn, id, dados.valor_centavos, parcelamento_id)
+        if dados.estorno_parte_id:
+            _conferir_parte_do_parcelamento(conn, id, dados, original_id, parcelamento_id)
     origem = (
         "SELECT categoria_id FROM parte_categorias WHERE parte_id = %s"
         if dados.estorno_parte_id
@@ -1248,33 +1272,149 @@ def _conferir_total_do_parcelamento(
         raise recusar("estornos somam mais que o parcelamento")
 
 
+def _conferir_parte_do_parcelamento(
+    conn, id: UUID, dados: DadosDoLancamento, parcela_id: UUID, parcelamento_id: UUID
+) -> None:
+    """O estorno de uma parcela na parte que veio do parcelamento também respeita o que resta da
+    parte no parcelamento, junto com o estorno de todas as parcelas dela (ticket 160)."""
+    total, parcelas = conn.execute(
+        "SELECT valor_total_centavos, parcelas FROM parcelamentos WHERE id = %s",
+        (parcelamento_id,),
+    ).fetchone()
+    somas = somas_das_partes_do_parcelamento(conn, parcelamento_id, total, parcelas)
+    parte = next((p for p in somas if id_na_parcela(parcela_id, p) == dados.estorno_parte_id), None)
+    if parte is None:
+        return
+    estornado = estornado_nas_partes_do_parcelamento(conn, parcelamento_id, id)
+    if estornado.get(parte, 0) + dados.valor_centavos > somas[parte]:
+        raise recusar("estornos somam mais que a parte")
+
+
 def _conferir_estorno_de_todas(
     conn, id: UUID, dados: DadosDoLancamento, parcelamento_id: UUID
 ) -> frozenset[UUID]:
     """O estorno de todas as parcelas é de um parcelamento no cartão, para um cartão, até a soma
-    das parcelas menos o já estornado (de cada parcela e de todas). Devolve as categorias do
-    parcelamento, que valem no estorno (ticket 138)."""
+    das parcelas menos o já estornado (de cada parcela e de todas). No parcelamento com partes, é
+    de uma parte e vai até a soma dela nas parcelas menos o já estornado nela (ticket 160).
+    Devolve as categorias do parcelamento (ou da parte), que valem no estorno (ticket 138)."""
     if dados.tipo != "despesa" or not faturas.ler_cartao(conn, dados.conta_id):
         raise recusar("estorno é um crédito no cartão")
-    if dados.estorno_parte_id:
-        raise recusar("o parcelamento ainda não tem partes")
     achado = conn.execute(
-        "SELECT conta_id, valor_total_centavos FROM parcelamentos WHERE id = %s",
+        "SELECT conta_id, valor_total_centavos, parcelas FROM parcelamentos WHERE id = %s",
         (parcelamento_id,),
     ).fetchone()
     if not achado:
         raise recusar("parcelamento não encontrado")
-    conta, total = achado
+    conta, total, parcelas = achado
     if not faturas.ler_cartao(conn, conta):
         raise recusar("só compra no cartão tem estorno")
+    partes = somas_das_partes_do_parcelamento(conn, parcelamento_id, total, parcelas)
+    # O estorno de antes da divisão do parcelamento continua dele inteiro e pode ser editado.
+    ja_existe = conn.execute("SELECT 1 FROM lancamentos WHERE id = %s", (id,)).fetchone()
+    parte = dados.estorno_parte_id
+    if partes and not parte and not ja_existe:
+        raise recusar("o parcelamento tem partes: escolha a parte que foi estornada")
+    if parte and not partes:
+        raise recusar("o parcelamento não tem partes")
+    if parte and parte not in partes:
+        raise recusar("a parte não é deste parcelamento")
+    if parte:
+        estornado = estornado_nas_partes_do_parcelamento(conn, parcelamento_id, id)
+        if estornado.get(parte, 0) + dados.valor_centavos > partes[parte]:
+            raise recusar("estornos somam mais que a parte")
     _conferir_total_do_parcelamento(conn, id, dados.valor_centavos, parcelamento_id, total)
-    return frozenset(
-        c
-        for (c,) in conn.execute(
-            "SELECT categoria_id FROM parcelamento_categorias WHERE parcelamento_id = %s",
-            (parcelamento_id,),
+    origem = (
+        "SELECT categoria_id FROM parcelamento_parte_categorias WHERE parte_id = %s"
+        if parte
+        else "SELECT categoria_id FROM parcelamento_categorias WHERE parcelamento_id = %s"
+    )
+    return frozenset(c for (c,) in conn.execute(origem, (parte or parcelamento_id,)))
+
+
+def somas_das_partes_do_parcelamento(
+    conn, parcelamento_id: UUID, total: int, parcelas: int
+) -> dict[UUID, int]:
+    """Quanto cada parte do parcelamento soma nas parcelas."""
+    partes = conn.execute(
+        "SELECT id, valor_centavos FROM parcelamento_partes WHERE parcelamento_id = %s"
+        " ORDER BY ordem",
+        (parcelamento_id,),
+    ).fetchall()
+    somas = somas_nas_parcelas(total, parcelas, [v for _, v in partes])
+    return {id: s for (id, _), s in zip(partes, somas)}
+
+
+def somas_nas_parcelas(total: int, parcelas: int, proporcao: list[int]) -> list[int]:
+    """A soma de cada parte nas parcelas: cada parcela dividida na proporção das partes, como a
+    geração a divide (ticket 139)."""
+    from app.parcelamentos import valor_da_parcela
+
+    somas = [0] * len(proporcao)
+    if not proporcao:
+        return somas
+    for n in range(1, parcelas + 1):
+        divididas = dividir_pela_proporcao(valor_da_parcela(total, parcelas, n), proporcao)
+        somas = [s + v for s, v in zip(somas, divididas)]
+    return somas
+
+
+def conferir_partes_do_parcelamento_com_estorno(
+    conn, parcelamento_id: UUID, partes: list[Parte], total: int, parcelas: int
+) -> None:
+    """Na correção do parcelamento, como na compra à vista: a parte com estorno não sai, as partes
+    não se juntam e a soma dela nas parcelas não fica abaixo do que foi estornado nela (ticket
+    160)."""
+    estornado = estornado_nas_partes_do_parcelamento(conn, parcelamento_id)
+    if not estornado:
+        return
+    if not partes:
+        raise recusar(
+            "o parcelamento tem estorno de parte; exclua o estorno antes de juntar as partes"
+        )
+    somas = dict(
+        zip(
+            (p.id for p in partes),
+            somas_nas_parcelas(total, parcelas, [p.valor_centavos for p in partes]),
         )
     )
+    for parte_id, centavos in estornado.items():
+        if parte_id not in somas:
+            raise recusar("a parte tem estorno; exclua o estorno antes de tirá-la")
+        if somas[parte_id] < centavos:
+            raise recusar(
+                f"a parte tem estornos de {centavos} centavos: o valor dela não pode ficar"
+                " abaixo disso"
+            )
+
+
+def estornado_nas_partes_do_parcelamento(
+    conn, parcelamento_id: UUID, exceto: UUID | None = None
+) -> dict[UUID, int]:
+    """O já estornado em cada parte do parcelamento: o estorno de todas as parcelas dela e o de
+    uma parcela, na parte dessa parcela que veio dela (o id é o da parcela com o da parte, como a
+    geração faz). `exceto` fica de fora: o estorno que está sendo conferido."""
+    partes = [
+        p
+        for (p,) in conn.execute(
+            "SELECT id FROM parcelamento_partes WHERE parcelamento_id = %s", (parcelamento_id,)
+        )
+    ]
+    estornado = dict.fromkeys(partes, 0)
+    for estorno_de, parte, valor in conn.execute(
+        "SELECT estorno_de, estorno_parte_id, valor_centavos FROM lancamentos"
+        " WHERE excluido_em IS NULL AND id IS DISTINCT FROM %s AND estorno_parte_id IS NOT NULL"
+        " AND (estorno_parcelamento_id = %s"
+        " OR estorno_de IN (SELECT id FROM lancamentos WHERE parcelamento_id = %s))",
+        (exceto, parcelamento_id, parcelamento_id),
+    ):
+        de_qual = (
+            parte
+            if estorno_de is None
+            else next((p for p in partes if id_na_parcela(estorno_de, p) == parte), None)
+        )
+        if de_qual in estornado:
+            estornado[de_qual] += valor
+    return {p: v for p, v in estornado.items() if v}
 
 
 def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:

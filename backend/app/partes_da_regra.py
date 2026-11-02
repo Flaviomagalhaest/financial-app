@@ -3,9 +3,10 @@ diferentes (ticket 140; o parcelamento do ticket 139 pode guardar as dele aqui t
 A regra guarda as partes no valor dela, como proporção; cada lançamento que ela gera recebe as
 suas, com ids próprios, divididas pelo valor dele (`partes.redividir`)."""
 
-from uuid import UUID, uuid5
+from uuid import UUID
 
 from app.lancamentos import Parte, ids_das_tags
+from app.partes import id_na_parcela
 
 
 def ler(conn, ids: list[UUID]) -> dict[UUID, list[Parte]]:
@@ -117,7 +118,7 @@ def apagar(conn, regra_ids: list[UUID]) -> None:
 def do_lancamento(lancamento_id: UUID, partes: list[Parte]) -> list[Parte]:
     """As partes da regra como um lançamento gerado as recebe: o id vem do lançamento e da parte
     da regra, e gerar ou reajustar de novo não muda o id da mesma parte."""
-    return [p.model_copy(update={"id": uuid5(lancamento_id, str(p.id))}) for p in partes]
+    return [p.model_copy(update={"id": id_na_parcela(lancamento_id, p.id)}) for p in partes]
 
 
 def linhas(partes: list[Parte]) -> int:
