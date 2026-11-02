@@ -6,6 +6,8 @@ sem partes, com `parte_id` e `valor_da_parte` nulos (vale o valor do lançamento
 parte, com o valor e a ordem dela. A compra com partes não tem categoria, tag nem pessoa próprias, então
 nada conta duas vezes."""
 
+from uuid import UUID, uuid5
+
 CATEGORIAS_QUE_CONTAM = (
     "(SELECT lancamento_id, categoria_id, NULL::uuid AS parte_id, NULL::bigint AS valor_da_parte,"
     " NULL::integer AS ordem FROM lancamento_categorias"
@@ -50,6 +52,12 @@ def com_sinal(apelido: str) -> str:
         f"CASE WHEN lancamentos.tipo = 'despesa' AND NOT {e_estorno()}"
         f" THEN {valor(apelido)} ELSE -{valor(apelido)} END"
     )
+
+
+def id_na_parcela(parcela_id: UUID, parte_id: UUID) -> UUID:
+    """O id da parte do parcelamento (ou da regra) numa parcela (ou ocorrência): vem dos dois, e
+    gerar de novo não duplica (tickets 139 e 140)."""
+    return uuid5(parcela_id, str(parte_id))
 
 
 NAO_DA_PARA_DIVIDIR = "o valor não dá para dividir pelas partes: cada uma precisa de um centavo"

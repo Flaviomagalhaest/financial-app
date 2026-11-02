@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 from app.faturas import Titular, escolher_fatura
 from app.item_em_que_conta import onde_conta
-from app.lancamentos import Parte
+from app.lancamentos import Parte, somas_nas_parcelas
 from app.parcelamentos import parcelas_puladas, valor_da_parcela
 from app.partes import redividir
 from app.planejamento import percentual
@@ -110,3 +110,8 @@ def test_parcelas_puladas(caso: dict):
         )
         == caso["puladas"]
     )
+
+
+@pytest.mark.parametrize("caso", casos("somas-das-partes"), ids=lambda c: c["caso"])
+def test_somas_das_partes(caso: dict):
+    assert somas_nas_parcelas(caso["total"], caso["parcelas"], caso["pesos"]) == caso["resultado"]

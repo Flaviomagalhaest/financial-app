@@ -4,7 +4,7 @@ DSQL, ADR 0009): a API confere as ligações. O id do lançamento nasce no apare
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal, NamedTuple, get_args
-from uuid import UUID, uuid4, uuid5
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
@@ -17,7 +17,7 @@ from app.banco import conectar, em_transacao
 from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual_das_partes, guardar_item_atual_do_lancamento
 from app.login import UsuarioLogado
-from app.partes import NAO_DA_PARA_DIVIDIR, e_estorno, redividir
+from app.partes import NAO_DA_PARA_DIVIDIR, e_estorno, id_na_parcela, redividir
 from app.partes import dividir as dividir_pela_proporcao
 from app.pessoas import configuradas
 
@@ -1282,7 +1282,7 @@ def _conferir_parte_do_parcelamento(
         (parcelamento_id,),
     ).fetchone()
     somas = somas_das_partes_do_parcelamento(conn, parcelamento_id, total, parcelas)
-    parte = next((p for p in somas if uuid5(parcela_id, str(p)) == dados.estorno_parte_id), None)
+    parte = next((p for p in somas if id_na_parcela(parcela_id, p) == dados.estorno_parte_id), None)
     if parte is None:
         return
     estornado = estornado_nas_partes_do_parcelamento(conn, parcelamento_id, id)
@@ -1388,11 +1388,11 @@ def conferir_partes_do_parcelamento_com_estorno(
 
 
 def estornado_nas_partes_do_parcelamento(
-    conn, parcelamento_id: UUID, sem: UUID | None = None
+    conn, parcelamento_id: UUID, exceto: UUID | None = None
 ) -> dict[UUID, int]:
     """O já estornado em cada parte do parcelamento: o estorno de todas as parcelas dela e o de
     uma parcela, na parte dessa parcela que veio dela (o id é o da parcela com o da parte, como a
-    geração faz). `sem` fica de fora: o estorno que está sendo conferido."""
+    geração faz). `exceto` fica de fora: o estorno que está sendo conferido."""
     partes = [
         p
         for (p,) in conn.execute(
@@ -1405,12 +1405,12 @@ def estornado_nas_partes_do_parcelamento(
         " WHERE excluido_em IS NULL AND id IS DISTINCT FROM %s AND estorno_parte_id IS NOT NULL"
         " AND (estorno_parcelamento_id = %s"
         " OR estorno_de IN (SELECT id FROM lancamentos WHERE parcelamento_id = %s))",
-        (sem, parcelamento_id, parcelamento_id),
+        (exceto, parcelamento_id, parcelamento_id),
     ):
         de_qual = (
             parte
             if estorno_de is None
-            else next((p for p in partes if uuid5(estorno_de, str(p)) == parte), None)
+            else next((p for p in partes if id_na_parcela(estorno_de, p) == parte), None)
         )
         if de_qual in estornado:
             estornado[de_qual] += valor

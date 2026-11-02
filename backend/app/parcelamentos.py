@@ -37,6 +37,7 @@ from app.lancamentos import (
 )
 from app.login import UsuarioLogado
 from app.partes import dividir as dividir_pela_proporcao
+from app.partes import id_na_parcela
 from app.recorrencias import com_o_dia_do_lancamento, mais_meses
 
 router = APIRouter(prefix="/api")
@@ -415,7 +416,9 @@ def partes_da_parcela(
     return PartesDaParcela(
         [
             (
-                p.model_copy(update={"id": uuid5(lancamento_id, str(p.id)), "valor_centavos": v}),
+                p.model_copy(
+                    update={"id": id_na_parcela(lancamento_id, p.id), "valor_centavos": v}
+                ),
                 tags.get(p.id, []),
             )
             for p, v in zip(regra.partes, dividir_pela_proporcao(valor, proporcao))

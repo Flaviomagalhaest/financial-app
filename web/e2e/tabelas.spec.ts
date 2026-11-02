@@ -8,7 +8,9 @@ import mesDaCompraTabela from "../../tabelas-de-teste/mes-da-compra.json" with {
 import divisaoTabela from "../../tabelas-de-teste/divisao-das-parcelas.json" with { type: "json" };
 import puladasTabela from "../../tabelas-de-teste/puladas.json" with { type: "json" };
 import redivisaoTabela from "../../tabelas-de-teste/redivisao-das-partes.json" with { type: "json" };
+import somasTabela from "../../tabelas-de-teste/somas-das-partes.json" with { type: "json" };
 import { mesDaCompra, ondeConta, percentual } from "../src/dados/aviso";
+import { somasDasPartes } from "../src/lancamentos/apresentacao";
 import { dividirEmParcelas, redividir } from "../src/lancamentos/dinheiro";
 import { ocorrenciasPuladas, parcelasPuladas } from "../src/lancamentos/puladas";
 import type { RecorrenciaNaFolha } from "../src/lancamentos/recorrencia";
@@ -42,6 +44,16 @@ test.describe("redivisão das partes", () => {
     test(c.caso, () => {
       const divididas = redividir(c.pesos.map((peso, i) => ({ id: i, valor_centavos: peso })), c.valor);
       expect(divididas && divididas.map((p) => p.valor_centavos)).toEqual(c.resultado);
+    });
+  }
+});
+
+test.describe("somas das partes nas parcelas", () => {
+  for (const c of somasTabela.casos) {
+    test(c.caso, () => {
+      const partes = c.pesos.map((peso, i) => ({ id: String(i), valor_centavos: peso }));
+      const somas = somasDasPartes({ id: "p", valor_total_centavos: c.total, parcelas: c.parcelas, partes });
+      expect(partes.map((p) => somas.get(p.id))).toEqual(c.resultado);
     });
   }
 });
