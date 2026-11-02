@@ -1,7 +1,7 @@
 # Conferir as regras provisórias da aba Histórico
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: 57
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se uma regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
