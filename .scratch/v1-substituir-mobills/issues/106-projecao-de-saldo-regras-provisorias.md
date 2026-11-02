@@ -1,7 +1,7 @@
 # Projeção de saldo: confirmar as regras provisórias
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se uma regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -22,5 +22,16 @@ A leitura é `GET /api/futuro` (`backend/app/projecao.py`), com os testes em `ba
 
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste de API em `backend/tests/test_projecao.py` e ajuste em `backend/app/projecao.py` (ou em `planejamento.a_lancar_nas_despesas`)
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] Se uma regra mudar: teste de API em `backend/tests/test_projecao.py` e ajuste em `backend/app/projecao.py` (ou em `planejamento.a_lancar_nas_despesas`)
+
+## Answer
+
+O dono aceitou a recomendação em todas as perguntas:
+
+1. **Mantida**: transferência (e receita) fora da linha com o planejamento. Conta de destino fora do casal vira ticket novo se aparecer.
+2. **Mantida**: o ajuste de fatura diminui o que falta dos itens.
+3. **Mudou**: o mês futuro sem itens de planejamento usa o modelo padrão (valor do modelo menos o realizado e o previsto do mês, só categorias de despesa, sem compensar o item estourado). Implementado em `planejamento.a_lancar_nas_despesas`; teste `test_mes_sem_planejamento_usa_o_modelo_padrao_e_desconta_o_que_ja_foi_lancado`.
+4. **Mantida**: o passado começa na abertura de cada conta.
+5. **Mantida**: o pagamento de fatura previsto não conta.
+6. **Mantida**: 12 meses para trás e 12 adiante.

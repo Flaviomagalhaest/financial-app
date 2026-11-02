@@ -194,19 +194,34 @@ def a_lancar_nas_despesas(conn, mes: date) -> int:
     """O que ainda falta lançar dos itens de despesa do mês (o planejado menos o realizado e o
     previsto), sem compensar o item estourado com a sobra de outro, menos os ajustes de fatura,
     como o "ainda dá para gastar". O item de transferência fica de fora: guardar na reserva move
-    dinheiro entre contas e não muda a soma delas."""
+    dinheiro entre contas e não muda a soma delas. O mês vazio vale pelo modelo
+    padrão, para a projeção não subir de repente depois do último mês planejado."""
     plano = ler_mes(conn, mes.strftime("%Y-%m"))
+    if plano.itens:
+        planejado = {i.categoria_id: i.ainda_da_para_gastar_centavos for i in plano.itens}
+    else:
+        planejado = _faltas_do_modelo(conn, mes)
     de_despesa = {
         id
         for (id,) in conn.execute(
             "SELECT id FROM categorias WHERE tipo = 'despesa' AND id = ANY(%s)",
-            ([i.categoria_id for i in plano.itens],),
+            (list(planejado),),
         )
     }
-    falta = sum(
-        max(i.ainda_da_para_gastar_centavos, 0) for i in plano.itens if i.categoria_id in de_despesa
-    )
+    falta = sum(max(v, 0) for categoria_id, v in planejado.items() if categoria_id in de_despesa)
     return max(falta - plano.ajustes_de_fatura_centavos, 0)
+
+
+def _faltas_do_modelo(conn, mes: date) -> dict[UUID, int]:
+    """Por categoria do modelo padrão, o valor dele menos o realizado e o previsto do mês."""
+    valores = {i.categoria_id: i.valor_centavos for i in _modelo(conn).itens}
+    if not valores:
+        return {}
+    # Sem itens, cada categoria do modelo faz de item.
+    movimentos, _ = _movimentos_por_item(conn, mes, {id: id for id in valores})
+    for categoria_id, _situacao, valor in movimentos:
+        valores[categoria_id] -= valor
+    return valores
 
 
 def _gravar_itens(conn, dia: date, itens, usuario: str) -> None:
