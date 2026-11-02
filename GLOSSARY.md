@@ -131,7 +131,7 @@ Apaga o parcelamento e todas as parcelas, também as pagas e as alteradas à mã
 _Avoid_: desfazer o parcelamento
 
 **Antecipação**:
-Pagamento adiantado das últimas parcelas de um parcelamento que ainda não foram pagas, no dia de hoje ou em outro, por um valor editável (o desconto é a diferença para o valor das parcelas). As parcelas viram realizadas na data do pagamento, e no cartão contam na fatura em que foi paga, por troca à mão. **Quitação** é a antecipação de todas as parcelas que faltam.
+Pagamento adiantado das últimas parcelas de um parcelamento que ainda não foram pagas, no dia de hoje ou em outro, por um valor editável (o desconto é a diferença para o valor das parcelas). As parcelas viram realizadas na data do pagamento, e no cartão contam na fatura em que foi paga, por troca à mão. **Quitação** é a antecipação de todas as parcelas que faltam. O pedido leva uma chave de idempotência (o id da antecipação, gerado no aparelho): repetir com a mesma chave devolve as parcelas já antecipadas, sem antecipar as seguintes.
 _Avoid_: adiantamento, amortização
 
 **Automático**:
