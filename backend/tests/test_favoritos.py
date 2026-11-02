@@ -452,6 +452,9 @@ def test_a_identidade_bate_com_os_vetores_comuns_do_app():
                 e["pessoa"],
             ]
         )
-        assert identidade_de(
-            e["descricao"], e["tipo"], e["conta_id"], e["categoria_ids"], e["tags"], e["pessoa"]
-        ) == esperado, v["nome"]
+        assert (
+            identidade_de(
+                e["descricao"], e["tipo"], e["conta_id"], e["categoria_ids"], e["tags"], e["pessoa"]
+            )
+            == esperado
+        ), v["nome"]
