@@ -1,7 +1,7 @@
 # Parcelamento e recorrência que mexem numa fatura paga
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: o dono decide o que acontece com as parcelas e os previstos numa fatura paga); apoio: `implement`, `tdd`
 Modelo recomendado: Opus
