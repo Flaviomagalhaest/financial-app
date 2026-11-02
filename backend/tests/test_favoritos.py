@@ -458,3 +458,50 @@ def test_a_identidade_bate_com_os_vetores_comuns_do_app():
             )
             == esperado
         ), v["nome"]
+
+
+def test_juntar_a_categoria_atualiza_o_favorito_e_o_valor_padrao_continua(casal: Casal):
+    conta, cafe, padaria = casal.conta(), casal.categoria("Café"), casal.categoria("Padaria")
+    casal.pedir("flavio", "POST", "/api/favoritos", json=favorito(conta, [cafe]))
+    lancar(casal, conta, [cafe], descricao="Café da padaria", valor_centavos=1500)
+
+    juntou = casal.pedir(
+        "flavio", "POST", f"/api/categorias/{cafe}/juntar", json={"destino_id": padaria}
+    )
+
+    assert juntou.status_code == 200
+    [visto] = listar(casal)["favoritos"]
+    assert visto["categoria_ids"] == [padaria]
+    assert visto["valor_padrao_centavos"] == 1500
+
+
+def test_juntar_a_categoria_atualiza_a_parte_do_favorito_com_partes(casal: Casal):
+    conta, a, b, c = casal.conta(), *(casal.categoria(n) for n in ("A", "B", "C"))
+    partes = [parte_do_modelo([a], 600), parte_do_modelo([b], 600)]
+    casal.pedir("flavio", "POST", "/api/favoritos", json=favorito_com_partes(conta, partes))
+
+    casal.pedir("flavio", "POST", f"/api/categorias/{a}/juntar", json={"destino_id": c})
+
+    [visto] = listar(casal)["favoritos"]
+    assert [p["categoria_ids"] for p in visto["partes"]] == [[c], [b]]
+
+
+def test_juntar_em_categoria_que_deixa_dois_favoritos_iguais_mantem_um_so(casal: Casal):
+    conta, a, b = casal.conta(), casal.categoria("A"), casal.categoria("B")
+    casal.pedir("flavio", "POST", "/api/favoritos", json=favorito(conta, [a]))
+    casal.pedir("flavio", "POST", "/api/favoritos", json=favorito(conta, [b]))
+
+    casal.pedir("flavio", "POST", f"/api/categorias/{a}/juntar", json={"destino_id": b})
+
+    [visto] = listar(casal)["favoritos"]
+    assert visto["categoria_ids"] == [b]
+
+
+def test_excluir_a_categoria_de_um_favorito_recusa(casal: Casal):
+    conta, cafe = casal.conta(), casal.categoria("Café")
+    casal.pedir("flavio", "POST", "/api/favoritos", json=favorito(conta, [cafe]))
+
+    resposta = casal.pedir("flavio", "DELETE", f"/api/categorias/{cafe}")
+
+    assert resposta.status_code == 409
+    assert len(listar(casal)["favoritos"]) == 1
