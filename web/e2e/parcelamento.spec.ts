@@ -481,8 +481,8 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   expect(new Set(chaves).size).toBe(1);
   const parcelas: { situacao: string; valor_centavos: number }[] = (await api.ler("/api/lancamentos")).filter((l: { descricao: string }) => l.descricao === descricao);
   expect(parcelas.filter((l) => l.situacao === "previsto")).toHaveLength(3);
-  const antecipadas = parcelas.filter((l) => l.situacao === "realizado").slice(-2);
-  expect(antecipadas.map((l) => l.valor_centavos)).toEqual([9000, 9000]);
+  // A 1ª já era realizada (R$ 100,00); as duas antecipadas dividem os R$ 180,00.
+  expect(parcelas.filter((l) => l.situacao === "realizado").map((l) => l.valor_centavos).sort((a, b) => a - b)).toEqual([9000, 9000, 10000]);
 });
 
 test("quita o parcelamento pela tela, com desconto", async ({ page }) => {
