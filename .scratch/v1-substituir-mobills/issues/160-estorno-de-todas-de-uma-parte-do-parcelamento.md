@@ -1,7 +1,7 @@
 # Estorno de todas as parcelas de uma parte do parcelamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Opus
