@@ -366,18 +366,31 @@ def dispensar_sugerido(dispensa: Dispensa, usuario: UsuarioLogado, request: Requ
 
 
 def usa_categoria(conn, categoria_id: UUID) -> bool:
-    """Algum favorito (ou dispensado) guarda esta categoria, direto ou numa parte."""
-    alvo = str(categoria_id)
-    return any(
-        alvo in categorias or alvo in partes
-        for categorias, partes in conn.execute("SELECT categoria_ids, partes FROM favoritos")
+    """Algum favorito (o dispensado não conta: não aparece na lista) guarda esta categoria."""
+    alvo = f"%{categoria_id}%"
+    return (
+        conn.execute(
+            "SELECT 1 FROM favoritos WHERE estado = 'favorito'"
+            " AND (categoria_ids LIKE %s OR partes LIKE %s) LIMIT 1",
+            (alvo, alvo),
+        ).fetchone()
+        is not None
+    )
+
+
+def esquecer_dispensados_da_categoria(conn, categoria_id: UUID) -> None:
+    alvo = f"%{categoria_id}%"
+    conn.execute(
+        "DELETE FROM favoritos WHERE estado = 'dispensado'"
+        " AND (categoria_ids LIKE %s OR partes LIKE %s)",
+        (alvo, alvo),
     )
 
 
 def juntar_categoria_nos_favoritos(conn, origem: UUID, destino: UUID) -> None:
     """A manutenção de categorias juntou `origem` em `destino`: o favorito (e o dispensado, que
     guarda a mesma identidade) passa a apontar para o destino e a identidade é refeita. Se isso
-    deixar dois com a mesma identidade, fica o favorito mais antigo na lista (o outro sai)."""
+    deixar dois com a mesma identidade, fica o que já existia com ela (o que acabou de mudar sai)."""
     alvo = str(origem)
     linhas = conn.execute(
         "SELECT id, estado, descricao, tipo, conta_id, categoria_ids, tags, pessoa, valor_centavos,"
@@ -412,10 +425,10 @@ def juntar_categoria_nos_favoritos(conn, origem: UUID, destino: UUID) -> None:
         concorrente = conn.execute(
             "SELECT id, estado FROM favoritos WHERE identidade = %s AND id <> %s", (chave_, id)
         ).fetchall()
-        if any(e == "favorito" for _, e in concorrente) and estado == "favorito":
+        if any(e == "favorito" for _, e in concorrente) or (concorrente and estado != "favorito"):
             conn.execute("DELETE FROM favoritos WHERE id = %s", (id,))
             continue
-        # Um dispensado igual ao favorito que chega some: o favorito é o que vale.
+        # O dispensado igual ao favorito que chega some: o favorito é o que vale.
         conn.execute(
             "DELETE FROM favoritos WHERE identidade = %s AND id <> %s AND estado <> 'favorito'",
             (chave_, id),

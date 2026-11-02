@@ -505,3 +505,12 @@ def test_excluir_a_categoria_de_um_favorito_recusa(casal: Casal):
 
     assert resposta.status_code == 409
     assert len(listar(casal)["favoritos"]) == 1
+
+
+def test_excluir_a_categoria_do_favorito_removido_funciona(casal: Casal):
+    conta, cafe = casal.conta(), casal.categoria("Café")
+    novo = favorito(conta, [cafe])
+    casal.pedir("flavio", "POST", "/api/favoritos", json=novo)
+    casal.pedir("flavio", "DELETE", f"/api/favoritos/{novo['id']}")
+
+    assert casal.pedir("flavio", "DELETE", f"/api/categorias/{cafe}").status_code == 204

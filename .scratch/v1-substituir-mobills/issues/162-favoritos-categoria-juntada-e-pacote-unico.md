@@ -19,6 +19,6 @@ Origem: [ticket 108](108-favoritos-decisoes-e-acabamentos.md)
 
 ## Answer
 
-- **Categoria juntada**: `juntar_categoria` passa a remapear os favoritos (e os dispensados) para o destino, inclusive nas partes, e refaz a identidade (`juntar_categoria_nos_favoritos`, `backend/app/favoritos.py`). Se o remapeamento deixar dois favoritos iguais, fica o primeiro da lista. O valor padrão continua, porque a identidade dos lançamentos também foi remapeada pela junção.
+- **Categoria juntada**: `juntar_categoria` passa a remapear os favoritos (e os dispensados) para o destino, inclusive nas partes, e refaz a identidade (`juntar_categoria_nos_favoritos`, `backend/app/favoritos.py`). Se o remapeamento deixar dois favoritos iguais, fica o que já existia com a identidade. O valor padrão continua, porque a identidade dos lançamentos também foi remapeada pela junção.
 - **Categoria excluída**: `excluir_categoria` recusa com 409 ("categoria em favorito"), como já recusa com lançamentos, transferências e planejamento: o dono arquiva ou junta.
 - **Pacote único**: não unificado. O [ticket 63](63-sugestao-pelo-historico.md) já registrou que o pacote para lançar é feito de leituras guardadas uma a uma na camada de dados (ticket 33); `GET /api/favoritos` já devolve favoritos e sugeridos numa chamada só. Unificar tudo num endpoint exigiria reescrever a camada de dados do aparelho sem ganho funcional; nenhuma regra mudou.
