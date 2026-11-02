@@ -21,6 +21,7 @@ import {
   type Recorrencia,
   type NovoLancamento,
   type NovoParcelamento,
+  type Antecipacao,
 } from "./armazem";
 import { comOsEnviados } from "./saldo";
 
@@ -204,6 +205,15 @@ export function enfileirarParcelamento(parcelamento: NovoParcelamento): Promise<
   return mudar(parcelamento.id, () => ({ acao: "criar_parcelamento", parcelamento }));
 }
 
+/**
+ * Antecipar parcelas de um parcelamento do servidor sobe como um pedido, com o id da antecipação
+ * como chave: se o envio ficar sem resposta, o reenvio devolve as mesmas parcelas (ticket 155).
+ */
+export function enfileirarAntecipacao(parcelamentoId: string, descricao: string, antecipacao: Omit<Antecipacao, "id">): Promise<void> {
+  const id = crypto.randomUUID();
+  return mudar(id, () => ({ acao: "antecipar_parcelas", parcelamento_id: parcelamentoId, descricao, antecipacao: { ...antecipacao, id } }));
+}
+
 /** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
 export function enfileirarExcluir(id: string, base?: Base): Promise<void> {
   return mudar(id, (atual, aceito) =>
@@ -280,6 +290,7 @@ function acoesDo(item: ItemDaFila): Acao[] {
   }
   if (item.acao === "excluir_recorrencia") return [{ acao: "excluir_recorrencia", id: item.id }];
   if (item.acao === "criar_parcelamento") return [{ acao: "criar_parcelamento", parcelamento: { ...item.parcelamento, dia_do_lancamento } }];
+  if (item.acao === "antecipar_parcelas") return [{ acao: "antecipar_parcelas", parcelamento_id: item.parcelamento_id, antecipacao: item.antecipacao }];
   if (item.acao === "excluir") return [{ acao: "excluir", id: item.id, versao: item.base?.versao, acao_em }];
   if (item.acao === "confirmar") {
     // Só os ajustes que a pessoa fez, sobre a versão que a tela mostrava, como na rota de confirmar.
@@ -427,6 +438,7 @@ const NOME_DO_PEDIDO: Record<ItemDaFila["acao"], string> = {
   confirmar: "este lançamento",
   criar_recorrencia: "esta recorrência",
   criar_parcelamento: "este parcelamento",
+  antecipar_parcelas: "esta antecipação",
   alterar_recorrencia: "esta mudança da recorrência",
   excluir_recorrencia: "esta exclusão da recorrência",
 };
@@ -456,6 +468,7 @@ function previstosAteOHorizonte({ a_cada, unidade }: Pick<NovaRecorrencia, "a_ca
 /** Quantos lançamentos o servidor gera, refaz ou exclui ao receber o pedido; o de um lançamento, nenhum. */
 function lancamentosDaRegra(item: ItemDaFila): number {
   if (item.acao === "criar_parcelamento") return item.parcelamento.parcelas;
+  if (item.acao === "antecipar_parcelas") return item.antecipacao.parcelas;
   if (item.acao === "criar_recorrencia" || item.acao === "excluir_recorrencia") return previstosAteOHorizonte(item.recorrencia);
   if (item.acao === "alterar_recorrencia") return previstosAteOHorizonte({ ...item.base, ...item.alteracao });
   return 0;

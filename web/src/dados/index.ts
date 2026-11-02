@@ -25,6 +25,7 @@ import {
   type Recorrencia,
   type NovoLancamento,
   type NovoParcelamento,
+  type Antecipacao,
 } from "./armazem";
 import {
   CONTAS,
@@ -34,6 +35,7 @@ import {
   enfileirarExcluir,
   enfileirarExcluirRecorrencia,
   enfileirarMudancaDaRecorrencia,
+  enfileirarAntecipacao,
   enfileirarParcelamento,
   enfileirarRecorrencia,
   enfileirarSalvar,
@@ -84,6 +86,7 @@ export type LimiteDoCartao = components["schemas"]["LimiteDoCartao"];
 export type Futuro = components["schemas"]["Futuro"];
 export type Historico = components["schemas"]["Historico"];
 export type Parcelamento = components["schemas"]["Parcelamento"];
+export type Quitacao = components["schemas"]["Quitacao"];
 export type AlteracaoDeParcelamento = components["schemas"]["AlteracaoDeParcelamento"];
 export type AvisoDeRealizadas = components["schemas"]["AvisoDeRealizadas"];
 /** "Só esta", "Esta e as próximas" ou "Todas (inclusive as já realizadas)" (ticket 136). */
@@ -990,6 +993,50 @@ export async function excluirRecorrencia(recorrencia: NovaRecorrencia): Promise<
 export async function salvarParcelamento(parcelamento: NovoParcelamento): Promise<void> {
   await enfileirarParcelamento(parcelamento);
   void enviarAgora();
+}
+
+/**
+ * Antecipar as últimas parcelas vai pela fila e vale sem internet; a chave é o id gerado aqui, e o
+ * reenvio não antecipa as seguintes (ticket 155).
+ */
+export async function anteciparParcelas(parcelamento: Pick<Parcelamento, "id" | "descricao">, antecipacao: Omit<Antecipacao, "id">): Promise<void> {
+  await enfileirarAntecipacao(parcelamento.id, parcelamento.descricao, antecipacao);
+  void enviarAgora();
+}
+
+/** O que o servidor disse da quitação: gravou (`{}`) ou recusou (`motivo`). */
+export type QuitacaoDoParcelamento = { motivo?: string };
+
+/** Quitar não tem chave (o reenvio daria 422), então precisa de internet e não entra na fila. */
+export async function quitarParcelamento(id: string, quitacao: Quitacao): Promise<QuitacaoDoParcelamento> {
+  try {
+    const { data, error } = await api.POST("/api/parcelamentos/{id}/quitacao", { params: { path: { id } }, body: quitacao });
+    if (data) {
+      await relerAsParcelas();
+      return {};
+    }
+    const detalhe = (error as { detail?: unknown } | undefined)?.detail;
+    return { motivo: typeof detalhe === "string" ? detalhe : "o servidor recusou a quitação" };
+  } catch {
+    return { motivo: "sem resposta do servidor" };
+  }
+}
+
+/** A antecipação na fila, com o motivo da recusa quando o servidor não a aceitou. */
+export type AntecipacaoNaoEnviada = { id: string; parcelamentoId: string; descricao: string; parcelas: number; recusa?: string; podeDescartar: boolean };
+
+/** As antecipações feitas no aparelho que ainda não subiram, do mais antigo ao mais novo. */
+export function useAntecipacoesNaoEnviadas(): AntecipacaoNaoEnviada[] {
+  const fila = useFila();
+  return useMemo(
+    () =>
+      fila.flatMap((item) =>
+        item.acao === "antecipar_parcelas"
+          ? [{ id: item.id, parcelamentoId: item.parcelamento_id, descricao: item.descricao, parcelas: item.antecipacao.parcelas, recusa: item.recusa, podeDescartar: podeDescartar(item) }]
+          : [],
+      ),
+    [fila],
+  );
 }
 
 export async function excluirLancamento(mostrado: LancamentoNaTela): Promise<void> {

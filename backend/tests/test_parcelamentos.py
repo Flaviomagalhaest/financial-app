@@ -437,6 +437,37 @@ def test_sem_internet_o_parcelamento_sobe_no_lote_como_um_pedido_so(casal: Casal
     assert len(casal.pedir("esposa", "GET", "/api/lancamentos").json()) == 11
 
 
+def test_sem_internet_a_antecipacao_sobe_no_lote_e_o_reenvio_nao_antecipa_as_seguintes(
+    casal: Casal,
+):
+    conta, emprestimo = casal.conta(), casal.categoria("Empréstimo")
+    novo = parcelamento(conta, [emprestimo], parcelas=4, valor_total_centavos=400000)
+    casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    antecipacao = {"id": str(uuid4()), "parcelas": 1, "valor_total_centavos": 90000}
+    acao = {"acao": "antecipar_parcelas", "parcelamento_id": novo["id"], "antecipacao": antecipacao}
+    inexistente = {**acao, "parcelamento_id": str(uuid4())}
+
+    primeiro = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json={"acoes": [acao]})
+    # A fila repete o lote que ficou sem resposta.
+    segundo = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json={"acoes": [acao]})
+    recusado = casal.pedir("esposa", "POST", "/api/lancamentos/lote", json={"acoes": [inexistente]})
+
+    assert primeiro.status_code == 200
+    assert [r["resultado"] for r in primeiro.json()["resultados"]] == ["aceita"]
+    assert [r["resultado"] for r in segundo.json()["resultados"]] == ["aceita"]
+    assert [(l["situacao"], l["valor_centavos"]) for l in parcelas(casal, novo["id"])] == [
+        ("previsto", 100000),
+        ("previsto", 100000),
+        ("previsto", 100000),
+        ("realizado", 90000),
+    ]
+    [nao_achou] = recusado.json()["resultados"]
+    assert (nao_achou["resultado"], nao_achou["motivo"]) == (
+        "recusada",
+        "parcelamento não encontrado",
+    )
+
+
 def test_cartao_sem_dia_de_fechamento_recusa_o_parcelamento_sem_gravar_nada(
     casal: Casal, database_url: str
 ):

@@ -1,7 +1,11 @@
 import { useState } from "react";
 import {
+  anteciparParcelas,
   corrigirParcelamento,
+  descartarNaoEnviado,
   excluirParcelamento,
+  quitarParcelamento,
+  useAntecipacoesNaoEnviadas,
   useCadastro,
   useConexao,
   useAvisoDePlanejamento,
@@ -17,7 +21,7 @@ import {
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { SeletorDeTags } from "./SeletorDeTags";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
-import { dataPorExtenso, rotuloDaFatura } from "./datas";
+import { dataPorExtenso, hoje, rotuloDaFatura } from "./datas";
 import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
 import { avisoDasMantidas, comoMuda, divisao, type ValorDigitado } from "./parcelamento";
 import { PartesDaCompra, resumoDaParte } from "./partes";
@@ -90,6 +94,113 @@ export function TelaDoParcelamento({ id }: { id: string }) {
       <h2>Parcelamento</h2>
       {(parcelamentos || semDados) && <p className="vazio">{semDados ? "Sem internet: este parcelamento não está no aparelho." : "Parcelamento não encontrado."}</p>}
       <a href="#/historico">Voltar ao Histórico</a>
+    </section>
+  );
+}
+
+/**
+ * Antecipar as últimas K parcelas (vale sem internet, pela fila, com o id da antecipação como chave)
+ * ou quitar tudo o que falta (precisa de internet: sem chave, o reenvio daria 422). O valor é o total
+ * pago, e a diferença para o das parcelas é o desconto (ticket 155).
+ */
+function AnteciparOuQuitar({ parcelamento, previstas }: { parcelamento: Parcelamento; previstas: { valor_centavos: number }[] }) {
+  const online = useConexao();
+  const naFila = useAntecipacoesNaoEnviadas().filter((a) => a.parcelamentoId === parcelamento.id);
+  const [modo, setModo] = useState<"antecipar" | "quitar">("antecipar");
+  const [parcelas, setParcelas] = useState("1");
+  const [data, setData] = useState(hoje);
+  const [valor, setValor] = useState("");
+  const [erro, setErro] = useState("");
+  const [feito, setFeito] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const quantas = modo === "quitar" ? previstas.length : Number(parcelas);
+  // As últimas K, que são as que a antecipação paga.
+  const devido = previstas.slice(previstas.length - quantas).reduce((soma, l) => soma + l.valor_centavos, 0);
+
+  async function confirmar() {
+    if (modo === "antecipar" && (!Number.isInteger(quantas) || quantas < 1 || quantas > previstas.length)) return setErro(`Digite de 1 a ${previstas.length} parcelas.`);
+    const centavos = valor.trim() ? emCentavos(valor) : undefined;
+    if (valor.trim() && !centavos) return setErro("Digite o valor pago.");
+    setErro("");
+    setFeito("");
+    const corpo = { data, valor_total_centavos: centavos ?? null };
+    if (modo === "antecipar") {
+      await anteciparParcelas(parcelamento, { parcelas: quantas, ...corpo });
+      return setFeito(`${quantas === 1 ? "1 parcela" : `${quantas} parcelas`} na fila para antecipar.`);
+    }
+    setEnviando(true);
+    const { motivo } = await quitarParcelamento(parcelamento.id, corpo);
+    setEnviando(false);
+    if (motivo) return setErro(`Não foi possível quitar: ${motivo}.`);
+    setFeito("Parcelamento quitado.");
+  }
+
+  return (
+    <section aria-label="Antecipar ou quitar">
+      <h3>Antecipar ou quitar</h3>
+      {naFila.length > 0 && (
+        <ul className="lista" aria-label="Antecipações não enviadas">
+          {naFila.map((a) => (
+            <li key={a.id}>
+              <div>
+                <span>
+                  Antecipar {a.parcelas === 1 ? "1 parcela" : `${a.parcelas} parcelas`}, não enviado
+                </span>
+              </div>
+              {a.recusa && <p className="erro">Recusado: {a.recusa}.</p>}
+              {a.podeDescartar && (
+                <button type="button" className="secundario" onClick={() => void descartarNaoEnviado(a.id)}>
+                  Descartar antecipação
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {feito && <p role="status">{feito}</p>}
+      {previstas.length === 0 ? (
+        <p className="vazio">Não há parcelas por pagar.</p>
+      ) : (
+        <>
+          <div className="alternancia" role="group" aria-label="Pagar adiantado">
+            {(
+              [
+                ["antecipar", "Antecipar"],
+                ["quitar", "Quitar tudo"],
+              ] as const
+            ).map(([v, nome]) => (
+              <button type="button" key={v} className={modo === v ? "" : "secundario"} aria-pressed={modo === v} onClick={() => setModo(v)}>
+                {nome}
+              </button>
+            ))}
+          </div>
+          {modo === "antecipar" ? (
+            <div className="linha">
+              <label htmlFor="parcelas-a-antecipar">Parcelas a antecipar (as últimas, de {previstas.length} por pagar)</label>
+              <input id="parcelas-a-antecipar" type="number" inputMode="numeric" min={1} max={previstas.length} value={parcelas} onChange={(e) => setParcelas(e.target.value)} />
+            </div>
+          ) : (
+            <p className="vazio">Paga as {previstas.length} parcelas que faltam. Precisa de internet.</p>
+          )}
+          <div className="linha">
+            <label htmlFor="data-do-pagamento">Data do pagamento</label>
+            <input id="data-do-pagamento" type="date" max={hoje()} value={data} onChange={(e) => e.target.value && setData(e.target.value)} />
+          </div>
+          <div className="linha">
+            <label htmlFor="valor-pago">Total pago</label>
+            <input id="valor-pago" inputMode="decimal" placeholder={Number.isInteger(quantas) && quantas > 0 ? comoDigitado(devido) : ""} value={valor} onChange={(e) => setValor(e.target.value)} />
+          </div>
+          <p className="vazio">Sem valor, paga o das parcelas ({formatarCentavos(devido)}); com menos, a diferença é o desconto.</p>
+          {erro && (
+            <p role="alert" className="erro">
+              {erro}
+            </p>
+          )}
+          <button type="button" disabled={enviando || (modo === "quitar" && !online)} onClick={() => void confirmar()}>
+            {modo === "antecipar" ? "Antecipar parcelas" : "Quitar parcelamento"}
+          </button>
+        </>
+      )}
     </section>
   );
 }
@@ -304,6 +415,8 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
       <button type="button" disabled={enviando || !online || (!comPartes && form.categoriaIds.length === 0)} onClick={() => void salvar(false)}>
         Salvar correção
       </button>
+
+      <AnteciparOuQuitar parcelamento={parcelamento} previstas={doParcelamento.filter((l) => l.situacao === "previsto")} />
 
       <h3>Parcelas</h3>
       <ul className="lista parcelas" aria-label={`Parcelas de ${parcelamento.descricao}`}>
