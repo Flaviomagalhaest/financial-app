@@ -187,7 +187,7 @@ function AnteciparOuQuitar({ parcelamento, previstas }: { parcelamento: Parcelam
             <input id="data-do-pagamento" type="date" max={hoje()} value={data} onChange={(e) => e.target.value && setData(e.target.value)} />
           </div>
           <div className="linha">
-            <label htmlFor="valor-pago">Valor total pago</label>
+            <label htmlFor="valor-pago">Total pago</label>
             <input id="valor-pago" inputMode="decimal" placeholder={Number.isInteger(quantas) && quantas > 0 ? comoDigitado(devido) : ""} value={valor} onChange={(e) => setValor(e.target.value)} />
           </div>
           <p className="vazio">Sem valor, paga o das parcelas ({formatarCentavos(devido)}); com menos, a diferença é o desconto.</p>

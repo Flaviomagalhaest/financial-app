@@ -457,7 +457,7 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   await expect(antecipar.getByRole("button", { name: "Quitar parcelamento" })).toBeDisabled();
   await antecipar.getByRole("button", { name: "Antecipar", exact: true }).click();
   await antecipar.getByLabel(/^Parcelas a antecipar/).fill("2");
-  await antecipar.getByLabel("Valor total pago").fill("180,00");
+  await antecipar.getByLabel("Total pago").fill("180,00");
   await antecipar.getByRole("button", { name: "Antecipar parcelas" }).click();
   await expect(antecipar.getByRole("list", { name: "Antecipações não enviadas" })).toContainText("Antecipar 2 parcelas, não enviado");
 
@@ -474,8 +474,12 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   await context.setOffline(false);
   await expect.poll(() => perdidas).toBe(1);
   await aba(page, "Hoje");
-  await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  // A fila pode subir sozinha quando a rede volta; se não, "Enviar agora" sobe.
+  await expect(async () => {
+    const enviar = page.getByRole("button", { name: "Enviar agora" });
+    if ((await enviar.count()) > 0) await enviar.click({ timeout: 2_000 }).catch(() => {});
+    await expect(page.getByTestId("nao-enviados")).toHaveCount(0, { timeout: 3_000 });
+  }).toPass();
 
   expect(chaves).toHaveLength(2);
   expect(new Set(chaves).size).toBe(1);
@@ -491,7 +495,7 @@ test("quita o parcelamento pela tela, com desconto", async ({ page }) => {
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
   const antecipar = page.getByRole("region", { name: "Antecipar ou quitar" });
   await antecipar.getByRole("button", { name: "Quitar tudo" }).click();
-  await antecipar.getByLabel("Valor total pago").fill("450,00");
+  await antecipar.getByLabel("Total pago").fill("450,00");
   await antecipar.getByRole("button", { name: "Quitar parcelamento" }).click();
   await expect(antecipar.getByText("Parcelamento quitado.")).toBeVisible();
   await expect(antecipar.getByText("Não há parcelas por pagar.")).toBeVisible();
