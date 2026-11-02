@@ -1,7 +1,7 @@
 # Tempo limite da rede: valor provisório para o dono confirmar
 
 Type: grilling
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement` se o valor mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -15,4 +15,8 @@ Origem: [ticket 82](82-rede-que-nao-responde-e-tempo-limite.md) (o tempo limite 
 
 ## Checklist
 
-- [ ] O dono confirma ou troca o valor
+- [x] O dono confirma ou troca o valor
+
+## Comments
+
+Decisão do dono: manter `tempoLimiteDaRedeSegundos` em **10 s**, valor único para leituras e para o lote da fila (inclusive no service worker). Nada muda em `config/valores-iniciais.json`. Sem ADR: reversível pelo próprio arquivo.
