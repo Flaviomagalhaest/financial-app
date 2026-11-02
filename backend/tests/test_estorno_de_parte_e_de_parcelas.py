@@ -439,3 +439,171 @@ def test_banco_antecipa_e_depois_estorna_e_a_quitacao_seguida_do_estorno_de_toda
     assert estorno.status_code == 201, estorno.text
     assert fatura(casal, cartao, estorno.json()["fatura_mes"])["total_centavos"] == 0
     assert estorno_de_todas(casal, novo, 1).status_code == 422
+
+
+# --- Todas as parcelas de uma parte do parcelamento (ticket 160) ---------------------------
+
+
+def parcelada_em_partes(casal: Casal):
+    """30000 em 3 parcelas de 10000, cada uma com 7500 do vestido e 2500 da cortina."""
+    cartao = novo_cartao(casal)["id"]
+    roupa, casa = casal.categoria("Roupa"), casal.categoria("Casa")
+    novo = parcelamento(
+        cartao,
+        [],
+        data="2026-03-28",
+        parcelas=3,
+        valor_total_centavos=30000,
+        partes=[
+            parte([roupa], 22500, descricao="Vestido", tags=["presente"]),
+            parte([casa], 7500, descricao="Cortina"),
+        ],
+    )
+    criado = casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
+    assert criado.status_code == 201, criado.text
+    return cartao, roupa, casa, criado.json()
+
+
+def test_estorno_de_todas_de_uma_parte_leva_a_classificacao_dela_e_vai_ate_a_soma_dela(
+    casal: Casal,
+):
+    _, roupa, casa, novo = parcelada_em_partes(casal)
+    vestido = novo["partes"][0]["id"]
+
+    acima = estorno_de_todas(casal, novo, 22501, estorno_parte_id=vestido)
+    estorno = estorno_de_todas(
+        casal, novo, 15000, estorno_parte_id=vestido, categoria_ids=[casa], tags=["outra"]
+    )
+
+    assert (acima.status_code, acima.json()["detail"]) == (422, "estornos somam mais que a parte")
+    assert estorno.status_code == 201, estorno.text
+    criado = estorno.json()
+    assert (criado["estorno_parcelamento_id"], criado["estorno_parte_id"]) == (novo["id"], vestido)
+    assert (criado["categoria_ids"], criado["tags"]) == ([roupa], ["presente"])
+    mes = totais(casal, criado["mes"][:7])
+    # A parcela do mês tem 7500 do vestido e 2500 da cortina; o estorno tira 15000 do vestido.
+    assert sorted(mes["por_categoria"], key=lambda c: c["centavos"]) == [
+        {"categoria_id": roupa, "centavos": -7500},
+        {"categoria_id": casa, "centavos": 2500},
+    ]
+    assert mes["por_tag"] == [{"tag": "presente", "centavos": -7500}]
+    # O resto do vestido: 7500.
+    assert estorno_de_todas(casal, novo, 7501, estorno_parte_id=vestido).status_code == 422
+    assert estorno_de_todas(casal, novo, 7500, estorno_parte_id=vestido).status_code == 201
+
+
+def test_estorno_de_todas_com_partes_pede_a_parte_dele_e_conta_o_de_cada_parcela_nela(
+    casal: Casal,
+):
+    _, _, _, novo = parcelada_em_partes(casal)
+    _, _, sem_partes = parcelada_no_cartao(casal)
+    vestido = novo["partes"][0]["id"]
+    primeira = parcelas(casal, novo["id"])[0]
+    estorno_da_parte(casal, primeira, 0, 7000)
+
+    sem_parte = estorno_de_todas(casal, novo, 100)
+    de_outro = estorno_de_todas(casal, sem_partes, 100, estorno_parte_id=vestido)
+    de_outra = estorno_de_todas(casal, novo, 100, estorno_parte_id=primeira["partes"][0]["id"])
+    acima = estorno_de_todas(casal, novo, 15501, estorno_parte_id=vestido)
+    resto = estorno_de_todas(casal, novo, 15500, estorno_parte_id=vestido)
+
+    assert [
+        (r.status_code, r.json()["detail"]) for r in (sem_parte, de_outro, de_outra, acima)
+    ] == [
+        (422, "o parcelamento tem partes: escolha a parte que foi estornada"),
+        (422, "o parcelamento não tem partes"),
+        (422, "a parte não é deste parcelamento"),
+        (422, "estornos somam mais que a parte"),
+    ]
+    assert resto.status_code == 201, resto.text
+    # O de uma parcela depois do de todas também respeita o que resta da parte.
+    assert estorno_da_parte(casal, parcelas(casal, novo["id"])[1], 0, 1).status_code == 422
+
+
+def test_estorno_de_todas_de_uma_parte_com_item_diminui_o_item_dela(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    roupa, casa, lazer = casal.categoria("Roupa"), casal.categoria("Casa"), casal.categoria("Lazer")
+    novo = parcelamento(
+        cartao,
+        [],
+        data="2026-03-28",
+        parcelas=3,
+        valor_total_centavos=30000,
+        partes=[
+            parte([roupa, lazer], 22500, item_categoria_id=lazer),
+            parte([casa], 7500),
+        ],
+    )
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    estorno = estorno_de_todas(casal, novo, 1000, estorno_parte_id=novo["partes"][0]["id"]).json()
+    mes = estorno["mes"][:7]
+    for categoria in (roupa, lazer):
+        casal.pedir(
+            "flavio",
+            "POST",
+            f"/api/planejamento/{mes}/itens",
+            json={"id": str(uuid4()), "categoria_id": categoria, "valor_centavos": 50000},
+        )
+
+    itens = casal.pedir("flavio", "GET", f"/api/planejamento/{mes}").json()["itens"]
+
+    assert estorno["item_categoria_id"] == lazer
+    # A parcela do mês põe os 7500 do vestido no lazer; o estorno tira 1000 dele.
+    realizado = {i["categoria_id"]: i["realizado_centavos"] for i in itens}
+    assert (realizado[lazer], realizado[roupa]) == (6500, 0)
+
+
+def corrigir(casal: Casal, novo: dict, **campos):
+    return casal.pedir("flavio", "PATCH", f"/api/parcelamentos/{novo['id']}", json=campos)
+
+
+def test_estorno_de_todas_de_uma_parte_acompanha_a_parte_na_correcao(casal: Casal):
+    _, _, casa, novo = parcelada_em_partes(casal)
+    vestido, cortina = novo["partes"]
+    estorno = estorno_de_todas(casal, novo, 1000, estorno_parte_id=vestido["id"]).json()
+
+    corrigido = corrigir(
+        casal, novo, partes=[{**vestido, "categoria_ids": [casa], "tags": ["natal"]}, cortina]
+    )
+
+    assert corrigido.status_code == 200, corrigido.text
+    [lido] = [
+        l
+        for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()
+        if l["id"] == estorno["id"]
+    ]
+    assert (lido["categoria_ids"], lido["tags"]) == ([casa], ["natal"])
+
+
+def test_parte_do_parcelamento_com_estorno_nao_sai_nem_fica_abaixo_do_estornado(casal: Casal):
+    _, roupa, _, novo = parcelada_em_partes(casal)
+    vestido, cortina = novo["partes"]
+    estorno_de_todas(casal, novo, 15000, estorno_parte_id=vestido["id"])
+
+    sem_a_parte = corrigir(casal, novo, partes=[cortina, parte([roupa], 22500)])
+    juntado = corrigir(casal, novo, partes=[], categoria_ids=[roupa])
+    # 3 parcelas de 10000 com o vestido em 1/2: 15000, ainda dá; em 1/3, 9999, não.
+    metade = corrigir(
+        casal,
+        novo,
+        partes=[{**vestido, "valor_centavos": 15000}, {**cortina, "valor_centavos": 15000}],
+    )
+    terco = corrigir(
+        casal,
+        novo,
+        partes=[{**vestido, "valor_centavos": 10000}, {**cortina, "valor_centavos": 20000}],
+    )
+
+    assert (sem_a_parte.status_code, sem_a_parte.json()["detail"]) == (
+        422,
+        "a parte tem estorno; exclua o estorno antes de tirá-la",
+    )
+    assert (juntado.status_code, juntado.json()["detail"]) == (
+        422,
+        "o parcelamento tem estorno de parte; exclua o estorno antes de juntar as partes",
+    )
+    assert metade.status_code == 200, metade.text
+    assert (terco.status_code, terco.json()["detail"]) == (
+        422,
+        "a parte tem estornos de 15000 centavos: o valor dela não pode ficar abaixo disso",
+    )

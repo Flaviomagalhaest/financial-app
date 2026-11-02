@@ -1129,6 +1129,9 @@ def gravar_correcao(
         atual.conta_id,
         frozenset(atual.categoria_ids) | {c for p in atual.partes for c in p.categoria_ids},
     )
+    lancamentos.conferir_partes_do_parcelamento_com_estorno(
+        conn, id, nova.partes, nova.valor_total_centavos, nova.parcelas
+    )
     if nova.partes:
         lancamentos.conferir_divisao(
             nova.valor_total_centavos // nova.parcelas, [p.valor_centavos for p in nova.partes]
