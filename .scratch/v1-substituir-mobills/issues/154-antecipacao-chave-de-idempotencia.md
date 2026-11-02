@@ -1,7 +1,7 @@
 # Antecipação: chave de idempotência para o reenvio
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` se mexer na fila do app
 Modelo recomendado: Sonnet
