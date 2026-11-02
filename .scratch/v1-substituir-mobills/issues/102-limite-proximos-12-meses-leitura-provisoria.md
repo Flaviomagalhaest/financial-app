@@ -1,7 +1,7 @@
 # Limite do cartão: o que a lista dos próximos 12 meses mostra
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se a leitura mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -17,5 +17,13 @@ Origem: [ticket 56](56-limite-comprometido-do-cartao.md) (revisão: o [ticket 23
 
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma leitura mudar: teste de API em `backend/tests/test_limite_do_cartao.py` e ajuste em `backend/app/limite.py` e na aba Cartões
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] Se uma leitura mudar (nenhuma mudou): teste de API em `backend/tests/test_limite_do_cartao.py` e ajuste em `backend/app/limite.py` e na aba Cartões
+
+## Answer
+
+1. **Mês que libera**: mantido. Cada parte cai no mês do vencimento da fatura em que está.
+2. **Recorrência prevista em fatura fechada**: mantida na conta do comprometido.
+3. **Parcela prevista em fatura fechada**: mantida só na fatura fechada, fora de "parcelamentos em andamento".
+
+Nenhuma regra mudou: sem alteração em `backend/app/limite.py`, testes ou aba Cartões. Sem pendências novas.
