@@ -1,7 +1,7 @@
 # Juntar tag leva também as tags da recorrência e do parcelamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `diagnosing-bugs` para confirmar o caso
 Modelo recomendado: Sonnet
