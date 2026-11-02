@@ -1,7 +1,7 @@
 # CI vermelho entra na main e falha sem material para diagnóstico
 
 Type: task
-Status: ready-for-human
+Status: wontfix
 Blocked by: —
 Skills: `writing-for-agents` (AGENTS.md); HITL: o dono muda as configurações do repositório
 Modelo recomendado: Sonnet
@@ -30,3 +30,7 @@ O `ci.yml` cobre o que o repositório tem (lint e testes do backend com Postgres
 ## Notas
 
 - Os números de ticket repetidos (73, 95, 100, 102, 103, 104 e 109 na V1, com um terceiro 109 no PR do 57) são o assunto do ticket 09, aberto no PR do 95.
+
+## Fechamento
+
+Fechado sem fazer (`wontfix`) por decisão do dono em 02/11. Em 02/11 a `main` não tinha proteção, o merge commit seguia permitido e o `ci.yml` não tinha artifact, `concurrency` nem cache do Playwright.
