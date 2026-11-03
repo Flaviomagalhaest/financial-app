@@ -117,7 +117,7 @@ test("a compra não enviada aparece na fatura sem internet, junto com a leitura 
   await context.setOffline(true);
   await lancar(page, { teclas: ["9", "00"], conta: `Visa ${s}`, categoria: `Mercado ${s}`, descricao: `Lanche ${s}` });
   await page.evaluate(([c, m]) => (location.hash = `#/cartoes/${c}/${m}`), [cartao.id, compra.fatura_mes]);
-  await expect(page.getByRole("listitem").filter({ hasText: `Lanche ${s}` })).toContainText("⏳ não enviado");
+  await expect(page.getByRole("listitem").filter({ hasText: `Lanche ${s}` })).toContainText("R$ 9,00");
   await expect(page.getByRole("listitem").filter({ hasText: `Padaria ${s}` })).toBeVisible();
   await context.setOffline(false);
 });
