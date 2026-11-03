@@ -1,7 +1,7 @@
 # Comprimir a resposta da API
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`; HITL só na conferência com `curl` no `dev`
 Modelo recomendado: Sonnet
