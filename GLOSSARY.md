@@ -357,6 +357,10 @@ _Avoid_: par duvidoso, casamento parcial
 Lançamento, ou mudança num lançamento, feito no aparelho que ainda não chegou ao servidor; já conta no que o próprio aparelho mostra, mas a outra pessoa só o vê depois do envio. A recorrência e o parcelamento novos e a mudança de uma recorrência também ficam não enviados, cada um como um pedido só.
 _Avoid_: pendente, offline, na fila, não sincronizado
 
+**Janela do aparelho**:
+Os lançamentos que o aparelho guarda para mostrar e mudar sem internet: os que contam nos últimos 12 meses (pelo mês em que contam, o da fatura na compra no cartão) e todos daqui para frente. O que fica antes dela só aparece com internet.
+_Avoid_: cache, lista local, offline
+
 **Conflito**:
 Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica. A mudança não enviada de uma recorrência não vira conflito: o servidor a recusa com o motivo, e quem a fez a refaz sobre a regra nova (ADR 0020).
 _Avoid_: colisão, divergência
