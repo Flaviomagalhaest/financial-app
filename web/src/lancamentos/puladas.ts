@@ -28,7 +28,7 @@ export function avisoDasPuladas(puladas: number, termo: { um: string; varios: st
 
 /**
  * Quantas parcelas do boleto vencem antes de `hoje` e não serão lançadas (o cartão gera todas).
- * Repete `parcelas_puladas` do servidor só para mostrar, como a ADR 0018.
+ * Repete `parcelas_anteriores` do servidor só para mostrar, como a ADR 0018.
  */
 export function parcelasPuladas(parcelas: number, data: string, hoje: string, noCartao: boolean): number {
   if (noCartao || !Number.isInteger(parcelas) || parcelas < 2) return 0;

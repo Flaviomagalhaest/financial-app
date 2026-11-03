@@ -143,7 +143,7 @@ class Parcelamento(DadosDoParcelamento):
     alterado_em: datetime
     # As parcelas do boleto que já tinham passado quando ele foi lançado (ticket 87): não viram
     # lançamento, mas contam na numeração e no total.
-    parcelas_puladas: int = 0
+    parcelas_anteriores: int = 0
     # A recusa que parou a parte parcela a parcela de uma mudança com alcance depois do pedido
     # (ticket 149): as parcelas que faltavam ficaram como estavam até a próxima mudança.
     mudanca_recusada: str | None = None
@@ -287,7 +287,7 @@ def _ler(conn, filtro: str = "", parametros: tuple = ()) -> list[Parcelamento]:
     partes = _ler_partes(conn, ids)
     return [
         Parcelamento(
-            **dict(zip([*_NOMES_DAS_COLUNAS, "parcelas_puladas", "mudanca_recusada"], linha)),
+            **dict(zip([*_NOMES_DAS_COLUNAS, "parcelas_anteriores", "mudanca_recusada"], linha)),
             categoria_ids=categorias.get(linha[0], []),
             tags=tags.get(linha[0], []),
             partes=partes.get(linha[0], []),

@@ -3089,7 +3089,7 @@ export interface components {
              * Parcelas Puladas
              * @default 0
              */
-            parcelas_puladas: number;
+            parcelas_anteriores: number;
             /** Mudanca Recusada */
             mudanca_recusada?: string | null;
         };
@@ -3166,7 +3166,7 @@ export interface components {
              * Parcelas Puladas
              * @default 0
              */
-            parcelas_puladas: number;
+            parcelas_anteriores: number;
             /** Mudanca Recusada */
             mudanca_recusada?: string | null;
             /** Parcelas Mantidas */

@@ -8636,9 +8636,9 @@
             "format": "date-time",
             "title": "Alterado Em"
           },
-          "parcelas_puladas": {
+          "parcelas_anteriores": {
             "type": "integer",
-            "title": "Parcelas Puladas",
+            "title": "Parcelas Anteriores",
             "default": 0
           },
           "mudanca_recusada": {
@@ -8788,9 +8788,9 @@
             "format": "date-time",
             "title": "Alterado Em"
           },
-          "parcelas_puladas": {
+          "parcelas_anteriores": {
             "type": "integer",
-            "title": "Parcelas Puladas",
+            "title": "Parcelas Anteriores",
             "default": 0
           },
           "mudanca_recusada": {

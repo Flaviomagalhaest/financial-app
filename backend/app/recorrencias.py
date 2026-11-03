@@ -369,7 +369,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     lá. A ocorrência de antes de hoje não vira lançamento (ticket 87; não é o mês pulado, que
     existe excluído): `geradas` passa por ela, e ela segue contando no calendário e nas `vezes`.
     Enquanto a regra é a que o casal lançou, o "hoje" é o dia do lançamento (`dia_do_lancamento_vigente`), e a
-    ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu); fora dela,
+    ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu), salvo a de
+    valor fixo que não é automática: essa o casal confirma no pagamento (ticket 129); fora dela,
     só a automática que chegou."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
@@ -413,7 +414,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         lancamento_id = uuid5(id, str(n))
         situacao = (
             "realizado"
-            if dia == lancada or (regra.automatico and dia <= dia_de_hoje)
+            if (dia == lancada and (regra.automatico or regra.tipo_do_valor != "fixo"))
+            or (regra.automatico and dia <= dia_de_hoje)
             else "previsto"
         )
         mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia)
