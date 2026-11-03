@@ -41,4 +41,7 @@ Três correções no armazenamento do aparelho (`web/src/dados/armazem.ts`, `ind
 | GET da lista por abertura do Histórico | 1 | 1 |
 
   O que sobra é o render da lista inteira (JS, layout e estilo somam uns 5 s dos 7), que é o [ticket 167](167-historico-desenhado-mes-a-mes.md). O prazo de 15 s de `lerAListaInteira` (`sem-internet.spec.ts`) fica para ele, como o 167 já diz.
-- **Pendência**: a aba que estava aberta com a versão anterior do app passa a receber `VersionError` do IndexedDB depois da migração, até ser recarregada: [ticket 168](168-aba-aberta-numa-versao-anterior-do-app.md) (`ready-for-human`).
+- **CI**: a primeira escrita da lista num aparelho vazio (o caso de todo teste, cada um num contexto novo do navegador) grava um registro por lançamento e leva mais que o bloco de antes (uns 140 ms com 1.700 lançamentos, contra uns 150 ms do GET até a tela na `main`). Isso expôs duas corridas de teste que a `main` também tem com mais dados no banco. `fatura-paga.spec.ts` abria a correção antes de a fatura listar a compra, e agora espera a compra aparecer. `lancamentos.spec.ts` recarregava antes de a edição subir, e agora espera o envio.
+- **Pendências**:
+  - a aba que estava aberta com a versão anterior do app passa a receber `VersionError` do IndexedDB depois da migração, até ser recarregada: [ticket 168](168-aba-aberta-numa-versao-anterior-do-app.md) (`ready-for-human`);
+  - a edição cuja resposta se perdeu não sobe ao reabrir o app, e a exclusão seguinte volta como conflito com ela, também na `main`: [ticket 169](169-edicao-com-a-resposta-perdida-e-a-exclusao-seguinte.md).
