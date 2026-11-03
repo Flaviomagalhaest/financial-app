@@ -1,7 +1,7 @@
 # Guardar lançamento por lançamento e reler só o que mudou
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`, `codebase-design`; apoio: `run`
 Modelo recomendado: Opus
