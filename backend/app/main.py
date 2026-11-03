@@ -20,6 +20,7 @@ from app.filtros_salvos import router as filtros_salvos
 from app.historico import router as historico
 from app.hoje import router as hoje
 from app.lancamentos import router as lancamentos
+from app.lancamentos_das_telas import router as lancamentos_das_telas
 from app.limite import router as limite
 from app.login import UsuarioLogado, VerificadorDeJwt, verificador_da_configuracao
 from app.lote import router as lote
@@ -115,5 +116,6 @@ def create_app(
     app.include_router(filtros_salvos)
     app.include_router(projecao)
     app.include_router(busca)
+    app.include_router(lancamentos_das_telas)
     app.include_router(edicao_em_lote)
     return app

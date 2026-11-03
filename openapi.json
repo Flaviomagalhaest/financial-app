@@ -3272,6 +3272,169 @@
         ]
       }
     },
+    "/api/cartoes/{id}/faturas/{mes}/lancamentos": {
+      "get": {
+        "summary": "Listar Lancamentos Da Fatura",
+        "description": "As compras que contam na fatura `mes` do cartão, com as dos adicionais dele.",
+        "operationId": "listar_lancamentos_da_fatura",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          },
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Lancamento"
+                  },
+                  "title": "Response Listar Lancamentos Da Fatura"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meses/{mes}/lancamentos": {
+      "get": {
+        "summary": "Listar Lancamentos Do Mes",
+        "description": "Os lançamentos que contam no mês: no cartão, o da fatura; no resto, o da data (ADR 0003).",
+        "operationId": "listar_lancamentos_do_mes",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mes",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "examples": [
+                "2026-10"
+              ],
+              "title": "Mes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Lancamento"
+                  },
+                  "title": "Response Listar Lancamentos Do Mes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/parcelamentos/{id}/lancamentos": {
+      "get": {
+        "summary": "Listar Lancamentos Do Parcelamento",
+        "description": "Todas as parcelas do parcelamento, da primeira à última.",
+        "operationId": "listar_lancamentos_do_parcelamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Lancamento"
+                  },
+                  "title": "Response Listar Lancamentos Do Parcelamento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/edicoes-em-lote/previa": {
       "post": {
         "summary": "Ver Previa",
