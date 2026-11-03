@@ -363,3 +363,82 @@ def dispensar_sugerido(dispensa: Dispensa, usuario: UsuarioLogado, request: Requ
 
     em_transacao(url_do_banco(request), gravar)
     return Response(status_code=204)
+
+
+def usa_categoria(conn, categoria_id: UUID) -> bool:
+    """Algum favorito (o dispensado não conta: não aparece na lista) guarda esta categoria."""
+    alvo = f"%{categoria_id}%"
+    return (
+        conn.execute(
+            "SELECT 1 FROM favoritos WHERE estado = 'favorito'"
+            " AND (categoria_ids LIKE %s OR partes LIKE %s) LIMIT 1",
+            (alvo, alvo),
+        ).fetchone()
+        is not None
+    )
+
+
+def esquecer_dispensados_da_categoria(conn, categoria_id: UUID) -> None:
+    alvo = f"%{categoria_id}%"
+    conn.execute(
+        "DELETE FROM favoritos WHERE estado = 'dispensado'"
+        " AND (categoria_ids LIKE %s OR partes LIKE %s)",
+        (alvo, alvo),
+    )
+
+
+def juntar_categoria_nos_favoritos(conn, origem: UUID, destino: UUID) -> None:
+    """A manutenção de categorias juntou `origem` em `destino`: o favorito (e o dispensado, que
+    guarda a mesma identidade) passa a apontar para o destino e a identidade é refeita. Se isso
+    deixar dois com a mesma identidade, fica o que já existia com ela (o que acabou de mudar sai)."""
+    alvo = str(origem)
+    linhas = conn.execute(
+        "SELECT id, estado, descricao, tipo, conta_id, categoria_ids, tags, pessoa, valor_centavos,"
+        " partes FROM favoritos WHERE categoria_ids LIKE %s OR partes LIKE %s ORDER BY ordem, id",
+        (f"%{alvo}%", f"%{alvo}%"),
+    ).fetchall()
+    for id, estado, descricao, tipo, conta_id, categorias, tags, pessoa, valor, partes in linhas:
+
+        def trocar(ids: list) -> list[UUID]:
+            novos: list[UUID] = []
+            for c in ids:
+                c = destino if str(c) == alvo else UUID(str(c))
+                if c not in novos:
+                    novos.append(c)
+            return novos
+
+        categoria_ids = trocar(json.loads(categorias))
+        partes_novas = json.loads(partes) if partes else []
+        for p in partes_novas:
+            p["categoria_ids"] = [str(c) for c in trocar(p["categoria_ids"])]
+        dados = DadosDoFavorito(
+            descricao=descricao,
+            tipo=tipo,
+            conta_id=conta_id,
+            categoria_ids=categoria_ids,
+            tags=json.loads(tags),
+            pessoa=pessoa,
+            valor_centavos=valor,
+            partes=partes_novas,
+        )
+        chave_ = identidade(dados)
+        concorrente = conn.execute(
+            "SELECT id, estado FROM favoritos WHERE identidade = %s AND id <> %s", (chave_, id)
+        ).fetchall()
+        if any(e == "favorito" for _, e in concorrente) or (concorrente and estado != "favorito"):
+            conn.execute("DELETE FROM favoritos WHERE id = %s", (id,))
+            continue
+        # O dispensado igual ao favorito que chega some: o favorito é o que vale.
+        conn.execute(
+            "DELETE FROM favoritos WHERE identidade = %s AND id <> %s AND estado <> 'favorito'",
+            (chave_, id),
+        )
+        conn.execute(
+            "UPDATE favoritos SET categoria_ids = %s, partes = %s, identidade = %s WHERE id = %s",
+            (
+                json.dumps([str(c) for c in categoria_ids]),
+                json.dumps(partes_novas),
+                chave_,
+                id,
+            ),
+        )

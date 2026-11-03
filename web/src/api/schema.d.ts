@@ -259,8 +259,8 @@ export interface paths {
         put?: never;
         /**
          * Juntar Categoria
-         * @description Move os lançamentos, as recorrências, as transferências, os itens do planejamento e as
-         *     escolhas de item da categoria para o destino, do mesmo tipo, e exclui a origem.
+         * @description Move os lançamentos, as recorrências, as transferências, os itens do planejamento, as
+         *     escolhas de item e os favoritos da categoria para o destino, do mesmo tipo, e exclui a origem.
          */
         post: operations["juntar_categoria"];
         delete?: never;
