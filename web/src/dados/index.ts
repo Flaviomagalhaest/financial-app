@@ -373,6 +373,27 @@ export function useLancamentos() {
   return { lancamentos, atualizadoEm, semDados, filaLida: lida };
 }
 
+/**
+ * Os lançamentos de uma tela que filtra a lista (a fatura, o Mês, o parcelamento), lidos do servidor
+ * em vez da lista guardada, que só tem a janela do aparelho (ticket 165, ADR 0024). A resposta fica
+ * guardada por tela; os não enviados entram por cima, só os que `passa` aceita. `semDados`: sem
+ * internet e sem resposta guardada, a tela diz que precisa de internet em vez de mostrar lista vazia.
+ */
+export function useLancamentosDaTela(caminho: string, ler: () => Promise<{ data?: Lancamento[] }>, passa: (l: LancamentoNaTela) => boolean) {
+  const { dados, atualizadoEm, semDados, buscar } = useRespostaDe<Lancamento[]>(caminho, ler);
+  const { itens: fila, lida } = useFilaLida();
+  // A fila subiu (ou mudou): o servidor tem coisa nova para a tela.
+  const tamanho = fila.length;
+  const antes = useRef(tamanho);
+  useEffect(() => {
+    if (antes.current === tamanho) return;
+    antes.current = tamanho;
+    void buscar();
+  }, [tamanho, buscar]);
+  const lancamentos = useMemo(() => (dados || semDados ? naTela(dados ?? [], fila).filter(passa) : null), [dados, semDados, fila, passa]);
+  return { lancamentos, atualizadoEm, semDados, filaLida: lida, buscar };
+}
+
 export type LinhaDaBusca = LinhaNaTela<LancamentoNaTela>;
 
 const naTelaDoServidor = (l: Lancamento): LancamentoNaTela => ({ ...l, naoEnviado: false });
@@ -1012,7 +1033,7 @@ export async function quitarParcelamento(id: string, quitacao: Quitacao): Promis
   try {
     const { data, error } = await api.POST("/api/parcelamentos/{id}/quitacao", { params: { path: { id } }, body: quitacao });
     if (data) {
-      await relerAsParcelas();
+      await relerAsParcelas(id);
       return {};
     }
     const detalhe = (error as { detail?: unknown } | undefined)?.detail;
@@ -1083,9 +1104,14 @@ export function useParcelamentos() {
 }
 
 /** A correção e a exclusão refazem as parcelas no servidor: o aparelho lê de novo o que elas mudam. */
-async function relerAsParcelas() {
+async function relerAsParcelas(id?: string | null) {
   const caminhos = [LISTA, "/api/contas", "/api/contas?arquivadas=true", "/api/parcelamentos"] as const;
-  await Promise.all([...caminhos.map((c) => buscarEGuardar<unknown>(c, LEITURAS[c])), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
+  await Promise.all([
+    ...caminhos.map((c) => buscarEGuardar<unknown>(c, LEITURAS[c])),
+    buscarEGuardar("/api/hoje", () => api.GET("/api/hoje")),
+    // A tela do parcelamento lê as parcelas do servidor (ticket 165).
+    ...(id ? [buscarEGuardar(`/api/parcelamentos/${id}/lancamentos`, () => api.GET("/api/parcelamentos/{id}/lancamentos", { params: { path: { id } } }))] : []),
+  ]);
 }
 
 /**
@@ -1103,7 +1129,7 @@ export async function corrigirParcelamento(id: string, alteracao: AlteracaoDePar
   try {
     const { data, error, response } = await api.PATCH("/api/parcelamentos/{id}", { params: { path: { id } }, body: alteracao });
     if (data) {
-      await relerAsParcelas();
+      await relerAsParcelas(id);
       return { mantidas: data.parcelas_mantidas };
     }
     if (response.status === 409) return { aviso: error as AvisoDeRealizadas };
@@ -1134,7 +1160,7 @@ export async function mudarParcela(
   try {
     const { data, error, response } = await api.PATCH("/api/parcelas/{id}", { params: { path: { id: mostrado.id } }, body: corpo });
     if (data) {
-      await relerAsParcelas();
+      await relerAsParcelas(mostrado.parcelamento_id);
       return { mantidas: data.parcelas_mantidas };
     }
     if (response.status === 409) return { aviso: error as AvisoDeRealizadas };
@@ -1163,7 +1189,7 @@ export async function excluirParcelamento(id: string, confirmarRealizadas = fals
   } catch {
     return { motivo: "sem resposta do servidor" };
   }
-  await relerAsParcelas();
+  await relerAsParcelas(id);
   return {};
 }
 
