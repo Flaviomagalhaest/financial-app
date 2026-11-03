@@ -1,5 +1,6 @@
 // O que o aparelho guarda para funcionar sem internet (ADR 0011): a última resposta de cada
-// leitura (a lista de lançamentos, um registro por lançamento) e a fila do que não foi enviado. Banco próprio, separado do da sessão; a tela e o
+// leitura (a lista de lançamentos, um registro por lançamento) e a fila do que não foi
+// enviado. Banco próprio, separado do da sessão; a tela e o
 // service worker usam este mesmo módulo.
 import type { components } from "../api/schema";
 
@@ -239,7 +240,7 @@ export async function emTransacao<T>(
 }
 
 /** Do mais novo ao mais antigo, como o servidor manda a lista. */
-export function ordenar(lista: Lancamento[]): Lancamento[] {
+function ordenar(lista: Lancamento[]): Lancamento[] {
   return lista.sort((a, b) => b.data.localeCompare(a.data) || b.criado_em.localeCompare(a.criado_em));
 }
 
@@ -271,7 +272,7 @@ async function guardarALista(respostas: IDBObjectStore, lancamentos: IDBObjectSt
   await Promise.all(escritas);
 }
 
-const agora = () => performance.timeOrigin + performance.now();
+export const agora = () => performance.timeOrigin + performance.now();
 let ultimaLeitura = 0;
 /**
  * O número da leitura é a hora em que ela sai (ms, com fração): a tela, as abas e o service worker
@@ -287,21 +288,22 @@ function numerarLeitura(): number {
 const maisNova = (guardada: Omit<Guardada<unknown>, "dados"> | undefined, numero: number) =>
   !!guardada?.leitura && guardada.leitura > numero && guardada.leitura <= agora();
 
-/** As leituras deste contexto ainda sem resposta, por caminho: a que pede `juntar` espera a que já saiu. */
-const emAndamento = new Map<string, Promise<unknown>>();
+/** A última leitura de cada caminho ainda sem resposta neste contexto, e quando ela foi pedida (ms). */
+const emAndamento = new Map<string, { leitura: Promise<unknown>; pedidaEm: number }>();
 
 /**
  * Busca no servidor (`ler`, `undefined` quando ele não respondeu) e guarda a resposta. As leituras
  * de uma resposta correm juntas, na tela, noutra aba ou no service worker, e a que saiu antes pode
  * chegar depois: numeradas na saída, a mais velha não troca a guardada (tickets 120 e 122).
  *
- * Com `juntar`, a leitura de um caminho que já está em andamento neste contexto não sai de novo: a
- * tela que abre com vários leitores do mesmo caminho faz um GET só. Quem acabou de mudar algo no
- * servidor não junta, porque a leitura em andamento pode ter saído antes da mudança.
+ * Com `juntarDesde` (ms, no relógio de `agora`), a leitura do caminho pedida neste contexto desde
+ * então, ainda sem resposta, serve: a tela que abre com vários leitores do mesmo caminho faz um GET
+ * só. A pedida antes não serve: pode ter saído antes de uma mudança no servidor, ou estar presa
+ * numa rede que acabou de voltar.
  */
-export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined>, { juntar = false } = {}): Promise<D | undefined> {
-  const andamento = juntar ? (emAndamento.get(caminho) as Promise<D | undefined> | undefined) : undefined;
-  if (andamento) return andamento;
+export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined>, { juntarDesde }: { juntarDesde?: number } = {}): Promise<D | undefined> {
+  const andamento = emAndamento.get(caminho);
+  if (juntarDesde !== undefined && andamento && andamento.pedidaEm >= juntarDesde) return andamento.leitura as Promise<D | undefined>;
   const leitura = comTrava("shared", async () => {
     const numero = numerarLeitura();
     const dados = await ler().catch(() => undefined);
@@ -315,9 +317,9 @@ export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined
     });
     return dados;
   }).finally(() => {
-    if (emAndamento.get(caminho) === leitura) emAndamento.delete(caminho);
+    if (emAndamento.get(caminho)?.leitura === leitura) emAndamento.delete(caminho);
   });
-  emAndamento.set(caminho, leitura);
+  emAndamento.set(caminho, { leitura, pedidaEm: agora() });
   return leitura;
 }
 

@@ -331,13 +331,13 @@ export const pelaData = (a: { data: string; criado_em?: string }, b: { data: str
  * um), as contas da semana da Hoje e o saldo das contas. A lista só muda se já estava guardada.
  */
 async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
-  await emTransacao("readwrite", async (fila, respostas, guardados) => {
+  await emTransacao("readwrite", async (fila, respostas, lancamentos) => {
     const temLista = (await pedido(respostas.count(LISTA))) > 0;
-    const naLista = async (id: string): Promise<Lancamento | undefined> => (temLista ? await pedido(guardados.get(id)) : undefined);
+    const naLista = async (id: string): Promise<Lancamento | undefined> => (temLista ? await pedido(lancamentos.get(id)) : undefined);
     const guardar = async (id: string, lancamento: Lancamento | undefined) => {
       if (!temLista) return;
-      if (lancamento) await pedido(guardados.put(lancamento));
-      else await pedido(guardados.delete(id));
+      if (lancamento) await pedido(lancamentos.put(lancamento));
+      else await pedido(lancamentos.delete(id));
     };
     const daHoje: Guardada<LeituraDaHoje> | undefined = await pedido(respostas.get(HOJE));
     let previstos = daHoje?.dados.contas_da_semana ?? [];

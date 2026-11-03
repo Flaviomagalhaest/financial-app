@@ -11,6 +11,7 @@ import {
   deLancamento,
   lerEGuardar,
   lerFila,
+  agora,
   lerResposta,
   NA_FILA,
   ouvirMudancas,
@@ -164,11 +165,22 @@ type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
 
 /**
- * Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. Com `juntar`, espera
- * a leitura do mesmo caminho que já saiu (`lerEGuardar`): só para quem não acabou de mudar o servidor.
+ * Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. Com `juntar`, a
+ * leitura do mesmo caminho pedida nesta mesma tarefa do navegador serve (`lerEGuardar`): os hooks
+ * que montam juntos, ou que ouvem o mesmo evento, fazem um GET só.
  */
-function buscarEGuardar<D>(caminho: string, ler: () => Promise<{ data?: D }>, juntar = false) {
-  return lerEGuardar(caminho, async () => (await ler()).data, { juntar });
+function buscarEGuardar<D>(caminho: string, ler: () => Promise<{ data?: D }>, { juntar = false } = {}) {
+  return lerEGuardar(caminho, async () => (await ler()).data, { juntarDesde: juntar ? inicioDaTarefa() : undefined });
+}
+
+let tarefa: number | null = null;
+/** Quando começou a tarefa do navegador em que o código está: vale até a próxima. */
+function inicioDaTarefa(): number {
+  if (tarefa === null) {
+    tarefa = agora();
+    setTimeout(() => (tarefa = null));
+  }
+  return tarefa;
 }
 
 /** A resposta do servidor, ou a última guardada; `aoVivo` diz se a última busca deu certo. */
@@ -233,10 +245,10 @@ function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
   leitor.current = ler;
 
   // A leitura que a tela pede depois de mudar algo no servidor sai sozinha; a de abrir, a de a rede
-  // voltar e a de o app voltar à frente juntam-se à do mesmo caminho em andamento (um GET por tela).
+  // voltar e a de o app voltar à frente juntam-se à do mesmo caminho pedida na mesma tarefa (um GET por tela).
   const lerDoServidor = useCallback(
     async (juntar: boolean) => {
-      setAoVivo(!!(await buscarEGuardar(caminho, leitor.current, juntar)));
+      setAoVivo(!!(await buscarEGuardar(caminho, leitor.current, { juntar })));
     },
     [caminho],
   );
@@ -690,7 +702,7 @@ function useFaturasDosTitulares(cartoes: Cartao[]): Map<string, Fatura[]> {
         (guardadas) => ativo && setPorCartao(new Map(ids.map((id, i) => [id, guardadas[i]?.dados ?? []]))),
       );
     lerGuardadas();
-    for (const id of ids) void buscarEGuardar(caminhoDasFaturas(id), faturasDe(id), true);
+    for (const id of ids) void buscarEGuardar(caminhoDasFaturas(id), faturasDe(id), { juntar: true });
     const parar = ouvirMudancas(ids.map(caminhoDasFaturas), lerGuardadas);
     return () => {
       ativo = false;
