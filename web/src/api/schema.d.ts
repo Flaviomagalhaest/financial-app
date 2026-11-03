@@ -3086,7 +3086,7 @@ export interface components {
              */
             alterado_em: string;
             /**
-             * Parcelas Puladas
+             * Parcelas Anteriores
              * @default 0
              */
             parcelas_anteriores: number;
@@ -3163,7 +3163,7 @@ export interface components {
              */
             alterado_em: string;
             /**
-             * Parcelas Puladas
+             * Parcelas Anteriores
              * @default 0
              */
             parcelas_anteriores: number;
