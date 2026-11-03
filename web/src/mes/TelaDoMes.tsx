@@ -419,9 +419,6 @@ function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; 
   );
 }
 
-/** A lista do mês já vem filtrada pelo servidor: a fila só muda o que já está nela. */
-const QUALQUER = () => true;
-
 const SITUACAO: Record<LeituraDoMes["situacao"], string> = { passado: "mês fechado", atual: "mês atual", futuro: "mês que vem pela frente" };
 
 /** A aba Mês: navega mês a mês; o mês passado mostra o fechamento, o atual e o futuro, a barra. */
@@ -430,7 +427,8 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
   const { categorias } = useCadastro();
   // Os lançamentos do mês vêm do servidor: a lista guardada só tem a janela do aparelho (ADR 0024).
   const leituraDosLancamentos = useCallback(() => api.GET("/api/meses/{mes}/lancamentos", { params: { path: { mes } } }), [mes]);
-  const { lancamentos } = useLancamentosDaTela(`/api/meses/${mes}/lancamentos`, leituraDosLancamentos, QUALQUER);
+  const doMes = useCallback((l: LancamentoNaTela) => (l.mes ?? l.data).slice(0, 7) === mes, [mes]);
+  const { lancamentos, semDados: semLancamentos, atualizadoEm: lancamentosDeAntes } = useLancamentosDaTela(`/api/meses/${mes}/lancamentos`, leituraDosLancamentos, doMes);
 
   return (
     <section className="aba-mes">
@@ -451,6 +449,12 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
       {semDados && (
         <p role="alert" className="erro">
           Sem internet: não foi possível carregar este mês.
+        </p>
+      )}
+      {lancamentosDeAntes && <p className="vazio">Sem internet: os lançamentos do mês são os da última leitura.</p>}
+      {semLancamentos && (
+        <p role="alert" className="erro">
+          Sem internet: o &quot;A escolher&quot; e o Ranking precisam dos lançamentos do mês, que não estão no aparelho.
         </p>
       )}
       {leitura && (

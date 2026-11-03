@@ -381,7 +381,7 @@ export function useLancamentos() {
  */
 export function useLancamentosDaTela(caminho: string, ler: () => Promise<{ data?: Lancamento[] }>, passa: (l: LancamentoNaTela) => boolean) {
   const { dados, atualizadoEm, semDados, buscar } = useRespostaDe<Lancamento[]>(caminho, ler);
-  const { itens: fila, lida } = useFilaLida();
+  const { itens: fila } = useFilaLida();
   // A fila subiu (ou mudou): o servidor tem coisa nova para a tela.
   const tamanho = fila.length;
   const antes = useRef(tamanho);
@@ -391,7 +391,7 @@ export function useLancamentosDaTela(caminho: string, ler: () => Promise<{ data?
     void buscar();
   }, [tamanho, buscar]);
   const lancamentos = useMemo(() => (dados || semDados ? naTela(dados ?? [], fila).filter(passa) : null), [dados, semDados, fila, passa]);
-  return { lancamentos, atualizadoEm, semDados, filaLida: lida, buscar };
+  return { lancamentos, atualizadoEm, semDados, buscar };
 }
 
 export type LinhaDaBusca = LinhaNaTela<LancamentoNaTela>;

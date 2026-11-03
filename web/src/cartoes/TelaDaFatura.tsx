@@ -226,7 +226,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
       {/* A busca pelo filtro Fatura, com a categoria e a tag escolhidas aqui. */}
       <a href={enderecoDaBusca({ fatura: { mes, cartao_id: cartaoId }, categoria_ids: categoria === TODAS ? undefined : [categoria], tags: tag === TODAS ? undefined : [tag] })}>Ver os lançamentos</a>
       {atualizadoEm && <p className="vazio">Sem internet: as compras são as da última leitura.</p>}
-      {semInternet && !daLeitura?.length && (
+      {semInternet && (
         <p role="alert" className="erro">
           Sem internet: as compras desta fatura precisam de internet.
         </p>
