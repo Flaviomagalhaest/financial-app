@@ -126,6 +126,21 @@ def test_inicio_no_passado_so_lanca_de_hoje_em_diante_e_a_de_hoje_nasce_realizad
     assert saldo == -18990
 
 
+def test_a_de_hoje_de_valor_fixo_sem_automatico_nasce_prevista(casal: Casal):
+    # Ticket 129, pergunta 2: só a estimada (o casal registra o que aconteceu) e a automática
+    # nascem realizadas hoje; a fixa que o casal confirma no pagamento nasce prevista.
+    conta, luz = casal.conta(), casal.categoria("Luz")
+    nova = recorrencia(conta, [luz], inicio="2026-10-28", tipo_do_valor="fixo", vezes=2)
+
+    resposta = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    assert resposta.status_code == 201
+    assert [(l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-10-28", "previsto"),
+        ("2026-11-28", "previsto"),
+    ]
+
+
 def test_enviada_no_dia_seguinte_a_ocorrencia_do_dia_do_lancamento_nasce_realizada(
     casal: Casal,
 ):

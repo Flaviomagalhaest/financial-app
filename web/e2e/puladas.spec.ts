@@ -79,7 +79,7 @@ test("a folha avisa as parcelas do boleto antes de hoje, e a tela do parcelament
   const api = await apiDaPagina(page);
   await expect.poll(async () => (await api.ler("/api/parcelamentos")).filter((p: { descricao: string }) => p.descricao === `Sofá ${s}`).length).toBe(1);
   const [gravado] = (await api.ler("/api/parcelamentos")).filter((p: { descricao: string }) => p.descricao === `Sofá ${s}`);
-  expect(gravado.parcelas_puladas).toBe(2 + extra);
+  expect(gravado.parcelas_anteriores).toBe(2 + extra);
 
   await page.goto(`/#/parcelamento/${gravado.id}`);
   await expect(page.getByText(`${2 + extra} parcelas não foram lançadas: venciam antes de hoje`)).toBeVisible();
