@@ -9,6 +9,7 @@ import {
   comTrava,
   deLancamento,
   emTransacao,
+  LISTA,
   lerFila,
   pedido,
   type Base,
@@ -37,7 +38,7 @@ export type Remessa = (acoes: Acao[]) => Promise<Resultado[] | number>;
 /** O `sync` que a tela pede e o service worker atende (service-worker.js). */
 export const ETIQUETA_DO_ENVIO = "enviar-fila";
 /** A lista de lançamentos guardada, que o resultado do envio já acerta. */
-export const LISTA = "/api/lancamentos";
+export { LISTA };
 /** A leitura da Hoje guardada: o resultado do envio acerta as contas da semana dela. */
 export const HOJE = "/api/hoje";
 /** As contas guardadas: o resultado do envio acerta o saldo delas até a próxima leitura (ticket 120). */
@@ -264,10 +265,6 @@ export function lancarDeNovo(id: string): Promise<void> {
   });
 }
 
-export function ordenar(lista: Lancamento[]): Lancamento[] {
-  return lista.sort((a, b) => b.data.localeCompare(a.data) || b.criado_em.localeCompare(a.criado_em));
-}
-
 /** Recusado, em conflito ou vencido pela exclusão: não sobe até a pessoa decidir. */
 export const esperaAPessoa = (item: ItemDaFila) => !!(item.recusa || (deLancamento(item) && (item.conflito || item.exclusao)));
 
@@ -329,10 +326,19 @@ export function naSemana(l: Pick<Lancamento, "data"> & { situacao?: Lancamento["
 export const pelaData = (a: { data: string; criado_em?: string }, b: { data: string; criado_em?: string }) =>
   a.data.localeCompare(b.data) || (a.criado_em ?? "\uffff").localeCompare(b.criado_em ?? "\uffff");
 
+/**
+ * O resultado do envio no que o aparelho guarda: a fila, a lista (só os lançamentos enviados, um a
+ * um), as contas da semana da Hoje e o saldo das contas. A lista só muda se já estava guardada.
+ */
 async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
-  await emTransacao("readwrite", async (fila, respostas) => {
-    const guardada: Guardada<Lancamento[]> | undefined = await pedido(respostas.get(LISTA));
-    let lista = guardada?.dados ?? [];
+  await emTransacao("readwrite", async (fila, respostas, guardados) => {
+    const temLista = (await pedido(respostas.count(LISTA))) > 0;
+    const naLista = async (id: string): Promise<Lancamento | undefined> => (temLista ? await pedido(guardados.get(id)) : undefined);
+    const guardar = async (id: string, lancamento: Lancamento | undefined) => {
+      if (!temLista) return;
+      if (lancamento) await pedido(guardados.put(lancamento));
+      else await pedido(guardados.delete(id));
+    };
     const daHoje: Guardada<LeituraDaHoje> | undefined = await pedido(respostas.get(HOJE));
     let previstos = daHoje?.dados.contas_da_semana ?? [];
     const aceitos: Aceitos = (await pedido(respostas.get(ACEITOS))) ?? {};
@@ -364,21 +370,22 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       }
       if (resultado === "conflito") {
         // O aparelho passa a mostrar a versão do servidor enquanto a decisão espera.
-        if (lancamento) lista = [...lista.filter((l) => l.id !== enviado.id), lancamento];
+        if (lancamento) await guardar(enviado.id, lancamento);
         if (intacto && lancamento) await pedido(fila.put({ ...atual, conflito: { motivo: motivo ?? "conflito", lancamento, campos: campos ?? [] } }));
         continue;
       }
-      const antes = lista.find((l) => l.id === enviado.id);
-      lista = lista.filter((l) => l.id !== enviado.id);
+      const antes = await naLista(enviado.id);
       if (resultado === "descartada") {
+        await guardar(enviado.id, undefined);
         if (atual?.lancamento && exclusao) await pedido(fila.put({ ...atual, exclusao }));
         else if (atual) await pedido(fila.delete(enviado.id));
         continue;
       }
       // Excluído no aparelho enquanto subia: agora que existe no servidor, sai de lá também.
       const excluidoNoCaminho = !atual && enviado.acao === "criar";
-      if (lancamento && !excluidoNoCaminho) lista.push(lancamento);
-      noSaldo.push([antes, lista.find((l) => l.id === enviado.id)]);
+      const depois = lancamento && !excluidoNoCaminho ? lancamento : undefined;
+      await guardar(enviado.id, depois);
+      noSaldo.push([antes, depois]);
       if (lancamento) aceitos[enviado.id] = { base: lancamento, em: Date.now() };
       if (excluidoNoCaminho) await pedido(fila.put({ id: enviado.id, acao: "excluir", base: lancamento, desde: enviado.desde, revisao: 1 }));
       else if (intacto) await pedido(fila.delete(enviado.id));
@@ -389,7 +396,6 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
     }
     const recentes = Object.entries(aceitos).sort(([, a], [, b]) => b.em - a.em).slice(0, MAXIMO_DE_ACEITOS);
     await pedido(respostas.put(Object.fromEntries(recentes), ACEITOS));
-    if (guardada) await pedido(respostas.put({ ...guardada, dados: ordenar(lista) }, LISTA));
     if (daHoje) await pedido(respostas.put({ ...daHoje, dados: { ...daHoje.dados, contas_da_semana: previstos } }, HOJE));
     for (const caminho of CONTAS) {
       const contas: Guardada<Conta[]> | undefined = await pedido(respostas.get(caminho));

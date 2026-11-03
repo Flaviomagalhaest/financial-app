@@ -1,4 +1,4 @@
-// Mede o Histórico com o volume do banco (ticket 123): o tempo até a tela mostrar um lançamento
+// Mede o Histórico com o volume do banco (tickets 123 e 164): o tempo até a tela mostrar um lançamento
 // novo, separando a leitura da lista (`GET /api/lancamentos`), as gravações e leituras dela no
 // IndexedDB e o render, num celular mais lento simulado (CPU throttling do Chromium).
 //
@@ -26,23 +26,43 @@ function instrumentar(lista: string) {
   const marcas: Marca[] = [];
   (window as unknown as { __medidas: Marca[] }).__medidas = marcas;
   const agora = () => performance.now();
+  // A lista num bloco só em `respostas` (antes do ticket 164) ou lançamento por lançamento na loja
+  // `lancamentos`: uma gravação é a transação que grava nela, com quantos lançamentos gravou.
+  const gravacoes = new WeakMap<IDBTransaction, Marca>();
+  const gravar = (loja: IDBObjectStore, inicio: number, quantos: number) => {
+    let marca = gravacoes.get(loja.transaction);
+    if (!marca) {
+      const nova: Marca = { tipo: "gravar", inicio, sincrono: 0, tamanho: 0 };
+      gravacoes.set(loja.transaction, (marca = nova));
+      loja.transaction.addEventListener("complete", () => (nova.fim = agora()));
+      marcas.push(nova);
+    }
+    marca.sincrono! += agora() - inicio; // a cópia estruturada roda aqui, na thread da tela
+    marca.tamanho! += quantos;
+  };
   const put = IDBObjectStore.prototype.put;
   IDBObjectStore.prototype.put = function (this: IDBObjectStore, valor: unknown, chave?: IDBValidKey) {
-    if (chave !== lista) return put.call(this, valor, chave);
-    const marca: Marca = { tipo: "gravar", inicio: agora() };
+    const inicio = agora();
     const pedido = put.call(this, valor, chave);
-    marca.sincrono = agora() - marca.inicio; // a cópia estruturada roda aqui, na thread da tela
-    this.transaction.addEventListener("complete", () => (marca.fim = agora()));
-    marcas.push(marca);
+    if (this.name === "lancamentos") gravar(this, inicio, 1);
+    else if (chave === lista) gravar(this, inicio, ((valor as { dados?: unknown[] }).dados ?? []).length);
     return pedido;
+  };
+  const lida = (pedido: IDBRequest) => {
+    const marca: Marca = { tipo: "ler guardada", inicio: agora() };
+    pedido.addEventListener("success", () => (marca.fim = agora()));
+    marcas.push(marca);
   };
   const get = IDBObjectStore.prototype.get;
   IDBObjectStore.prototype.get = function (this: IDBObjectStore, chave: IDBValidKey | IDBKeyRange) {
     const pedido = get.call(this, chave);
-    if (chave !== lista) return pedido;
-    const marca: Marca = { tipo: "ler guardada", inicio: agora() };
-    pedido.addEventListener("success", () => (marca.fim = agora()));
-    marcas.push(marca);
+    if (chave === lista && this.name === "respostas" && !this.transaction.objectStoreNames.contains("lancamentos")) lida(pedido);
+    return pedido;
+  };
+  const getAll = IDBObjectStore.prototype.getAll;
+  IDBObjectStore.prototype.getAll = function (this: IDBObjectStore, ...args: unknown[]) {
+    const pedido = (getAll as (...a: unknown[]) => IDBRequest).apply(this, args);
+    if (this.name === "lancamentos" && this.transaction.mode === "readonly") lida(pedido);
     return pedido;
   };
   const json = Response.prototype.json;
@@ -112,7 +132,7 @@ function relatar(nome: string, m: Medida) {
   console.log(`  GET ${LISTA}: ${m.leituras.length}x; ${m.leituras.map((l) => `servidor ${ms(l.resposta - l.inicio)} + download ${ms(l.fim - l.resposta)}, ${Math.round(l.bytes / 1024)} KB`).join("; ")}`);
   console.log(`  outras leituras da API: ${m.outras.filter((o) => o.inicio <= m.ateMostrar).map((o) => `${o.caminho} ${ms(o.inicio)}→${ms(o.fim)}`).join(", ")}`);
   console.log(`  JSON da lista: ${tipo("json").map((x) => `${ms(x.fim! - x.inicio)} (${x.tamanho} lançamentos)`).join(", ")}`);
-  console.log(`  gravações no IndexedDB: ${gravacoes.length}x; cópia na thread da tela ${gravacoes.map((g) => ms(g.sincrono!)).join(", ")}; até gravar ${gravacoes.map((g) => ms((g.fim ?? NaN) - g.inicio)).join(", ")}`);
+  console.log(`  gravações no IndexedDB: ${gravacoes.length}x; lançamentos gravados ${gravacoes.map((g) => g.tamanho).join(", ")}; cópia na thread da tela ${gravacoes.map((g) => ms(g.sincrono!)).join(", ")}; até gravar ${gravacoes.map((g) => ms((g.fim ?? NaN) - g.inicio)).join(", ")}`);
   console.log(`  leituras da guardada: ${tipo("ler guardada").length}x; ${tipo("ler guardada").map((x) => ms((x.fim ?? NaN) - x.inicio)).join(", ")}`);
   const quando = (x: { inicio: number; fim?: number }) => `${ms(x.inicio)}→${ms(x.fim ?? NaN)}`;
   console.log(`  linha do tempo (desde o início da página): GET ${m.leituras.map((l) => `${ms(l.inicio)}→${ms(l.fim)}`).join(", ")}; JSON ${tipo("json").map(quando).join(", ")}; gravar ${gravacoes.map(quando).join(", ")}; tarefas longas ${longas.map(quando).join(", ")}`);

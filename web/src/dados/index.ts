@@ -12,7 +12,9 @@ import {
   lerEGuardar,
   lerFila,
   lerResposta,
+  NA_FILA,
   ouvirMudancas,
+  temResposta,
   type Base,
   type Conflito,
   type Exclusao,
@@ -161,9 +163,12 @@ const LEITURAS = {
 type Caminho = keyof typeof LEITURAS;
 type Dados<C extends Caminho> = NonNullable<Awaited<ReturnType<(typeof LEITURAS)[C]>>["data"]>;
 
-/** Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. */
-function buscarEGuardar<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
-  return lerEGuardar(caminho, async () => (await ler()).data);
+/**
+ * Busca no servidor e guarda a resposta; `undefined` quando ele não respondeu. Com `juntar`, espera
+ * a leitura do mesmo caminho que já saiu (`lerEGuardar`): só para quem não acabou de mudar o servidor.
+ */
+function buscarEGuardar<D>(caminho: string, ler: () => Promise<{ data?: D }>, juntar = false) {
+  return lerEGuardar(caminho, async () => (await ler()).data, { juntar });
 }
 
 /** A resposta do servidor, ou a última guardada; `aoVivo` diz se a última busca deu certo. */
@@ -227,9 +232,15 @@ function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
   const leitor = useRef(ler);
   leitor.current = ler;
 
-  const buscar = useCallback(async () => {
-    setAoVivo(!!(await buscarEGuardar(caminho, leitor.current)));
-  }, [caminho]);
+  // A leitura que a tela pede depois de mudar algo no servidor sai sozinha; a de abrir, a de a rede
+  // voltar e a de o app voltar à frente juntam-se à do mesmo caminho em andamento (um GET por tela).
+  const lerDoServidor = useCallback(
+    async (juntar: boolean) => {
+      setAoVivo(!!(await buscarEGuardar(caminho, leitor.current, juntar)));
+    },
+    [caminho],
+  );
+  const buscar = useCallback(() => lerDoServidor(false), [lerDoServidor]);
 
   useEffect(() => {
     let ativo = true;
@@ -238,10 +249,10 @@ function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
         if (ativo && g) setGuardada(g);
       });
     lerGuardada();
-    void buscar();
-    const parar = ouvirMudancas(lerGuardada);
+    void lerDoServidor(true);
+    const parar = ouvirMudancas([caminho], lerGuardada);
     // A rede voltou ou o app voltou à frente: a resposta guardada pode estar velha.
-    const buscarDeNovo = () => document.visibilityState === "visible" && void buscar();
+    const buscarDeNovo = () => document.visibilityState === "visible" && void lerDoServidor(true);
     window.addEventListener("online", buscarDeNovo);
     document.addEventListener("visibilitychange", buscarDeNovo);
     return () => {
@@ -250,7 +261,7 @@ function useRespostaDe<D>(caminho: string, ler: () => Promise<{ data?: D }>) {
       window.removeEventListener("online", buscarDeNovo);
       document.removeEventListener("visibilitychange", buscarDeNovo);
     };
-  }, [caminho, buscar]);
+  }, [caminho, lerDoServidor]);
 
   return {
     dados: guardada?.dados ?? null,
@@ -271,7 +282,7 @@ function useRespostaGuardada<D>(caminho: string): D | null {
         if (ativo && g) setGuardada(g.dados);
       });
     ler();
-    const parar = ouvirMudancas(ler);
+    const parar = ouvirMudancas([caminho], ler);
     return () => {
       ativo = false;
       parar();
@@ -292,7 +303,7 @@ function useFilaLida() {
     let ativo = true;
     const ler = () => void lerFila().then((lidos) => ativo && setEstado({ itens: lidos, lida: true }));
     ler();
-    const parar = ouvirMudancas(ler);
+    const parar = ouvirMudancas([NA_FILA], ler);
     return () => {
       ativo = false;
       parar();
@@ -679,8 +690,8 @@ function useFaturasDosTitulares(cartoes: Cartao[]): Map<string, Fatura[]> {
         (guardadas) => ativo && setPorCartao(new Map(ids.map((id, i) => [id, guardadas[i]?.dados ?? []]))),
       );
     lerGuardadas();
-    for (const id of ids) void buscarEGuardar(caminhoDasFaturas(id), faturasDe(id));
-    const parar = ouvirMudancas(lerGuardadas);
+    for (const id of ids) void buscarEGuardar(caminhoDasFaturas(id), faturasDe(id), true);
+    const parar = ouvirMudancas(ids.map(caminhoDasFaturas), lerGuardadas);
     return () => {
       ativo = false;
       parar();
@@ -933,7 +944,7 @@ export async function enviarAgora(): Promise<boolean> {
   // enviado sumiria do aparelho até a próxima leitura com internet (ticket 90).
   // Se ela não chega (a rede caiu de novo, ou ainda não voltou de todo), a fila fica para a próxima (ticket 120).
   const pendentes = (await lerFila()).length;
-  if (pendentes > 0 && !(await lerResposta(LISTA)) && !(await buscarEGuardar(LISTA, LEITURAS[LISTA]))) return false;
+  if (pendentes > 0 && !(await temResposta(LISTA)) && !(await buscarEGuardar(LISTA, LEITURAS[LISTA]))) return false;
   const enviou = await enviarFila(remeter);
   if (!enviou) pedirEnvioEmSegundoPlano();
   // O envio já acertou o saldo guardado das contas (ticket 120); a leitura traz o do servidor (ticket 81).
