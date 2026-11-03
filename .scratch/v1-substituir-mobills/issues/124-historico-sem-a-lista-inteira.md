@@ -1,7 +1,7 @@
 # Histórico sem a lista inteira: páginas, janela de meses ou virtualização
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: a decisão é do dono e mexe no ADR 0011); apoio: `research` (limites de resposta da Lambda e da HTTP API), `prototype` se a escolha pedir ver a tela
 Modelo recomendado: Opus
@@ -39,7 +39,26 @@ Medidos com `web/e2e/medir-historico.ts`: recarregar o Histórico com a lista j�
 
 ## Checklist
 
-- [ ] Dono escolhe o caminho (e, na janela, quantos meses; nas páginas, o tamanho)
-- [ ] Decidir o que o aparelho guarda sem internet e registrar no ADR 0011 (ou ADR novo)
-- [ ] Confirmar com `research` o limite de resposta da Lambda e da HTTP API e se comprimir a resposta ajuda
-- [ ] Abrir os tickets de implementação, com a releitura em cascata e a volta do prazo do teste "a rede volta, mas a lista não chega antes do envio" (`web/e2e/sem-internet.spec.ts`, `lerAListaInteira`) ao padrão
+- [x] Dono escolhe o caminho (e, na janela, quantos meses; nas páginas, o tamanho)
+- [x] Decidir o que o aparelho guarda sem internet e registrar no ADR 0011 (ou ADR novo)
+- [x] Confirmar com `research` o limite de resposta da Lambda e da HTTP API e se comprimir a resposta ajuda
+- [x] Abrir os tickets de implementação, com a releitura em cascata e a volta do prazo do teste "a rede volta, mas a lista não chega antes do envio" (`web/e2e/sem-internet.spec.ts`, `lerAListaInteira`) ao padrão
+
+## Answer
+
+Decidido pelo dono em 02 e 03/11, em três rodadas de `grilling` (Q1 a Q12, todas com a recomendação aceita). Registro: [ADR 0024](../../../docs/adr/0024-sem-internet-so-a-janela-do-aparelho.md), uma linha nas Consequences do [ADR 0011](../../../docs/adr/0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md) e o termo **Janela do aparelho** no `GLOSSARY.md`.
+
+- **Q1, caminho**: janela de meses (caminho 2). O aparelho deixa de guardar a lista inteira.
+- **Q2**: guardar lançamento por lançamento, avisar só quem lê a resposta que mudou e um GET da lista por tela entram em qualquer caminho.
+- **Q3, tamanho**: 12 meses (uns 1.400 lançamentos, de 150 a 230 KB comprimidos).
+- **Q4, o que entra**: pelo mês em que o lançamento conta (o da fatura, na compra no cartão), mais todo o futuro (parcelas e previstos das recorrências até o horizonte de 24 meses).
+- **Q5, Histórico**: desenhado mês a mês ao rolar; depois da janela, com internet, continua pelo servidor sem guardar; sem internet, o fim da janela diz que é preciso internet.
+- **Q6, fora da janela sem internet**: a tela avisa, não esconde. Abrir, editar, estornar e ver as parcelas pedem internet; as compras da fatura, o Ranking e o "A escolher" do Mês e as parcelas passam a ler do servidor; a busca sem internet diz que olhou só os 12 meses.
+- **Q7, atualização**: reler a janela inteira, comprimida. "Mudou desde" só se a medida pedir.
+- **Q8**: comprimir a resposta da API (gzip na FastAPI), em ticket próprio.
+- **Q9**: o termo é **Janela do aparelho**.
+- **Q10**: ADR novo (0024), com uma linha no 0011.
+- **Q11**: sem protótipo: a tela é a lista de hoje com cabeçalho de mês e o aviso do fim da janela, e o ticket 167 a mostra pronta com `run`.
+- **Q12, tickets**: [163](163-comprimir-a-resposta-da-api.md) (gzip), [164](164-guardar-lancamento-por-lancamento-e-reler-so-o-que-mudou.md) (armazenamento por item e releitura), [165](165-telas-que-filtram-a-lista-leem-do-servidor.md) (telas que filtram a lista leem do servidor), [166](166-janela-do-aparelho.md) (a janela, bloqueado por 164 e 165) e [167](167-historico-desenhado-mes-a-mes.md) (Histórico mês a mês, bloqueado por 166).
+
+**Pesquisa** ([limites de resposta da Lambda](../research/limites-de-resposta-da-lambda.md)): a resposta síncrona da Lambda é de 6 MiB e conta o envelope serializado (uns 12% maior que a lista), então o teto sem compressão fica perto de 7.900 lançamentos, não 8.500. Com gzip na API, cabem de 40 a 63 mil. A HTTP API e o CloudFront não comprimem a resposta da API, e a HTTP API não tem streaming. Falta conferir no `dev` com `curl` que o gzip passa pela HTTP API (no ticket 163).
