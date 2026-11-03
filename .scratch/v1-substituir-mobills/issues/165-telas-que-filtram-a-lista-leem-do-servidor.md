@@ -1,7 +1,7 @@
 # Telas que filtram a lista guardada passam a ler do servidor
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
