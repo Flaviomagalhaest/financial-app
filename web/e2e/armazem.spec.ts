@@ -3,6 +3,11 @@
 import { expect, test, type Page } from "@playwright/test";
 import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 const LISTA = "/api/lancamentos";
 const daLista = (url: string) => new URL(url).pathname === LISTA;

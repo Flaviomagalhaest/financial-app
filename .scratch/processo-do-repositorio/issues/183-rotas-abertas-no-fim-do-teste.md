@@ -17,5 +17,7 @@ Arquivos com `rota.fetch()` e sem `unrouteAll` no teste: `cartoes-cadastro`, `co
 
 ## Checklist
 
-- [ ] Em cada teste com rota que busca do servidor, `unrouteAll({ behavior: "wait" })` no fim (ou um ajudante comum)
+- [x] Em cada teste com rota que busca do servidor, `unrouteAll({ behavior: "wait" })` no fim (feito com `soltarRotas` em `web/e2e/rotas.ts`, num `test.afterEach` dos 11 arquivos)
 - [ ] Prova com a injeção do 178 num dos testes trocados: vermelho sem a mudança, verde com ela
+
+Nota: a prova (injeção do 178) não rodou na sessão — sem dependências, Postgres nem navegador no ambiente. Falta rodar no CI/local; por isso o ticket segue `claimed`.

@@ -2,6 +2,11 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar, lancar } from "./lancar";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 // A edição chega ao servidor, mas a resposta não volta ao aparelho, e a pessoa reabre o app (ticket 169).
 

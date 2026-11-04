@@ -3,6 +3,11 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 /** Entra e cadastra uma conta e uma categoria de despesa, guardadas no aparelho. */
 async function prepararCasal(page: Page) {

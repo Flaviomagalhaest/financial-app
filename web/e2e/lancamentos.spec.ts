@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { entrar } from "./entrar";
 import { cadastrar, digitar, lancar } from "./lancar";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ page }) => {
   const s = String(Date.now());

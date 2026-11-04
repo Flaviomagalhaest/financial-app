@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { entrar } from "./entrar";
 import { digitar, lancar } from "./lancar";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 // O dia do casal é o de São Paulo, como na API.
 test.use({ timezoneId: "America/Sao_Paulo" });
