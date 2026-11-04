@@ -1,7 +1,7 @@
 # Mês e parcelamento sem internet: testes que faltam e primeira parcela fora da janela
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 166
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
