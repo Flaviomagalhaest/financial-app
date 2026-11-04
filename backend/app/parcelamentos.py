@@ -637,16 +637,28 @@ def completar_todos(url: str | None) -> int:
     return consertados
 
 
+_A_CORRECAO_PAROU = (
+    "A correção do parcelamento parou: as parcelas que faltavam corrigir ficaram como estavam"
+)
+
+
+def tirar_a_recusa(conn, id: UUID, so_a_da_correcao: bool = False) -> None:
+    """Tira do parcelamento a recusa que a tela mostra; `so_a_da_correcao` deixa a de uma
+    mudança com alcance (ticket 149), que só a próxima mudança tira."""
+    conn.execute(
+        "UPDATE parcelamentos SET mudanca_recusada = NULL WHERE id = %s"
+        " AND mudanca_recusada IS NOT NULL AND (NOT %s OR mudanca_recusada LIKE %s)",
+        (id, so_a_da_correcao, f"%{_A_CORRECAO_PAROU}"),
+    )
+
+
 def _desistir_do_conserto(conn, id: UUID, recusa: HTTPException) -> None:
     """Tira a classificação pendente que o refazer não consegue levar e grava a recusa no
     parcelamento, para o casal ver (ticket 157)."""
     conn.execute(
         "UPDATE parcelamentos SET classificacao_pendente = '', mudanca_recusada = %s WHERE id = %s",
         (
-            (
-                f"{recusa.detail}. A correção do parcelamento parou: as parcelas que faltavam"
-                " corrigir ficaram como estavam"
-            ),
+            f"{recusa.detail}. {_A_CORRECAO_PAROU}",
             id,
         ),
     )
@@ -659,26 +671,6 @@ def completar(url: str | None, id: UUID) -> bool:
     pendente = em_transacao(url, lambda conn: classificacao_pendente(conn, id))
     _refazer_protegido(url, id, lambda conn: _reajustar_do_parcelamento(conn, id), pendente)
     return True
-
-
-def _refazer_protegido(
-    url: str | None, id: UUID, um_lote: Callable[..., bool], classificacao: "Classificacao"
-) -> None:
-    """Os lotes do refazer da correção e a geração das parcelas que faltam, cada um com as
-    regras da fatura paga (`cartoes.protegida`). A conferência de antes de gravar
-    (`_conferir_os_lotes`) não vê a fatura paga depois dela: se um lote levaria uma parcela para
-    dentro de uma, ele é recusado, as parcelas que faltam ficam como estão, a recusa fica
-    gravada no parcelamento e sobe (ticket 180)."""
-    try:
-        while em_transacao(url, cartoes.protegida(um_lote)):
-            pass
-        # Antes de gerar: a geração já cria as parcelas com a classificação inteira.
-        em_transacao(url, lambda conn: _dar_por_refeita(conn, id, classificacao))
-        while em_transacao(url, cartoes.protegida(lambda conn: _gerar_um_lote(conn, id))):
-            pass
-    except HTTPException as recusa:
-        em_transacao(url, lambda conn, recusa=recusa: _desistir_do_conserto(conn, id, recusa))
-        raise
 
 
 # Os campos de classificação a levar às parcelas, cada um com a parcela a partir da qual vale: a
@@ -726,6 +718,31 @@ def _dar_por_refeita(conn, id: UUID, feita: Classificacao) -> None:
         " AND coalesce(classificacao_pendente, '') = %s",
         (id, _gravar_classificacao(feita)),
     )
+
+
+def _refazer_protegido(
+    url: str | None,
+    id: UUID,
+    um_lote: Callable[[psycopg.Connection], bool],
+    classificacao: Classificacao,
+) -> None:
+    """Os lotes do refazer da correção e a geração das parcelas que faltam, cada um com as
+    regras da fatura paga (`cartoes.protegida`). A conferência de antes de gravar
+    (`_conferir_os_lotes`) não vê a fatura paga depois dela: se um lote levaria uma parcela para
+    dentro de uma, ele é recusado, as parcelas que faltam ficam como estão, a recusa fica
+    gravada no parcelamento e sobe (ticket 180). A tarefa diária tenta de novo a cada dia: se a
+    fatura deixar de estar paga, o conserto termina e a recusa sai."""
+    try:
+        while em_transacao(url, cartoes.protegida(um_lote)):
+            pass
+        # Antes de gerar: a geração já cria as parcelas com a classificação inteira.
+        em_transacao(url, lambda conn: _dar_por_refeita(conn, id, classificacao))
+        while em_transacao(url, cartoes.protegida(lambda conn: _gerar_um_lote(conn, id))):
+            pass
+        em_transacao(url, lambda conn: tirar_a_recusa(conn, id, so_a_da_correcao=True))
+    except HTTPException as recusa:
+        em_transacao(url, lambda conn, recusa=recusa: _desistir_do_conserto(conn, id, recusa))
+        raise
 
 
 def _falta_conserto(conn, id: UUID) -> bool:
@@ -1567,11 +1584,7 @@ def _gravar_e_tirar_a_recusa(
     """A correção nova refaz as parcelas desde o começo: a recusa de antes sai do parcelamento
     (se ela se repetir no refazer, volta)."""
     gravada = gravar_correcao(conn, id, alteracao, usuario)
-    conn.execute(
-        "UPDATE parcelamentos SET mudanca_recusada = NULL"
-        " WHERE id = %s AND mudanca_recusada IS NOT NULL",
-        (id,),
-    )
+    tirar_a_recusa(conn, id)
     return gravada
 
 
@@ -1603,7 +1616,7 @@ def alterar_parcelamento(
         # Uma fatura foi paga depois da conferência de antes de gravar (ticket 180).
         raise recusar(
             f"{recusa.detail}. A correção foi gravada e as primeiras parcelas mudaram;"
-            " as que faltavam corrigir ficaram como estavam"
+            " as que faltavam ficaram como estavam"
         ) from recusa
     with conectar(url) as conn:
         if not (lidos := _ler(conn, "id = %s", (id,))):

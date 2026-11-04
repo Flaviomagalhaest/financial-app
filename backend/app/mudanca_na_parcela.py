@@ -282,11 +282,7 @@ def _mudar_a_parcela(
     # A mudança nova toma o lugar da que uma recusa parou, menos a recusa que este pedido acabou
     # de achar ao terminar o anterior: ela é de outra mudança, que o casal ainda não viu.
     if tirar_a_recusa:
-        conn.execute(
-            "UPDATE parcelamentos SET mudanca_recusada = NULL"
-            " WHERE id = %s AND mudanca_recusada IS NOT NULL",
-            (regra.id,),
-        )
+        parcelamentos.tirar_a_recusa(conn, regra.id)
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     desde = antes.parcela if alteracao.alcance == "esta_e_as_proximas" else 1
 
@@ -541,9 +537,17 @@ def mudar_parcela(
         except HTTPException as e:
             recusa = e
     if mudanca.classificacao is not None:
-        parcelamentos.refazer_as_parcelas(
-            url, mudanca.parcelamento_id, usuario, mudanca.classificacao
-        )
+        try:
+            parcelamentos.refazer_as_parcelas(
+                url, mudanca.parcelamento_id, usuario, mudanca.classificacao
+            )
+        except HTTPException as e:
+            # Uma fatura paga depois da conferência parou o refazer (ticket 180).
+            if not recusa:
+                raise recusar(
+                    f"{e.detail}. A parcela e as primeiras das outras parcelas mudaram;"
+                    " as demais ficaram como estavam"
+                ) from e
     if recusa:
         raise recusar(
             f"{recusa.detail}. A parcela, a classificação e as primeiras das outras parcelas"

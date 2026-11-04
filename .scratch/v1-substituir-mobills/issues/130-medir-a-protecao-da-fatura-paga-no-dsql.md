@@ -15,5 +15,5 @@ Origem: [ticket 127](127-medir-o-custo-da-protecao-da-fatura-paga.md): a medida 
 
 ## Checklist
 
-- [ ] Rodar `backend/medir_fatura_paga.py` contra um banco DSQL de teste (ele apaga o schema `public`) e registrar o lançamento e o lote de 50 aqui
+- [ ] Rodar `backend/medir_fatura_paga.py` contra um banco DSQL de teste (ele apaga o schema `public`) e registrar o lançamento, o lote de 50 e a correção do parcelamento longo (ticket 180) aqui
 - [ ] Se pesar: conferir só os titulares tocados pela gravação, ou só as faturas fechadas, mantendo `backend/tests/test_fatura_paga.py`
