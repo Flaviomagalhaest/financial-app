@@ -1,7 +1,7 @@
 # Main só aplica ao projeto os tickets que o push mudou
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `writing-for-agents` (AGENTS.md), `tdd` (teste do script com `gh` falso)
 Modelo recomendado: Sonnet
@@ -24,7 +24,7 @@ Origem: pedido do dono (04/11): o "Sincronizar projeto" da `main` moveu um card 
 - [x] Workflow: na `main`, calcular `$ANTES` e a lista de tickets mudados; `workflow_dispatch` com `--tudo`
 - [x] AGENTS.md: a regra em "Como atualizar" e o claim como passo zero
 - [x] Testado com `gh` falso: merge de outro ticket não mexe no DOING; merge do ticket `resolved` leva a FINISHED e fecha a issue; dependente sai de BLOCKED; `--tudo` acerta tudo
-- [ ] PR aberto para `main`, sem conflito e com checks verdes
+- [x] PR aberto para `main`, sem conflito e com checks verdes
 
 ## Notas
 

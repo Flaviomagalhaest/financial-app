@@ -4,25 +4,30 @@
 # Lê o projeto inteiro de uma vez e só muda o que difere: a cota GraphQL é do usuário dono do
 # token e acabava com a sincronização completa da main (ticket 11). Abrir, fechar e o rótulo
 # vão pela API REST, que tem cota à parte.
-# Na main, o card em DOING não volta a TODO/WAITING se o ticket está `claimed` em alguma branch remota.
+# Na main (--desde), só os tickets que o push mudou recebem o estado completo; os outros não mudam de
+# coluna, para o DOING/FINISHED posto por uma branch ainda não mesclada não ser desfeito (ticket 170).
 # Só a main põe issue no projeto (ticket 12): o ticket de uma branch ainda não mesclada fica de fora.
 #   --so-no-projeto      (branches) só mexe nos tickets cuja issue já está no projeto
+#   --desde <sha>        (main) aplica o estado completo só aos tickets mudados desde <sha> e reavalia os que
+#                        dependem deles (só entre BLOCKED e a coluna do status); os demais só entram no projeto
+#                        se faltarem. Sem --desde, aplica a todos (modo `--tudo` à mão)
 #   --tirar-sem-ticket   (main, sem lista de tickets) tira do projeto as issues deste repositório
 #                        que não são de nenhum ticket daqui, as que entraram por uma branch
 # Precisa do gh autenticado com o escopo `project` (gh auth refresh -s project).
-# Uso: scripts/sincronizar-projeto.sh [--dry-run] [--so-no-projeto] [--tirar-sem-ticket] [caminho-do-ticket ...]
+# Uso: scripts/sincronizar-projeto.sh [--dry-run] [--so-no-projeto] [--tirar-sem-ticket] [--desde sha] [caminho-do-ticket ...]
 set -euo pipefail
 
 OWNER=Flaviomagalhaest
 REPO=financial-app
 PROJECT=3
 
-dry=0 so_no_projeto=0 tirar=0
+dry=0 so_no_projeto=0 tirar=0 desde=
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) dry=1 ;;
     --so-no-projeto) so_no_projeto=1 ;;
     --tirar-sem-ticket) tirar=1 ;;
+    --desde) desde=$2; shift ;;
     *) break ;;
   esac
   shift
@@ -48,18 +53,6 @@ bloqueado() {
     b=$(ls "$dir"/"$n"-*.md 2>/dev/null | head -1) || true
     [ -n "$b" ] && ! fechado "$b" && return 0
   done
-  return 1
-}
-
-# Alguma branch remota (fora da main) tem este ticket em `claimed`? A sessão em andamento marca o
-# `claimed` só na própria branch, e a main ainda lê o ticket como aberto: sem isto a main devolvia
-# o card de DOING para TODO/WAITING no merge seguinte de qualquer outro ticket.
-reivindicado() {
-  local ref
-  while read -r ref; do
-    [ "$ref" = origin/main ] || [ "$ref" = origin/HEAD ] || [ "$ref" = origin ] && continue
-    git show "$ref:$1" 2>/dev/null | sed -n 's/^Status: *//p' | head -1 | grep -q '^claimed' && return 0
-  done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin)
   return 1
 }
 
@@ -118,6 +111,20 @@ if [ $dry -eq 0 ]; then
     | @tsv' <<<"$paginas")
 fi
 
+# Com --desde: os tickets que o push mudou, e os que dependem deles por `Blocked by`
+mudados=" " dependentes=" "
+if [ -n "$desde" ]; then
+  while read -r m; do
+    [ -n "$m" ] && mudados+="$m "
+  done < <(git diff --name-only --diff-filter=AM "$desde" HEAD -- '.scratch/*/issues/*.md')
+  for f in "${files[@]}"; do
+    for n in $(campo "$f" 'Blocked by' | grep -oE '[0-9]+' || true); do
+      b=$(ls "$(dirname "$f")"/"$n"-*.md 2>/dev/null | head -1) || true
+      [ -n "$b" ] && [[ "$mudados" == *" $b "* ]] && dependentes+="$f " && break
+    done
+  done
+fi
+
 mudancas=0
 dos_tickets=" "
 for f in "${files[@]}"; do
@@ -144,11 +151,15 @@ for f in "${files[@]}"; do
     echo "  entrou no projeto"; mudancas=$((mudancas + 1))
   fi
 
-  # Na main (--tirar-sem-ticket), o DOING posto por uma sessão numa branch não volta para TODO/WAITING
-  if [ $tirar -eq 1 ] && [ "$atual" = DOING ] && { [ "$col" = TODO ] || [ "$col" = WAITING ]; } \
-    && reivindicado "$f"; then
-    echo "  DOING mantido: ticket reivindicado numa branch em andamento"
-    col=DOING
+  # Na main com --desde, o ticket que o push não mudou não muda de coluna: o DOING/FINISHED posto por uma
+  # branch ainda não mesclada fica. O dependente de um ticket mudado só sai de/entra em BLOCKED.
+  if [ -n "$desde" ] && [ "$atual" != "-" ] && [[ "$mudados" != *" $f "* ]]; then
+    if [[ "$dependentes" == *" $f "* ]] && [ "$atual" != DOING ] && [ "$atual" != FINISHED ]; then
+      :
+    else
+      echo "  mantido: o push não mudou este ticket"
+      continue
+    fi
   fi
 
   if [ "$atual" != "$col" ]; then
