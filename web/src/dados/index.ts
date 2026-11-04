@@ -382,13 +382,14 @@ export function useLancamentos() {
 export function useLancamentosDaTela(caminho: string, ler: () => Promise<{ data?: Lancamento[] }>, passa: (l: LancamentoNaTela) => boolean) {
   const { dados, atualizadoEm, semDados, buscar } = useRespostaDe<Lancamento[]>(caminho, ler);
   const { itens: fila } = useFilaLida();
-  // A fila subiu (ou mudou): o servidor tem coisa nova para a tela.
+  // A fila subiu (encolheu): o servidor tem coisa nova para a tela. Quando ela cresce, nada subiu, e
+  // uma leitura nessa hora falharia sem internet e marcaria a rede como sem resposta, atrasando o envio.
   const tamanho = fila.length;
   const antes = useRef(tamanho);
   useEffect(() => {
-    if (antes.current === tamanho) return;
+    const encolheu = tamanho < antes.current;
     antes.current = tamanho;
-    void buscar();
+    if (encolheu) void buscar();
   }, [tamanho, buscar]);
   const lancamentos = useMemo(() => (dados || semDados ? naTela(dados ?? [], fila).filter(passa) : null), [dados, semDados, fila, passa]);
   return { lancamentos, atualizadoEm, semDados, buscar };
