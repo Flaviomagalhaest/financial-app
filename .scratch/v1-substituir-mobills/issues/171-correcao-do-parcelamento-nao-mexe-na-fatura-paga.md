@@ -21,7 +21,7 @@ O que fica valendo, só para a fatura paga pelo pagamento (a importada do Mobill
 
 ## Checklist
 
-- [ ] A parcela de fatura paga fica intocada (valor, data e fatura), conta em `parcelas_mantidas` e fica fora do aviso de realizadas
+- [ ] A parcela de fatura paga fica intocada (valor, data e fatura), conta em `parcelas_mantidas` e fica fora do aviso de realizadas (o [ticket 170](170-exclusao-do-parcelamento-deixa-as-de-fatura-paga.md) já faz `_correcoes` pular a parcela da fatura paga pelo pagamento; falta contá-la em `parcelas_mantidas` quando o pedido a mudaria)
 - [ ] Encolher abaixo da última parcela de fatura paga dá 422, com a mensagem
 - [ ] A parcela que entraria numa fatura paga recusa o pedido inteiro antes de gravar (422), também quando isso acontece só num lote seguinte
 - [ ] A mudança com alcance ("esta e as próximas", "todas") segue as mesmas regras; conferir se já segue

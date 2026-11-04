@@ -12,7 +12,7 @@ function dia(deslocamento: number): string {
 }
 
 /**
- * O aparelho guarda só a janela (ticket 166, ADR 0024): a lista guardada não tem esses lançamentos,
+ * O aparelho guarda só a janela (ticket 166, ADR 0025): a lista guardada não tem esses lançamentos,
  * e as telas da fatura, do Mês e do parcelamento precisam achá-los no servidor.
  */
 async function aparelhoSemALista(page: Page) {

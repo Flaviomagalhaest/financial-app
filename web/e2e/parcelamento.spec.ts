@@ -449,9 +449,13 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(6);
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
   await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  // A lista das parcelas vem do servidor: sem ela lida, sem internet não há o que antecipar.
+  await expect(page.getByRole("list", { name: `Parcelas de ${descricao}` }).getByRole("listitem")).toHaveCount(6);
 
-  await context.setOffline(true);
+  // As parcelas vêm do servidor (ticket 165): só fica sem internet depois de elas chegarem.
   const antecipar = page.getByRole("region", { name: "Antecipar ou quitar" });
+  await expect(antecipar.getByRole("button", { name: "Quitar tudo" })).toBeVisible();
+  await context.setOffline(true);
   // Quitar tudo precisa de internet; antecipar vale sem ela.
   await antecipar.getByRole("button", { name: "Quitar tudo" }).click();
   await expect(antecipar.getByRole("button", { name: "Quitar parcelamento" })).toBeDisabled();
@@ -503,4 +507,51 @@ test("quita o parcelamento pela tela, com desconto", async ({ page }) => {
   const parcelas: { situacao: string; valor_centavos: number }[] = (await api.ler("/api/lancamentos")).filter((l: { descricao: string }) => l.descricao === descricao);
   expect(parcelas.every((l) => l.situacao === "realizado")).toBe(true);
   expect(parcelas.reduce((soma, l) => soma + l.valor_centavos, 0)).toBe(55000);
+});
+
+test("o aviso de exclusão diz quantas parcelas de fatura paga ficam e como tirá-las", async ({ page }) => {
+  const { id } = await prepararParcelamento(page);
+  await page.reload();
+  // O servidor responde como no cartão com três parcelas em faturas pagas (ticket 170).
+  await page.route(
+    (url) => url.pathname === `/api/parcelamentos/${id}`,
+    (rota) =>
+      rota.request().method() === "DELETE"
+        ? rota.fulfill({
+            status: 409,
+            json: { motivo: "isto apaga lançamentos já pagos e pode desconfigurar o histórico", parcelas: 3, de_fatura_paga: 0, realizadas: 1, alteradas_a_mao: 0, ficam_de_fatura_paga: 3 },
+          })
+        : rota.fallback(),
+  );
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  page.once("dialog", (d) => void d.accept());
+  await page.getByRole("button", { name: "Excluir parcelamento" }).click();
+
+  const aviso = page.getByRole("alertdialog", { name: "Excluir parcelas já pagas" });
+  await expect(aviso).toContainText("Saem as 3 parcelas");
+  await expect(aviso).toContainText("Ficam 3 parcelas de fatura paga, e o parcelamento continua só com elas. Para tirá-las, corrija a fatura.");
+});
+
+test("a tela de um parcelamento que não existe diz que não achou e não guarda lista vazia", async ({ page }) => {
+  await prepararCasal(page);
+  const inexistente = randomUUID();
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${inexistente}`);
+  await expect(page.getByText("Parcelamento não encontrado.")).toBeVisible();
+
+  const chaves = await page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const abertura = indexedDB.open("financial-app-dados");
+        abertura.onerror = reject;
+        abertura.onsuccess = () => {
+          const banco = abertura.result;
+          const pedido = banco.transaction("respostas", "readonly").objectStore("respostas").getAllKeys();
+          pedido.onsuccess = () => {
+            banco.close();
+            resolve(pedido.result as string[]);
+          };
+        };
+      }),
+  );
+  expect(chaves.filter((c) => c.includes(inexistente))).toEqual([]);
 });

@@ -1,4 +1,4 @@
-"""Os lançamentos que a fatura, o Mês e o parcelamento leem do servidor (ticket 165, ADR 0024):
+"""Os lançamentos que a fatura, o Mês e o parcelamento leem do servidor (ticket 165, ADR 0025):
 com a janela do aparelho, a lista guardada não tem os meses antigos."""
 
 from datetime import date
@@ -74,5 +74,6 @@ def test_parcelas_do_parcelamento_vem_todas_e_so_as_dele(casal: Casal):
     assert {l["parcelamento_id"] for l in achadas} == {novo["id"]}
 
 
-def test_parcelamento_que_nao_existe_devolve_lista_vazia(casal: Casal):
-    assert ler(casal, f"/api/parcelamentos/{uuid4()}/lancamentos") == []
+def test_parcelamento_que_nao_existe_e_404(casal: Casal):
+    resposta = casal.pedir("flavio", "GET", f"/api/parcelamentos/{uuid4()}/lancamentos")
+    assert resposta.status_code == 404
