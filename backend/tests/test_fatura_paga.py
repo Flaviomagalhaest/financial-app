@@ -6,12 +6,12 @@ from uuid import uuid4
 
 import pytest
 
-from app import lancamentos
+from app import lancamentos, parcelamentos
 from tests.conftest import Casal
 from tests.test_cartoes import comprar, lancamento, novo_cartao
 from tests.test_contas import nova_conta
 from tests.test_pagamento_de_fatura import faturas, numeros, pagamento, pagar
-from tests.test_parcelamentos import parcelamento
+from tests.test_parcelamentos import parcelamento, parcelas
 
 RECUSA = "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
 
@@ -490,3 +490,125 @@ def test_correcao_acerta_as_partes_da_compra_junto_com_o_valor(casal: Casal):
         ]
         assert vista["valor_centavos"] == 90000
         assert [p["valor_centavos"] for p in vista["partes"]] == [60000, 30000]
+
+
+# A correção do parcelamento não mexe na fatura paga (ticket 171).
+
+
+def tres_faturas_pagas(casal: Casal, monkeypatch: pytest.MonkeyPatch) -> tuple[str, dict]:
+    """Hoje é 10/07: 1.000,00 em 10x desde abril, com abril, maio e junho pagas."""
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 7, 10))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    criado = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/parcelamentos",
+        json=parcelamento(cartao, [casal.categoria()], data="2026-03-28", parcelas=10),
+    )
+    assert criado.status_code == 201, criado.text
+    for mes, dia in (("2026-04-01", "2026-05-02"), ("2026-05-01", "2026-06-02")):
+        pago = pagar(casal, conta, cartao, fatura_mes=mes, valor_centavos=10000, data=dia)
+        assert pago.status_code == 201, pago.text
+    pago = pagar(
+        casal, conta, cartao, fatura_mes="2026-06-01", valor_centavos=10000, data="2026-07-02"
+    )
+    assert pago.status_code == 201, pago.text
+    return cartao, criado.json()
+
+
+def corrigir_parcelamento(casal: Casal, id: str, **correcao):
+    return casal.pedir("flavio", "PATCH", f"/api/parcelamentos/{id}", json=correcao)
+
+
+def valores_das_parcelas(casal: Casal, id: str) -> list[tuple[int, int, str]]:
+    return [(p["parcela"], p["valor_centavos"], p["fatura_mes"]) for p in parcelas(casal, id)]
+
+
+def test_correcao_deixa_intocada_a_parcela_de_fatura_paga(casal: Casal, monkeypatch):
+    cartao, criado = tres_faturas_pagas(casal, monkeypatch)
+    antes = {m: numeros(f) for m, f in faturas(casal, cartao).items()}
+
+    aviso = corrigir_parcelamento(casal, criado["id"], valor_total_centavos=120000)
+    corrigido = corrigir_parcelamento(
+        casal, criado["id"], valor_total_centavos=120000, confirmar_realizadas=True
+    )
+
+    # Só a 4ª, realizada numa fatura aberta, pede confirmação.
+    assert aviso.status_code == 409, aviso.text
+    assert [p["parcela"] for p in aviso.json()["parcelas"]] == [4]
+    assert corrigido.status_code == 200, corrigido.text
+    assert corrigido.json()["parcelas_mantidas"] == 3
+    valores = valores_das_parcelas(casal, criado["id"])
+    assert [v for _, v, _ in valores] == [10000] * 3 + [12000] * 7
+    assert sum(v for _, v, _ in valores) == 114000
+    assert [f for _, _, f in valores][:3] == ["2026-04-01", "2026-05-01", "2026-06-01"]
+    depois = faturas(casal, cartao)
+    for mes in ("2026-04-01", "2026-05-01", "2026-06-01"):
+        assert numeros(depois[mes]) == antes[mes]
+
+
+def test_correcao_nao_encolhe_abaixo_da_ultima_parcela_de_fatura_paga(casal: Casal, monkeypatch):
+    _, criado = tres_faturas_pagas(casal, monkeypatch)
+
+    encolhido = corrigir_parcelamento(casal, criado["id"], parcelas=2, confirmar_realizadas=True)
+    ate_a_ultima = corrigir_parcelamento(casal, criado["id"], parcelas=3, confirmar_realizadas=True)
+
+    assert encolhido.status_code == 422
+    assert encolhido.json()["detail"] == (
+        "a parcela 3 está numa fatura paga: o parcelamento não fica com menos de 3 parcelas"
+        " (para mudá-la, use a correção da fatura)"
+    )
+    assert ate_a_ultima.status_code == 200, ate_a_ultima.text
+    assert [v for _, v, _ in valores_das_parcelas(casal, criado["id"])] == [10000] * 3
+
+
+def test_correcao_que_levaria_parcela_para_a_fatura_paga_e_recusada_antes_de_gravar(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    # Hoje é 10/06: abril fechou sem pagamento e maio, paga, fechou depois dela.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    # Uma parcela por lote: a 2ª, que cairia em maio, só viria no lote seguinte.
+    monkeypatch.setattr(parcelamentos, "parcelas_por_lote", lambda conn, regra: 1)
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+    comprar(casal, cartao, "2026-05-08", valor_centavos=50000)
+    pagar(casal, conta, cartao, fatura_mes="2026-05-01", valor_centavos=50000, data="2026-06-05")
+    criado = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/parcelamentos",
+        json=parcelamento(cartao, [casal.categoria()], data="2026-05-28", parcelas=2),
+    ).json()
+    antes = valores_das_parcelas(casal, criado["id"])
+
+    # A 1ª iria para abril (fechada, sem pagamento); a 2ª, para maio, paga.
+    recusada = corrigir_parcelamento(
+        casal, criado["id"], data="2026-04-20", confirmar_realizadas=True
+    )
+
+    assert recusada.status_code == 422
+    assert recusada.json()["detail"] == (
+        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
+    )
+    assert valores_das_parcelas(casal, criado["id"]) == antes
+    [lido] = casal.pedir("flavio", "GET", "/api/parcelamentos").json()
+    assert lido["data"] == "2026-05-28"
+
+
+def test_mudar_o_valor_de_todas_as_parcelas_deixa_as_de_fatura_paga(casal: Casal, monkeypatch):
+    from tests.test_alcance_da_mudanca_na_parcela import mudar_parcela
+
+    _, criado = tres_faturas_pagas(casal, monkeypatch)
+    quinta = parcelas(casal, criado["id"])[4]
+
+    resposta = mudar_parcela(
+        casal, quinta, "todas", valor_centavos=12000, confirmar_realizadas=True
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["parcelas_mantidas"] == 3
+    assert [v for _, v, _ in valores_das_parcelas(casal, criado["id"])] == (
+        [10000] * 3 + [12000] * 7
+    )

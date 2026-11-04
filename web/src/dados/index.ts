@@ -1140,7 +1140,7 @@ async function relerAsParcelas(id?: string | null) {
 
 /**
  * O que o servidor disse da correção: gravou (`mantidas`, as parcelas que ficaram como estavam por
- * terem sido mudadas à mão), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`).
+ * terem sido mudadas à mão ou por estarem numa fatura paga), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`).
  */
 export type Correcao = { mantidas?: number; aviso?: AvisoDeRealizadas; motivo?: string };
 

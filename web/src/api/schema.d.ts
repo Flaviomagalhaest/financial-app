@@ -814,9 +814,11 @@ export interface paths {
         /**
          * Alterar Parcelamento
          * @description Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa mudou à mão fica como
-         *     está nos campos que mudou, e a resposta diz quantas ficaram assim. Se uma parcela realizada
-         *     mudar ou sair, responde 409 com o aviso e não grava nada até o pedido vir com
-         *     `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.
+         *     está nos campos que mudou, a de fatura paga fica como está no valor, na data e na fatura, e a
+         *     resposta diz quantas ficaram assim. Encolher para menos parcelas que a última de fatura paga
+         *     ou levar uma parcela para dentro de uma fatura paga recusa o pedido (422) sem gravar nada. Se
+         *     uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o pedido
+         *     vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.
          */
         patch: operations["alterar_parcelamento"];
         trace?: never;

@@ -230,7 +230,7 @@ test("corrige o parcelamento pela tela e confirma antes de mudar as parcelas rea
   await page.getByRole("button", { name: "Corrigir mesmo assim" }).click();
 
   // A 6ª, mudada à mão, ficou como estava, e a tela avisa antes de voltar.
-  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão.");
+  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão ou ela está numa fatura paga.");
   await page.getByRole("link", { name: "Voltar ao Histórico" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await expect(parcela("01/06")).toContainText("R$ 200,00");
@@ -270,7 +270,7 @@ test("muda uma parcela com alcance: esta e as próximas, todas com a realizada c
   await context.setOffline(false);
   await alcance.getByRole("button", { name: "Esta e as próximas" }).click();
 
-  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão.");
+  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão ou ela está numa fatura paga.");
   expect((await doParcelamento()).map((l) => l.descricao)).toEqual([descricao, descricao, novaDescricao, `${descricao} da sala`, novaDescricao, novaDescricao]);
   await page.getByRole("link", { name: "Voltar ao Histórico" }).click();
 

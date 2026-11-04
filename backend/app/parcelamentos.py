@@ -4,6 +4,7 @@ para o valor inteiro nunca contar de uma vez num mês só. No cartão, todas as 
 da compra e a parcela n cai n - 1 faturas depois da fatura da compra; fora dele (o boleto), a
 parcela n vence n - 1 meses depois da primeira."""
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -930,6 +931,27 @@ DA_COMPRA = CLASSIFICACAO - {"descricao"}
 CRONOGRAMA = frozenset({"valor_centavos", "data", "conta_id", "fatura_mes"})
 
 
+def parcelas_nas_faturas_pagas(conn, id: UUID) -> set[int]:
+    """O número das parcelas do parcelamento que estão numa fatura paga pelo pagamento (ADR
+    0021): a correção as deixa como estão no valor, na data e na fatura (ticket 171). A da
+    fatura importada do Mobills segue a correção, com o aviso das realizadas."""
+    linhas = conn.execute(
+        f"SELECT l.parcela, COALESCE(c.titular_id, c.id), {lancamentos.MES_EM_QUE_CONTA}"
+        " FROM lancamentos l JOIN cartoes c ON c.id = l.conta_id"
+        " WHERE l.parcelamento_id = %s AND l.excluido_em IS NULL",
+        (id,),
+    ).fetchall()
+    pagas = {
+        titular: {
+            f.mes
+            for f in cartoes.faturas_do_titular(conn, titular)
+            if cartoes.paga_pelo_pagamento(f)
+        }
+        for titular in {t for _, t, _ in linhas}
+    }
+    return {n for n, titular, mes in linhas if mes in pagas[titular]}
+
+
 def _correcoes(
     conn,
     regra: Parcelamento,
@@ -979,6 +1001,7 @@ def _correcoes(
     ):
         tags.setdefault(lancamento_id, set()).add(nome.casefold())
     partes = lancamentos.ler_partes(conn, ids)
+    nas_pagas = parcelas_nas_faturas_pagas(conn, regra.id)
     tags_das_partes = _tags_das_partes(conn, regra.id) if regra.partes else {}
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     dia_de_hoje = lancamentos.hoje()
@@ -1007,6 +1030,10 @@ def _correcoes(
         pulada,
     ) in parcelas:
         maos = a_mao.get(lancamento_id, set())
+        if n in nas_pagas:
+            # A da fatura paga fica como está no valor, na data e na fatura, como se uma pessoa
+            # os tivesse mudado à mão (ticket 171).
+            maos = maos | CRONOGRAMA
         acao: _Acao = "atualizar"
         if excluida:
             if n > regra.parcelas or not (pulada or geradas < n):
@@ -1173,6 +1200,13 @@ def gravar_correcao(
                     )
                 ],
             )
+    nas_pagas = parcelas_nas_faturas_pagas(conn, id)
+    if nas_pagas and nova.parcelas < (ultima := max(nas_pagas)):
+        # Um "3/2" não faz sentido: a parcela da fatura paga não sai (ticket 171).
+        raise recusar(
+            f"a parcela {ultima} está numa fatura paga: o parcelamento não fica com menos de"
+            f" {ultima} parcelas (para mudá-la, use a correção da fatura)"
+        )
     sobram = dict(
         conn.execute(
             "SELECT id, parcela FROM lancamentos WHERE parcelamento_id = %s"
@@ -1230,6 +1264,7 @@ def gravar_correcao(
                 motivo="a correção muda parcelas que já foram realizadas", parcelas=realizadas
             )
         )
+    _conferir_os_lotes(conn, nova, correcoes, geradas_depois)
     tags_de_antes = set(_tags_do_parcelamento(conn, id))
     tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes)
     if not conn.execute(
@@ -1274,6 +1309,55 @@ def gravar_correcao(
     # O estorno de todas as parcelas segue a classificação do parcelamento (ticket 138).
     lancamentos.acompanhar_estornos_do_parcelamento(conn, id)
     return CorrecaoGravada(classificacao, mantidas)
+
+
+def _conferir_os_lotes(conn, regra: Parcelamento, correcoes: list[_Correcao], geradas: int) -> None:
+    """As regras da fatura paga (ADR 0021) em cada lote do refazer e na geração das parcelas
+    que faltam, simuladas antes de gravar (`cartoes.conferir_sem_gravar`): a parcela que entraria
+    numa fatura paga recusa o pedido inteiro, e não só o lote em que ela cai (ticket 171). As
+    que já estão numa fatura paga não mudam (`parcelas_nas_faturas_pagas`)."""
+    onde = {
+        lancamento_id: (titular, mes, excluida)
+        for lancamento_id, titular, mes, excluida in conn.execute(
+            f"SELECT l.id, COALESCE(c.titular_id, c.id), {lancamentos.MES_EM_QUE_CONTA},"
+            " l.excluido_em IS NOT NULL"
+            " FROM lancamentos l JOIN cartoes c ON c.id = l.conta_id"
+            " WHERE l.parcelamento_id = %s",
+            (regra.id,),
+        )
+    }
+    sinal = 1 if regra.tipo == "despesa" else -1
+    quantas = parcelas_por_lote(conn, regra)
+    passos: list[dict[tuple[UUID, date], int]] = []
+    for inicio in range(0, len(correcoes), quantas):
+        passo: Counter = Counter()
+        for t in correcoes[inicio : inicio + quantas]:
+            if t.id not in onde:
+                continue  # fora do cartão
+            titular, mes, excluida = onde[t.id]
+            if not excluida:
+                passo[titular, mes] -= sinal * t.valor_antes
+            if t.acao in ("atualizar", "reviver"):
+                passo[titular, t.mes] += sinal * t.valor
+        passos.append(passo)
+    cartao = faturas.ler_cartao(conn, regra.conta_id)
+    if cartao is not None:
+        existem = {
+            n
+            for (n,) in conn.execute(
+                "SELECT parcela FROM lancamentos WHERE parcelamento_id = %s", (regra.id,)
+            )
+        }
+        geracao: Counter = Counter()
+        for n in range(geradas + 1, regra.parcelas + 1):
+            if n not in existem:
+                mes = faturas.mes_da_parcela(conn, cartao.titular, regra.data, n)
+                geracao[cartao.titular.id, mes] += sinal * valor_da_parcela(
+                    regra.valor_total_centavos, regra.parcelas, n
+                )
+        passos.append(geracao)
+    if any(passos):
+        cartoes.conferir_sem_gravar(conn, passos)
 
 
 def _conferir_as_divisoes(conn, correcoes: list[_Correcao]) -> None:
@@ -1434,9 +1518,11 @@ def alterar_parcelamento(
     id: UUID, alteracao: AlteracaoDeParcelamento, usuario: UsuarioLogado, request: Request
 ) -> ParcelamentoCorrigido | JSONResponse:
     """Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa mudou à mão fica como
-    está nos campos que mudou, e a resposta diz quantas ficaram assim. Se uma parcela realizada
-    mudar ou sair, responde 409 com o aviso e não grava nada até o pedido vir com
-    `confirmar_realizadas`. Se parar no meio, repetir o pedido continua."""
+    está nos campos que mudou, a de fatura paga fica como está no valor, na data e na fatura, e a
+    resposta diz quantas ficaram assim. Encolher para menos parcelas que a última de fatura paga
+    ou levar uma parcela para dentro de uma fatura paga recusa o pedido (422) sem gravar nada. Se
+    uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o pedido
+    vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua."""
     url = url_do_banco(request)
     try:
         mudanca = em_transacao(url, lambda conn: gravar_correcao(conn, id, alteracao, usuario))

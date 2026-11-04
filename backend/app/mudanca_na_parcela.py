@@ -177,7 +177,8 @@ def _falta(
 ) -> tuple[list[tuple[Lancamento, dict]], set[int]]:
     """As outras parcelas do alcance que ainda faltam mudar, na ordem do número, com os campos de
     cada uma (menos os que alguém mudou nela), e o número das que ficam como estão em algum
-    campo pedido porque uma pessoa o mudou só nelas."""
+    campo pedido porque uma pessoa o mudou só nelas ou porque estão numa fatura paga, que não
+    muda de valor, data, conta nem fatura (ticket 171)."""
     outras = lancamentos.ler_por_ids(
         conn,
         [
@@ -190,11 +191,15 @@ def _falta(
         ],
     )
     a_mao = lancamentos.campos_a_mao(conn, [l.id for l in outras])
+    nas_pagas = parcelamentos.parcelas_nas_faturas_pagas(conn, parcelamento_id)
     falta: list[tuple[Lancamento, dict]] = []
     mantidas: set[int] = set()
     for outra in sorted(outras, key=lambda l: l.parcela):
         valores = _valores_na_outra(pendente, outra)
         maos = a_mao.get(outra.id, set())
+        if outra.parcela in nas_pagas:
+            # A da fatura paga fica como está, como a mudada à mão (ticket 171).
+            maos = maos | parcelamentos.CRONOGRAMA
         if any(c in maos and not iguais(c, v, getattr(outra, c)) for c, v in valores.items()):
             mantidas.add(outra.parcela)
         valores = {
