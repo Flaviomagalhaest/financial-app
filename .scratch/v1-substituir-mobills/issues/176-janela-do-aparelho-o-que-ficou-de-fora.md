@@ -1,7 +1,7 @@
 # Janela do aparelho: o que ficou de fora do 166
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`, `diagnosing-bugs` (o teste que falha no ambiente na nuvem)
 Modelo recomendado: Sonnet
@@ -21,9 +21,13 @@ Origem: revisão do [ticket 166](166-janela-do-aparelho.md) (sub-agentes Standar
 
 ## Checklist
 
-- [ ] Estorno na fatura antiga mostra o nome da compra com internet, com teste de navegador
-- [ ] Estorno de parcela com as primeiras parcelas fora da janela: o restante igual ao do servidor com internet, com teste
-- [ ] Teste de navegador do mês que vira com conflito
-- [ ] Teste de navegador da recorrência fora da janela, com e sem internet
-- [ ] Edição sem `base` e "Repetir último": tratado ou registrado como aceito
-- [ ] Causa da falha de `sem-internet.spec.ts` na nuvem achada e corrigida (ou registrada)
+- [x] Estorno na fatura antiga mostra o nome da compra com internet, com teste de navegador
+- [x] Estorno de parcela com as primeiras parcelas fora da janela: o restante igual ao do servidor com internet, com teste
+- [x] Teste de navegador do mês que vira com conflito
+- [x] Teste de navegador da recorrência fora da janela, com e sem internet
+- [x] Edição sem `base` e "Repetir último": registrado como aceito na ADR 0025
+- [x] Causa da falha de `sem-internet.spec.ts` na nuvem achada e corrigida (ou registrada): registrada abaixo
+
+## Registro: `sem-internet.spec.ts` na nuvem
+
+Na sessão do 176 (Postgres 16 local, `npx playwright test`), o teste "a leitura da lista que a tela pediu antes da do service worker..." **passou**, junto dos outros 27 de `estorno*.spec.ts` e `sem-internet.spec.ts`. A falha anterior não se reproduziu, então a causa não foi achada: o provável é o `listaGuardadaTem` depender do service worker ler a lista a tempo, que varia com o ambiente. Se voltar a falhar, abra um ticket com o `trace` de `test-results/` (o CI sobe como artefato). O CI da `main` não foi consultado nesta sessão.

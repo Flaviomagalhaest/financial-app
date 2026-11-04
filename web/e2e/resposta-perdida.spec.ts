@@ -7,6 +7,22 @@ import { cadastrar, digitar, lancar } from "./lancar";
 
 const linhaDe = (page: Page, texto: string) => page.getByRole("listitem").filter({ hasText: texto });
 
+/** Outra aba segura a trava da fila: ao abrir, o envio espera até a função devolvida ser chamada. */
+async function segurarAFila(page: Page): Promise<() => Promise<void>> {
+  const outra = page;
+  await outra.goto("/service-worker.js");
+  await outra.evaluate(
+    () =>
+      new Promise<void>((segurou) => {
+        void navigator.locks.request("financial-app-fila", { mode: "exclusive" }, () => {
+          segurou();
+          return new Promise<void>((soltar) => ((window as unknown as { soltarFila: () => void }).soltarFila = soltar));
+        });
+      }),
+  );
+  return () => outra.evaluate(() => (window as unknown as { soltarFila: () => void }).soltarFila());
+}
+
 /**
  * Lança "Jantar <s>" de R$ 1,00 e o edita para R$ 10,07: o servidor grava a edição, mas a resposta
  * cai (`"resposta"`) ou a pessoa recarrega antes de ela voltar (`"recarga"`). Depois recarrega, com
@@ -40,22 +56,10 @@ async function editarSemResposta(page: Page, perder: "resposta" | "recarga") {
   await expect.poll(() => gravadas).toBe(1);
   await expect(linha).toContainText("não enviado");
 
-  // Outra aba segura a trava da fila: ao abrir, o envio espera até `soltar()`.
-  const outra = await page.context().newPage();
-  await outra.goto("/service-worker.js");
-  await outra.evaluate(
-    () =>
-      new Promise<void>((segurou) => {
-        void navigator.locks.request("financial-app-fila", { mode: "exclusive" }, () => {
-          segurou();
-          return new Promise<void>((soltar) => ((window as unknown as { soltarFila: () => void }).soltarFila = soltar));
-        });
-      }),
-  );
+  const soltar = await segurarAFila(await page.context().newPage());
   await page.reload();
   await expect(linha).toContainText("− R$ 10,07");
   await expect(linha).toContainText("não enviado");
-  const soltar = () => outra.evaluate(() => (window as unknown as { soltarFila: () => void }).soltarFila());
   return { linha, descricao, soltar, api: await apiDaPagina(page) };
 }
 
@@ -98,3 +102,52 @@ test("a edição sem resposta sobe sozinha ao reabrir o app", async ({ page }) =
   await expect(linha).not.toContainText("não enviado");
   await expect(linha).not.toContainText("conflito");
 });
+
+// O criar chega ao servidor, mas a página sai antes de a resposta voltar, e a pessoa exclui ao
+// reabrir (ticket 173). Na recarga, o navegador derruba o pedido e a página ainda vê a falha; com a
+// aba fechada (ou o app morto pelo sistema), ela não vê nada.
+for (const sair of ["recarga", "aba fechada"] as const) {
+  test(`excluir ao reabrir, sobre o criar sem resposta (${sair}), tira o lançamento do servidor`, async ({ page }) => {
+    const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const [conta, mercado, descricao] = [`Corrente ${s}`, `Mercado ${s}`, `Jantar ${s}`];
+    await page.goto("/#/contas-e-categorias");
+    await entrar(page);
+    await cadastrar(page, "Nova conta", conta, "corrente");
+    await cadastrar(page, "Nova categoria", mercado, "despesa");
+
+    let gravadas = 0;
+    await page.route("**/api/lancamentos/lote", async (rota) => {
+      if (gravadas > 0) return rota.continue();
+      await rota.fetch();
+      gravadas++;
+      // O pedido fica sem resposta até a página sair.
+    });
+    await lancar(page, { teclas: ["1", "00"], conta, categoria: mercado, descricao });
+    await expect.poll(() => gravadas).toBe(1);
+    await expect(linhaDe(page, descricao)).toContainText("não enviado");
+
+    const contexto = page.context();
+    if (sair === "aba fechada") await page.close();
+    const soltar = await segurarAFila(await contexto.newPage());
+    if (sair === "aba fechada") {
+      page = await contexto.newPage();
+      await page.goto("/#/historico");
+    } else await page.reload();
+    const linha = linhaDe(page, descricao);
+    await expect(linha).toContainText("não enviado");
+    const api = await apiDaPagina(page);
+    const noServidor = async () => (await api.ler("/api/lancamentos")).some((l: { descricao: string }) => l.descricao === descricao);
+    expect(await noServidor()).toBe(true);
+
+    page.once("dialog", (dialogo) => void dialogo.accept());
+    await linha.getByRole("button", { name: `Excluir ${descricao}` }).click();
+    await expect(linha).toHaveCount(0);
+    await soltar();
+
+    await expect.poll(noServidor).toBe(false);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+    await expect(linha).toHaveCount(0);
+    await expect(page.getByText("conflito")).toHaveCount(0);
+  });
+}

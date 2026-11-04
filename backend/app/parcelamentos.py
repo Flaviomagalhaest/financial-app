@@ -5,7 +5,7 @@ da compra e a parcela n cai n - 1 faturas depois da fatura da compra; fora dele 
 parcela n vence n - 1 meses depois da primeira."""
 
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Literal, NamedTuple
@@ -632,11 +632,24 @@ def completar_todos(url: str | None) -> int:
     for id in ids:
         try:
             consertados += completar(url, id)
-        except HTTPException as recusa:
-            em_transacao(
-                url, lambda conn, id=id, recusa=recusa: _desistir_do_conserto(conn, id, recusa)
-            )
+        except HTTPException:
+            continue  # a recusa ficou gravada no parcelamento (`_refazer_protegido`)
     return consertados
+
+
+_A_CORRECAO_PAROU = (
+    "A correção do parcelamento parou: as parcelas que faltavam corrigir ficaram como estavam"
+)
+
+
+def tirar_a_recusa(conn, id: UUID, so_a_da_correcao: bool = False) -> None:
+    """Tira do parcelamento a recusa que a tela mostra; `so_a_da_correcao` deixa a de uma
+    mudança com alcance (ticket 149), que só a próxima mudança tira."""
+    conn.execute(
+        "UPDATE parcelamentos SET mudanca_recusada = NULL WHERE id = %s"
+        " AND mudanca_recusada IS NOT NULL AND (NOT %s OR mudanca_recusada LIKE %s)",
+        (id, so_a_da_correcao, f"%{_A_CORRECAO_PAROU}"),
+    )
 
 
 def _desistir_do_conserto(conn, id: UUID, recusa: HTTPException) -> None:
@@ -645,7 +658,7 @@ def _desistir_do_conserto(conn, id: UUID, recusa: HTTPException) -> None:
     conn.execute(
         "UPDATE parcelamentos SET classificacao_pendente = '', mudanca_recusada = %s WHERE id = %s",
         (
-            f"{recusa.detail}. A correção do parcelamento parou: as parcelas ficaram como estavam",
+            f"{recusa.detail}. {_A_CORRECAO_PAROU}",
             id,
         ),
     )
@@ -656,10 +669,7 @@ def completar(url: str | None, id: UUID) -> bool:
     if not em_transacao(url, lambda conn: _falta_conserto(conn, id)):
         return False
     pendente = em_transacao(url, lambda conn: classificacao_pendente(conn, id))
-    while em_transacao(url, lambda conn: _reajustar_do_parcelamento(conn, id)):
-        pass
-    em_transacao(url, lambda conn: _dar_por_refeita(conn, id, pendente))
-    gerar_as_parcelas(url, id)
+    _refazer_protegido(url, id, lambda conn: _reajustar_do_parcelamento(conn, id), pendente)
     return True
 
 
@@ -708,6 +718,31 @@ def _dar_por_refeita(conn, id: UUID, feita: Classificacao) -> None:
         " AND coalesce(classificacao_pendente, '') = %s",
         (id, _gravar_classificacao(feita)),
     )
+
+
+def _refazer_protegido(
+    url: str | None,
+    id: UUID,
+    um_lote: Callable[[psycopg.Connection], bool],
+    classificacao: Classificacao,
+) -> None:
+    """Os lotes do refazer da correção e a geração das parcelas que faltam, cada um com as
+    regras da fatura paga (`cartoes.protegida`). A conferência de antes de gravar
+    (`_conferir_os_lotes`) não vê a fatura paga depois dela: se um lote levaria uma parcela para
+    dentro de uma, ele é recusado, as parcelas que faltam ficam como estão, a recusa fica
+    gravada no parcelamento e sobe (ticket 180). A tarefa diária tenta de novo a cada dia: se a
+    fatura deixar de estar paga, o conserto termina e a recusa sai."""
+    try:
+        while em_transacao(url, cartoes.protegida(um_lote)):
+            pass
+        # Antes de gerar: a geração já cria as parcelas com a classificação inteira.
+        em_transacao(url, lambda conn: _dar_por_refeita(conn, id, classificacao))
+        while em_transacao(url, cartoes.protegida(lambda conn: _gerar_um_lote(conn, id))):
+            pass
+        em_transacao(url, lambda conn: tirar_a_recusa(conn, id, so_a_da_correcao=True))
+    except HTTPException as recusa:
+        em_transacao(url, lambda conn, recusa=recusa: _desistir_do_conserto(conn, id, recusa))
+        raise
 
 
 def _falta_conserto(conn, id: UUID) -> bool:
@@ -1536,13 +1571,21 @@ def refazer_as_parcelas(url: str | None, id: UUID, usuario: str, classificacao) 
     # Import aqui: `automaticos` importa este módulo.
     from app import automaticos
 
-    while em_transacao(url, lambda conn: _reajustar_um_lote(conn, id, usuario, classificacao)):
-        pass
-    # Antes de gerar: a geração já cria as parcelas com a classificação inteira.
-    em_transacao(url, lambda conn: _dar_por_refeita(conn, id, classificacao))
-    gerar_as_parcelas(url, id)
+    _refazer_protegido(
+        url, id, lambda conn: _reajustar_um_lote(conn, id, usuario, classificacao), classificacao
+    )
     # A parcela automática que a data nova já alcançou se realiza agora, como na criação.
     automaticos.realizar_automaticos(url, id)
+
+
+def _gravar_e_tirar_a_recusa(
+    conn, id: UUID, alteracao: AlteracaoDeParcelamento, usuario: str
+) -> CorrecaoGravada:
+    """A correção nova refaz as parcelas desde o começo: a recusa de antes sai do parcelamento
+    (se ela se repetir no refazer, volta)."""
+    gravada = gravar_correcao(conn, id, alteracao, usuario)
+    tirar_a_recusa(conn, id)
+    return gravada
 
 
 @router.patch(
@@ -1562,10 +1605,19 @@ def alterar_parcelamento(
     vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua."""
     url = url_do_banco(request)
     try:
-        mudanca = em_transacao(url, lambda conn: gravar_correcao(conn, id, alteracao, usuario))
+        mudanca = em_transacao(
+            url, lambda conn: _gravar_e_tirar_a_recusa(conn, id, alteracao, usuario)
+        )
     except RealizadasMudam as e:
         return JSONResponse(e.aviso.model_dump(mode="json"), status_code=409)
-    refazer_as_parcelas(url, id, usuario, mudanca.classificacao)
+    try:
+        refazer_as_parcelas(url, id, usuario, mudanca.classificacao)
+    except HTTPException as recusa:
+        # Uma fatura foi paga depois da conferência de antes de gravar (ticket 180).
+        raise recusar(
+            f"{recusa.detail}. A correção foi gravada e as primeiras parcelas mudaram;"
+            " as que faltavam ficaram como estavam"
+        ) from recusa
     with conectar(url) as conn:
         if not (lidos := _ler(conn, "id = %s", (id,))):
             # Excluído por outra sessão no meio do refazer: as parcelas saíram com ele.
