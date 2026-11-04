@@ -802,11 +802,13 @@ export interface paths {
         post?: never;
         /**
          * Excluir Parcelamento
-         * @description Idempotente. Exclui o parcelamento inteiro: todas as parcelas, também as realizadas e as
-         *     que uma pessoa editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois
-         *     recebe o aviso de excluído). Se alguma parcela é de fatura paga, realizada ou alterada à mão,
-         *     responde 409 com quantas de cada tipo e não apaga nada até o pedido vir com
-         *     `confirmar_realizadas` (ticket 142).
+         * @description Idempotente. Exclui o parcelamento e as parcelas, também as realizadas e as que uma pessoa
+         *     editou à mão (a exclusão de um lançamento é a de sempre: quem o edita depois recebe o aviso de
+         *     excluído), menos as da fatura paga pelo pagamento (ADR 0021, ticket 170): essas ficam, e o
+         *     parcelamento continua, encolhido até a última delas, com o total igual à soma delas e nada
+         *     mais a gerar; a parcela de antes dela que sai fica como excluída uma a uma. Se alguma parcela
+         *     é de fatura paga, realizada ou alterada à mão, responde 409 com quantas de cada tipo saem e
+         *     quantas ficam, e não apaga nada até o pedido vir com `confirmar_realizadas` (ticket 142).
          */
         delete: operations["excluir_parcelamento"];
         options?: never;
@@ -1110,7 +1112,7 @@ export interface paths {
         };
         /**
          * Listar Lancamentos Do Parcelamento
-         * @description Todas as parcelas do parcelamento, da primeira à última.
+         * @description Todas as parcelas do parcelamento, da primeira à última; 404 se ele não existe.
          */
         get: operations["listar_lancamentos_do_parcelamento"];
         put?: never;
@@ -1556,7 +1558,8 @@ export interface components {
          * AvisoDeExclusao
          * @description Excluir o parcelamento apagaria parcelas já pagas ou alteradas à mão; nada foi apagado.
          *     Repetir o pedido com `confirmar_realizadas` apaga. As alteradas à mão também entram nas
-         *     outras contas quando são de fatura paga ou realizadas.
+         *     outras contas quando são de fatura paga ou realizadas. As parcelas da fatura paga pelo
+         *     pagamento não saem (ADR 0021): o parcelamento fica, encolhido até a última delas.
          */
         AvisoDeExclusao: {
             /** Motivo */
@@ -1569,6 +1572,8 @@ export interface components {
             realizadas: number;
             /** Alteradas A Mao */
             alteradas_a_mao: number;
+            /** Ficam De Fatura Paga */
+            ficam_de_fatura_paga: number;
         };
         /**
          * AvisoDeRealizadas

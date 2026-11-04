@@ -46,7 +46,7 @@ Medidos com `web/e2e/medir-historico.ts`: recarregar o Histórico com a lista j�
 
 ## Answer
 
-Decidido pelo dono em 02 e 03/11, em três rodadas de `grilling` (Q1 a Q12, todas com a recomendação aceita). Registro: [ADR 0024](../../../docs/adr/0024-sem-internet-so-a-janela-do-aparelho.md), uma linha nas Consequences do [ADR 0011](../../../docs/adr/0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md) e o termo **Janela do aparelho** no `GLOSSARY.md`.
+Decidido pelo dono em 02 e 03/11, em três rodadas de `grilling` (Q1 a Q12, todas com a recomendação aceita). Registro: [ADR 0025](../../../docs/adr/0025-sem-internet-so-a-janela-do-aparelho.md), uma linha nas Consequences do [ADR 0011](../../../docs/adr/0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md) e o termo **Janela do aparelho** no `GLOSSARY.md`.
 
 - **Q1, caminho**: janela de meses (caminho 2). O aparelho deixa de guardar a lista inteira.
 - **Q2**: guardar lançamento por lançamento, avisar só quem lê a resposta que mudou e um GET da lista por tela entram em qualquer caminho.
@@ -57,7 +57,7 @@ Decidido pelo dono em 02 e 03/11, em três rodadas de `grilling` (Q1 a Q12, toda
 - **Q7, atualização**: reler a janela inteira, comprimida. "Mudou desde" só se a medida pedir.
 - **Q8**: comprimir a resposta da API (gzip na FastAPI), em ticket próprio.
 - **Q9**: o termo é **Janela do aparelho**.
-- **Q10**: ADR novo (0024), com uma linha no 0011.
+- **Q10**: ADR novo (0025), com uma linha no 0011.
 - **Q11**: sem protótipo: a tela é a lista de hoje com cabeçalho de mês e o aviso do fim da janela, e o ticket 167 a mostra pronta com `run`.
 - **Q12, tickets**: [163](163-comprimir-a-resposta-da-api.md) (gzip), [164](164-guardar-lancamento-por-lancamento-e-reler-so-o-que-mudou.md) (armazenamento por item e releitura), [165](165-telas-que-filtram-a-lista-leem-do-servidor.md) (telas que filtram a lista leem do servidor), [166](166-janela-do-aparelho.md) (a janela, bloqueado por 164 e 165) e [167](167-historico-desenhado-mes-a-mes.md) (Histórico mês a mês, bloqueado por 166).
 

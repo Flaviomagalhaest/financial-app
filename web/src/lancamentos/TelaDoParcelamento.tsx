@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { api } from "../api/cliente";
 import {
   anteciparParcelas,
@@ -10,6 +10,7 @@ import {
   useCadastro,
   useConexao,
   useAvisoDePlanejamento,
+  leituraDoParcelamento,
   useLancamentosDaTela,
   useParcelamentos,
   usePessoas,
@@ -20,6 +21,7 @@ import {
   type LancamentoNaTela,
   type Parcelamento,
 } from "../dados";
+import { AvisoDeLeituraDoServidor } from "./AvisoDeLeituraDoServidor";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { SeletorDeTags } from "./SeletorDeTags";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
@@ -84,6 +86,13 @@ function tiposQueSaem(a: AvisoDeExclusao, noCartao: boolean): string[] {
     a.realizadas ? plural(a.realizadas, noCartao ? "realizada de fatura ainda não paga" : "realizada", noCartao ? "realizadas de fatura ainda não paga" : "realizadas") : "",
     a.alteradas_a_mao ? plural(a.alteradas_a_mao, "alterada à mão", "alteradas à mão") : "",
   ].filter(Boolean);
+}
+
+/** As parcelas da fatura paga pelo pagamento não saem: o parcelamento fica com elas (ticket 170). */
+function ficamDeFaturaPaga(n: number): string {
+  return n === 1
+    ? "Fica 1 parcela de fatura paga, e o parcelamento continua só com ela. Para tirá-la, corrija a fatura."
+    : `Ficam ${n} parcelas de fatura paga, e o parcelamento continua só com elas. Para tirá-las, corrija a fatura.`;
 }
 
 /** Corrige ou exclui o parcelamento; as duas mudam a regra e precisam de internet (ADR 0011). */
@@ -210,10 +219,10 @@ function AnteciparOuQuitar({ parcelamento, previstas }: { parcelamento: Parcelam
 /** O formulário nasce com o parcelamento que a primeira leitura trouxe; a releitura não apaga o que se digita. */
 function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const id = parcelamento.id;
-  // As parcelas vêm do servidor: as antigas de um parcelamento longo saem da janela do aparelho (ADR 0024).
-  const daLeitura = useCallback(() => api.GET("/api/parcelamentos/{id}/lancamentos", { params: { path: { id } } }), [id]);
+  // As parcelas vêm do servidor: as antigas de um parcelamento longo saem da janela do aparelho (ADR 0025).
+  const leitura = useMemo(() => leituraDoParcelamento(id), [id]);
   const dele = useCallback((l: LancamentoNaTela) => l.parcelamento_id === id, [id]);
-  const { lancamentos, semDados: semParcelas, atualizadoEm: parcelasDeAntes } = useLancamentosDaTela(`/api/parcelamentos/${id}/lancamentos`, daLeitura, dele);
+  const { lancamentos, semDados: semParcelas, atualizadoEm: parcelasDaUltimaLeitura } = useLancamentosDaTela(leitura, dele);
   const { contasECartoes, categorias } = useCadastro();
   const { pessoas, nomeDe } = usePessoas();
   const opcoesDeTags = useTags();
@@ -229,6 +238,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const doParcelamento = (lancamentos ?? []).slice().sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
   const primeira = doParcelamento[0];
   const noCartao = !!primeira?.fatura_mes;
+  const saem = avisoDeExclusao ? tiposQueSaem(avisoDeExclusao, noCartao) : [];
   // O aviso mostra a 1ª parcela com o que o formulário tem; sem ela no aparelho, fica sem aviso.
   const centavosDoForm = emCentavos(form.valor) ?? 0;
   const parcelasDoForm = Number(form.parcelas);
@@ -424,12 +434,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
       <AnteciparOuQuitar parcelamento={parcelamento} previstas={doParcelamento.filter((l) => l.situacao === "previsto")} />
 
       <h3>Parcelas</h3>
-      {parcelasDeAntes && <p className="vazio">Sem internet: as parcelas são as da última leitura.</p>}
-      {semParcelas && (
-        <p role="alert" className="erro">
-          Sem internet: as parcelas precisam de internet.
-        </p>
-      )}
+      <AvisoDeLeituraDoServidor daUltimaLeitura={parcelasDaUltimaLeitura} semDados={semParcelas} oQue="as parcelas" precisam="as parcelas precisam de internet." />
       <ul className="lista parcelas" aria-label={`Parcelas de ${parcelamento.descricao}`}>
         {doParcelamento.map((l) => (
           <li key={l.id}>
@@ -453,12 +458,18 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
           <p>
             <strong>Isto apaga lançamentos já pagos e pode desconfigurar o histórico. Confirma?</strong>
           </p>
-          <p>Saem as {avisoDeExclusao.parcelas} parcelas; entre elas:</p>
-          <ul>
-            {tiposQueSaem(avisoDeExclusao, noCartao).map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ul>
+          <p>
+            {avisoDeExclusao.parcelas === 1 ? "Sai 1 parcela" : `Saem as ${avisoDeExclusao.parcelas} parcelas`}
+            {saem.length ? "; entre elas:" : "."}
+          </p>
+          {!!saem.length && (
+            <ul>
+              {saem.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          )}
+          {!!avisoDeExclusao.ficam_de_fatura_paga && <p>{ficamDeFaturaPaga(avisoDeExclusao.ficam_de_fatura_paga)}</p>}
           <div className="acoes">
             <button type="button" disabled={enviando || !online} onClick={() => void excluir(true)}>
               Excluir mesmo assim

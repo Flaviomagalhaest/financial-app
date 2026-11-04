@@ -7,7 +7,7 @@ Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
 Effort recomendado: high
 Issue: #398
-Origem: [ticket 124](124-historico-sem-a-lista-inteira.md) e [ADR 0024](../../../docs/adr/0024-sem-internet-so-a-janela-do-aparelho.md) (decisões Q1, Q3, Q4, Q6, Q7).
+Origem: [ticket 124](124-historico-sem-a-lista-inteira.md) e [ADR 0025](../../../docs/adr/0025-sem-internet-so-a-janela-do-aparelho.md) (decisões Q1, Q3, Q4, Q6, Q7).
 
 ## O que construir
 
