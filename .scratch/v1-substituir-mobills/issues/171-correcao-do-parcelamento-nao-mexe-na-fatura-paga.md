@@ -40,4 +40,4 @@ Feito em 04/11.
 - **Tela.** Ela já mostrava a recusa (`motivo`) e a contagem. A frase das mantidas agora diz "alguém as mudou à mão ou elas estão numa fatura paga", e as dicas da tela do parcelamento e da parcela também falam da fatura paga.
 - **Testes.** Testes de API em `backend/tests/test_fatura_paga.py`; o `GLOSSARY.md` (**Correção do parcelamento**) foi detalhado.
 
-Pendência: [ticket 176](176-fatura-paga-no-meio-do-refazer-da-correcao.md). A fatura paga entre a gravação e um lote seguinte do refazer ainda recebe a parcela que a correção leva para ela.
+Pendência: [ticket 178](178-fatura-paga-no-meio-do-refazer-da-correcao.md). A fatura paga entre a gravação e um lote seguinte do refazer ainda recebe a parcela que a correção leva para ela.
