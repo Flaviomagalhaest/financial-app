@@ -1,7 +1,7 @@
 # Janela do aparelho: o que ficou de fora do 166
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`, `diagnosing-bugs` (o teste que falha no ambiente na nuvem)
 Modelo recomendado: Sonnet
