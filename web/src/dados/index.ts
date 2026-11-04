@@ -396,14 +396,32 @@ export function useLancamentos() {
   return { lancamentos, atualizadoEm, semDados, filaLida: lida };
 }
 
+/** Onde a resposta de uma tela fica guardada e como o servidor a devolve: escritos juntos, num lugar só. */
+export type LeituraDaTela = { caminho: string; ler: () => Promise<{ data?: Lancamento[] }> };
+
+export const leituraDaFatura = (cartaoId: string, mes: string): LeituraDaTela => ({
+  caminho: `/api/cartoes/${cartaoId}/faturas/${mes}/lancamentos`,
+  ler: () => api.GET("/api/cartoes/{id}/faturas/{mes}/lancamentos", { params: { path: { id: cartaoId, mes } } }),
+});
+
+export const leituraDoMes = (mes: string): LeituraDaTela => ({
+  caminho: `/api/meses/${mes}/lancamentos`,
+  ler: () => api.GET("/api/meses/{mes}/lancamentos", { params: { path: { mes } } }),
+});
+
+export const leituraDoParcelamento = (id: string): LeituraDaTela => ({
+  caminho: `/api/parcelamentos/${id}/lancamentos`,
+  ler: () => api.GET("/api/parcelamentos/{id}/lancamentos", { params: { path: { id } } }),
+});
+
 /**
  * Os lançamentos de uma tela que filtra a lista (a fatura, o Mês, o parcelamento), lidos do servidor
  * em vez da lista guardada, que só tem a janela do aparelho (ticket 165, ADR 0025). A resposta fica
  * guardada por tela; os não enviados entram por cima, só os que `passa` aceita. `semDados`: sem
  * internet e sem resposta guardada, a tela diz que precisa de internet em vez de mostrar lista vazia.
  */
-export function useLancamentosDaTela(caminho: string, ler: () => Promise<{ data?: Lancamento[] }>, passa: (l: LancamentoNaTela) => boolean) {
-  const { dados, atualizadoEm, semDados, buscar } = useRespostaDe<Lancamento[]>(caminho, ler);
+export function useLancamentosDaTela(leitura: LeituraDaTela, passa: (l: LancamentoNaTela) => boolean) {
+  const { dados, atualizadoEm, semDados, buscar } = useRespostaDe<Lancamento[]>(leitura.caminho, leitura.ler);
   const { itens: fila } = useFilaLida();
   // A fila subiu (encolheu): o servidor tem coisa nova para a tela. Quando ela cresce, nada subiu, e
   // uma leitura nessa hora falharia sem internet e marcaria a rede como sem resposta, atrasando o envio.
@@ -1134,7 +1152,7 @@ async function relerAsParcelas(id?: string | null) {
     ...caminhos.map((c) => buscarEGuardar<unknown>(c, LEITURAS[c])),
     buscarEGuardar("/api/hoje", () => api.GET("/api/hoje")),
     // A tela do parcelamento lê as parcelas do servidor (ticket 165).
-    ...(id ? [buscarEGuardar(`/api/parcelamentos/${id}/lancamentos`, () => api.GET("/api/parcelamentos/{id}/lancamentos", { params: { path: { id } } }))] : []),
+    ...(id ? [leituraDoParcelamento(id)].map((l) => buscarEGuardar(l.caminho, l.ler)) : []),
   ]);
 }
 
