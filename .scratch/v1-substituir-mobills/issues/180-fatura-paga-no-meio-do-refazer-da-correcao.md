@@ -1,7 +1,7 @@
 # Fatura paga no meio do refazer da correção do parcelamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
