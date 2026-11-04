@@ -17,6 +17,23 @@ async function prepararCasal(page: Page) {
 
 const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: nome }).click();
 
+/** A fila guardada no aparelho, com a recusa de cada pedido, lida direto do IndexedDB. */
+const filaDoAparelho = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<unknown[]>((resolve, reject) => {
+        const abertura = indexedDB.open("financial-app-dados");
+        abertura.onerror = () => reject(abertura.error);
+        abertura.onsuccess = () => {
+          const pedido = abertura.result.transaction("fila").objectStore("fila").getAll();
+          pedido.onsuccess = () => {
+            abertura.result.close();
+            resolve(pedido.result);
+          };
+        };
+      }),
+  );
+
 /** Abre o novo lançamento pelo app, preenche valor, conta, categoria e descrição e marca "Parcelado". */
 async function comecarParcelado(page: Page, { teclas, conta, categoria, descricao }: { teclas: string[]; conta: string; categoria: string; descricao: string }) {
   await aba(page, "Hoje");
@@ -468,28 +485,34 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   // O servidor grava o lote, mas a resposta não chega: o reenvio leva a mesma chave.
   let perdidas = 0;
   const chaves: string[] = [];
+  // O que o servidor respondeu ao envio perdido: na falha, diz se ele gravou ou recusou (ticket 178).
+  let respostaPerdida = "";
   await page.route("**/api/lancamentos/lote", async (rota) => {
     for (const acao of rota.request().postDataJSON().acoes) if (acao.acao === "antecipar_parcelas") chaves.push(acao.antecipacao.id);
     if (perdidas > 0) return rota.continue();
     perdidas++;
-    await rota.fetch();
+    const resposta = await rota.fetch();
+    respostaPerdida = `${resposta.status()} ${await resposta.text()}`;
     await rota.abort("connectionreset");
   });
   await context.setOffline(false);
   await expect.poll(() => perdidas).toBe(1);
   await aba(page, "Hoje");
-  // A fila pode subir sozinha quando a rede volta; se não, "Enviar agora" sobe.
+  // A fila pode subir sozinha quando a rede volta; se não, "Enviar agora" sobe. A fila vazia se
+  // confere no aparelho: o aviso não aparece antes de a tela ler a fila, e com a CPU ocupada o
+  // "nenhum aviso" passava com a antecipação ainda na fila (ticket 178).
   await expect(async () => {
     const enviar = page.getByRole("button", { name: "Enviar agora" });
     if ((await enviar.count()) > 0) await enviar.click({ timeout: 2_000 }).catch(() => {});
-    await expect(page.getByTestId("nao-enviados")).toHaveCount(0, { timeout: 3_000 });
+    expect(await filaDoAparelho(page), `resposta ao envio perdido: ${respostaPerdida}`).toEqual([]);
   }).toPass();
+  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
 
   // Todo envio que a página viu leva a mesma chave (o service worker também pode enviar, fora da vista dela).
   expect(chaves.length).toBeGreaterThan(0);
   expect(new Set(chaves).size).toBe(1);
   const parcelas: { situacao: string; valor_centavos: number }[] = (await api.ler("/api/lancamentos")).filter((l: { descricao: string }) => l.descricao === descricao);
-  expect(parcelas.filter((l) => l.situacao === "previsto")).toHaveLength(3);
+  expect(parcelas.filter((l) => l.situacao === "previsto"), `resposta ao envio perdido: ${respostaPerdida}`).toHaveLength(3);
   // A 1ª já era realizada (R$ 100,00); as duas antecipadas dividem os R$ 180,00.
   expect(parcelas.filter((l) => l.situacao === "realizado").map((l) => l.valor_centavos).sort((a, b) => a - b)).toEqual([9000, 9000, 10000]);
 });
