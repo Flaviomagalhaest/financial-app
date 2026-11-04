@@ -1,7 +1,7 @@
 # Edição com a resposta perdida não sobe ao reabrir e a exclusão seguinte vira conflito
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
