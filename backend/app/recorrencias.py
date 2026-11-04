@@ -325,8 +325,9 @@ def _em_que_fatura_paga(conn) -> Callable[[UUID, date, date | None], tuple[UUID,
 def _conferir_as_faturas_do_passado(conn, nova: NovaRecorrencia, lancada: date) -> None:
     """Nenhuma ocorrência que a geração cria antes de hoje (do dia do lançamento em diante, que
     a fila sobe depois) cai numa fatura paga pelo pagamento (ADR 0021). A geração grava em
-    lotes e não volta atrás: a recusa vem antes de gravar a regra. De hoje em diante a fatura
-    ainda não fechou, e só a fechada recebe pagamento."""
+    lotes e não volta atrás: a recusa vem antes de gravar a regra. O pagamento que chega depois
+    dela a geração confere em cada lote, e a ocorrência dessa fatura passa sem virar lançamento
+    (ticket 179). De hoje em diante a fatura ainda não fechou, e só a fechada recebe pagamento."""
     dia_de_hoje = lancamentos.hoje()
     if lancada >= dia_de_hoje:
         return
@@ -436,10 +437,9 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         if _fora_do_fim(regra, n, dia) or dia > ultimo_dia:
             break
         ultima = n
-        # A de antes de hoje que cairia numa fatura paga depois da criação (a fatura paga entre
-        # os lotes, ou entre a conferência e o primeiro) passa como a de antes do lançamento: a
-        # fatura paga não recebe nada fora da correção (ADR 0021, ticket 179).
-        if dia >= desde and not (dia < dia_de_hoje and em_que_paga(regra.conta_id, dia, None)):
+        # ADR 0021: a fatura paga depois da conferência não recebe a de antes de hoje.
+        na_paga = dia < dia_de_hoje and em_que_paga(regra.conta_id, dia, None)
+        if dia >= desde and not na_paga:
             proximas.append((n, dia))
     if ultima == geradas:
         return False

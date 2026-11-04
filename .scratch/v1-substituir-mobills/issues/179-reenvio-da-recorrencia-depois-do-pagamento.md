@@ -24,4 +24,6 @@ A criação da recorrência no cartão confere as faturas pagas antes de gravar 
 
 A geração (`_gerar_um_lote`) passa pela ocorrência de antes de hoje que cairia numa fatura paga, como passa pela de antes do lançamento (ticket 87): `geradas` anda, nenhum lançamento nasce e a ocorrência segue contando no calendário e nas `vezes`. A conferência na criação continua recusando a regra inteira quando a fatura já está paga; a geração cobre o pagamento que chega depois dela, entre a conferência e o primeiro lote ou entre os lotes, em qualquer lote. Pôr a conferência e as ocorrências de antes de hoje na mesma transação da regra foi descartado: o lote tem limite de linhas, e as de antes de hoje podem não caber nele.
 
-Teste: `test_reenvio_depois_do_pagamento_nao_gera_o_passado_dentro_da_fatura_paga`.
+Testes: `test_reenvio_depois_do_pagamento_nao_gera_o_passado_dentro_da_fatura_paga` (pago entre a conferência e o primeiro lote) e `test_pagamento_entre_os_lotes_nao_leva_o_resto_do_passado_para_a_fatura_paga`.
+
+Pendência: a ocorrência passa sem aviso ao casal ([ticket 181](181-aviso-da-ocorrencia-que-a-fatura-paga-tirou.md)).

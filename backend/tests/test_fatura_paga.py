@@ -7,7 +7,7 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from app import lancamentos
+from app import lancamentos, recorrencias
 from tests.conftest import Casal
 from tests.test_cartoes import comprar, lancamento, novo_cartao
 from tests.test_contas import nova_conta
@@ -893,8 +893,6 @@ def test_reenvio_depois_do_pagamento_nao_gera_o_passado_dentro_da_fatura_paga(
 ):
     # Hoje é 10/05. A luz lançada em 20/04 foi gravada com abril ainda aberta, mas a geração
     # parou antes do primeiro lote; abril é paga e a fila reenvia (ticket 179).
-    from app import recorrencias
-
     monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 5, 10))
     conta = nova_conta(casal)["id"]
     cartao = novo_cartao(casal)["id"]
@@ -914,9 +912,44 @@ def test_reenvio_depois_do_pagamento_nao_gera_o_passado_dentro_da_fatura_paga(
         json={"acoes": [{"acao": "criar_recorrencia", "recorrencia": nova}]},
     ).json()["resultados"][0]
 
-    assert reenvio["resultado"] != "recusada", reenvio
+    assert reenvio["resultado"] == "aceita", reenvio
     assert [(l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
         ("2026-05-20", "previsto"),
         ("2026-06-20", "previsto"),
+    ]
+    assert numeros(faturas(casal, cartao)["2026-04-01"]) == (100000, 0, 60000, 0, "paga")
+
+
+def test_pagamento_entre_os_lotes_nao_leva_o_resto_do_passado_para_a_fatura_paga(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    # Hoje é 10/05. A luz lançada em 20/03 grava uma ocorrência por lote, e a geração para
+    # depois do primeiro (a de março); abril é paga e a fila reenvia (ticket 179).
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 5, 10))
+    monkeypatch.setattr(recorrencias, "LINHAS_POR_LOTE", 2)
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=100000)
+    nova = recorrencia_no_cartao(cartao, [casal.categoria()], "2026-03-20", vezes=3)
+    um_lote = recorrencias._gerar_um_lote
+    with monkeypatch.context() as queda:
+        queda.setattr(recorrencias, "_gerar_um_lote", lambda conn, id: um_lote(conn, id) and False)
+        criada = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+        assert criada.status_code == 201, criada.text
+    assert [l["data"] for l in gerados(casal, nova["id"])] == ["2026-03-20"]
+    pago = pagar(casal, conta, cartao, fatura_mes="2026-04-01", valor_centavos=60000)
+    assert pago.status_code == 201, pago.text
+
+    reenvio = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json={"acoes": [{"acao": "criar_recorrencia", "recorrencia": nova}]},
+    ).json()["resultados"][0]
+
+    assert reenvio["resultado"] == "aceita", reenvio
+    assert [(l["data"], l["situacao"]) for l in gerados(casal, nova["id"])] == [
+        ("2026-03-20", "realizado"),
+        ("2026-05-20", "previsto"),
     ]
     assert numeros(faturas(casal, cartao)["2026-04-01"]) == (100000, 0, 60000, 0, "paga")

@@ -20,6 +20,6 @@ Um pagamento realizado para uma fatura fechada a deixa paga, qualquer que seja o
 - O parcelamento e a recorrência no cartão também não mudam uma fatura paga pelo pagamento (ticket 126). Como gravam em vários lotes, a regra é decidida antes do primeiro lote, para não ficar pela metade:
   - **excluir o parcelamento** deixa as parcelas de fatura paga, e ele continua existindo, encolhido até a última delas;
   - **corrigir o parcelamento** deixa intocada a parcela de fatura paga, recusa encolher abaixo da última delas e recusa levar uma parcela para dentro de uma fatura paga;
-  - **criar uma recorrência** cuja ocorrência do dia do lançamento (ou outra que nasce antes de hoje, num calendário curto) cairia numa fatura paga é recusado, e **alterá-la** deixa como está o atrasado de fatura paga e, por enquanto, o atrasado que a data nova levaria para dentro de uma (ticket 178).
+  - **criar uma recorrência** cuja ocorrência do dia do lançamento (ou outra que nasce antes de hoje, num calendário curto) cairia numa fatura paga é recusado (paga a fatura depois da criação, entre os lotes da geração, a ocorrência de antes de hoje dela passa sem virar lançamento, ticket 179), e **alterá-la** deixa como está o atrasado de fatura paga e, por enquanto, o atrasado que a data nova levaria para dentro de uma (ticket 178).
 
   A fatura importada do Mobills fica de fora, como no resto da proteção.
