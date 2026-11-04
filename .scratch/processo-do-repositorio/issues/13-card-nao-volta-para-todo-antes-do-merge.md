@@ -1,7 +1,7 @@
 # Sincronizar: o card não volta para TODO enquanto o PR não é mesclado
 
 Type: task
-Status: claimed
+Status: wontfix
 Blocked by: —
 Skills: `implement`, `writing-for-agents` (AGENTS.md)
 Modelo recomendado: Sonnet
@@ -25,3 +25,9 @@ Fazer o freio valer também para o ticket que uma branch remota já deu como `re
 - [ ] Testado com um `gh` falso: ticket `resolved` só numa branch fica em FINISHED/DOING após a rodada completa da `main`; ticket sem branch nenhuma ainda volta a TODO
 - [ ] `AGENTS.md`: a regra, em "Como atualizar", junto do que já diz sobre o `claimed`
 - [ ] PR aberto para `main`
+
+## Resolução
+
+Superado pelo [ticket 170](170-main-so-aplica-tickets-que-o-push-mudou.md) (PR #423). Em vez de estender o `reivindicado()` aos tickets `resolved` numa branch remota, o 170 o removeu: a `main` aplica o estado completo só aos tickets que o push mudou (`--desde $ANTES`), então o DOING/FINISHED posto por uma branch ainda não mesclada não é desfeito por outro merge, e o merge do ticket `resolved` leva o card a FINISHED. A regra já está em "Como atualizar" do `AGENTS.md`. Os itens do checklist deixaram de se aplicar.
+
+Limite que continua: a varredura manual (`workflow_dispatch` com `--tudo`) recalcula todos os cards pela `main` e devolve a TODO o card que só uma branch pôs em DOING/FINISHED. O 170 registra isso como limite conhecido.
