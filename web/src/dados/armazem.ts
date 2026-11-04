@@ -1,5 +1,6 @@
 // O que o aparelho guarda para funcionar sem internet (ADR 0011): a última resposta de cada
-// leitura e a fila do que não foi enviado. Banco próprio, separado do da sessão; a tela e o
+// leitura (a lista de lançamentos, um registro por lançamento) e a fila do que não foi
+// enviado. Banco próprio, separado do da sessão; a tela e o
 // service worker usam este mesmo módulo.
 import type { components } from "../api/schema";
 
@@ -112,14 +113,42 @@ export interface Guardada<T> {
 const BANCO = "financial-app-dados";
 const FILA = "fila";
 const RESPOSTAS = "respostas";
+/** A lista de lançamentos guardada, um registro por lançamento (ticket 164). */
+const LANCAMENTOS = "lancamentos";
 const CANAL = "financial-app-dados";
 
+/**
+ * A lista de lançamentos: a única resposta guardada lançamento por lançamento. Em `respostas`, sob
+ * este caminho, fica só a hora e o número da leitura; os lançamentos ficam na loja própria.
+ */
+export const LISTA = "/api/lancamentos";
+/** A chave que `ouvirMudancas` usa para a fila; as respostas usam o caminho delas. */
+export const NA_FILA = "fila";
+/** Tudo mudou (sair da conta, ou um aviso de uma versão anterior do app). */
+const TUDO = "*";
+
+/** A versão 2 guarda a lista lançamento por lançamento e desfaz o bloco da versão 1. */
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const abertura = indexedDB.open(BANCO, 1);
-    abertura.onupgradeneeded = () => {
-      abertura.result.createObjectStore(FILA, { keyPath: "id" });
-      abertura.result.createObjectStore(RESPOSTAS);
+    const abertura = indexedDB.open(BANCO, 2);
+    abertura.onupgradeneeded = ({ oldVersion }) => {
+      const banco = abertura.result;
+      if (oldVersion < 1) {
+        banco.createObjectStore(FILA, { keyPath: "id" });
+        banco.createObjectStore(RESPOSTAS);
+      }
+      if (oldVersion < 2) {
+        const lancamentos = banco.createObjectStore(LANCAMENTOS, { keyPath: "id" });
+        const respostas = abertura.transaction!.objectStore(RESPOSTAS);
+        const bloco = respostas.get(LISTA);
+        bloco.onsuccess = () => {
+          const guardada = bloco.result as Guardada<Lancamento[]> | undefined;
+          if (!guardada) return;
+          const { dados, ...marca } = guardada;
+          for (const lancamento of dados) lancamentos.put(lancamento);
+          respostas.put(marca, LISTA);
+        };
+      }
     };
     abertura.onsuccess = () => resolve(abertura.result);
     abertura.onerror = () => reject(abertura.error);
@@ -133,43 +162,76 @@ export function pedido<T>(p: IDBRequest<T>): Promise<T> {
   });
 }
 
-const ouvintes = new Set<() => void>();
-// Avisa as outras abas e o service worker (e ouve deles) quando algo guardado muda.
+const ouvintes = new Map<() => void, ReadonlySet<string>>();
+function avisar(mudou: ReadonlySet<string>) {
+  for (const [ouvinte, chaves] of ouvintes) if (mudou.has(TUDO) || [...chaves].some((chave) => mudou.has(chave))) ouvinte();
+}
+// Avisa as outras abas e o service worker (e ouve deles) do que mudou no que está guardado. O aviso
+// de uma versão anterior do app não diz o quê: vale como tudo.
 const canal = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(CANAL);
-canal?.addEventListener("message", () => ouvintes.forEach((ouvinte) => ouvinte()));
+canal?.addEventListener("message", ({ data }) => avisar(new Set(Array.isArray(data) ? (data as string[]) : [TUDO])));
 
-/** Chamado sempre que a fila ou uma resposta guardada muda, aqui ou noutro contexto. */
-export function ouvirMudancas(ouvinte: () => void): () => void {
-  ouvintes.add(ouvinte);
+/**
+ * Chamado quando muda, aqui ou noutro contexto, o que está guardado sob uma das `chaves`: o caminho
+ * de uma resposta, ou `NA_FILA` para a fila. Uma escrita numa resposta não avisa quem lê outra.
+ */
+export function ouvirMudancas(chaves: readonly string[], ouvinte: () => void): () => void {
+  ouvintes.set(ouvinte, new Set(chaves));
   return () => void ouvintes.delete(ouvinte);
 }
 
+/** A loja com as escritas anotadas em `mudou`, pela chave que `ouvirMudancas` usa. */
+function anotada(loja: IDBObjectStore, mudou: Set<string>): IDBObjectStore {
+  const chaveDe = (metodo: string, args: unknown[]) => {
+    if (loja.name === FILA) return NA_FILA;
+    if (loja.name === LANCAMENTOS) return LISTA;
+    if (metodo === "clear") return TUDO;
+    return String(metodo === "delete" ? args[0] : args[1]);
+  };
+  return new Proxy(loja, {
+    get(alvo, nome) {
+      const valor = Reflect.get(alvo, nome, alvo);
+      if (typeof valor !== "function") return valor;
+      if (nome === "put" || nome === "add" || nome === "delete" || nome === "clear")
+        return (...args: unknown[]) => {
+          mudou.add(chaveDe(nome, args));
+          return valor.apply(alvo, args);
+        };
+      return valor.bind(alvo);
+    },
+  });
+}
+
 /**
- * Roda `trabalho` numa transação sobre a fila e as respostas; só pode esperar pedidos do próprio
- * IndexedDB, senão a transação fecha no meio. Uma escrita confirmada avisa os ouvintes.
+ * Roda `trabalho` numa transação sobre a fila, as respostas e os lançamentos da lista; só pode
+ * esperar pedidos do próprio IndexedDB, senão a transação fecha no meio. Uma escrita confirmada
+ * avisa quem ouve o que ela mudou. Na loja `lancamentos`, cada registro é um lançamento da lista,
+ * pelo `id`; ela só vale com a marca da leitura em `respostas` (`LISTA`).
  */
 export async function emTransacao<T>(
   modo: IDBTransactionMode,
-  trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore) => Promise<T>,
+  trabalho: (fila: IDBObjectStore, respostas: IDBObjectStore, lancamentos: IDBObjectStore) => Promise<T>,
 ): Promise<T> {
   const banco = await abrir();
   try {
-    const transacao = banco.transaction([FILA, RESPOSTAS], modo);
+    const transacao = banco.transaction([FILA, RESPOSTAS, LANCAMENTOS], modo);
     const fim = new Promise<void>((resolve, reject) => {
       transacao.oncomplete = () => resolve();
       transacao.onerror = transacao.onabort = () => reject(transacao.error);
     });
+    const mudou = new Set<string>();
+    const [fila, respostas, lancamentos] = [FILA, RESPOSTAS, LANCAMENTOS].map((nome) => anotada(transacao.objectStore(nome), mudou));
     let resultado: T;
     try {
-      resultado = await trabalho(transacao.objectStore(FILA), transacao.objectStore(RESPOSTAS));
+      resultado = await trabalho(fila, respostas, lancamentos);
     } catch (erro) {
       transacao.abort();
       throw erro;
     }
     await fim;
-    if (modo === "readwrite") {
-      ouvintes.forEach((ouvinte) => ouvinte());
-      canal?.postMessage("mudou");
+    if (mudou.size > 0) {
+      avisar(mudou);
+      canal?.postMessage([...mudou]);
     }
     return resultado;
   } finally {
@@ -177,10 +239,40 @@ export async function emTransacao<T>(
   }
 }
 
-export const lerResposta = <T>(caminho: string) =>
-  emTransacao("readonly", (_, respostas) => pedido(respostas.get(caminho)) as Promise<Guardada<T> | undefined>);
+/** Do mais novo ao mais antigo, como o servidor manda a lista. */
+function ordenar(lista: Lancamento[]): Lancamento[] {
+  return lista.sort((a, b) => b.data.localeCompare(a.data) || b.criado_em.localeCompare(a.criado_em));
+}
 
-const agora = () => performance.timeOrigin + performance.now();
+/** A resposta guardada; a lista vem montada dos lançamentos guardados um a um. */
+export const lerResposta = <T>(caminho: string) =>
+  emTransacao("readonly", async (_, respostas, lancamentos) => {
+    const guardada = (await pedido(respostas.get(caminho))) as Guardada<T> | Omit<Guardada<T>, "dados"> | undefined;
+    if (!guardada || caminho !== LISTA) return guardada as Guardada<T> | undefined;
+    return { ...guardada, dados: ordenar(await pedido(lancamentos.getAll())) as T } as Guardada<T>;
+  });
+
+/** Se há uma resposta guardada, sem ler a lista inteira para saber. */
+export const temResposta = (caminho: string) => emTransacao("readonly", async (_, respostas) => (await pedido(respostas.count(caminho))) > 0);
+
+/**
+ * Guarda a lista lida: grava só os lançamentos que mudaram desde a guardada e apaga os que o
+ * servidor não mandou mais.
+ */
+async function guardarALista(respostas: IDBObjectStore, lancamentos: IDBObjectStore, lida: Guardada<Lancamento[]>) {
+  const { dados, ...marca } = lida;
+  const guardados = new Map(((await pedido(lancamentos.getAll())) as Lancamento[]).map((l) => [l.id, JSON.stringify(l)]));
+  const escritas: Promise<unknown>[] = [];
+  for (const lancamento of dados) {
+    if (guardados.get(lancamento.id) !== JSON.stringify(lancamento)) escritas.push(pedido(lancamentos.put(lancamento)));
+    guardados.delete(lancamento.id);
+  }
+  for (const id of guardados.keys()) escritas.push(pedido(lancamentos.delete(id)));
+  escritas.push(pedido(respostas.put(marca, LISTA)));
+  await Promise.all(escritas);
+}
+
+export const agora = () => performance.timeOrigin + performance.now();
 let ultimaLeitura = 0;
 /**
  * O número da leitura é a hora em que ela sai (ms, com fração): a tela, as abas e o service worker
@@ -193,24 +285,42 @@ function numerarLeitura(): number {
 }
 
 /** A guardada é de uma leitura que saiu depois. Uma que saiu "depois de agora" é de antes de o relógio do aparelho voltar: não vale. */
-const maisNova = (guardada: Guardada<unknown> | undefined, numero: number) => !!guardada?.leitura && guardada.leitura > numero && guardada.leitura <= agora();
+const maisNova = (guardada: Omit<Guardada<unknown>, "dados"> | undefined, numero: number) =>
+  !!guardada?.leitura && guardada.leitura > numero && guardada.leitura <= agora();
+
+/** A última leitura de cada caminho ainda sem resposta neste contexto, e quando ela foi pedida (ms). */
+const emAndamento = new Map<string, { leitura: Promise<unknown>; pedidaEm: number }>();
 
 /**
  * Busca no servidor (`ler`, `undefined` quando ele não respondeu) e guarda a resposta. As leituras
  * de uma resposta correm juntas, na tela, noutra aba ou no service worker, e a que saiu antes pode
  * chegar depois: numeradas na saída, a mais velha não troca a guardada (tickets 120 e 122).
+ *
+ * Com `juntarDesde` (ms, no relógio de `agora`), a leitura do caminho pedida neste contexto desde
+ * então, ainda sem resposta, serve: a tela que abre com vários leitores do mesmo caminho faz um GET
+ * só. A pedida antes não serve: pode ter saído antes de uma mudança no servidor, ou estar presa
+ * numa rede que acabou de voltar.
  */
-export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined>): Promise<D | undefined> {
-  return comTrava("shared", async () => {
+export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined>, { juntarDesde }: { juntarDesde?: number } = {}): Promise<D | undefined> {
+  const andamento = emAndamento.get(caminho);
+  if (juntarDesde !== undefined && andamento && andamento.pedidaEm >= juntarDesde) return andamento.leitura as Promise<D | undefined>;
+  const leitura = comTrava("shared", async () => {
     const numero = numerarLeitura();
     const dados = await ler().catch(() => undefined);
     if (dados === undefined) return undefined;
-    await emTransacao("readwrite", async (_, respostas) => {
-      const guardada = (await pedido(respostas.get(caminho))) as Guardada<D> | undefined;
-      if (!maisNova(guardada, numero)) await pedido(respostas.put({ dados, em: Date.now(), leitura: numero } satisfies Guardada<D>, caminho));
+    await emTransacao("readwrite", async (_, respostas, lancamentos) => {
+      const guardada = (await pedido(respostas.get(caminho))) as Omit<Guardada<D>, "dados"> | undefined;
+      if (maisNova(guardada, numero)) return;
+      const lida = { dados, em: Date.now(), leitura: numero } satisfies Guardada<D>;
+      if (caminho === LISTA) await guardarALista(respostas, lancamentos, lida as Guardada<unknown> as Guardada<Lancamento[]>);
+      else await pedido(respostas.put(lida, caminho));
     });
     return dados;
+  }).finally(() => {
+    if (emAndamento.get(caminho)?.leitura === leitura) emAndamento.delete(caminho);
   });
+  emAndamento.set(caminho, { leitura, pedidaEm: agora() });
+  return leitura;
 }
 
 export async function lerFila(): Promise<ItemDaFila[]> {
@@ -220,9 +330,10 @@ export async function lerFila(): Promise<ItemDaFila[]> {
 
 /** Sair da conta apaga tudo o que o aparelho guardou, fila inclusive. */
 export const apagarTudo = () =>
-  emTransacao("readwrite", async (fila, respostas) => {
+  emTransacao("readwrite", async (fila, respostas, lancamentos) => {
     await pedido(fila.clear());
     await pedido(respostas.clear());
+    await pedido(lancamentos.clear());
   });
 
 /**

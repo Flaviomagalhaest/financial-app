@@ -101,6 +101,8 @@ test("a correção do valor de uma compra com partes acerta a última parte", as
   await criar("/api/transferencias", { id: randomUUID(), conta_origem_id: conta.id, conta_destino_id: cartao.id, valor_centavos: 60000, data: dia(0), descricao: "Fatura", fatura_mes: compra.mes });
 
   await page.goto(`/#/cartoes/${cartao.id}/${compra.mes}`);
+  // A correção abre com as compras que a fatura já mostra: espera a compra chegar na lista.
+  await expect(page.getByRole("listitem").filter({ hasText: `Mercado Livre ${s}` }).first()).toBeVisible();
   await page.getByRole("button", { name: "Corrigir fatura" }).click();
   const correcao = page.getByRole("form", { name: "Corrigir fatura" });
   await correcao.getByRole("group", { name: /Mercado Livre/ }).getByRole("textbox").fill("900,00");
@@ -155,6 +157,8 @@ test("a correção do valor de uma ocorrência da recorrência com partes as div
   await criar("/api/transferencias", { id: randomUUID(), conta_origem_id: conta.id, conta_destino_id: cartao.id, valor_centavos: 60000, data: dia(0), descricao: "Fatura", fatura_mes: ocorrencia.mes });
 
   await page.goto(`/#/cartoes/${cartao.id}/${ocorrencia.mes}`);
+  // A correção abre com as compras que a fatura já mostra: espera a ocorrência chegar na lista.
+  await expect(page.getByRole("listitem").filter({ hasText: `Combo ${s}` }).first()).toBeVisible();
   await page.getByRole("button", { name: "Corrigir fatura" }).click();
   const correcao = page.getByRole("form", { name: "Corrigir fatura" });
   await correcao.getByRole("group", { name: /Combo/ }).getByRole("textbox").fill("900,00");
