@@ -1,7 +1,7 @@
 # Janela do aparelho: o que ficou de fora do 166
 
 Type: task
-Status: resolved
+Status: ready-for-agent
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`, `diagnosing-bugs` (o teste que falha no ambiente na nuvem)
 Modelo recomendado: Sonnet
@@ -17,6 +17,7 @@ Origem: revisão do [ticket 166](166-janela-do-aparelho.md) (sub-agentes Standar
 - **Recorrência fora da janela**: `TelaDaRecorrencia.tsx` lê do servidor o lançamento de fora da janela, sem teste de navegador. A API não gera ocorrência antes de hoje (ticket 125), então o teste precisa simular a lista sem o lançamento (`page.route`), como o `telas-leem-do-servidor.spec.ts`.
 - **Edição sem `base`**: a mudança na fila sem a versão do servidor (um item de uma versão anterior do app) num lançamento que saiu da lista ainda entra no `naTela` como lançamento novo, sem os campos que só o servidor tem. Decidir se vale tratar ou registrar como aceito.
 - **"Repetir último"**: o `ultimoCriado` olha a janela. O lançamento criado agora com uma data de mais de 12 meses atrás não é o último. Decidir se isso importa.
+- **Histórico: mês lido do servidor** ([ticket 167](167-historico-desenhado-mes-a-mes.md)): o mês lido depois da janela é uma leitura única. Se a pessoa edita ou exclui um lançamento dele, a linha só muda ao recarregar o Histórico. Qualquer falha de leitura (não só a falta de rede) mostra "conecte-se à internet" e só tenta de novo quando a rede volta. A leitura de meses vazios é uma requisição por mês, em série, sem limite.
 - **Teste que falha no ambiente na nuvem**: `sem-internet.spec.ts` ("a leitura da lista que a tela pediu antes da do service worker, se chega depois, não troca a guardada") falha sempre nas sessões na nuvem, também na `main` antes do 166 (`listaGuardadaTem` nunca fica `true`). Conferir se o CI passa e o que o ambiente tem de diferente.
 
 ## Checklist
@@ -27,6 +28,7 @@ Origem: revisão do [ticket 166](166-janela-do-aparelho.md) (sub-agentes Standar
 - [x] Teste de navegador da recorrência fora da janela, com e sem internet
 - [x] Edição sem `base` e "Repetir último": registrado como aceito na ADR 0025
 - [x] Causa da falha de `sem-internet.spec.ts` na nuvem achada e corrigida (ou registrada): registrada abaixo
+- [ ] Histórico: mês lido do servidor atualiza após editar/excluir, e a falha de leitura não diz que falta internet
 
 ## Registro: `sem-internet.spec.ts` na nuvem
 

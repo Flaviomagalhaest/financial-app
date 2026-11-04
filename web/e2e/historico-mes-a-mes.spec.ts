@@ -46,7 +46,7 @@ test("o Histórico se desenha mês a mês, com cabeçalho de mês, e desenha o m
   await page.reload();
 
   // Só os meses mais recentes foram desenhados: o quinto mês para trás ainda não.
-  await expect(page.getByRole("heading", { level: 3, name: meses[0].rotulo }).or(page.getByRole("heading", { level: 3 }).first())).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: meses[0].rotulo })).toBeVisible();
   await expect(linha("Compra 4")).toHaveCount(0);
 
   await rolarAte(page, linha("Compra 4"));
@@ -69,7 +69,8 @@ test("depois do fim da janela do aparelho, com internet, o Histórico continua l
   await page.reload();
   await expect(linha("Padaria")).toBeVisible();
   await context.setOffline(true);
-  await page.getByTestId("fim-da-lista").scrollIntoViewIfNeeded();
+  // Chegou ao fim da janela sem internet (o aviso prova que a leitura foi tentada) e o lido antes não ficou.
+  await rolarAte(page, page.getByText(/^Para ver antes de .*, conecte-se à internet/));
   await expect(linha("Geladeira")).toHaveCount(0);
   await context.setOffline(false);
 });

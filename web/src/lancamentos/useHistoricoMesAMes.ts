@@ -104,8 +104,7 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
 
   // O mês com algo na fila (não enviado, recusado, em conflito) aparece sempre: a pessoa precisa vê-lo.
   const daTela = daJanela.filter((m, i) => i < desenhados || m.lancamentos.some((l) => l.naoEnviado));
-  const noFimDaJanelaAgora = desenhados >= daJanela.length;
-  const meses = noFimDaJanelaAgora ? juntar(daTela, doServidor) : daTela;
-  const noFimDaJanela = noFimDaJanelaAgora;
+  const noFimDaJanela = desenhados >= daJanela.length;
+  const meses = noFimDaJanela ? juntar(daTela, doServidor) : daTela;
   return { meses, chegouAoFim, semInternet: noFimDaJanela && semInternet, acabou: noFimDaJanela && acabou, depoisDe: doServidor.length + daJanela.length, noFimDaJanela };
 }
