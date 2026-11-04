@@ -1690,18 +1690,23 @@ def test_excluir_o_parcelamento_com_parcela_paga_ou_alterada_a_mao_pede_confirma
     assert aviso.status_code == 409
     assert aviso.json() == {
         "motivo": "isto apaga lançamentos já pagos e pode desconfigurar o histórico",
-        "parcelas": 4,
-        "de_fatura_paga": 1,
+        # A da fatura paga fica (ticket 170): saem as outras três.
+        "parcelas": 3,
+        "de_fatura_paga": 0,
         "realizadas": 1,
         "alteradas_a_mao": 1,
+        "ficam_de_fatura_paga": 1,
     }
     # Nada saiu.
     assert len(parcelas(casal, novo["id"])) == 4
     assert len(casal.pedir("flavio", "GET", "/api/parcelamentos").json()) == 1
 
     assert excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True).status_code == 204
-    assert parcelas(casal, novo["id"]) == []
-    assert casal.pedir("flavio", "GET", "/api/parcelamentos").json() == []
+    assert [l["parcela"] for l in parcelas(casal, novo["id"])] == [1]
+    [regra] = casal.pedir("flavio", "GET", "/api/parcelamentos").json()
+    # Encolhido até a parcela que ficou, com o total dela; a tabela não aceita 1x, então fica um
+    # 2x sem a 2ª (ticket 176).
+    assert (regra["parcelas"], regra["valor_total_centavos"]) == (2, 25000)
 
 
 def test_excluir_o_parcelamento_so_com_previstas_nao_pede_confirmacao(casal: Casal):

@@ -504,3 +504,26 @@ test("quita o parcelamento pela tela, com desconto", async ({ page }) => {
   expect(parcelas.every((l) => l.situacao === "realizado")).toBe(true);
   expect(parcelas.reduce((soma, l) => soma + l.valor_centavos, 0)).toBe(55000);
 });
+
+test("o aviso de exclusão diz quantas parcelas de fatura paga ficam e como tirá-las", async ({ page }) => {
+  const { id } = await prepararParcelamento(page);
+  await page.reload();
+  // O servidor responde como no cartão com três parcelas em faturas pagas (ticket 170).
+  await page.route(
+    (url) => url.pathname === `/api/parcelamentos/${id}`,
+    (rota) =>
+      rota.request().method() === "DELETE"
+        ? rota.fulfill({
+            status: 409,
+            json: { motivo: "isto apaga lançamentos já pagos e pode desconfigurar o histórico", parcelas: 3, de_fatura_paga: 0, realizadas: 1, alteradas_a_mao: 0, ficam_de_fatura_paga: 3 },
+          })
+        : rota.fallback(),
+  );
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  page.once("dialog", (d) => void d.accept());
+  await page.getByRole("button", { name: "Excluir parcelamento" }).click();
+
+  const aviso = page.getByRole("alertdialog", { name: "Excluir parcelas já pagas" });
+  await expect(aviso).toContainText("Saem as 3 parcelas");
+  await expect(aviso).toContainText("Ficam 3 parcelas de fatura paga, e o parcelamento continua só com elas. Para tirá-las, corrija a fatura.");
+});

@@ -86,6 +86,12 @@ function tiposQueSaem(a: AvisoDeExclusao, noCartao: boolean): string[] {
   ].filter(Boolean);
 }
 
+/** As parcelas da fatura paga pelo pagamento não saem: o parcelamento fica com elas (ticket 170). */
+function ficamDeFaturaPaga(n: number): string {
+  const quantas = n === 1 ? "Fica 1 parcela de fatura paga" : `Ficam ${n} parcelas de fatura paga`;
+  return `${quantas}, e o parcelamento continua só com ${n === 1 ? "ela" : "elas"}. Para tirá-${n === 1 ? "la" : "las"}, corrija a fatura.`;
+}
+
 /** Corrige ou exclui o parcelamento; as duas mudam a regra e precisam de internet (ADR 0011). */
 export function TelaDoParcelamento({ id }: { id: string }) {
   const { dados: parcelamentos, semDados } = useParcelamentos();
@@ -229,6 +235,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const doParcelamento = (lancamentos ?? []).slice().sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
   const primeira = doParcelamento[0];
   const noCartao = !!primeira?.fatura_mes;
+  const saem = avisoDeExclusao ? tiposQueSaem(avisoDeExclusao, noCartao) : [];
   // O aviso mostra a 1ª parcela com o que o formulário tem; sem ela no aparelho, fica sem aviso.
   const centavosDoForm = emCentavos(form.valor) ?? 0;
   const parcelasDoForm = Number(form.parcelas);
@@ -453,12 +460,19 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
           <p>
             <strong>Isto apaga lançamentos já pagos e pode desconfigurar o histórico. Confirma?</strong>
           </p>
-          <p>Saem as {avisoDeExclusao.parcelas} parcelas; entre elas:</p>
-          <ul>
-            {tiposQueSaem(avisoDeExclusao, noCartao).map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ul>
+          {saem.length ? (
+            <>
+              <p>Saem {avisoDeExclusao.parcelas === 1 ? "1 parcela" : `as ${avisoDeExclusao.parcelas} parcelas`}; entre elas:</p>
+              <ul>
+                {saem.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            !!avisoDeExclusao.parcelas && <p>Saem {avisoDeExclusao.parcelas === 1 ? "1 parcela" : `as ${avisoDeExclusao.parcelas} parcelas`}.</p>
+          )}
+          {!!avisoDeExclusao.ficam_de_fatura_paga && <p>{ficamDeFaturaPaga(avisoDeExclusao.ficam_de_fatura_paga)}</p>}
           <div className="acoes">
             <button type="button" disabled={enviando || !online} onClick={() => void excluir(true)}>
               Excluir mesmo assim
