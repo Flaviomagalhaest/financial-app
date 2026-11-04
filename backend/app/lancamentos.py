@@ -1080,7 +1080,7 @@ def _atual(conn, id: UUID, usuario: str) -> Lancamento:
         )
     # No Postgres em READ COMMITTED (local e CI), a exclusão do outro lado pode ser confirmada
     # entre as duas leituras; lida de novo, ela vira o 410. O DSQL lê tudo do mesmo instante.
-    lidos = _todos(conn, "id = %s", (id,))
+    lidos = ler_lancamentos(conn, "id = %s", (id,))
     return lidos[0] if lidos else _atual(conn, id, usuario)
 
 
@@ -1865,7 +1865,7 @@ def criar_lancamento(
     return na_rota(request, gravar)
 
 
-def _todos(
+def ler_lancamentos(
     conn, filtro: str = "", parametros: tuple = (), ordem: str = "data DESC, criado_em DESC, id"
 ) -> list[Lancamento]:
     """Os não excluídos; `filtro` é a condição a mais, sem o WHERE."""
@@ -1977,11 +1977,11 @@ def ler_partes(conn, ids: list[UUID] | None = None) -> dict[UUID, list[Parte]]:
 
 def ler_por_ids(conn, ids: list[UUID]) -> list[Lancamento]:
     """Os lançamentos não excluídos com esses ids."""
-    return _todos(conn, "id = ANY(%s)", (ids,))
+    return ler_lancamentos(conn, "id = ANY(%s)", (ids,))
 
 
 def _um(conn, id: UUID) -> Lancamento:
-    return _todos(conn, "id = %s", (id,))[0]
+    return ler_lancamentos(conn, "id = %s", (id,))[0]
 
 
 def inicio_da_janela() -> date:
@@ -1996,7 +1996,7 @@ def listar_lancamentos(usuario: UsuarioLogado, request: Request) -> list[Lancame
     """A janela do aparelho (ADR 0025): os que contam nos últimos meses, pelo mês em que contam (o
     da fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem."""
     with conectar(url_do_banco(request)) as conn:
-        return _todos(conn, f"{MES_EM_QUE_CONTA} >= %s", (inicio_da_janela(),))
+        return ler_lancamentos(conn, f"{MES_EM_QUE_CONTA} >= %s", (inicio_da_janela(),))
 
 
 class LancamentoELigados(BaseModel):
@@ -2016,12 +2016,12 @@ class LancamentoELigados(BaseModel):
 def ler_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> LancamentoELigados:
     """O lançamento que ficou fora da janela do aparelho, para abrir, editar ou estornar com internet."""
     with conectar(url_do_banco(request)) as conn:
-        lidos = _todos(conn, "id = %s", (id,))
+        lidos = ler_lancamentos(conn, "id = %s", (id,))
         if not lidos:
             raise HTTPException(status_code=404, detail="lançamento não encontrado")
         lido = lidos[0]
         parcelamento = lido.parcelamento_id
-        ligados = _todos(
+        ligados = ler_lancamentos(
             conn,
             "id <> %(id)s AND (estorno_de = %(id)s OR id = %(compra)s"
             " OR parcelamento_id = %(parcelamento)s OR estorno_parcelamento_id = %(parcelamento)s"
@@ -2048,7 +2048,7 @@ def editar_lancamento(
 def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
     """Os atrasados e os previstos até `contasDaSemanaDias` dias a partir de hoje."""
     ate = hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
-    return _todos(
+    return ler_lancamentos(
         conn,
         "situacao = 'previsto' AND NOT COALESCE(automatico, false) AND data <= %s",
         (ate,),

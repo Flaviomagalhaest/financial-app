@@ -5,11 +5,11 @@ janela do aparelho; estas telas precisam também dos meses antigos."""
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from app import faturas
 from app.banco import conectar
-from app.lancamentos import MES_EM_QUE_CONTA, Lancamento, _todos, url_do_banco
+from app.lancamentos import MES_EM_QUE_CONTA, Lancamento, ler_lancamentos, url_do_banco
 from app.login import UsuarioLogado
 from app.planejamento import Mes, primeiro_dia
 
@@ -26,7 +26,7 @@ def listar_lancamentos_da_fatura(
 ) -> list[Lancamento]:
     """As compras que contam na fatura `mes` do cartão, com as dos adicionais dele."""
     with conectar(url_do_banco(request)) as conn:
-        return _todos(
+        return ler_lancamentos(
             conn,
             f"{MES_EM_QUE_CONTA} = %s AND conta_id IN (SELECT id FROM cartoes WHERE %s IN (id, titular_id))",
             (faturas.mes_de(mes), id),
@@ -43,7 +43,7 @@ def listar_lancamentos_do_mes(
 ) -> list[Lancamento]:
     """Os lançamentos que contam no mês: no cartão, o da fatura; no resto, o da data (ADR 0003)."""
     with conectar(url_do_banco(request)) as conn:
-        return _todos(conn, f"{MES_EM_QUE_CONTA} = %s", (primeiro_dia(mes),))
+        return ler_lancamentos(conn, f"{MES_EM_QUE_CONTA} = %s", (primeiro_dia(mes),))
 
 
 @router.get(
@@ -54,6 +54,8 @@ def listar_lancamentos_do_mes(
 def listar_lancamentos_do_parcelamento(
     id: UUID, usuario: UsuarioLogado, request: Request
 ) -> list[Lancamento]:
-    """Todas as parcelas do parcelamento, da primeira à última."""
+    """Todas as parcelas do parcelamento, da primeira à última; 404 se ele não existe."""
     with conectar(url_do_banco(request)) as conn:
-        return _todos(conn, "parcelamento_id = %s", (id,), ordem="parcela, id")
+        if not conn.execute("SELECT 1 FROM parcelamentos WHERE id = %s", (id,)).fetchone():
+            raise HTTPException(status_code=404, detail="parcelamento não encontrado")
+        return ler_lancamentos(conn, "parcelamento_id = %s", (id,), ordem="parcela, id")

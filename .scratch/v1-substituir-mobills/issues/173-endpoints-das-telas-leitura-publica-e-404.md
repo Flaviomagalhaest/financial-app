@@ -1,7 +1,7 @@
 # Endpoints das telas: leitura pública e 404 do parcelamento inexistente
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -18,7 +18,7 @@ Origem: revisão do [ticket 165](165-telas-que-filtram-a-lista-leem-do-servidor.
 
 ## Checklist
 
-- [ ] `_todos` com nome público; ninguém mais importa o privado
-- [ ] 404 para parcelamento inexistente, com o teste do backend trocado
-- [ ] Teste de navegador: a tela de um parcelamento que não existe diz "Parcelamento não encontrado" e não guarda lista vazia
-- [ ] `openapi.json` e `web/src/api/schema.d.ts` regenerados
+- [x] `_todos` com nome público; ninguém mais importa o privado
+- [x] 404 para parcelamento inexistente, com o teste do backend trocado
+- [x] Teste de navegador: a tela de um parcelamento que não existe diz "Parcelamento não encontrado" e não guarda lista vazia
+- [x] `openapi.json` e `web/src/api/schema.d.ts` regenerados

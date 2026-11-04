@@ -3436,7 +3436,7 @@
     "/api/parcelamentos/{id}/lancamentos": {
       "get": {
         "summary": "Listar Lancamentos Do Parcelamento",
-        "description": "Todas as parcelas do parcelamento, da primeira à última.",
+        "description": "Todas as parcelas do parcelamento, da primeira à última; 404 se ele não existe.",
         "operationId": "listar_lancamentos_do_parcelamento",
         "security": [
           {
