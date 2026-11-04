@@ -9,14 +9,14 @@ export async function tokenDaPagina(page: Page): Promise<string> {
   return (await pedido).headers().authorization;
 }
 
-/** `criar(caminho, corpo)` faz o POST com o token da página e exige sucesso; `mudar`, o PATCH; `substituir`, o PUT; `ler(caminho)`, o GET. */
+/** `criar(caminho, corpo)` faz o POST com o token da página e exige sucesso (sem corpo na resposta 204); `mudar`, o PATCH; `substituir`, o PUT; `ler(caminho)`, o GET. */
 export async function apiDaPagina(page: Page) {
   const headers = { authorization: await tokenDaPagina(page) };
   return {
     async criar(caminho: string, data: object) {
       const resposta = await page.request.post(caminho, { headers, data });
       expect(resposta.ok(), await resposta.text()).toBe(true);
-      return resposta.json();
+      return resposta.status() === 204 ? undefined : resposta.json();
     },
     async mudar(caminho: string, data: object) {
       const resposta = await page.request.patch(caminho, { headers, data });

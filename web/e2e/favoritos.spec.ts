@@ -106,6 +106,12 @@ test("depois de salvar, o app oferece Favoritar; sem internet não oferece", asy
 test("os mais repetidos viram sugeridos; promover ou dispensar, e reordenar e remover nas configurações só com internet", async ({ page, context }) => {
   const s = sufixo();
   const { api, conta, categoria } = await prepararCasal(page, s);
+  // Os sugeridos são os mais repetidos entre todos os lançamentos do casal: os que os outros testes
+  // deixaram (as 10 parcelas de um parcelamento, um "Mercado" de outra rodada) tiravam a Feira dos
+  // três primeiros (ticket 15 de processo-do-repositorio). Dispensados, sobram só os deste teste.
+  for (let sugeridos; (sugeridos = (await api.ler("/api/favoritos")).sugeridos as { chave: string }[]).length > 0; ) {
+    for (const { chave } of sugeridos) await api.criar("/api/favoritos/sugeridos/dispensar", { chave });
+  }
   const repetir = async (vezes: number, descricao: string, centavos: number) => {
     for (let i = 0; i < vezes; i++) {
       await api.criar("/api/lancamentos", { id: randomUUID(), tipo: "despesa", valor_centavos: centavos, data: dia(-1), descricao, conta_id: conta.id, categoria_ids: [categoria.id] });

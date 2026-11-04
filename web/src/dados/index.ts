@@ -597,9 +597,11 @@ export type RecorrenciaNaTela = Recorrencia & { mudancasNaoEnviadas: number };
  */
 export function useRecorrencias() {
   const { dados, atualizadoEm, semDados } = useResposta("/api/recorrencias");
-  const fila = useFila();
+  const { itens: fila, lida } = useFilaLida();
   const recorrencias = useMemo(() => {
-    if (!dados) return null;
+    // Antes de a fila ser lida, a regra viria sem as mudanças não enviadas, e a tela da recorrência,
+    // que preenche o formulário uma vez só, ficaria com a regra de antes (ticket 15 de processo-do-repositorio).
+    if (!dados || !lida) return null;
     const porId = new Map<string, RecorrenciaNaTela>(dados.map((r) => [r.id, { ...r, mudancasNaoEnviadas: 0 }]));
     for (const item of fila.filter((i) => !i.recusa)) {
       if (item.acao === "excluir_recorrencia") porId.delete(item.id);
@@ -607,7 +609,7 @@ export function useRecorrencias() {
       if (regra && item.acao === "alterar_recorrencia") porId.set(regra.id, { ...comAMudanca(regra, item.alteracao), mudancasNaoEnviadas: regra.mudancasNaoEnviadas + 1 });
     }
     return [...porId.values()];
-  }, [dados, fila]);
+  }, [dados, fila, lida]);
   return { recorrencias, atualizadoEm, semDados };
 }
 

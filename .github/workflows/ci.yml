@@ -83,3 +83,12 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npx playwright test
+
+      - name: App, trace e vídeo dos testes que falharam
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testes-com-navegador
+          path: web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
