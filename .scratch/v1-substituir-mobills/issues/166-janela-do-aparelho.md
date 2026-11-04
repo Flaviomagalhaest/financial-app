@@ -1,7 +1,7 @@
 # Janela do aparelho: guardar só 12 meses e o futuro
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 164, 165
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
