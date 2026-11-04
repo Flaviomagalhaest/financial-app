@@ -1,5 +1,5 @@
 // O que o aparelho guarda para funcionar sem internet (ADR 0011): a última resposta de cada
-// leitura (a lista de lançamentos, que é a janela do aparelho do ADR 0024, um registro por
+// leitura (a lista de lançamentos, que é a janela do aparelho do ADR 0025, um registro por
 // lançamento) e a fila do que não foi enviado. Banco próprio, separado do da sessão; a tela e o
 // service worker usam este mesmo módulo.
 import type { components } from "../api/schema";
@@ -115,7 +115,7 @@ export const inicioDaJanela = () => mesDepois(hoje(), 1 - config.janelaDoAparelh
 
 /**
  * A versão do servidor sobre a qual a mudança da fila foi feita, para o lançamento que não está na
- * lista guardada: o que ficou fora da janela do aparelho (ADR 0024), aberto com internet. O criar
+ * lista guardada: o que ficou fora da janela do aparelho (ADR 0025), aberto com internet. O criar
  * não tem: a base dele é o que foi enviado, que talvez nem esteja no servidor.
  */
 export function baseDaMudanca(item: ItemDeLancamento): Lancamento | undefined {
@@ -277,7 +277,7 @@ export const temResposta = (caminho: string) => emTransacao("readonly", async (_
 
 /**
  * Guarda a lista lida: grava só os lançamentos que mudaram desde a guardada e apaga os que o
- * servidor não mandou mais. A lista é a janela do aparelho (ADR 0024): quando o mês vira, o que
+ * servidor não mandou mais. A lista é a janela do aparelho (ADR 0025): quando o mês vira, o que
  * saiu dela some, menos o que tem mudança na fila (não enviada, recusada ou em conflito), que a
  * tela ainda mostra e que a fila edita sobre a versão guardada.
  */

@@ -7,7 +7,7 @@ Skills: `implement`, `tdd`; apoio: `run`, `diagnosing-bugs` (o teste que falha n
 Modelo recomendado: Sonnet
 Effort recomendado: medium
 Issue: #436
-Origem: revisão do [ticket 166](166-janela-do-aparelho.md) (sub-agentes Standards e Spec): limitações da [janela do aparelho](../../../docs/adr/0024-sem-internet-so-a-janela-do-aparelho.md) que o 166 deixou registradas e testes que faltaram.
+Origem: revisão do [ticket 166](166-janela-do-aparelho.md) (sub-agentes Standards e Spec): limitações da [janela do aparelho](../../../docs/adr/0025-sem-internet-so-a-janela-do-aparelho.md) que o 166 deixou registradas e testes que faltaram.
 
 ## O que construir
 

@@ -85,7 +85,7 @@ type Props = {
 export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
   const { contas, cartoes, contasECartoes, categorias, carregado } = useCadastro();
   // O lançamento que se abre, a compra que se estorna e a do estorno que se edita podem estar fora da
-  // janela do aparelho (ADR 0024): com internet, vêm do servidor; sem ela, a tela diz que não estão aqui.
+  // janela do aparelho (ADR 0025): com internet, vêm do servidor; sem ela, a tela diz que não estão aqui.
   const [compraDoExistente, setCompraDoExistente] = useState<string | null>(null);
   const { lancamentos, foraDoAparelho } = useLancamentosComOsDeFora(id, estornoDe, compraDoExistente);
   const { dados: parcelamentos } = useParcelamentos();

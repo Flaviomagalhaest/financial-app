@@ -147,7 +147,7 @@ export interface paths {
         };
         /**
          * Listar Lancamentos
-         * @description A janela do aparelho (ADR 0024): os que contam nos últimos meses, pelo mês em que contam (o
+         * @description A janela do aparelho (ADR 0025): os que contam nos últimos meses, pelo mês em que contam (o
          *     da fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem.
          */
         get: operations["listar_lancamentos"];

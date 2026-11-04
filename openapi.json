@@ -400,7 +400,7 @@
     "/api/lancamentos": {
       "get": {
         "summary": "Listar Lancamentos",
-        "description": "A janela do aparelho (ADR 0024): os que contam nos últimos meses, pelo mês em que contam (o\nda fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem.",
+        "description": "A janela do aparelho (ADR 0025): os que contam nos últimos meses, pelo mês em que contam (o\nda fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem.",
         "operationId": "listar_lancamentos",
         "responses": {
           "200": {

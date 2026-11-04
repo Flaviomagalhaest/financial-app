@@ -406,7 +406,7 @@ type LidoDeFora = Lancamento[] | Exclude<ForaDoAparelho, "lendo">;
 
 /**
  * A lista do aparelho com a fila por cima e, com internet, os lançamentos de `ids` que ficaram fora
- * da janela do aparelho (ADR 0024), lidos do servidor sem guardar, com os ligados a eles pelo
+ * da janela do aparelho (ADR 0025), lidos do servidor sem guardar, com os ligados a eles pelo
  * estorno (os estornos, a compra, as outras parcelas). `foraDoAparelho` diz, do id que a lista não
  * tem, se ainda está lendo, se faltou internet ou se ele não existe.
  */

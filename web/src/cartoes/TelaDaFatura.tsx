@@ -112,7 +112,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const { lancamentos: daLeitura, semDados: semInternet, atualizadoEm } = useLancamentosDaTela(`/api/cartoes/${cartaoId}/faturas/${mes}/lancamentos`, leitura, daFatura);
   const compras = useMemo(() => daLeitura ?? [], [daLeitura]);
   // O índice de estornos olha a janela do aparelho (o estorno pode estar em outra fatura) e as compras
-  // desta fatura, que podem estar antes dela (ADR 0024). O estorno de uma compra fora da janela, numa
+  // desta fatura, que podem estar antes dela (ADR 0025). O estorno de uma compra fora da janela, numa
   // fatura antiga, fica "estorno de uma compra" até abri-lo (ticket 176).
   const { lancamentos } = useLancamentos();
   const { dados: parcelamentos } = useParcelamentos();

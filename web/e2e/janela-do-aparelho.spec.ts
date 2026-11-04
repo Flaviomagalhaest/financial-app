@@ -8,7 +8,7 @@ test.use({ timezoneId: "America/Sao_Paulo" });
 
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 
-/** 10 de março de `anos` anos atrás: fora da janela do aparelho, que tem 12 meses (ADR 0024). */
+/** 10 de março de `anos` anos atrás: fora da janela do aparelho, que tem 12 meses (ADR 0025). */
 const haAnos = (anos: number) => `${Number(hoje().slice(0, 4)) - anos}-03-10`;
 
 const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: nome }).click();

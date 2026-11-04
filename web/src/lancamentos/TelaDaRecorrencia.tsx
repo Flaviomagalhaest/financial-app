@@ -111,7 +111,7 @@ function alteracaoDo(f: Formulario, r: RecorrenciaNaTela, ocorrencia: number, da
  * (ADR 0020); o servidor refaz os previstos quando a mudança sobe.
  */
 export function TelaDaRecorrencia({ id }: { id: string }) {
-  // O lançamento pode estar fora da janela do aparelho (ADR 0024): com internet, vem do servidor.
+  // O lançamento pode estar fora da janela do aparelho (ADR 0025): com internet, vem do servidor.
   const { lancamentos, foraDoAparelho } = useLancamentosComOsDeFora(id);
   const { recorrencias, semDados } = useRecorrencias();
   const mudancas = useMudancasDaRecorrenciaNaoEnviadas();

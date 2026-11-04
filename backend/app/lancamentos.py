@@ -1993,7 +1993,7 @@ def inicio_da_janela() -> date:
 
 @router.get("/lancamentos", response_model=list[Lancamento], operation_id="listar_lancamentos")
 def listar_lancamentos(usuario: UsuarioLogado, request: Request) -> list[Lancamento]:
-    """A janela do aparelho (ADR 0024): os que contam nos últimos meses, pelo mês em que contam (o
+    """A janela do aparelho (ADR 0025): os que contam nos últimos meses, pelo mês em que contam (o
     da fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem."""
     with conectar(url_do_banco(request)) as conn:
         return _todos(conn, f"{MES_EM_QUE_CONTA} >= %s", (inicio_da_janela(),))

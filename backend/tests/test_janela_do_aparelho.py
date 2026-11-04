@@ -1,4 +1,4 @@
-"""A janela do aparelho (ticket 166, ADR 0024): a lista que o aparelho guarda traz só os
+"""A janela do aparelho (ticket 166, ADR 0025): a lista que o aparelho guarda traz só os
 lançamentos que contam nos últimos 12 meses, pelo mês em que contam, e todos daqui para frente."""
 
 from datetime import date
