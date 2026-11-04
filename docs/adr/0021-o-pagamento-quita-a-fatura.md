@@ -17,3 +17,9 @@ Um pagamento realizado para uma fatura fechada a deixa paga, qualquer que seja o
 - Fatura fechada sem nenhum pagamento continua fechada, devendo e vencida na Hoje, e não passa saldo anterior; as compras novas vão para a seguinte pela data do fechamento, como sempre.
 - Fatura fechada de total zero fica fechada, não paga.
 - Compra esquecida, troca, estorno ou acerto de datas que cairia numa fatura paga é recusado com aviso para corrigir a fatura.
+- O parcelamento e a recorrência no cartão também não mudam uma fatura paga pelo pagamento (ticket 126). Como gravam em vários lotes, a regra é decidida antes do primeiro lote, para não ficar pela metade:
+  - **excluir o parcelamento** deixa as parcelas de fatura paga, e ele continua existindo, encolhido até a última delas;
+  - **corrigir o parcelamento** deixa intocada a parcela de fatura paga, recusa encolher abaixo da última delas e recusa levar uma parcela para dentro de uma fatura paga;
+  - **criar uma recorrência** cuja ocorrência do dia do lançamento cairia numa fatura paga é recusado, e **alterá-la** deixa como está o atrasado de fatura paga.
+
+  A fatura importada do Mobills fica de fora, como no resto da proteção.
