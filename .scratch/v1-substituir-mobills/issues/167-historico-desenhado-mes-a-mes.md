@@ -1,7 +1,7 @@
 # Histórico desenhado mês a mês e continuado pelo servidor
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 166
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
