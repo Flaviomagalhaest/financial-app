@@ -410,7 +410,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     Enquanto a regra é a que o casal lançou, o "hoje" é o dia do lançamento (`dia_do_lancamento_vigente`), e a
     ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu), salvo a de
     valor fixo que não é automática: essa o casal confirma no pagamento (ticket 129); fora dela,
-    só a automática que chegou."""
+    só a automática que chegou. A de antes de hoje que cairia numa fatura paga também passa: a
+    criação confere as pagas, mas o pagamento pode chegar entre os lotes (ticket 179)."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -426,6 +427,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     lancada = dia_do_lancamento_vigente(regra)
     desde = lancada or dia_de_hoje
+    em_que_paga = _em_que_fatura_paga(conn)
     proximas: list[tuple[int, date]] = []
     ultima, n = geradas, geradas
     while len(proximas) < por_lote:
@@ -434,7 +436,10 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         if _fora_do_fim(regra, n, dia) or dia > ultimo_dia:
             break
         ultima = n
-        if dia >= desde:
+        # A de antes de hoje que cairia numa fatura paga depois da criação (a fatura paga entre
+        # os lotes, ou entre a conferência e o primeiro) passa como a de antes do lançamento: a
+        # fatura paga não recebe nada fora da correção (ADR 0021, ticket 179).
+        if dia >= desde and not (dia < dia_de_hoje and em_que_paga(regra.conta_id, dia, None)):
             proximas.append((n, dia))
     if ultima == geradas:
         return False
