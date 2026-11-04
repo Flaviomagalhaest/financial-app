@@ -555,3 +555,29 @@ test("a tela de um parcelamento que não existe diz que não achou e não guarda
   );
   expect(chaves.filter((c) => c.includes(inexistente))).toEqual([]);
 });
+
+test("a tela do parcelamento com a lista sem a 1ª parcela não calcula o aviso de planejamento com a parcela do meio", async ({ page }) => {
+  const { api, id, descricao } = await prepararParcelamento(page);
+  const eletro = (await api.ler("/api/parcelamentos")).find((p: { id: string }) => p.id === id).categoria_ids[0];
+  const primeira = (await api.ler("/api/lancamentos")).find((l: { parcelamento_id: string; parcela: number }) => l.parcelamento_id === id && l.parcela === 1);
+  const mes = (primeira.mes ?? primeira.data).slice(0, 7);
+  await api.criar(`/api/planejamento/${mes}/itens`, { id: crypto.randomUUID(), categoria_id: eletro, valor_centavos: 100000 });
+  await page.reload();
+
+  // Com a lista inteira, o aviso sai da 1ª parcela.
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  await expect(page.getByRole("region", { name: "Aviso de planejamento" })).toBeVisible();
+
+  // A lista sem a 1ª parcela (resposta guardada velha, ou só os não enviados): sem aviso, em vez de calcular com a do meio.
+  await page.route(`**/api/parcelamentos/${id}/lancamentos`, async (rota) => {
+    const resposta = await rota.fetch();
+    const lista = (await resposta.json()) as { parcela: number }[];
+    await rota.fulfill({ response: resposta, json: lista.filter((l) => l.parcela !== 1) });
+  });
+  await aba(page, "Hoje");
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  await expect(page.getByRole("button", { name: /^Parcela 2|2\/6/ }).or(page.getByText("02/06")).first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Aviso de planejamento" })).toHaveCount(0);
+});

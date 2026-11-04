@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 
@@ -154,4 +154,97 @@ test("o casal cria um item avulso, muda o valor e exclui, sem passar pelo modelo
   await linha.getByRole("button", { name: `Excluir Casa ${s}` }).click();
   await expect(itens.getByRole("row").filter({ hasText: `Casa ${s}` })).toHaveCount(0);
   await expect(itens).toContainText("Nenhum item planejado neste mês.");
+});
+
+/** Um mês de um ano antigo e vazio, com a conta, duas categorias com item no planejamento e um jantar nas duas (o "A escolher"). */
+async function prepararMesComJantar(page: Page) {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/#/mes");
+  await entrar(page);
+  await expect(page.getByText("mês atual")).toBeVisible();
+  const api = await apiDaPagina(page);
+  const ano = await anoVazio(api, (a) => [`${a}-03`]);
+  const mes = `${ano}-03`;
+  const conta = await api.criar("/api/contas", { nome: `Corrente ${s}`, tipo: "corrente" });
+  const mercado = (await api.criar("/api/categorias", { nome: `Mercado ${s}`, tipo: "despesa" })).id as string;
+  const viagem = (await api.criar("/api/categorias", { nome: `Viagem ${s}`, tipo: "despesa" })).id as string;
+  for (const categoria of [mercado, viagem]) await api.criar(`/api/planejamento/${mes}/itens`, { id: randomUUID(), categoria_id: categoria, valor_centavos: 50000 });
+  await api.criar("/api/lancamentos", {
+    id: randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 20000,
+    data: `${mes}-07`,
+    descricao: `Jantar ${s}`,
+    conta_id: conta.id,
+    categoria_ids: [mercado, viagem],
+    tags: [],
+  });
+  return { s, mes, api };
+}
+
+const abrirMes = (page: Page, mes: string) => page.evaluate((m) => (window.location.hash = `#/mes/${m}`), mes);
+
+test("sem internet, o Mês mostra os lançamentos da última leitura e avisa", async ({ page, context }) => {
+  const { s, mes } = await prepararMesComJantar(page);
+  await abrirMes(page, mes);
+  const aEscolher = page.getByRole("region", { name: "A escolher" });
+  await expect(aEscolher).toContainText(`Jantar ${s}`);
+  await expect(page.getByText("Sem internet: os lançamentos do mês são as da última leitura.")).toHaveCount(0);
+
+  await context.setOffline(true);
+  await abrirMes(page, "1000-01");
+  await abrirMes(page, mes);
+  await expect(page.getByText("Sem internet: os lançamentos do mês são as da última leitura.")).toBeVisible();
+  await expect(aEscolher).toContainText(`Jantar ${s}`);
+  const ranking = page.getByRole("region", { name: "Ranking" });
+  await ranking.getByRole("button", { name: new RegExp(`Mercado ${s}`) }).click();
+  await expect(page.getByRole("dialog", { name: `Mercado ${s}` })).toContainText(`Jantar ${s}`);
+  await context.setOffline(false);
+});
+
+test("sem internet e sem resposta guardada dos lançamentos, o Mês diz que o A escolher e o Ranking precisam de internet", async ({ page }) => {
+  const { s, mes } = await prepararMesComJantar(page);
+  // A leitura do mês chega; a dos lançamentos do mês nunca veio ao aparelho.
+  await page.route(`**/api/meses/${mes}/lancamentos`, (rota) => rota.abort("internetdisconnected"));
+  await abrirMes(page, mes);
+  await expect(page.getByRole("heading", { name: /Março de/ })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "precisam dos lançamentos do mês, que não estão no aparelho" })).toContainText('Sem internet: o "A escolher" e o Ranking precisam');
+  await expect(page.getByRole("region", { name: "A escolher" })).toHaveCount(0);
+  await expect(page.getByText(`Jantar ${s}`)).toHaveCount(0);
+});
+
+test("um lançamento não enviado aparece no A escolher e no Ranking do Mês sem internet", async ({ page, context }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/#/mes");
+  await entrar(page);
+  const api = await apiDaPagina(page);
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const mes = hoje.slice(0, 7);
+  const conta = await api.criar("/api/contas", { nome: `Corrente ${s}`, tipo: "corrente" });
+  const mercado = (await api.criar("/api/categorias", { nome: `Mercado ${s}`, tipo: "despesa" })).id as string;
+  const viagem = (await api.criar("/api/categorias", { nome: `Viagem ${s}`, tipo: "despesa" })).id as string;
+  for (const categoria of [mercado, viagem]) await api.criar(`/api/planejamento/${mes}/itens`, { id: randomUUID(), categoria_id: categoria, valor_centavos: 50000 });
+  await api.criar("/api/lancamentos", { id: randomUUID(), tipo: "despesa", valor_centavos: 4500, data: hoje, descricao: `Jantar ${s}`, conta_id: conta.id, categoria_ids: [mercado, viagem], tags: [] });
+  await page.reload();
+  await expect(page.getByRole("region", { name: "A escolher" })).toContainText(`Jantar ${s}`);
+
+  // Sem internet, a edição do valor fica na fila; a resposta guardada do mês é a de antes dela.
+  await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Histórico" }).click();
+  const linha = page.getByRole("listitem").filter({ hasText: `Jantar ${s}` });
+  await expect(linha).toBeVisible();
+  await context.setOffline(true);
+  await linha.getByRole("link", { name: `Editar Jantar ${s}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 45,00");
+  await page.getByRole("button", { name: "0", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(linha).toContainText("⏳ não enviado");
+
+  await abrirMes(page, mes);
+  const aEscolher = page.getByRole("region", { name: "A escolher" });
+  await expect(aEscolher).toContainText(`Jantar ${s}`);
+  await expect(aEscolher).toContainText("R$ 450,00");
+  const ranking = page.getByRole("region", { name: "Ranking" });
+  await ranking.getByRole("button", { name: new RegExp(`Mercado ${s}`) }).click();
+  await expect(page.getByRole("dialog", { name: `Mercado ${s}` })).toContainText("R$ 450,00");
+  await context.setOffline(false);
 });

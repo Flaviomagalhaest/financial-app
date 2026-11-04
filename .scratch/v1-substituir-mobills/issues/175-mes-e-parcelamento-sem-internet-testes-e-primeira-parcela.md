@@ -1,7 +1,7 @@
 # Mês e parcelamento sem internet: testes que faltam e primeira parcela fora da janela
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 166
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -16,7 +16,7 @@ Origem: revisão do [ticket 165](165-telas-que-filtram-a-lista-leem-do-servidor.
 
 ## Checklist
 
-- [ ] Teste de navegador: Mês sem internet com e sem resposta guardada
-- [ ] Teste de navegador: não enviado no "A escolher" e no Ranking sem internet
-- [ ] Primeira parcela escolhida pelo número, não pela posição; sem ela, sem aviso
-- [ ] Teste de navegador do parcelamento com a lista sem a 1ª parcela
+- [x] Teste de navegador: Mês sem internet com e sem resposta guardada
+- [x] Teste de navegador: não enviado no "A escolher" e no Ranking sem internet
+- [x] Primeira parcela escolhida pelo número, não pela posição; sem ela, sem aviso
+- [x] Teste de navegador do parcelamento com a lista sem a 1ª parcela
