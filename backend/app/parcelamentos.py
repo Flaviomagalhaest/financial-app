@@ -8,7 +8,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Literal
+from typing import Literal, NamedTuple
 from uuid import UUID, uuid5
 
 import psycopg
@@ -931,16 +931,38 @@ DA_COMPRA = CLASSIFICACAO - {"descricao"}
 CRONOGRAMA = frozenset({"valor_centavos", "data", "conta_id", "fatura_mes"})
 
 
+class _NaFatura(NamedTuple):
+    """Onde uma parcela do cartão está: o número dela, o titular e o mês da fatura."""
+
+    parcela: int
+    titular: UUID
+    mes: date
+    excluida: bool
+
+
+def _onde_estao_as_parcelas(conn, id: UUID) -> dict[UUID, _NaFatura]:
+    """A fatura de cada parcela do parcelamento que está num cartão, excluídas também."""
+    return {
+        lancamento_id: _NaFatura(n, titular, mes, excluida)
+        for lancamento_id, n, titular, mes, excluida in conn.execute(
+            f"SELECT l.id, l.parcela, COALESCE(c.titular_id, c.id),"
+            f" {lancamentos.MES_EM_QUE_CONTA}, l.excluido_em IS NOT NULL"
+            " FROM lancamentos l JOIN cartoes c ON c.id = l.conta_id"
+            " WHERE l.parcelamento_id = %s",
+            (id,),
+        )
+    }
+
+
 def parcelas_nas_faturas_pagas(conn, id: UUID) -> set[int]:
     """O número das parcelas do parcelamento que estão numa fatura paga pelo pagamento (ADR
     0021): a correção as deixa como estão no valor, na data e na fatura (ticket 171). A da
     fatura importada do Mobills segue a correção, com o aviso das realizadas."""
-    linhas = conn.execute(
-        f"SELECT l.parcela, COALESCE(c.titular_id, c.id), {lancamentos.MES_EM_QUE_CONTA}"
-        " FROM lancamentos l JOIN cartoes c ON c.id = l.conta_id"
-        " WHERE l.parcelamento_id = %s AND l.excluido_em IS NULL",
-        (id,),
-    ).fetchall()
+    linhas = [
+        (n, titular, mes)
+        for n, titular, mes, excluida in _onde_estao_as_parcelas(conn, id).values()
+        if not excluida
+    ]
     pagas = {
         titular: {
             f.mes
@@ -1258,13 +1280,14 @@ def gravar_correcao(
             "SELECT parcela FROM lancamentos WHERE id = %s", (editada,)
         ).fetchone()
         mantidas.discard(numero)
+    # Antes do aviso: o pedido que vai ser recusado não pede para confirmar as realizadas.
+    _conferir_os_lotes(conn, nova, correcoes, geradas_depois)
     if realizadas and not alteracao.confirmar_realizadas:
         raise RealizadasMudam(
             AvisoDeRealizadas(
                 motivo="a correção muda parcelas que já foram realizadas", parcelas=realizadas
             )
         )
-    _conferir_os_lotes(conn, nova, correcoes, geradas_depois)
     tags_de_antes = set(_tags_do_parcelamento(conn, id))
     tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes)
     if not conn.execute(
@@ -1311,35 +1334,28 @@ def gravar_correcao(
     return CorrecaoGravada(classificacao, mantidas)
 
 
-def _conferir_os_lotes(conn, regra: Parcelamento, correcoes: list[_Correcao], geradas: int) -> None:
+def _conferir_os_lotes(
+    conn, regra: Parcelamento, correcoes: list[_Correcao], geradas_depois: int
+) -> None:
     """As regras da fatura paga (ADR 0021) em cada lote do refazer e na geração das parcelas
     que faltam, simuladas antes de gravar (`cartoes.conferir_sem_gravar`): a parcela que entraria
     numa fatura paga recusa o pedido inteiro, e não só o lote em que ela cai (ticket 171). As
     que já estão numa fatura paga não mudam (`parcelas_nas_faturas_pagas`)."""
-    onde = {
-        lancamento_id: (titular, mes, excluida)
-        for lancamento_id, titular, mes, excluida in conn.execute(
-            f"SELECT l.id, COALESCE(c.titular_id, c.id), {lancamentos.MES_EM_QUE_CONTA},"
-            " l.excluido_em IS NOT NULL"
-            " FROM lancamentos l JOIN cartoes c ON c.id = l.conta_id"
-            " WHERE l.parcelamento_id = %s",
-            (regra.id,),
-        )
-    }
+    na_fatura = _onde_estao_as_parcelas(conn, regra.id)
     sinal = 1 if regra.tipo == "despesa" else -1
-    quantas = parcelas_por_lote(conn, regra)
-    passos: list[dict[tuple[UUID, date], int]] = []
-    for inicio in range(0, len(correcoes), quantas):
-        passo: Counter = Counter()
-        for t in correcoes[inicio : inicio + quantas]:
-            if t.id not in onde:
+    por_lote = parcelas_por_lote(conn, regra)
+    lotes: list[Counter] = []
+    for inicio in range(0, len(correcoes), por_lote):
+        lote: Counter = Counter()
+        for correcao in correcoes[inicio : inicio + por_lote]:
+            if not (antes := na_fatura.get(correcao.id)):
                 continue  # fora do cartão
-            titular, mes, excluida = onde[t.id]
-            if not excluida:
-                passo[titular, mes] -= sinal * t.valor_antes
-            if t.acao in ("atualizar", "reviver"):
-                passo[titular, t.mes] += sinal * t.valor
-        passos.append(passo)
+            # Sai da fatura em que está com o valor de antes e entra na nova com o de depois.
+            if not antes.excluida:
+                lote[antes.titular, antes.mes] -= sinal * correcao.valor_antes
+            if correcao.acao in ("atualizar", "reviver"):
+                lote[antes.titular, correcao.mes] += sinal * correcao.valor
+        lotes.append(lote)
     cartao = faturas.ler_cartao(conn, regra.conta_id)
     if cartao is not None:
         existem = {
@@ -1349,13 +1365,15 @@ def _conferir_os_lotes(conn, regra: Parcelamento, correcoes: list[_Correcao], ge
             )
         }
         geracao: Counter = Counter()
-        for n in range(geradas + 1, regra.parcelas + 1):
+        for n in range(geradas_depois + 1, regra.parcelas + 1):
             if n not in existem:
                 mes = faturas.mes_da_parcela(conn, cartao.titular, regra.data, n)
                 geracao[cartao.titular.id, mes] += sinal * valor_da_parcela(
                     regra.valor_total_centavos, regra.parcelas, n
                 )
-        passos.append(geracao)
+        lotes.append(geracao)
+    # A fatura em que a soma não muda (só a classificação mudou) não entra na simulação.
+    passos = [{chave: valor for chave, valor in lote.items() if valor} for lote in lotes]
     if any(passos):
         cartoes.conferir_sem_gravar(conn, passos)
 

@@ -1,7 +1,7 @@
 # A correção do parcelamento não mexe na fatura paga
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -21,10 +21,23 @@ O que fica valendo, só para a fatura paga pelo pagamento (a importada do Mobill
 
 ## Checklist
 
-- [ ] A parcela de fatura paga fica intocada (valor, data e fatura), conta em `parcelas_mantidas` e fica fora do aviso de realizadas
-- [ ] Encolher abaixo da última parcela de fatura paga dá 422, com a mensagem
-- [ ] A parcela que entraria numa fatura paga recusa o pedido inteiro antes de gravar (422), também quando isso acontece só num lote seguinte
-- [ ] A mudança com alcance ("esta e as próximas", "todas") segue as mesmas regras; conferir se já segue
-- [ ] A tela mostra as recusas e a contagem de mantidas
-- [ ] Testes de API em `backend/tests/test_fatura_paga.py`
-- [ ] Conferir se o `GLOSSARY.md` (**Correção do parcelamento**) bate com o que foi feito
+- [x] A parcela de fatura paga fica intocada (valor, data e fatura), conta em `parcelas_mantidas` e fica fora do aviso de realizadas
+- [x] Encolher abaixo da última parcela de fatura paga dá 422, com a mensagem
+- [x] A parcela que entraria numa fatura paga recusa o pedido inteiro antes de gravar (422), também quando isso acontece só num lote seguinte
+- [x] A mudança com alcance ("esta e as próximas", "todas") segue as mesmas regras; conferir se já segue
+- [x] A tela mostra as recusas e a contagem de mantidas
+- [x] Testes de API em `backend/tests/test_fatura_paga.py`
+- [x] Conferir se o `GLOSSARY.md` (**Correção do parcelamento**) bate com o que foi feito
+
+## Answer
+
+Feito em 04/11.
+
+- **A parcela de fatura paga fica intocada.** `parcelamentos.parcelas_nas_faturas_pagas` acha as parcelas que estão numa fatura paga pelo pagamento (`cartoes.paga_pelo_pagamento`; a importada do Mobills fica de fora e segue a correção, com o aviso). `_correcoes` trata essas parcelas como alteradas à mão no valor, na data, na conta e na fatura: elas contam em `parcelas_mantidas` e ficam fora do aviso. A classificação (descrição, categorias, tags...) continua sendo corrigida nelas, porque não muda a fatura.
+- **Encolher abaixo da última parcela de fatura paga** é recusado em `gravar_correcao` (422): "a parcela N está numa fatura paga: o parcelamento não fica com menos de N parcelas (para mudá-la, use a correção da fatura)".
+- **Entrar numa fatura paga** recusa o pedido inteiro antes de gravar. `_conferir_os_lotes` simula, com `cartoes.conferir_sem_gravar`, cada lote do refazer e, no fim, a geração das parcelas que faltam. A recusa vem antes do aviso das realizadas, para o pedido que vai ser recusado não pedir confirmação.
+- **Mudança com alcance.** "Todas" com valor ou data passa pela correção e segue a mesma regra. Em "esta e as próximas" e na conta ou fatura de "todas", `mudanca_na_parcela._falta` deixa a parcela de fatura paga como está, também a de uma fatura paga no meio da mudança. Antes, essa parcela recusava o pedido. Os testes do ticket 149 sobre a recusa num lote seguinte e a recusa gravada no parcelamento passaram a usar uma parcela que **entraria** numa fatura paga.
+- **Tela.** Ela já mostrava a recusa (`motivo`) e a contagem. A frase das mantidas agora diz "alguém as mudou à mão ou elas estão numa fatura paga", e as dicas da tela do parcelamento e da parcela também falam da fatura paga.
+- **Testes.** Testes de API em `backend/tests/test_fatura_paga.py`; o `GLOSSARY.md` (**Correção do parcelamento**) foi detalhado.
+
+Pendência: [ticket 176](176-fatura-paga-no-meio-do-refazer-da-correcao.md). A fatura paga entre a gravação e um lote seguinte do refazer ainda recebe a parcela que a correção leva para ela.
