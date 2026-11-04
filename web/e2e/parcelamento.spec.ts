@@ -449,6 +449,9 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(6);
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
   await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  // As parcelas vêm do servidor e não ficam no aparelho: a rede cair antes de elas chegarem deixava a
+  // tela sem parcelas por pagar (ticket 15 de processo-do-repositorio).
+  await expect(page.getByRole("list", { name: `Parcelas de ${descricao}` }).getByRole("listitem")).toHaveCount(6);
 
   await context.setOffline(true);
   const antecipar = page.getByRole("region", { name: "Antecipar ou quitar" });
