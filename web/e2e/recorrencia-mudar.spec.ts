@@ -121,6 +121,35 @@ test("sem internet, encerrar e mudar daqui para frente ficam na fila, um pedido 
   expect(gravada).toMatchObject({ valor_centavos: 21000, vezes: 2, ate: null });
 });
 
+/** Daqui em diante, a leitura da fila no aparelho responde `ms` depois: chega depois das respostas guardadas. */
+async function atrasarALeituraDaFila(page: Page, ms: number) {
+  await page.evaluate((ms) => {
+    const { getAll } = IDBObjectStore.prototype;
+    const definir = Object.getOwnPropertyDescriptor(IDBRequest.prototype, "onsuccess")!.set!;
+    IDBObjectStore.prototype.getAll = function (this: IDBObjectStore, ...args: unknown[]) {
+      const lida = (getAll as (...a: unknown[]) => IDBRequest).apply(this, args);
+      if (this.name === "fila")
+        Object.defineProperty(lida, "onsuccess", { set: (aoLer: (e: Event) => void) => definir.call(lida, (e: Event) => setTimeout(() => aoLer.call(lida, e), ms)) });
+      return lida;
+    };
+  }, ms);
+}
+
+test("a tela da recorrência espera a fila: o formulário traz a mudança não enviada mesmo quando a fila chega depois da regra guardada", async ({ page, context }) => {
+  const { descricao } = await prepararRegra(page, 2);
+  const previstos = linha(page, descricao);
+  await context.setOffline(true);
+  await abrirRecorrencia(page, previstos.nth(1), descricao);
+  await mudarOValor(page, "210,00");
+
+  // O formulário se preenche uma vez só: se a regra guardada chegava antes da fila, ficava sem a
+  // mudança (ticket 15 de processo-do-repositorio, que o CI mostrava com as partes).
+  await atrasarALeituraDaFila(page, 1500);
+  await abrirRecorrencia(page, previstos.nth(1), descricao);
+  await expect(page.getByRole("listitem").filter({ hasText: "valor, não enviado" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Valor" })).toHaveValue("210,00");
+});
+
 /** Muda a regra pela API, como a outra pessoa com internet, fora do contexto que está sem rede. */
 async function mudarPelaApi(request: APIRequestContext, token: string, id: string, data: object) {
   const resposta = await request.patch(`/api/recorrencias/${id}`, { headers: { authorization: token }, data });
