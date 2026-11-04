@@ -930,6 +930,24 @@ DA_COMPRA = CLASSIFICACAO - {"descricao"}
 CRONOGRAMA = frozenset({"valor_centavos", "data", "conta_id", "fatura_mes"})
 
 
+def _faturas_pagas(conn, conta_ids: set[UUID]) -> dict[UUID, dict[date, bool]]:
+    """De cada conta, os meses das faturas pagas e se foi pelo pagamento (`True`, só a correção
+    de fatura a muda, ADR 0021) ou se é a importada do Mobills (`False`); fora do cartão, nada."""
+    pagas: dict[UUID, dict[date, bool]] = {}
+    for conta_id in conta_ids:
+        cartao = faturas.ler_cartao(conn, conta_id)
+        pagas[conta_id] = (
+            {
+                f.mes: cartoes.paga_pelo_pagamento(f)
+                for f in cartoes.faturas_do_titular(conn, cartao.titular.id)
+                if f.situacao == "paga"
+            }
+            if cartao
+            else {}
+        )
+    return pagas
+
+
 def _correcoes(
     conn,
     regra: Parcelamento,
@@ -956,12 +974,13 @@ def _correcoes(
     parcelas = conn.execute(
         f"SELECT id, parcela, data, valor_centavos, descricao, pessoa, situacao,"
         f" excluido_em IS NOT NULL, {lancamentos.VERSAO}, item_categoria_id, mes,"
-        " COALESCE(excluido_pela_regra, false)"
+        " COALESCE(excluido_pela_regra, false), conta_id"
         " FROM lancamentos WHERE parcelamento_id = %s"
         " ORDER BY parcela",
         (regra.id,),
     ).fetchall()
     ids = [linha[0] for linha in parcelas]
+    pagas = _faturas_pagas(conn, {linha[12] for linha in parcelas})
     a_mao = lancamentos.campos_a_mao(conn, ids)
     mantidas = set() if mantidas is None else mantidas
     categorias: dict[UUID, set[UUID]] = {}
@@ -1005,9 +1024,15 @@ def _correcoes(
         item_categoria_id,
         mes_antes,
         pulada,
+        conta_da_parcela,
     ) in parcelas:
         maos = a_mao.get(lancamento_id, set())
         acao: _Acao = "atualizar"
+        if not excluida and n <= regra.parcelas and pagas[conta_da_parcela].get(mes_antes):
+            # A parcela da fatura paga pelo pagamento fica como está (ADR 0021): a do
+            # parcelamento que a exclusão encolheu não se divide de novo pelo total que sobrou
+            # (ticket 170). O resto da proteção na correção é do ticket 171.
+            continue
         if excluida:
             if n > regra.parcelas or not (pulada or geradas < n):
                 continue
@@ -1498,40 +1523,45 @@ class _Exclusao:
     saem: list[UUID]
     aviso: AvisoDeExclusao | None
     # O número da última parcela que fica; `None` quando todas saem e o parcelamento some.
-    ate: int | None
-    total: int
+    ultima_que_fica: int | None
+    total_que_fica: int
+
+
+@dataclass
+class _ParcelaQueSairia:
+    id: UUID
+    parcela: int
+    valor: int
+    conta_id: UUID
+    mes: date
+    situacao: str
+    alterada_a_mao: bool
 
 
 def _exclusao(conn, id: UUID) -> _Exclusao:
-    linhas = conn.execute(
-        f"SELECT id, parcela, valor_centavos, conta_id, {lancamentos.MES_EM_QUE_CONTA},"
-        f" situacao, {lancamentos.ALTERADA_A_MAO}"
-        " FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL ORDER BY parcela",
-        (id,),
-    ).fetchall()
-    pagas: dict[UUID, dict[date, bool]] = {}
-    for conta_id in {linha[3] for linha in linhas}:
-        cartao = faturas.ler_cartao(conn, conta_id)
-        # De cada fatura paga, se foi pelo pagamento (fica) ou importada do Mobills (sai).
-        pagas[conta_id] = (
-            {
-                f.mes: cartoes.paga_pelo_pagamento(f)
-                for f in cartoes.faturas_do_titular(conn, cartao.titular.id)
-                if f.situacao == "paga"
-            }
-            if cartao
-            else {}
+    """Separa as parcelas que ficam (as da fatura paga pelo pagamento, ADR 0021) das que saem, e
+    conta para o aviso o que sai de cada tipo e o que fica."""
+    linhas = [
+        _ParcelaQueSairia(*linha)
+        for linha in conn.execute(
+            f"SELECT id, parcela, valor_centavos, conta_id, {lancamentos.MES_EM_QUE_CONTA},"
+            f" situacao, {lancamentos.ALTERADA_A_MAO}"
+            " FROM lancamentos WHERE parcelamento_id = %s AND excluido_em IS NULL"
+            " ORDER BY parcela",
+            (id,),
         )
-    ficam = [linha for linha in linhas if pagas[linha[3]].get(linha[4])]
-    ficam_ids = {linha[0] for linha in ficam}
-    saem = [linha for linha in linhas if linha[0] not in ficam_ids]
-    de_fatura_paga = sum(1 for linha in saem if linha[4] in pagas[linha[3]])
+    ]
+    pagas = _faturas_pagas(conn, {p.conta_id for p in linhas})
+    ficam = [p for p in linhas if pagas[p.conta_id].get(p.mes)]
+    saem = [p for p in linhas if not pagas[p.conta_id].get(p.mes)]
+    # As da fatura paga que saem são as da importada do Mobills.
+    de_fatura_paga = sum(1 for p in saem if p.mes in pagas[p.conta_id])
     realizadas = sum(
-        1 for linha in saem if linha[5] == "realizado" and linha[4] not in pagas[linha[3]]
+        1 for p in saem if p.situacao == "realizado" and p.mes not in pagas[p.conta_id]
     )
-    alteradas = sum(1 for linha in saem if linha[6])
+    alteradas = sum(1 for p in saem if p.alterada_a_mao)
     aviso = None
-    if de_fatura_paga or realizadas or alteradas or ficam:
+    if saem and (de_fatura_paga or realizadas or alteradas or ficam):
         aviso = AvisoDeExclusao(
             motivo="isto apaga lançamentos já pagos e pode desconfigurar o histórico",
             parcelas=len(saem),
@@ -1541,10 +1571,10 @@ def _exclusao(conn, id: UUID) -> _Exclusao:
             ficam_de_fatura_paga=len(ficam),
         )
     return _Exclusao(
-        [linha[0] for linha in saem],
+        [p.id for p in saem],
         aviso,
-        max((linha[1] for linha in ficam), default=None),
-        sum(linha[2] for linha in ficam),
+        max((p.parcela for p in ficam), default=None),
+        sum(p.valor for p in ficam),
     )
 
 
@@ -1580,16 +1610,16 @@ def excluir_parcelamento(
             raise ExclusaoPedeConfirmacao(plano.aviso)
         # Com todas as parcelas dadas por geradas, a tarefa diária não gera novas enquanto as de
         # agora saem, nem depois, no parcelamento que encolheu.
-        if plano.ate is None:
+        if plano.ultima_que_fica is None:
             conn.execute("UPDATE parcelamentos SET geradas = parcelas WHERE id = %s", (id,))
         else:
-            # A tabela pede duas parcelas ou mais, e o DSQL não tira a restrição (ADR 0009): com
+            # A tabela pede duas parcelas ou mais, e o DSQL não tira a restrição (ADR 0014): com
             # só a 1ª de fatura paga, fica um 2x com a 2ª excluída uma a uma (ticket 176).
-            parcelas = max(plano.ate, 2)
+            parcelas = max(plano.ultima_que_fica, 2)
             conn.execute(
                 "UPDATE parcelamentos SET parcelas = %s, geradas = %s, valor_total_centavos = %s"
                 " WHERE id = %s",
-                (parcelas, parcelas, plano.total, id),
+                (parcelas, parcelas, plano.total_que_fica, id),
             )
         return plano
 
@@ -1602,7 +1632,7 @@ def excluir_parcelamento(
         faltam = em_transacao(
             url, lambda conn, lote=faltam: _excluir_um_lote(conn, id, lote, usuario)
         )
-    if plano.ate is not None:
+    if plano.ultima_que_fica is not None:
         return Response(status_code=204)
 
     def tirar(conn) -> None:

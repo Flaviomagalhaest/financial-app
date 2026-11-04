@@ -1658,7 +1658,7 @@ def excluir_parcelamento(casal: Casal, id: str, quem: str = "flavio", **parametr
 
 
 def test_excluir_o_parcelamento_com_parcela_paga_ou_alterada_a_mao_pede_confirmacao_e_conta_cada_tipo(
-    casal: Casal, monkeypatch: pytest.MonkeyPatch
+    casal: Casal, monkeypatch: pytest.MonkeyPatch, database_url: str
 ):
     from tests.test_pagamento_de_fatura import pagar
 
@@ -1702,7 +1702,11 @@ def test_excluir_o_parcelamento_com_parcela_paga_ou_alterada_a_mao_pede_confirma
     assert len(casal.pedir("flavio", "GET", "/api/parcelamentos").json()) == 1
 
     assert excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True).status_code == 204
-    assert [l["parcela"] for l in parcelas(casal, novo["id"])] == [1]
+    fazer_tarefa_diaria(database_url)
+    # A que ficou não muda de valor, mesmo com a regra de 2x (ticket 176).
+    assert [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, novo["id"])] == [
+        (1, 25000)
+    ]
     [regra] = casal.pedir("flavio", "GET", "/api/parcelamentos").json()
     # Encolhido até a parcela que ficou, com o total dela; a tabela não aceita 1x, então fica um
     # 2x sem a 2ª (ticket 176).

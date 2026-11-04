@@ -88,8 +88,9 @@ function tiposQueSaem(a: AvisoDeExclusao, noCartao: boolean): string[] {
 
 /** As parcelas da fatura paga pelo pagamento não saem: o parcelamento fica com elas (ticket 170). */
 function ficamDeFaturaPaga(n: number): string {
-  const quantas = n === 1 ? "Fica 1 parcela de fatura paga" : `Ficam ${n} parcelas de fatura paga`;
-  return `${quantas}, e o parcelamento continua só com ${n === 1 ? "ela" : "elas"}. Para tirá-${n === 1 ? "la" : "las"}, corrija a fatura.`;
+  return n === 1
+    ? "Fica 1 parcela de fatura paga, e o parcelamento continua só com ela. Para tirá-la, corrija a fatura."
+    : `Ficam ${n} parcelas de fatura paga, e o parcelamento continua só com elas. Para tirá-las, corrija a fatura.`;
 }
 
 /** Corrige ou exclui o parcelamento; as duas mudam a regra e precisam de internet (ADR 0011). */
@@ -460,17 +461,16 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
           <p>
             <strong>Isto apaga lançamentos já pagos e pode desconfigurar o histórico. Confirma?</strong>
           </p>
-          {saem.length ? (
-            <>
-              <p>Saem {avisoDeExclusao.parcelas === 1 ? "1 parcela" : `as ${avisoDeExclusao.parcelas} parcelas`}; entre elas:</p>
-              <ul>
-                {saem.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            !!avisoDeExclusao.parcelas && <p>Saem {avisoDeExclusao.parcelas === 1 ? "1 parcela" : `as ${avisoDeExclusao.parcelas} parcelas`}.</p>
+          <p>
+            {avisoDeExclusao.parcelas === 1 ? "Sai 1 parcela" : `Saem as ${avisoDeExclusao.parcelas} parcelas`}
+            {saem.length ? "; entre elas:" : "."}
+          </p>
+          {!!saem.length && (
+            <ul>
+              {saem.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
           )}
           {!!avisoDeExclusao.ficam_de_fatura_paga && <p>{ficamDeFaturaPaga(avisoDeExclusao.ficam_de_fatura_paga)}</p>}
           <div className="acoes">

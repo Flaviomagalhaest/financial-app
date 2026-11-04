@@ -577,11 +577,17 @@ def test_a_parcela_antes_da_ultima_de_fatura_paga_sai_e_o_aviso_diz_quantas_fica
     assert excluir_parcelamento(casal, id, confirmar_realizadas=True).status_code == 204
     fazer_tarefa_diaria(database_url)
 
-    assert [l["parcela"] for l in parcelas(casal, id)] == [1, 2, 3, 5]
+    # A tarefa diária não divide de novo o total pelas cinco: as da fatura paga ficam como estão.
+    assert [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, id)] == [
+        (1, 10000),
+        (2, 10000),
+        (3, 10000),
+        (5, 10000),
+    ]
     regra = o_parcelamento(casal, id)
     assert (regra["parcelas"], regra["valor_total_centavos"]) == (5, 40000)
-    # Excluir de novo não tira mais nada: o que ficou é da fatura paga.
-    assert excluir_parcelamento(casal, id, confirmar_realizadas=True).status_code == 204
+    # Excluir de novo não tira nem pergunta nada: o que ficou é da fatura paga.
+    assert excluir_parcelamento(casal, id).status_code == 204
     assert [l["parcela"] for l in parcelas(casal, id)] == [1, 2, 3, 5]
 
 
@@ -607,7 +613,8 @@ def test_a_parcela_da_fatura_importada_do_mobills_sai_com_o_aviso(
         "ficam_de_fatura_paga": 1,
     }
     assert excluir_parcelamento(casal, id, confirmar_realizadas=True).status_code == 204
-    assert [l["parcela"] for l in parcelas(casal, id)] == [2]
+    fazer_tarefa_diaria(database_url)
+    assert [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, id)] == [(2, 10000)]
     regra = o_parcelamento(casal, id)
     assert (regra["parcelas"], regra["valor_total_centavos"]) == (2, 10000)
     assert faturas(casal, cartao)["2026-01-01"]["total_centavos"] == 0
