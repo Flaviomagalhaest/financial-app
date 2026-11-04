@@ -1,7 +1,7 @@
 # Telas que leem do servidor: uma definição por tela, sem repetição
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `codebase-design`
 Modelo recomendado: Sonnet
