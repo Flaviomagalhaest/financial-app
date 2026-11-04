@@ -1,7 +1,7 @@
 # Testes de navegador: três execuções verdes na main e as próximas falhas com trace
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 15
 Skills: `diagnosing-bugs`; apoio: `run`
 Modelo recomendado: Opus
