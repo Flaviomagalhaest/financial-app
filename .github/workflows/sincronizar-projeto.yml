@@ -1,7 +1,8 @@
 name: Sincronizar projeto
 
-# Na main, espelha todos os tickets (acerta qualquer desvio): só ela põe issue no projeto, e tira
-# as que não são de nenhum ticket dela (ticket 12).
+# Na main, só os tickets que o push mudou recebem o estado completo, para não desfazer o DOING/FINISHED
+# de uma branch ainda não mesclada (ticket 170); rodado à mão na main (workflow_dispatch), espelha todos.
+# Só a main põe issue no projeto, e tira as que não são de nenhum ticket dela (ticket 12).
 # Nas outras branches, só os tickets que a branch mudou e que já estão no projeto, para a coluna
 # andar antes do merge; o ticket novo da branch entra no merge.
 on:
@@ -31,13 +32,20 @@ jobs:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
           BRANCH: ${{ github.ref_name }}
           ANTES: ${{ github.event.before }}
+          EVENTO: ${{ github.event_name }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::falta o secret PROJECT_TOKEN (veja o ticket 07)"
             exit 1
           fi
           if [ "$BRANCH" = main ]; then
-            scripts/sincronizar-projeto.sh --tirar-sem-ticket
+            if [ "$EVENTO" = push ] && [ -n "$ANTES" ] \
+              && [ "$ANTES" != 0000000000000000000000000000000000000000 ] \
+              && git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+              scripts/sincronizar-projeto.sh --tirar-sem-ticket --desde "$ANTES"
+            else
+              scripts/sincronizar-projeto.sh --tirar-sem-ticket  # à mão: todos os tickets (--tudo)
+            fi
             exit 0
           fi
           # Push anterior da branch; no primeiro push (ou à mão), compara com a main
