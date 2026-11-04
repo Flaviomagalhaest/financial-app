@@ -481,7 +481,10 @@ def _terminar_o_que_outro_pedido_deixou(url: str | None, id: UUID) -> bool:
         except HTTPException:
             recusada = True  # o pedido anterior fica como parou; este segue
     if classificacao:
-        parcelamentos.completar(url, parcelamento_id)
+        try:
+            parcelamentos.completar(url, parcelamento_id)
+        except HTTPException:
+            recusada = True  # a correção anterior fica como parou, com a recusa; este segue
     return recusada
 
 

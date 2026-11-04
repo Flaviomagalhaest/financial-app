@@ -886,3 +886,72 @@ def test_sem_parcela_de_fatura_paga_a_exclusao_tira_o_parcelamento(
 
     assert parcelas(casal, id) == []
     assert o_parcelamento(casal, id) is None
+
+
+def test_a_fatura_paga_no_meio_do_refazer_da_correcao_nao_recebe_a_parcela(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from app import parcelamentos
+    from tests.test_alcance_da_mudanca_na_parcela import parcelamento as o_lido
+    from tests.test_alcance_da_mudanca_na_parcela import um_lote_por_parcela
+
+    # Hoje é 10/06: as parcelas caem em março, abril e maio, todas fechadas e a pagar.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    # Abril tem outra compra, para poder ser paga depois que a 2ª sair dela.
+    comprar(casal, cartao, "2026-04-10", valor_centavos=10000)
+    criado = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/parcelamentos",
+        json=parcelamento(
+            cartao, [casal.categoria()], data="2026-03-20", parcelas=3, valor_total_centavos=30000
+        ),
+    )
+    assert criado.status_code == 201, criado.text
+    id = criado.json()["id"]
+    original = parcelamentos._reajustar_um_lote
+    lotes = []
+
+    def cai_no_terceiro(*args):
+        lotes.append(args)
+        if len(lotes) > 2:
+            raise RuntimeError("a Lambda caiu")
+        return original(*args)
+
+    # A correção leva as parcelas um mês para trás; o pedido cai antes de mexer na 3ª.
+    with monkeypatch.context() as queda:
+        queda.setattr(parcelamentos, "_reajustar_um_lote", cai_no_terceiro)
+        with pytest.raises(RuntimeError):
+            corrigir_parcelamento(casal, id, data="2026-02-20", confirmar_realizadas=True)
+    # Abril, em que a 3ª entraria, é paga entre o pedido que caiu e a tarefa diária.
+    pago = pagar(
+        casal, conta, cartao, fatura_mes="2026-04-01", valor_centavos=10000, data="2026-06-05"
+    )
+    assert pago.status_code == 201, pago.text
+    abril_paga = numeros(faturas(casal, cartao)["2026-04-01"])
+
+    fazer_tarefa_diaria(casal.client.app.state.url)
+
+    assert [f for _, _, f in numero_valor_e_fatura(casal, id)] == [
+        "2026-02-01",
+        "2026-03-01",
+        "2026-05-01",
+    ]
+    assert numeros(faturas(casal, cartao)["2026-04-01"]) == abril_paga
+    assert o_lido(casal, id)["mudanca_recusada"] == (
+        "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
+        " A correção do parcelamento parou: as parcelas que faltavam corrigir ficaram como estavam"
+    )
+
+    # A próxima correção, que não leva parcela para abril, tira o aviso.
+    corrigido = corrigir_parcelamento(casal, id, data="2026-01-20", confirmar_realizadas=True)
+    assert corrigido.status_code == 200, corrigido.text
+    assert [f for _, _, f in numero_valor_e_fatura(casal, id)] == [
+        "2026-01-01",
+        "2026-02-01",
+        "2026-03-01",
+    ]
+    assert o_lido(casal, id)["mudanca_recusada"] is None
