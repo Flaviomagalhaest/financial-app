@@ -1,7 +1,7 @@
 # Rotas dos testes de navegador que leem do servidor ficam abertas quando o teste acaba
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
