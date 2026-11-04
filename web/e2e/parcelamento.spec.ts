@@ -450,8 +450,10 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
   await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
 
-  await context.setOffline(true);
+  // As parcelas vêm do servidor (ticket 165): só fica sem internet depois de elas chegarem.
   const antecipar = page.getByRole("region", { name: "Antecipar ou quitar" });
+  await expect(antecipar.getByRole("button", { name: "Quitar tudo" })).toBeVisible();
+  await context.setOffline(true);
   // Quitar tudo precisa de internet; antecipar vale sem ela.
   await antecipar.getByRole("button", { name: "Quitar tudo" }).click();
   await expect(antecipar.getByRole("button", { name: "Quitar parcelamento" })).toBeDisabled();
