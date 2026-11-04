@@ -1,7 +1,7 @@
 # Criar com a página fechada no meio do envio e a exclusão seguinte
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
@@ -21,5 +21,13 @@ Em `web/e2e/resposta-perdida.spec.ts`, como no caso `"recarga"`: lance o lançam
 
 ## Checklist
 
-- [ ] Teste de navegador: criar com a recarga no meio do envio, excluir ao reabrir, e o lançamento sai do servidor
-- [ ] A marca do criar não muda o planejamento nos envios que recebem resposta
+- [x] Teste de navegador: criar com a recarga no meio do envio, excluir ao reabrir, e o lançamento sai do servidor
+- [x] A marca do criar não muda o planejamento nos envios que recebem resposta
+
+## Resolução
+
+A recarga do ticket não reproduz: o navegador derruba o pedido ao recarregar, o `fetch` falha ainda na página e `marcarSemResposta` grava a marca (o teste `"recarga"` passa sem a correção). O caso real é a aba fechada ou o app morto pelo sistema, em que a página não vê a falha: o teste `"aba fechada"` ficou vermelho (o lançamento continuava no servidor) e verde com a correção.
+
+A correção usa o mecanismo do ticket 169: `guardarOEnviado` guarda também o criar (`enviadoSemResposta`) antes de o lote sair, e `enfileirarExcluir` só tira da fila o criar sem essa guarda e sem `talvezNoServidor`. A exclusão sobe depois do criar reenviado (o servidor devolve o que já tinha) e o tira de lá. A marca que o planejamento lê (`talvezNoServidor`, `tentadoEm`) continua só na falha, então o envio que recebe resposta não muda o que a tela mostra. Em `aplicar`, o criar reenviado com a exclusão atrás conta como excluído no caminho.
+
+Pendência: a regra tem o mesmo buraco com a aba fechada, no [ticket 181](181-regra-descartada-depois-da-pagina-fechada.md).
