@@ -190,7 +190,7 @@ export function enfileirarExcluirRecorrencia(recorrencia: NovaRecorrencia): Prom
     for (const item of (await pedido(fila.getAll())) as ItemDaFila[])
       if (item.acao === "alterar_recorrencia" && item.recorrencia_id === recorrencia.id) await pedido(fila.delete(item.id));
     const atual: ItemDaFila | undefined = await pedido(fila.get(recorrencia.id));
-    if (atual?.acao === "criar_recorrencia" && (atual.recusa || atual.talvezNoServidor === undefined)) return void (await pedido(fila.delete(recorrencia.id)));
+    if (atual?.acao === "criar_recorrencia" && (atual.recusa || !talvezGravada(atual))) return void (await pedido(fila.delete(recorrencia.id)));
     const agora = Date.now();
     const exclusao: ItemDaFila = {
       id: recorrencia.id,
@@ -199,7 +199,7 @@ export function enfileirarExcluirRecorrencia(recorrencia: NovaRecorrencia): Prom
       desde: atual?.desde ?? agora,
       feitoEm: agora,
       revisao: (atual?.revisao ?? 0) + 1,
-      talvezNoServidor: atual?.talvezNoServidor,
+      talvezNoServidor: atual?.talvezNoServidor ?? (atual && talvezGravada(atual) ? atual.revisao : undefined),
     };
     await pedido(fila.put(exclusao));
   });
@@ -441,8 +441,8 @@ async function marcarSemResposta(enviados: ItemDaFila[], saiuEm: number) {
         await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao, tentadoEm: saiuEm, base: { ...enviado.lancamento!, versao: 1 } }));
       // A regra talvez gravada não se descarta mais no aparelho: os previstos e as parcelas viriam
       // mesmo assim. Sem rede no aparelho, o pedido nem saiu, e ela segue descartável.
-      if (atual && !deLancamento(atual) && atual.talvezNoServidor === undefined && navigator.onLine)
-        await pedido(fila.put({ ...atual, talvezNoServidor: enviado.revisao }));
+      if (atual && !deLancamento(atual) && atual.talvezNoServidor === undefined)
+        await pedido(fila.put({ ...atual, talvezNoServidor: navigator.onLine ? enviado.revisao : undefined, enviadaPor: undefined }));
       // A recorrência descartada enquanto subia talvez tenha chegado: a exclusão a tira de lá, se estiver.
       if (!atual && enviado.acao === "criar_recorrencia" && navigator.onLine)
         await pedido(
@@ -452,22 +452,36 @@ async function marcarSemResposta(enviados: ItemDaFila[], saiuEm: number) {
   });
 }
 
+/** Quem manda a fila deste contexto (a página, ou o service worker): some quando ele fecha. */
+export const REMETENTE = crypto.randomUUID();
+
+/**
+ * A regra talvez já gravada no servidor: ficou sem resposta, ou saiu de um remetente que fechou no
+ * caminho (outro, que não este). A que saiu daqui e espera a resposta ainda se descarta: a resposta
+ * aceita tira do servidor a recorrência descartada no caminho.
+ */
+export const talvezGravada = (item: ItemDaFila) => item.talvezNoServidor !== undefined || (item.enviadaPor !== undefined && item.enviadaPor !== REMETENTE);
+
 /**
  * Antes de o lote sair, a edição e a confirmação guardam o que levam: se a resposta não voltar
  * (caiu, ou a página fechou no caminho), elas talvez já estejam gravadas, e a próxima mudança do
  * lançamento não pode ir sobre a versão de antes delas (ticket 169). O criar guarda também: fechada
  * a página no caminho, `marcarSemResposta` não roda, e a exclusão seguinte precisa subir (ticket
  * 173). A marca do criar (`talvezNoServidor`, `tentadoEm`) fica para a falha, porque o planejamento
- * a lê.
+ * a lê. A regra guarda quem a mandou, se há rede (ticket 181); a que outro remetente mandou e ficou
+ * na fila veio de um envio que fechou no caminho (quem envia segura a trava), e fica talvez gravada.
  */
 async function guardarOEnviado(lote: ItemDaFila[]) {
-  const mudancas = lote.filter((item) => deLancamento(item) && item.acao !== "excluir" && !item.enviadoSemResposta);
+  const mudancas = lote.filter((item) => (deLancamento(item) ? item.acao !== "excluir" && !item.enviadoSemResposta : item.talvezNoServidor === undefined));
   if (mudancas.length === 0) return;
   await emTransacao("readwrite", async (fila) => {
     for (const enviado of mudancas) {
       const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
-      if (atual && deLancamento(atual) && atual.revisao === enviado.revisao)
-        await pedido(fila.put({ ...atual, enviadoSemResposta: { revisao: enviado.revisao, acoes: acoesDo(enviado) } }));
+      if (!atual || atual.revisao !== enviado.revisao) continue;
+      if (deLancamento(atual)) await pedido(fila.put({ ...atual, enviadoSemResposta: { revisao: enviado.revisao, acoes: acoesDo(enviado) } }));
+      else if (atual.talvezNoServidor !== undefined) continue;
+      else if (talvezGravada(atual)) await pedido(fila.put({ ...atual, talvezNoServidor: atual.revisao, enviadaPor: undefined }));
+      else if (navigator.onLine) await pedido(fila.put({ ...atual, enviadaPor: REMETENTE }));
     }
   });
 }

@@ -32,6 +32,12 @@ interface PedidoNaFila {
   recusa?: string;
   /** O criar (o do lançamento ou o da regra) enviado sem resposta: a revisão que talvez já esteja gravada no servidor. */
   talvezNoServidor?: number;
+  /**
+   * A regra saiu com rede e a resposta ainda não voltou: quem a mandou (a página ou o service
+   * worker). Se quem mandou fechou no caminho, a falha não chega a marcar `talvezNoServidor`, e a
+   * marca de outro remetente diz isso (ticket 181).
+   */
+  enviadaPor?: string;
 }
 
 /** Uma mudança de lançamento não enviada: no máximo uma por lançamento, a soma do que se fez nele. */
