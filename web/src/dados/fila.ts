@@ -219,10 +219,13 @@ export function enfileirarAntecipacao(parcelamentoId: string, descricao: string,
   return mudar(id, () => ({ acao: "antecipar_parcelas", parcelamento_id: parcelamentoId, descricao, antecipacao: { ...antecipacao, id } }));
 }
 
-/** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
+/**
+ * Excluir o que com certeza não chegou ao servidor só o tira da fila. O criar que saiu, mesmo sem
+ * a falha registrada (a página fechou no caminho), talvez esteja lá: a exclusão sobe depois dele.
+ */
 export function enfileirarExcluir(id: string, base?: Base): Promise<void> {
   return mudar(id, (atual, aceito) =>
-    atual?.acao === "criar" && atual.talvezNoServidor === undefined
+    atual?.acao === "criar" && atual.talvezNoServidor === undefined && !atual.enviadoSemResposta
       ? null
       : { acao: "excluir", base: atual?.conflito?.lancamento ?? atual?.base ?? base ?? aceito },
   );
@@ -399,8 +402,10 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         else if (atual) await pedido(fila.delete(enviado.id));
         continue;
       }
-      // Excluído no aparelho enquanto subia: agora que existe no servidor, sai de lá também.
-      const excluidoNoCaminho = !atual && enviado.acao === "criar";
+      // Excluído no aparelho enquanto subia (ou depois, com o criar ainda sem resposta): agora que
+      // existe no servidor, sai de lá também.
+      const criou = (reenviou ? enviado.enviadoSemResposta!.acoes[0].acao : enviado.acao) === "criar";
+      const excluidoNoCaminho = criou && (!atual || atual.acao === "excluir");
       const depois = lancamento && !excluidoNoCaminho ? lancamento : undefined;
       // O aceito que conta antes da janela do aparelho (o de fora dela, aberto com internet) não fica na lista.
       await guardar(enviado.id, depois && depois.mes >= inicioDaJanela() ? depois : undefined);
@@ -450,10 +455,13 @@ async function marcarSemResposta(enviados: ItemDaFila[], saiuEm: number) {
 /**
  * Antes de o lote sair, a edição e a confirmação guardam o que levam: se a resposta não voltar
  * (caiu, ou a página fechou no caminho), elas talvez já estejam gravadas, e a próxima mudança do
- * lançamento não pode ir sobre a versão de antes delas (ticket 169).
+ * lançamento não pode ir sobre a versão de antes delas (ticket 169). O criar guarda também: fechada
+ * a página no caminho, `marcarSemResposta` não roda, e a exclusão seguinte precisa subir (ticket
+ * 173). A marca do criar (`talvezNoServidor`, `tentadoEm`) fica para a falha, porque o planejamento
+ * a lê.
  */
 async function guardarOEnviado(lote: ItemDaFila[]) {
-  const mudancas = lote.filter((item) => (item.acao === "editar" || item.acao === "confirmar") && !item.enviadoSemResposta);
+  const mudancas = lote.filter((item) => deLancamento(item) && item.acao !== "excluir" && !item.enviadoSemResposta);
   if (mudancas.length === 0) return;
   await emTransacao("readwrite", async (fila) => {
     for (const enviado of mudancas) {

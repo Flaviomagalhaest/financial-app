@@ -87,7 +87,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   // O lançamento que se abre, a compra que se estorna e a do estorno que se edita podem estar fora da
   // janela do aparelho (ADR 0025): com internet, vêm do servidor; sem ela, a tela diz que não estão aqui.
   const [compraDoExistente, setCompraDoExistente] = useState<string | null>(null);
-  const { lancamentos, foraDoAparelho } = useLancamentosComOsDeFora(id, estornoDe, compraDoExistente);
+  const { lancamentos, foraDoAparelho, lendoLigados } = useLancamentosComOsDeFora(id, estornoDe, compraDoExistente);
   const { dados: parcelamentos } = useParcelamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
   const opcoesDeTags = useTags();
@@ -254,6 +254,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       if (fora && fora !== "lendo") setErro(fora === "sem-internet" ? "Sem internet: esta compra não está no aparelho." : "Compra não encontrada.");
       return;
     }
+    // O que cabe no estorno depende dos ligados (as outras parcelas e os estornos delas), lidos do servidor com internet.
+    if (lendoLigados) return;
     setErro("");
     setEstornoAplicado(true);
     const parteId = (compra.partes?.find((p) => restanteDaParte(compra, p.id, indice, novoId) > 0) ?? compra.partes?.[0])?.id ?? null;
@@ -261,7 +263,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setContaId(compra.conta_id);
     setData(hoje());
     preencherEstorno(compra, parteId, false);
-  }, [estornoDe, estornoAplicado, compra, indice, foraDoAparelho, novoId]);
+  }, [estornoDe, estornoAplicado, compra, indice, foraDoAparelho, novoId, lendoLigados]);
 
   // O crédito avulso novo abre no cartão da fatura de onde se veio. Preenche uma vez só.
   useEffect(() => {

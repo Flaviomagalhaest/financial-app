@@ -26,4 +26,4 @@ A geração (`_gerar_um_lote`) passa pela ocorrência de antes de hoje que cairi
 
 Testes: `test_reenvio_depois_do_pagamento_nao_gera_o_passado_dentro_da_fatura_paga` (pago entre a conferência e o primeiro lote) e `test_pagamento_entre_os_lotes_nao_leva_o_resto_do_passado_para_a_fatura_paga`.
 
-Pendência: a ocorrência passa sem aviso ao casal ([ticket 181](181-aviso-da-ocorrencia-que-a-fatura-paga-tirou.md)).
+Pendência: a ocorrência passa sem aviso ao casal ([ticket 184](184-aviso-da-ocorrencia-que-a-fatura-paga-tirou.md)).

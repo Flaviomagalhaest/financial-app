@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
-import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, useLancamentosDaTela, leituraDaFatura, type LancamentoNaTela, useParcelamentos, usePessoas, type Fatura } from "../dados";
+import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, useLancamentosDaTela, useLidosDoServidor, leituraDaFatura, type LancamentoNaTela, useParcelamentos, usePessoas, type Fatura } from "../dados";
 import { eCredito, eEstorno, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { AvisoDeLeituraDoServidor } from "../lancamentos/AvisoDeLeituraDoServidor";
 import { mesEmQueConta } from "../dados/aviso";
@@ -114,15 +114,24 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const { lancamentos: daLeitura, semDados: semInternet, atualizadoEm } = useLancamentosDaTela(leitura, daFatura);
   const compras = useMemo(() => daLeitura ?? [], [daLeitura]);
   // O índice de estornos olha a janela do aparelho (o estorno pode estar em outra fatura) e as compras
-  // desta fatura, que podem estar antes dela (ADR 0025). O estorno de uma compra fora da janela, numa
-  // fatura antiga, fica "estorno de uma compra" até abri-lo (ticket 176).
+  // desta fatura, que podem estar antes dela (ADR 0025). O estorno de uma compra que nenhuma das duas
+  // tem (numa fatura antiga) lê a compra do servidor, com internet, para dar o nome (ticket 176).
   const { lancamentos } = useLancamentos();
   const { dados: parcelamentos } = useParcelamentos();
-  const indice = useMemo(() => {
+  const conhecidos = useMemo(() => {
     const naJanela = lancamentos ?? [];
     const ids = new Set(naJanela.map((l) => l.id));
-    return indiceDeEstornos([...naJanela, ...compras.filter((l) => !ids.has(l.id))], parcelamentos ?? []);
-  }, [lancamentos, compras, parcelamentos]);
+    return [...naJanela, ...compras.filter((l) => !ids.has(l.id))];
+  }, [lancamentos, compras]);
+  const semACompra = useMemo(() => {
+    const ids = new Set(conhecidos.map((l) => l.id));
+    return compras.flatMap((l) => (l.estorno_de && !ids.has(l.estorno_de) ? [l.estorno_de] : []));
+  }, [conhecidos, compras]);
+  const doServidor = useLidosDoServidor(semACompra);
+  const indice = useMemo(() => {
+    const ids = new Set(conhecidos.map((l) => l.id));
+    return indiceDeEstornos([...conhecidos, ...doServidor.filter((l) => !ids.has(l.id))], parcelamentos ?? []);
+  }, [conhecidos, doServidor, parcelamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
   const estornosCentavos = compras.filter((l) => eEstorno(l) && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
   const ligacoes = useMemo(() => new Map(compras.map((l) => [l.id, ligacaoDoEstorno(l, indice, categorias)])), [compras, indice, categorias]);

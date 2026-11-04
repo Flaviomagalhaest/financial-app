@@ -237,7 +237,9 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   // porque estão numa fatura paga (ticket 171).
   const [mantidas, setMantidas] = useState("");
   const doParcelamento = (lancamentos ?? []).slice().sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
-  const primeira = doParcelamento[0];
+  // A 1ª parcela é a de número 1, não a primeira da lista: sem internet, a lista pode vir sem ela
+  // (resposta guardada velha, ou só os não enviados) e `[0]` seria uma parcela do meio.
+  const primeira = doParcelamento.find((l) => l.parcela === 1);
   const noCartao = !!primeira?.fatura_mes;
   const saem = avisoDeExclusao ? tiposQueSaem(avisoDeExclusao, noCartao) : [];
   // O aviso mostra a 1ª parcela com o que o formulário tem; sem ela no aparelho, fica sem aviso.
@@ -323,7 +325,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         </p>
       )}
       {parcelamento.mudanca_recusada && (
-        <p className="aviso">Uma mudança nas parcelas parou no meio: {parcelamento.mudanca_recusada}. Para terminar, mude de novo uma das parcelas que faltaram, em “Esta e as próximas” ou “Todas”.</p>
+        <p className="aviso">Uma mudança nas parcelas parou no meio: {parcelamento.mudanca_recusada}. Para terminar, mude de novo uma das parcelas que faltaram, em “Esta e as próximas” ou “Todas”, ou, se a correção do parcelamento parou, corrija-o de novo.</p>
       )}
       {!online && <p className="aviso">Sem internet: corrigir e excluir o parcelamento precisam de internet.</p>}
 
