@@ -7,5 +7,7 @@ import type { Page } from "@playwright/test";
  * Usar em `test.afterEach`.
  */
 export async function soltarRotas(page: Page) {
+  // `page.route` e `context.route` são listas separadas: cada uma tem o seu `unrouteAll`.
+  await page.unrouteAll({ behavior: "wait" });
   await page.context().unrouteAll({ behavior: "wait" });
 }
