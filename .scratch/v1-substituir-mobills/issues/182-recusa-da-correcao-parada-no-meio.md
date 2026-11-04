@@ -1,7 +1,7 @@
 # Recusa da correção parada no meio: a parcela em que parou e a tentativa de cada dia
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
