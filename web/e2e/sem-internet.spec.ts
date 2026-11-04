@@ -536,10 +536,18 @@ test("a leitura da lista que a tela pediu antes da do service worker, se chega d
   const solta = new Promise<void>((resolve) => (soltar = resolve));
   let respondida = () => {};
   const daTela = new Promise<void>((resolve) => (respondida = resolve));
-  // As leituras da tela que saíram antes do lançamento do outro aparelho; as de depois passam.
+  // As leituras da tela que saíram antes do lançamento do outro aparelho respondem a lista de antes,
+  // por último. As de depois também esperam e só então vão ao servidor: a tela lê a lista mais de
+  // uma vez quando a rede volta, e a que chegava ao servidor antes do lançamento guardava a lista sem
+  // ele, com o número mais novo; o service worker, achando a lista guardada, não a lia (ticket 15 de
+  // processo-do-repositorio).
   let antesDoOutro = true;
   await context.route(daLista, async (rota) => {
-    if (rota.request().serviceWorker() || !antesDoOutro) return rota.continue();
+    if (rota.request().serviceWorker()) return rota.continue();
+    if (!antesDoOutro) {
+      await solta;
+      return rota.continue().catch(() => undefined);
+    }
     const resposta = await rota.fetch();
     respondida();
     await solta;
