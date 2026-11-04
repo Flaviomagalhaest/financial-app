@@ -1,7 +1,7 @@
 # Edição com a resposta perdida não sobe ao reabrir e a exclusão seguinte vira conflito
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
@@ -28,5 +28,17 @@ O teste do 164 passou a esperar a edição subir antes de recarregar, que é o q
 
 ## Checklist
 
-- [ ] Teste de navegador com a resposta da edição perdida, o `reload` e a exclusão: o lançamento sai sem conflito
-- [ ] A fila sobe ao reabrir, sem esperar a pessoa mexer de novo
+- [x] Teste de navegador com a resposta da edição perdida, o `reload` e a exclusão: o lançamento sai sem conflito
+- [x] A fila sobe ao reabrir, sem esperar a pessoa mexer de novo
+
+## Resolução
+
+A causa é a base da mudança seguinte, não o envio ao abrir. A edição que saía sem resposta ficava na fila igual, sobre a versão 1, sem marca de que talvez já estivesse gravada (só o criar tinha a marca). A próxima mudança do lançamento entrava no lugar dela levando essa base: a exclusão ia com a versão 1, e a edição seguinte mudava de novo um campo que o servidor já tinha na versão 2. Os dois voltavam como conflito com a própria edição do aparelho. Quando a fila subia antes de a pessoa mexer, o reenvio da edição era aceito (o servidor aceita a mudança igual ao que tem) e a exclusão ia sobre a versão 2. Por isso o teste do 164 falhava só às vezes: era corrida entre o envio ao abrir e o clique.
+
+A fila sobe, sim, ao abrir (`iniciarEnvioAutomatico`): o envio saiu 0,1 s depois de recarregar, e 1 s com a CPU 8 vezes mais lenta. A demora de 3 s a 10 s vista no CI não se reproduziu: a trava e o "sem resposta" de `rede.ts` não seguram o envio ao abrir. Ela não é a causa: o conflito vem sempre que a pessoa mexe antes de a fila subir, mesmo com o envio rápido.
+
+A correção (`web/src/dados/fila.ts`): antes de o lote sair, a edição e a confirmação guardam as ações que levam (`enviadoSemResposta`, `guardarOEnviado`). Isso cobre também a página que fecha com o pedido no caminho, quando o `fetch` nem chega a falhar. Se o item muda antes da resposta, o envio seguinte reenvia primeiro essas ações. Aceitas, a mudança nova sobe sobre a versão que elas geraram. Recusadas ou em conflito, ela sobe sobre a base em que foi feita, e o servidor decide sobre ela. Qualquer resposta apaga o que ficou guardado.
+
+Testes: `web/e2e/resposta-perdida.spec.ts`. Outra aba segura a trava da fila para a mudança entrar antes do envio, e os testes cobrem a exclusão (resposta perdida e recarga no meio), a edição de novo e a fila subindo sozinha ao abrir.
+
+Pendência: [ticket 173](173-criar-com-a-pagina-fechada-no-meio-do-envio.md), o mesmo caso para o criar.
