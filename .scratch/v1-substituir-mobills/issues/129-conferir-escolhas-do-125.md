@@ -1,7 +1,7 @@
 # Conferir as escolhas do ticket 125 sem decisão do dono
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se a regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -20,5 +20,18 @@ Origem: [ticket 125](125-geracao-pula-o-passado.md) (revisão: o ticket 87 não 
 
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste de API e ajuste em `backend/app/recorrencias.py` ou `backend/app/parcelamentos.py`, e o verbete no `GLOSSARY.md`
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] Se uma regra mudar: teste de API e ajuste em `backend/app/recorrencias.py` ou `backend/app/parcelamentos.py`, e o verbete no `GLOSSARY.md`
+
+## Answer
+
+O dono aceitou a recomendação em todas as perguntas:
+
+1. **Mantida a recusa** (422) do boleto inteiro no passado.
+2. **Muda:** a de hoje de valor fixo que não é automática nasce prevista; a estimada e a automática seguem realizadas. Teste em `backend/tests/test_recorrencias.py`, regra em `backend/app/recorrencias.py`.
+3. **Mantido:** a de hoje só nasce realizada na criação; gerada depois, a estimada nasce prevista.
+4. **Muda:** `parcelas_puladas` virou `parcelas_anteriores` (API, `openapi.json`, tipos, app, glossário). "Pulada" fica só para o que o casal excluiu. Os nomes internos (`parcelas_puladas()`, `puladas.json`) ficam como estão.
+5. **Sim:** [ADR 0024](../../../docs/adr/0024-a-geracao-so-lanca-de-hoje-em-diante.md).
+6. **Aceitas** as três escolhas da correção (atrasada muda de data e segue prevista; realizada muda com a confirmação; previsto atrasado não vira automático).
+
+Pendências novas: nenhuma.

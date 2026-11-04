@@ -6,6 +6,11 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.banco import conectar, em_transacao
+from app.favoritos import (
+    esquecer_dispensados_da_categoria,
+    juntar_categoria_nos_favoritos,
+    usa_categoria,
+)
 from app.item_em_que_conta import guardar_item_atual
 from app.lancamentos import Categoria, url_do_banco
 from app.login import UsuarioLogado
@@ -97,8 +102,8 @@ class Juncao(BaseModel):
 def juntar_categoria(
     id: UUID, juncao: Juncao, usuario: UsuarioLogado, request: Request
 ) -> Categoria:
-    """Move os lançamentos, as recorrências, as transferências, os itens do planejamento e as
-    escolhas de item da categoria para o destino, do mesmo tipo, e exclui a origem."""
+    """Move os lançamentos, as recorrências, as transferências, os itens do planejamento, as
+    escolhas de item e os favoritos da categoria para o destino, do mesmo tipo, e exclui a origem."""
 
     def trabalho(conn):
         origem, destino = _categoria(conn, id), _categoria(conn, juncao.destino_id)
@@ -148,6 +153,7 @@ def juntar_categoria(
             "UPDATE transferencias SET categoria_id = %s WHERE categoria_id = %s",
             (destino.id, origem.id),
         )
+        juntar_categoria_nos_favoritos(conn, origem.id, destino.id)
         conn.execute("DELETE FROM categorias WHERE id = %s", (origem.id,))
         return destino
 
@@ -177,6 +183,9 @@ def excluir_categoria(id: UUID, usuario: UsuarioLogado, request: Request) -> Res
             "SELECT 1 FROM modelo_do_planejamento WHERE categoria_id = %s", (id,)
         ).fetchone():
             raise HTTPException(status_code=409, detail="categoria no modelo do planejamento")
+        if usa_categoria(conn, id):
+            raise HTTPException(status_code=409, detail="categoria em favorito")
+        esquecer_dispensados_da_categoria(conn, id)
         conn.execute("DELETE FROM categorias WHERE id = %s", (id,))
 
     em_transacao(url_do_banco(request), trabalho)

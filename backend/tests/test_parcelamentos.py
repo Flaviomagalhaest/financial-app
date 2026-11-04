@@ -95,7 +95,7 @@ def test_compra_com_juros_pelo_valor_da_parcela_e_reenvio_devolve_o_gravado(casa
         "criado_em": None,
         "alterado_por": "flavio",
         "alterado_em": None,
-        "parcelas_puladas": 0,
+        "parcelas_anteriores": 0,
         "mudanca_recusada": None,
     }
     assert casal.pedir("esposa", "GET", "/api/parcelamentos").json() == [primeira.json()]
@@ -168,7 +168,7 @@ def test_boleto_com_data_no_passado_pula_as_parcelas_que_passaram_e_avisa_quanta
     ]
     assert (primeira.status_code, segunda.status_code) == (201, 200)
     assert segunda.json() == primeira.json()
-    assert (primeira.json()["valor_total_centavos"], primeira.json()["parcelas_puladas"]) == (
+    assert (primeira.json()["valor_total_centavos"], primeira.json()["parcelas_anteriores"]) == (
         100000,
         2,
     )
@@ -204,7 +204,7 @@ def test_boleto_enviado_no_dia_seguinte_tem_a_parcela_do_dia_do_lancamento_reali
     assert aceita["resultado"] == "aceita"
     assert (
         aceita["parcelamento"]["dia_do_lancamento"],
-        aceita["parcelamento"]["parcelas_puladas"],
+        aceita["parcelamento"]["parcelas_anteriores"],
     ) == (
         "2026-10-27",
         0,
@@ -224,7 +224,7 @@ def test_boleto_cuja_ultima_parcela_cai_no_dia_do_lancamento_nao_e_recusado(casa
 
     resposta = casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo)
 
-    assert (resposta.status_code, resposta.json()["parcelas_puladas"]) == (201, 1)
+    assert (resposta.status_code, resposta.json()["parcelas_anteriores"]) == (201, 1)
     assert [(l["parcela"], l["situacao"]) for l in parcelas(casal, novo["id"])] == [
         (2, "realizado")
     ]
@@ -238,7 +238,7 @@ def test_boleto_automatico_com_data_no_passado_nao_realiza_o_que_passou(casal: C
 
     resposta = casal.pedir("flavio", "POST", "/api/parcelamentos", json=consorcio)
 
-    assert resposta.json()["parcelas_puladas"] == 1
+    assert resposta.json()["parcelas_anteriores"] == 1
     assert [(l["parcela"], l["situacao"]) for l in parcelas(casal, consorcio["id"])] == [
         (2, "previsto"),
         (3, "previsto"),
@@ -1075,7 +1075,7 @@ def test_corrigir_a_data_para_o_passado_pula_as_parcelas_que_passaram_sem_realiz
 
     # Setembro e outubro passaram: saem como puladas, nada vira realizado (ticket 87).
     assert resposta.status_code == 200
-    assert resposta.json()["parcelas_puladas"] == 2
+    assert resposta.json()["parcelas_anteriores"] == 2
     assert valores(casal, novo["id"]) == [(3, 33333, "2026-11-10", "previsto")]
     [conta] = casal.pedir("flavio", "GET", "/api/contas").json()
     assert conta["saldo_centavos"] == 0
@@ -1091,7 +1091,7 @@ def test_a_parcela_que_a_correcao_pulou_volta_quando_a_data_volta_para_hoje_ou_d
 
     # A de hoje volta e se realiza hoje, como a automática que chega na data.
     assert resposta.status_code == 200
-    assert resposta.json()["parcelas_puladas"] == 0
+    assert resposta.json()["parcelas_anteriores"] == 0
     assert valores(casal, novo["id"]) == [
         (1, 33334, "2026-10-28", "realizado"),
         (2, 33333, "2026-11-28", "previsto"),
@@ -1118,7 +1118,7 @@ def test_crescer_de_novo_com_a_realizada_que_saiu_no_passado_nao_pede_confirmaca
     resposta = mudar(casal, novo["id"], parcelas=4, valor_total_centavos=200000)
 
     assert resposta.status_code == 200
-    assert resposta.json()["parcelas_puladas"] == 1
+    assert resposta.json()["parcelas_anteriores"] == 1
     assert valores(casal, novo["id"]) == [
         (1, 50000, "2026-08-10", "realizado"),
         (2, 50000, "2026-09-10", "realizado"),
@@ -1141,7 +1141,7 @@ def test_corrigir_a_data_do_boleto_para_frente_cria_as_parcelas_puladas_menos_a_
     resposta = mudar(casal, novo["id"], data="2026-12-10")
 
     assert resposta.status_code == 200
-    assert resposta.json()["parcelas_puladas"] == 0
+    assert resposta.json()["parcelas_anteriores"] == 0
     assert valores(casal, novo["id"]) == [
         (1, 16670, "2026-12-10", "previsto"),
         (2, 16666, "2027-01-10", "previsto"),
@@ -1599,7 +1599,7 @@ def test_mudar_so_a_classificacao_nao_tira_a_parcela_do_dia_do_lancamento(
         (3, "2026-12-27", "previsto"),
     ]
     [gravado] = casal.pedir("esposa", "GET", "/api/parcelamentos").json()
-    assert gravado["parcelas_puladas"] == 0
+    assert gravado["parcelas_anteriores"] == 0
 
 
 def test_corrigir_so_a_descricao_nao_tira_a_parcela_do_dia_do_lancamento(

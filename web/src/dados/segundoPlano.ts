@@ -2,7 +2,7 @@
 // rede volta. O vite.config.ts empacota este arquivo dentro do service-worker.js; ele importa só
 // o que roda fora da tela (sem React, sem o cliente da API, sem a biblioteca do SRP).
 import { tokenEmSegundoPlano } from "../login/renovacao";
-import { lerEGuardar, lerFila, lerResposta } from "./armazem";
+import { lerEGuardar, lerFila, temResposta } from "./armazem";
 import { fetchComTempoLimite } from "./rede";
 import { enviarFila, LISTA, regraAceita, RELIDAS_DEPOIS_DE_REGRA, type Remessa } from "./fila";
 
@@ -45,7 +45,7 @@ export async function enviarEmSegundoPlano(): Promise<void> {
   // enviado sumiria do aparelho até a próxima leitura com internet. Como na tela (ticket 120),
   // sem a lista a fila não sobe (ticket 122).
   const pendentes = (await lerFila()).length;
-  if (pendentes > 0 && !(await lerResposta(LISTA)) && !(await lerDoServidor(LISTA))) throw new Error("a lista não chegou");
+  if (pendentes > 0 && !(await temResposta(LISTA)) && !(await lerDoServidor(LISTA))) throw new Error("a lista não chegou");
   const enviou = await enviarFila(remeter);
   if (geradosNoServidor) {
     geradosNoServidor = false;

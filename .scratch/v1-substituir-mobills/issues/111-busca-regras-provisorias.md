@@ -1,7 +1,7 @@
 # Busca: conferir as regras provisórias
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: 59
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se uma regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -25,5 +25,21 @@ Origem: [ticket 59](59-busca.md): a spec, o [ticket 24](24-busca-e-filtros-salvo
 
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste de API em `backend/tests/test_busca.py`, ajuste em `backend/app/busca.py` e na busca do aparelho (`web/src/dados/busca.ts`), e o README (seção Busca) acompanha
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] (nenhuma regra mudou) Se uma regra mudar: teste de API em `backend/tests/test_busca.py`, ajuste em `backend/app/busca.py` e na busca do aparelho (`web/src/dados/busca.ts`), e o README (seção Busca) acompanha
+
+## Answer
+
+O dono confirmou as 11 regras provisórias como estão, sem mudança de código (respondido em 2026-11-04):
+
+1. Filtro Fatura sem cartão: mantido.
+2. Parcelamento com filtro de situação: a linha mostra a soma das parcelas achadas; o total só sem filtro.
+3. Realizado e previsto de um parcelamento nos totais: cada parcela na sua situação.
+4. Sem "total com previstos" no topo.
+5. Estorno: valor absoluto no filtro de valor e na ordem "Maior valor".
+6. Transferências: como estão.
+7. "Conta ou cartão" (OU): mantido. O cartão titular não traz o adicional, o que hoje não importa (entrada manual não tem adicional). Com open banking as compras do adicional podem chegar: pendência no [ticket 163](163-busca-cartao-adicional-open-banking.md).
+8. Ajuste de fatura e saldo anterior fora da busca, sem aviso.
+9. 50 linhas por página e 300 ms de espera.
+10. Sem internet: texto e comportamento mantidos.
+11. Lupa e aba Histórico: mantidas.

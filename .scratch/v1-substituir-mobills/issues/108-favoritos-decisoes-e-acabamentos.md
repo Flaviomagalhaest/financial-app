@@ -29,7 +29,7 @@ Origem: [ticket 62](62-favoritos.md) (revisão e escolhas provisórias da implem
 - [x] O dono responde as perguntas e a resposta vai para `## Answer`
 - [x] Se uma regra mudar: nenhuma mudou
 - [x] Teste de paridade da identidade (`docs/vetores/identidade.json`, `test_favoritos.py` e `web/e2e/identidade.spec.ts`); servidor passou a usar `lower` nas tags
-- [ ] Categoria juntada e pacote único: ticket [162](162-favoritos-categoria-juntada-e-pacote-unico.md)
+- [x] Categoria juntada e pacote único: ticket [162](162-favoritos-categoria-juntada-e-pacote-unico.md)
 
 ## Answer
 
