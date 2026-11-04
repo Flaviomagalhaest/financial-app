@@ -111,12 +111,18 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
     [doCartao, cartao, faturas, mes],
   );
   const leitura = useMemo(() => leituraDaFatura(cartaoId, mes), [cartaoId, mes]);
-  const { lancamentos: comprasDoServidor, semDados: semInternet, atualizadoEm } = useLancamentosDaTela(leitura, daFatura);
-  const compras = useMemo(() => comprasDoServidor ?? [], [comprasDoServidor]);
-  // O índice de estornos olha a lista guardada do aparelho: o estorno pode estar em outra fatura (ticket 166).
-  const { lancamentos: guardados } = useLancamentos();
+  const { lancamentos: daLeitura, semDados: semInternet, atualizadoEm } = useLancamentosDaTela(leitura, daFatura);
+  const compras = useMemo(() => daLeitura ?? [], [daLeitura]);
+  // O índice de estornos olha a janela do aparelho (o estorno pode estar em outra fatura) e as compras
+  // desta fatura, que podem estar antes dela (ADR 0025). O estorno de uma compra fora da janela, numa
+  // fatura antiga, fica "estorno de uma compra" até abri-lo (ticket 176).
+  const { lancamentos } = useLancamentos();
   const { dados: parcelamentos } = useParcelamentos();
-  const indice = useMemo(() => indiceDeEstornos(guardados ?? [], parcelamentos ?? []), [guardados, parcelamentos]);
+  const indice = useMemo(() => {
+    const naJanela = lancamentos ?? [];
+    const ids = new Set(naJanela.map((l) => l.id));
+    return indiceDeEstornos([...naJanela, ...compras.filter((l) => !ids.has(l.id))], parcelamentos ?? []);
+  }, [lancamentos, compras, parcelamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
   const estornosCentavos = compras.filter((l) => eEstorno(l) && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
   const ligacoes = useMemo(() => new Map(compras.map((l) => [l.id, ligacaoDoEstorno(l, indice, categorias)])), [compras, indice, categorias]);
@@ -228,7 +234,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
       {/* A busca pelo filtro Fatura, com a categoria e a tag escolhidas aqui. */}
       <a href={enderecoDaBusca({ fatura: { mes, cartao_id: cartaoId }, categoria_ids: categoria === TODAS ? undefined : [categoria], tags: tag === TODAS ? undefined : [tag] })}>Ver os lançamentos</a>
       <AvisoDeLeituraDoServidor daUltimaLeitura={atualizadoEm} semDados={semInternet} oQue="as compras" precisam="as compras desta fatura precisam de internet." />
-      {comprasDoServidor && !semInternet && filtradas.length === 0 && <p className="vazio">Nenhuma compra nesta fatura.</p>}
+      {daLeitura && !semInternet && filtradas.length === 0 && <p className="vazio">Nenhuma compra nesta fatura.</p>}
       {dias.map((dia) => (
         <div key={dia} role="group" aria-label={dataPorExtenso(dia)}>
           <h3>{dataPorExtenso(dia)}</h3>

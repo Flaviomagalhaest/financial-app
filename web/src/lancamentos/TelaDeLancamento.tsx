@@ -13,7 +13,7 @@ import {
   useConexao,
   useFaturas,
   useFavoritos,
-  useLancamentos,
+  useLancamentosComOsDeFora,
   useParcelamentos,
   usePessoas,
   useSugestao,
@@ -84,7 +84,10 @@ type Props = {
 /** Novo lançamento (sem `id`) ou edição (com `id`, preenchida pelo que o aparelho mostra). */
 export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, tipoInicial = "despesa", centavosIniciais = 0, onTransferencia }: Props) {
   const { contas, cartoes, contasECartoes, categorias, carregado } = useCadastro();
-  const { lancamentos, semDados } = useLancamentos();
+  // O lançamento que se abre, a compra que se estorna e a do estorno que se edita podem estar fora da
+  // janela do aparelho (ADR 0025): com internet, vêm do servidor; sem ela, a tela diz que não estão aqui.
+  const [compraDoExistente, setCompraDoExistente] = useState<string | null>(null);
+  const { lancamentos, foraDoAparelho } = useLancamentosComOsDeFora(id, estornoDe, compraDoExistente);
   const { dados: parcelamentos } = useParcelamentos();
   const { pessoas, nomeDe, euId } = usePessoas();
   const opcoesDeTags = useTags();
@@ -150,11 +153,13 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     if (!id || existente) return;
     const achado = lancamentos?.find((l) => l.id === id);
     if (!achado) {
-      if (lancamentos || semDados) setErro(semDados ? "Sem internet: este lançamento não está no aparelho." : "Lançamento não encontrado.");
+      const fora = foraDoAparelho(id);
+      if (fora && fora !== "lendo") setErro(fora === "sem-internet" ? "Sem internet: este lançamento não está no aparelho." : "Lançamento não encontrado.");
       return;
     }
     setErro("");
     setExistente(achado);
+    setCompraDoExistente(achado.estorno_de ?? null);
     setTipo(achado.tipo);
     setCentavos(achado.valor_centavos);
     setContaId(achado.conta_id);
@@ -172,7 +177,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       const guardada = achado.proporcao_das_partes;
       setProporcao(guardada?.length === achado.partes.length ? guardada : achado.partes.map((p) => p.valor_centavos));
     }
-  }, [id, existente, lancamentos, semDados]);
+  }, [id, existente, lancamentos, foraDoAparelho]);
 
   // O estorno novo (`estornoDe`) ou o que se edita (`existente.estorno_de`) é ligado a uma compra; o de todas as
   // parcelas (`existente.estorno_parcelamento_id`) é ligado ao parcelamento, sem compra.
@@ -245,7 +250,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   useEffect(() => {
     if (!estornoDe || estornoAplicado) return;
     if (!compra) {
-      if (lancamentos || semDados) setErro(semDados ? "Sem internet: esta compra não está no aparelho." : "Compra não encontrada.");
+      const fora = foraDoAparelho(estornoDe);
+      if (fora && fora !== "lendo") setErro(fora === "sem-internet" ? "Sem internet: esta compra não está no aparelho." : "Compra não encontrada.");
       return;
     }
     setErro("");
@@ -255,7 +261,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
     setContaId(compra.conta_id);
     setData(hoje());
     preencherEstorno(compra, parteId, false);
-  }, [estornoDe, estornoAplicado, compra, indice, lancamentos, semDados, novoId]);
+  }, [estornoDe, estornoAplicado, compra, indice, foraDoAparelho, novoId]);
 
   // O crédito avulso novo abre no cartão da fatura de onde se veio. Preenche uma vez só.
   useEffect(() => {
