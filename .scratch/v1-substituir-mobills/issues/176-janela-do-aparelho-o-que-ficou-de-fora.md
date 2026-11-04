@@ -25,5 +25,5 @@ Origem: revisão do [ticket 166](166-janela-do-aparelho.md) (sub-agentes Standar
 - [ ] Estorno de parcela com as primeiras parcelas fora da janela: o restante igual ao do servidor com internet, com teste
 - [ ] Teste de navegador do mês que vira com conflito
 - [ ] Teste de navegador da recorrência fora da janela, com e sem internet
-- [ ] Edição sem `base` e "Repetir último": tratado ou registrado como aceito
+- [x] Edição sem `base` e "Repetir último": registrado como aceito na ADR 0025
 - [ ] Causa da falha de `sem-internet.spec.ts` na nuvem achada e corrigida (ou registrada)

@@ -439,8 +439,20 @@ export function useLancamentosComOsDeFora(...ids: (string | null | undefined)[])
     const noAparelho = new Set([...(dados ?? []).map((l) => l.id), ...fila.filter(deLancamento).map((item) => item.id)]);
     return procurados ? procurados.split(",").filter((id) => !noAparelho.has(id)) : [];
   }, [procurados, dados, semDados, fila, lida]);
+  // A parcela e o estorno que o aparelho tem podem ter ligados fora da janela (as primeiras parcelas e os
+  // estornos delas, a compra do estorno): com internet, vêm do servidor também (ticket 176).
+  const comLigados = useMemo(() => {
+    if (!dados) return [];
+    const daLista = new Map(dados.map((l) => [l.id, l]));
+    return procurados
+      .split(",")
+      .filter((id) => {
+        const l = daLista.get(id);
+        return !!l && (!!l.parcelamento_id || !!l.estorno_de || !!l.estorno_parcelamento_id);
+      });
+  }, [procurados, dados]);
 
-  const chaveDosQueFaltam = faltam?.join() ?? "";
+  const chaveDosQueFaltam = [...(faltam ?? []), ...comLigados].join();
   useEffect(() => {
     if (!chaveDosQueFaltam) return;
     let ativo = true;
@@ -464,12 +476,12 @@ export function useLancamentosComOsDeFora(...ids: (string | null | undefined)[])
   const lancamentos = useMemo(() => {
     if (!dados && !semDados) return null;
     const porId = new Map((dados ?? []).map((l) => [l.id, l]));
-    for (const id of faltam ?? []) {
+    for (const id of [...(faltam ?? []), ...comLigados]) {
       const lido = lidos.get(id);
       if (Array.isArray(lido)) for (const l of lido) if (!porId.has(l.id)) porId.set(l.id, l);
     }
     return naTela([...porId.values()], fila);
-  }, [dados, semDados, faltam, lidos, fila]);
+  }, [dados, semDados, faltam, comLigados, lidos, fila]);
 
   const foraDoAparelho = useCallback(
     (id: string): ForaDoAparelho | null => {
@@ -1546,4 +1558,32 @@ export async function corrigirFatura(cartaoId: string, mes: string, correcao: Co
   );
   if (motivo === null) await Promise.all([buscarEGuardar(LISTA, LEITURAS[LISTA]), buscarEGuardar("/api/hoje", () => api.GET("/api/hoje"))]);
   return motivo;
+}
+
+/**
+ * Os lançamentos `ids` e os ligados a eles pelo estorno, lidos do servidor sem guardar (ADR 0025).
+ * Sem internet (ou sem o lançamento) o id fica de fora e a tela segue com o que tem.
+ */
+export function useLidosDoServidor(ids: string[]): Lancamento[] {
+  const [lidos, setLidos] = useState<ReadonlyMap<string, Lancamento[]>>(new Map());
+  const chave = [...new Set(ids)].sort().join();
+  useEffect(() => {
+    if (!chave) return;
+    let ativo = true;
+    const ler = () =>
+      chave.split(",").forEach(async (id) => {
+        const lido = await api.GET("/api/lancamentos/{id}", { params: { path: { id } } }).then(
+          ({ data }) => (data ? [data.lancamento, ...data.ligados] : null),
+          () => null,
+        );
+        if (ativo && lido) setLidos((antes) => new Map(antes).set(id, lido));
+      });
+    ler();
+    window.addEventListener("online", ler);
+    return () => {
+      ativo = false;
+      window.removeEventListener("online", ler);
+    };
+  }, [chave]);
+  return useMemo(() => [...lidos.values()].flat(), [lidos]);
 }
