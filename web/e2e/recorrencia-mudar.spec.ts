@@ -381,3 +381,35 @@ test("cria tag nova na mudança daqui para frente, e ela vale na regra", async (
 
   await expect.poll(async () => (await api.ler("/api/recorrencias")).find((r: { id: string }) => r.id === regra.id)?.tags).toEqual([`viagem${s}`]);
 });
+
+test("a recorrência de um lançamento fora da janela do aparelho abre lendo do servidor, e sem internet diz que ele não está aqui (ticket 176)", async ({ page, context }) => {
+  const { descricao, api } = await prepararRegra(page, 2);
+  const previstos = ((await api.ler("/api/lancamentos")) as { id: string; descricao: string; data: string }[])
+    .filter((l) => l.descricao === descricao)
+    .sort((a, b) => a.data.localeCompare(b.data));
+  const fora = previstos[1];
+  // A API não gera ocorrência antes de hoje (ticket 125): a lista que o servidor devolve ao aparelho
+  // é que perde o lançamento, como se ele tivesse saído da janela (ADR 0025).
+  await page.route(
+    (url) => url.pathname === "/api/lancamentos",
+    async (rota) => {
+      if (rota.request().method() !== "GET") return rota.fallback();
+      const resposta = await rota.fetch();
+      const lista = (await resposta.json()) as { id: string }[];
+      return rota.fulfill({ response: resposta, json: lista.filter((l) => l.id !== fora.id) });
+    },
+  );
+  await page.reload();
+  await historico(page);
+  await expect(linha(page, descricao)).toHaveCount(1);
+
+  await page.evaluate((id) => (location.hash = `#/recorrencia/${id}`), fora.id);
+  await expect(page.getByRole("heading", { name: "Recorrência", level: 2 })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Valor" })).toHaveValue("189,90");
+
+  await context.setOffline(true);
+  await page.evaluate(() => (location.hash = "#/historico"));
+  await page.evaluate((id) => (location.hash = `#/recorrencia/${id}`), fora.id);
+  await expect(page.getByText("Sem internet: este lançamento não está no aparelho.")).toBeVisible();
+  await context.setOffline(false);
+});

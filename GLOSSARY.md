@@ -361,6 +361,9 @@ _Avoid_: pendente, offline, na fila, não sincronizado
 Os lançamentos que o aparelho guarda para mostrar e mudar sem internet: os que contam nos últimos 12 meses (pelo mês em que contam, o da fatura na compra no cartão) e todos daqui para frente. O que fica antes dela só aparece com internet.
 _Avoid_: cache, lista local, offline
 
+**Ligados**:
+Os lançamentos ligados a um lançamento pelo estorno: os estornos dele, a compra de que ele é estorno e, na parcela, as outras parcelas e os estornos delas. A API devolve junto do lançamento (`GET /api/lancamentos/{id}`), e as telas de estorno os leem com internet para o restante bater com o do servidor, mesmo que estejam fora da **Janela do aparelho**.
+
 **Conflito**:
 Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica. A mudança não enviada de uma recorrência não vira conflito: o servidor a recusa com o motivo, e quem a fez a refaz sobre a regra nova (ADR 0020).
 _Avoid_: colisão, divergência
