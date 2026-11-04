@@ -123,7 +123,7 @@ A escolha, ao mudar qualquer campo de uma parcela, entre "Só esta", "Esta e as 
 _Avoid_: escopo da edição, aplicar em lote
 
 **Correção do parcelamento**:
-Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje: a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_anteriores`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova. No cartão, a parcela de fatura paga pelo pagamento fica como está no valor, na data e na fatura, sem pedir confirmação, e conta entre as mantidas, como a alterada à mão; a correção que levaria uma parcela para dentro de uma fatura paga, ou que deixaria menos parcelas que a última de fatura paga, é recusada antes de gravar. A mudança com alcance segue a mesma regra.
+Mudança do valor, do número de parcelas ou da data de um parcelamento, que gera as parcelas de novo, também as realizadas: quando uma realizada vai mudar ou sair, a API avisa e só muda com a confirmação. Só o número de parcelas mantém o total. A parcela excluída uma a uma não volta; a que sai porque o parcelamento encolheu volta se ele crescer de novo. No boleto, nada da correção vira lançamento antes de hoje: a prevista que a data nova leva de hoje ou depois para antes sai como pulada (conta em `parcelas_anteriores`), sem realizar a automática; a pulada que a data nova põe em hoje ou depois nasce; a atrasada (que já estava antes de hoje) segue prevista com a data nova. No cartão, a parcela de fatura paga pelo pagamento fica como está no valor, na data e na fatura, sem pedir confirmação, e conta entre as mantidas, como a alterada à mão; a correção que levaria uma parcela para dentro de uma fatura paga, ou que deixaria menos parcelas que a última de fatura paga, é recusada antes de gravar. Se uma fatura é paga depois da gravação, com o refazer em lotes no meio, o lote que levaria uma parcela para dentro dela é recusado: as parcelas que faltavam corrigir ficam como estavam e o parcelamento mostra a recusa até a próxima correção ou mudança. A mudança com alcance segue a mesma regra.
 _Avoid_: regerar, recalcular o parcelamento
 
 **Exclusão do parcelamento**:
@@ -360,6 +360,9 @@ _Avoid_: pendente, offline, na fila, não sincronizado
 **Janela do aparelho**:
 Os lançamentos que o aparelho guarda para mostrar e mudar sem internet: os que contam nos últimos 12 meses (pelo mês em que contam, o da fatura na compra no cartão) e todos daqui para frente. O que fica antes dela só aparece com internet.
 _Avoid_: cache, lista local, offline
+
+**Ligados**:
+Os lançamentos ligados a um lançamento pelo estorno: os estornos dele, a compra de que ele é estorno e, na parcela, as outras parcelas e os estornos delas. A API devolve junto do lançamento (`GET /api/lancamentos/{id}`), e as telas de estorno os leem com internet para o restante bater com o do servidor, mesmo que estejam fora da **Janela do aparelho**.
 
 **Conflito**:
 Mudança não enviada feita sobre um lançamento que outra pessoa (ou uma regra) mudou depois nos mesmos campos; fica esperando que quem a fez escolha, campo a campo, qual versão fica. A mudança não enviada de uma recorrência não vira conflito: o servidor a recusa com o motivo, e quem a fez a refaz sobre a regra nova (ADR 0020).

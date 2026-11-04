@@ -22,3 +22,7 @@ O aparelho deixa de guardar a lista inteira de lançamentos e guarda só a **jan
 - O Histórico desenha mês a mês, conforme a pessoa rola. Depois da janela, com internet, continua lendo do servidor sem guardar. Sem internet, o fim da janela diz que é preciso internet para ver antes.
 - A API comprime a resposta (gzip), o que também tira o limite de 6 MiB do caminho.
 - O aparelho guarda lançamento por lançamento, não a lista num bloco só, e avisa só quem lê a resposta que mudou.
+- Limites aceitos (ticket 176):
+  - A mudança que está na fila sem a versão do servidor (`base`), de uma versão anterior do app, num lançamento que saiu da janela, aparece como lançamento novo, sem os campos que só o servidor tem, até o envio. Só existe para o item enfileirado antes da atualização do app, que se esvazia no primeiro envio; o envio não perde nada.
+  - O "Repetir último" olha a janela: um lançamento criado agora com data de mais de 12 meses atrás não conta como o último. É um uso raro e o resultado (repetir o anterior) não é errado.
+- Com internet, a tela de uma parcela ou de um estorno lê também os ligados (as outras parcelas e os estornos delas), mesmo com o lançamento no aparelho, para o restante do estorno bater com o do servidor; e a fatura lê a compra do estorno que está fora da janela para dar o nome. Sem internet, valem os que o aparelho tem, e o servidor recusa o que passar (422), que a fila mostra.
