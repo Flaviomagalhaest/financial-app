@@ -1,4 +1,4 @@
-"""Os lançamentos que a fatura, o Mês e o parcelamento leem do servidor (ticket 165, ADR 0024):
+"""Os lançamentos que a fatura, o Mês e o parcelamento leem do servidor (ticket 165, ADR 0025):
 com a janela do aparelho, a lista guardada não tem os meses antigos."""
 
 from datetime import date

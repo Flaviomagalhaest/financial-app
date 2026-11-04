@@ -1,5 +1,5 @@
 """Os lançamentos que as telas leem do servidor em vez de filtrar a lista guardada no aparelho
-(ticket 165, ADR 0024): a fatura de um cartão, o Mês e o parcelamento. A lista guardada só tem a
+(ticket 165, ADR 0025): a fatura de um cartão, o Mês e o parcelamento. A lista guardada só tem a
 janela do aparelho; estas telas precisam também dos meses antigos."""
 
 from datetime import date

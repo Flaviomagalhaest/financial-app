@@ -7,7 +7,7 @@ Skills: `implement`, `tdd`; apoio: `run`; HITL só na conferência com `curl` no
 Modelo recomendado: Sonnet
 Effort recomendado: low
 Issue: #400
-Origem: [ticket 124](124-historico-sem-a-lista-inteira.md) e [ADR 0024](../../../docs/adr/0024-sem-internet-so-a-janela-do-aparelho.md) (decisão Q8). Números na [pesquisa dos limites de resposta](../research/limites-de-resposta-da-lambda.md).
+Origem: [ticket 124](124-historico-sem-a-lista-inteira.md) e [ADR 0025](../../../docs/adr/0025-sem-internet-so-a-janela-do-aparelho.md) (decisão Q8). Números na [pesquisa dos limites de resposta](../research/limites-de-resposta-da-lambda.md).
 
 ## O que construir
 
