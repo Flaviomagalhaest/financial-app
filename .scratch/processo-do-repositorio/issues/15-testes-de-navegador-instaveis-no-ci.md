@@ -1,7 +1,7 @@
 # Testes de navegador falham de forma diferente a cada execução do CI
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `run`
 Modelo recomendado: Opus
