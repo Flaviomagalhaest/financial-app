@@ -1,7 +1,7 @@
 # Reenvio da recorrência depois do pagamento entre os lotes da geração
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -17,5 +17,13 @@ A criação da recorrência no cartão confere as faturas pagas antes de gravar 
 
 ## Checklist
 
-- [ ] Decidir o conserto: a geração não cria ocorrência de antes de hoje em fatura paga (sai como pulada?), ou a conferência e as ocorrências de antes de hoje vão na mesma transação da regra
-- [ ] Teste de API em `backend/tests/test_fatura_paga.py`
+- [x] Decidir o conserto: a geração não cria ocorrência de antes de hoje em fatura paga (sai como pulada?), ou a conferência e as ocorrências de antes de hoje vão na mesma transação da regra
+- [x] Teste de API em `backend/tests/test_fatura_paga.py`
+
+## Resolução
+
+A geração (`_gerar_um_lote`) passa pela ocorrência de antes de hoje que cairia numa fatura paga, como passa pela de antes do lançamento (ticket 87): `geradas` anda, nenhum lançamento nasce e a ocorrência segue contando no calendário e nas `vezes`. A conferência na criação continua recusando a regra inteira quando a fatura já está paga; a geração cobre o pagamento que chega depois dela, entre a conferência e o primeiro lote ou entre os lotes, em qualquer lote. Pôr a conferência e as ocorrências de antes de hoje na mesma transação da regra foi descartado: o lote tem limite de linhas, e as de antes de hoje podem não caber nele.
+
+Testes: `test_reenvio_depois_do_pagamento_nao_gera_o_passado_dentro_da_fatura_paga` (pago entre a conferência e o primeiro lote) e `test_pagamento_entre_os_lotes_nao_leva_o_resto_do_passado_para_a_fatura_paga`.
+
+Pendência: a ocorrência passa sem aviso ao casal ([ticket 184](184-aviso-da-ocorrencia-que-a-fatura-paga-tirou.md)).

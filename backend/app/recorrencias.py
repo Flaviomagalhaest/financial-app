@@ -325,8 +325,9 @@ def _em_que_fatura_paga(conn) -> Callable[[UUID, date, date | None], tuple[UUID,
 def _conferir_as_faturas_do_passado(conn, nova: NovaRecorrencia, lancada: date) -> None:
     """Nenhuma ocorrência que a geração cria antes de hoje (do dia do lançamento em diante, que
     a fila sobe depois) cai numa fatura paga pelo pagamento (ADR 0021). A geração grava em
-    lotes e não volta atrás: a recusa vem antes de gravar a regra. De hoje em diante a fatura
-    ainda não fechou, e só a fechada recebe pagamento."""
+    lotes e não volta atrás: a recusa vem antes de gravar a regra. O pagamento que chega depois
+    dela a geração confere em cada lote, e a ocorrência dessa fatura passa sem virar lançamento
+    (ticket 179). De hoje em diante a fatura ainda não fechou, e só a fechada recebe pagamento."""
     dia_de_hoje = lancamentos.hoje()
     if lancada >= dia_de_hoje:
         return
@@ -410,7 +411,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     Enquanto a regra é a que o casal lançou, o "hoje" é o dia do lançamento (`dia_do_lancamento_vigente`), e a
     ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu), salvo a de
     valor fixo que não é automática: essa o casal confirma no pagamento (ticket 129); fora dela,
-    só a automática que chegou."""
+    só a automática que chegou. A de antes de hoje que cairia numa fatura paga também passa: a
+    criação confere as pagas, mas o pagamento pode chegar entre os lotes (ticket 179)."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -426,6 +428,7 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
     lancada = dia_do_lancamento_vigente(regra)
     desde = lancada or dia_de_hoje
+    em_que_paga = _em_que_fatura_paga(conn)
     proximas: list[tuple[int, date]] = []
     ultima, n = geradas, geradas
     while len(proximas) < por_lote:
@@ -434,7 +437,9 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         if _fora_do_fim(regra, n, dia) or dia > ultimo_dia:
             break
         ultima = n
-        if dia >= desde:
+        # ADR 0021: a fatura paga depois da conferência não recebe a de antes de hoje.
+        na_paga = dia < dia_de_hoje and em_que_paga(regra.conta_id, dia, None)
+        if dia >= desde and not na_paga:
             proximas.append((n, dia))
     if ultima == geradas:
         return False
