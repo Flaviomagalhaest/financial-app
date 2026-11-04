@@ -7,7 +7,7 @@ Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
 Effort recomendado: medium
 Issue: #399
-Origem: [ticket 124](124-historico-sem-a-lista-inteira.md) e [ADR 0024](../../../docs/adr/0024-sem-internet-so-a-janela-do-aparelho.md) (decisão Q5).
+Origem: [ticket 124](124-historico-sem-a-lista-inteira.md) e [ADR 0025](../../../docs/adr/0025-sem-internet-so-a-janela-do-aparelho.md) (decisão Q5).
 
 ## O que construir
 

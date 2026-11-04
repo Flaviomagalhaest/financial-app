@@ -416,7 +416,7 @@ export const leituraDoParcelamento = (id: string): LeituraDaTela => ({
 
 /**
  * Os lançamentos de uma tela que filtra a lista (a fatura, o Mês, o parcelamento), lidos do servidor
- * em vez da lista guardada, que só tem a janela do aparelho (ticket 165, ADR 0024). A resposta fica
+ * em vez da lista guardada, que só tem a janela do aparelho (ticket 165, ADR 0025). A resposta fica
  * guardada por tela; os não enviados entram por cima, só os que `passa` aceita. `semDados`: sem
  * internet e sem resposta guardada, a tela diz que precisa de internet em vez de mostrar lista vazia.
  */
