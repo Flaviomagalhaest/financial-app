@@ -20,5 +20,5 @@ Sem internet, o app só mexe em lançamentos um a um: criar (inclusive parcelado
 - Mudanças feitas pelo próprio app (recorrência alterada "daqui para frente", automático que vira realizado) contam como o outro lado, e a tela de conflito diz de onde veio a mudança.
 - A mudança da recorrência ("daqui para frente", encerrar e excluir) é a exceção: vai pela fila, como a regra nova ([ADR 0020](0020-mudanca-da-recorrencia-vai-pela-fila.md)).
 - Na parcela, só a mudança de "só esta" vai pela fila; "esta e as próximas" e "todas" mudam o parcelamento e precisam de internet ([ADR 0023](0023-alcance-da-mudanca-na-parcela.md)).
-- O aparelho não guarda todos os lançamentos, só a janela do aparelho (12 meses pelo mês em que contam e todo o futuro); fora dela, mudar um lançamento pede internet ([ADR 0024](0024-sem-internet-so-a-janela-do-aparelho.md)).
+- O aparelho não guarda todos os lançamentos, só a janela do aparelho (12 meses pelo mês em que contam e todo o futuro); fora dela, mudar um lançamento pede internet ([ADR 0025](0025-sem-internet-so-a-janela-do-aparelho.md)).
 - O aviso de planejamento repete no aparelho, só para mostrar, as regras de fatura e de item do servidor ([ADR 0018](0018-aviso-de-planejamento-repete-regras-do-servidor-so-para-mostrar.md)); gravar continua sendo do servidor.
