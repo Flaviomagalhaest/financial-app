@@ -1,7 +1,7 @@
 # Dois ADRs com o número 0024
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `domain-modeling`
 Modelo recomendado: Sonnet
@@ -18,6 +18,6 @@ Origem: revisão do [ticket 165](../../v1-substituir-mobills/issues/165-telas-qu
 
 ## Checklist
 
-- [ ] Renomear o arquivo e o título do ADR que entrou depois
-- [ ] Trocar as referências a ele em `docs/`, `.scratch/`, `GLOSSARY.md`, `backend/` e `web/` (busca por `0024` e pelo nome do arquivo)
-- [ ] Conferir que nenhum link ficou quebrado
+- [x] Renomear o arquivo e o título do ADR que entrou depois
+- [x] Trocar as referências a ele em `docs/`, `.scratch/`, `GLOSSARY.md`, `backend/` e `web/` (busca por `0024` e pelo nome do arquivo)
+- [x] Conferir que nenhum link ficou quebrado

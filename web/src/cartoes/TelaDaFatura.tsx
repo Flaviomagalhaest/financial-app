@@ -98,7 +98,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const paga = !!fatura && pagaPeloPagamento(fatura);
   // As compras do adicional caem na fatura do titular.
   const doCartao = useMemo(() => new Set(cartoes.filter((c) => c.id === cartaoId || c.titular_id === cartaoId).map((c) => c.id)), [cartoes, cartaoId]);
-  // A lista vem do servidor (a guardada só tem a janela do aparelho, ADR 0024); a compra criada só no
+  // A lista vem do servidor (a guardada só tem a janela do aparelho, ADR 0025); a compra criada só no
   // aparelho ainda não tem `mes`: vale a fatura escolhida ou a da data (ADR 0003).
   const daFatura = useCallback(
     (l: LancamentoNaTela) => {

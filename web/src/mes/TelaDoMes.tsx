@@ -425,7 +425,7 @@ const SITUACAO: Record<LeituraDoMes["situacao"], string> = { passado: "mês fech
 export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
   const { dados: leitura, atualizadoEm, semDados, buscar } = useMes(mes);
   const { categorias } = useCadastro();
-  // Os lançamentos do mês vêm do servidor: a lista guardada só tem a janela do aparelho (ADR 0024).
+  // Os lançamentos do mês vêm do servidor: a lista guardada só tem a janela do aparelho (ADR 0025).
   const leituraDosLancamentos = useCallback(() => api.GET("/api/meses/{mes}/lancamentos", { params: { path: { mes } } }), [mes]);
   const doMes = useCallback((l: LancamentoNaTela) => (l.mes ?? l.data).slice(0, 7) === mes, [mes]);
   const { lancamentos, semDados: semLancamentos, atualizadoEm: lancamentosDeAntes } = useLancamentosDaTela(`/api/meses/${mes}/lancamentos`, leituraDosLancamentos, doMes);

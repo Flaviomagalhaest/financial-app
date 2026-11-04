@@ -527,3 +527,27 @@ test("o aviso de exclusão diz quantas parcelas de fatura paga ficam e como tir�
   await expect(aviso).toContainText("Saem as 3 parcelas");
   await expect(aviso).toContainText("Ficam 3 parcelas de fatura paga, e o parcelamento continua só com elas. Para tirá-las, corrija a fatura.");
 });
+
+test("a tela de um parcelamento que não existe diz que não achou e não guarda lista vazia", async ({ page }) => {
+  await prepararCasal(page);
+  const inexistente = randomUUID();
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${inexistente}`);
+  await expect(page.getByText("Parcelamento não encontrado.")).toBeVisible();
+
+  const chaves = await page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const abertura = indexedDB.open("financial-app-dados");
+        abertura.onerror = reject;
+        abertura.onsuccess = () => {
+          const banco = abertura.result;
+          const pedido = banco.transaction("respostas", "readonly").objectStore("respostas").getAllKeys();
+          pedido.onsuccess = () => {
+            banco.close();
+            resolve(pedido.result as string[]);
+          };
+        };
+      }),
+  );
+  expect(chaves.filter((c) => c.includes(inexistente))).toEqual([]);
+});

@@ -78,8 +78,10 @@ async function mudar(id: string, proximo: (atual: ItemDeLancamento | undefined, 
     const atual: ItemDaFila | undefined = await pedido(fila.get(id));
     const aceitos: Aceitos | undefined = await pedido(respostas.get(ACEITOS));
     const item = proximo(atual && deLancamento(atual) ? atual : undefined, aceitos?.[id]?.base);
+    // A edição que saiu sem resposta fica com a mudança nova: ela sobe antes (ticket 169).
+    const enviadoSemResposta = atual && deLancamento(atual) ? atual.enviadoSemResposta : undefined;
     if (!item) await pedido(fila.delete(id));
-    else await pedido(fila.put({ ...item, id, desde: atual?.desde ?? Date.now(), feitoEm: Date.now(), revisao: (atual?.revisao ?? 0) + 1 }));
+    else await pedido(fila.put({ enviadoSemResposta, ...item, id, desde: atual?.desde ?? Date.now(), feitoEm: Date.now(), revisao: (atual?.revisao ?? 0) + 1 }));
   });
 }
 
@@ -273,6 +275,7 @@ export const esperaAPessoa = (item: ItemDaFila) => !!(item.recusa || (deLancamen
  * a edição atrás: no servidor, reenviar o criar devolve o que já está gravado.
  */
 function acoesDo(item: ItemDaFila): Acao[] {
+  if (deLancamento(item) && reenviaASemResposta(item)) return item.enviadoSemResposta!.acoes;
   // A hora da ação no aparelho; item de uma versão anterior do app não a tem e vale a da chegada.
   const acao_em = item.feitoEm ? new Date(item.feitoEm).toISOString() : undefined;
   // O dia em que o casal lançou a regra: a fila pode subir no dia seguinte, e "antes de hoje" se
@@ -301,6 +304,9 @@ function acoesDo(item: ItemDaFila): Acao[] {
   const comEdicao = item.talvezNoServidor !== undefined && item.talvezNoServidor !== item.revisao;
   return comEdicao ? [{ acao: "criar", lancamento }, editar] : [{ acao: "criar", lancamento }];
 }
+
+/** A mudança que saiu sem resposta é de uma revisão anterior: ela sobe antes da atual. */
+const reenviaASemResposta = (item: ItemDeLancamento) => item.enviadoSemResposta !== undefined && item.enviadoSemResposta.revisao !== item.revisao;
 
 /**
  * Os campos que a mudança traz, como a tela os mostrava: o servidor recusa se a outra pessoa mexeu
@@ -363,7 +369,15 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
           await pedido(fila.put({ id: enviado.id, acao: "excluir_recorrencia", recorrencia: enviado.recorrencia, desde: enviado.desde, revisao: 1 }));
         continue;
       }
-      const atual = guardado && deLancamento(guardado) ? guardado : undefined;
+      // Com a resposta, a mudança enviada antes sem resposta já se sabe gravada ou não.
+      const atual = guardado && deLancamento(guardado) ? { ...guardado, enviadoSemResposta: undefined } : undefined;
+      // Subiu de novo a mudança que tinha ficado sem resposta: a atual vem depois, sobre o resultado dela.
+      const reenviou = reenviaASemResposta(enviado);
+      if (reenviou && (resultado === "recusada" || resultado === "conflito")) {
+        // Ela não foi gravada: a atual sobe sobre a versão em que foi feita, e o servidor decide sobre ela.
+        if (atual) await pedido(fila.put(atual));
+        continue;
+      }
       if (resultado === "recusada") {
         if (intacto) await pedido(fila.put({ ...atual, recusa: motivo ?? "recusado" }));
         continue;
@@ -372,6 +386,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         // O aparelho passa a mostrar a versão do servidor enquanto a decisão espera.
         if (lancamento) await guardar(enviado.id, lancamento);
         if (intacto && lancamento) await pedido(fila.put({ ...atual, conflito: { motivo: motivo ?? "conflito", lancamento, campos: campos ?? [] } }));
+        else if (atual) await pedido(fila.put(atual));
         continue;
       }
       const antes = await naLista(enviado.id);
@@ -388,7 +403,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       noSaldo.push([antes, depois]);
       if (lancamento) aceitos[enviado.id] = { base: lancamento, em: Date.now() };
       if (excluidoNoCaminho) await pedido(fila.put({ id: enviado.id, acao: "excluir", base: lancamento, desde: enviado.desde, revisao: 1 }));
-      else if (intacto) await pedido(fila.delete(enviado.id));
+      else if (intacto && !reenviou) await pedido(fila.delete(enviado.id));
       // Mudou no caminho: a mudança nova sobe sobre a versão que acabou de ser aceita (o que era
       // criar já existe lá e sobe como edição).
       else if (atual)
@@ -424,6 +439,23 @@ async function marcarSemResposta(enviados: ItemDaFila[], saiuEm: number) {
         await pedido(
           fila.put({ id: enviado.id, acao: "excluir_recorrencia", recorrencia: enviado.recorrencia, desde: enviado.desde, revisao: 1, talvezNoServidor: enviado.revisao }),
         );
+    }
+  });
+}
+
+/**
+ * Antes de o lote sair, a edição e a confirmação guardam o que levam: se a resposta não voltar
+ * (caiu, ou a página fechou no caminho), elas talvez já estejam gravadas, e a próxima mudança do
+ * lançamento não pode ir sobre a versão de antes delas (ticket 169).
+ */
+async function guardarOEnviado(lote: ItemDaFila[]) {
+  const mudancas = lote.filter((item) => (item.acao === "editar" || item.acao === "confirmar") && !item.enviadoSemResposta);
+  if (mudancas.length === 0) return;
+  await emTransacao("readwrite", async (fila) => {
+    for (const enviado of mudancas) {
+      const atual: ItemDaFila | undefined = await pedido(fila.get(enviado.id));
+      if (atual && deLancamento(atual) && atual.revisao === enviado.revisao)
+        await pedido(fila.put({ ...atual, enviadoSemResposta: { revisao: enviado.revisao, acoes: acoesDo(enviado) } }));
     }
   });
 }
@@ -508,6 +540,7 @@ export function enviarFila(remeter: Remessa): Promise<boolean> {
       if (lote.length === 0) return true;
       // A hora em que o pedido saiu, não a da falha: o planejamento lido no meio já pode ter o criar.
       const saiuEm = Date.now();
+      await guardarOEnviado(lote);
       const resultados = await remeterLote(remeter, lote).catch(() => null);
       if (!resultados) {
         await marcarSemResposta(lote, saiuEm);

@@ -1080,7 +1080,7 @@ def _atual(conn, id: UUID, usuario: str) -> Lancamento:
         )
     # No Postgres em READ COMMITTED (local e CI), a exclusão do outro lado pode ser confirmada
     # entre as duas leituras; lida de novo, ela vira o 410. O DSQL lê tudo do mesmo instante.
-    lidos = _todos(conn, "id = %s", (id,))
+    lidos = ler_lancamentos(conn, "id = %s", (id,))
     return lidos[0] if lidos else _atual(conn, id, usuario)
 
 
@@ -1865,7 +1865,7 @@ def criar_lancamento(
     return na_rota(request, gravar)
 
 
-def _todos(
+def ler_lancamentos(
     conn, filtro: str = "", parametros: tuple = (), ordem: str = "data DESC, criado_em DESC, id"
 ) -> list[Lancamento]:
     """Os não excluídos; `filtro` é a condição a mais, sem o WHERE."""
@@ -1977,17 +1977,17 @@ def ler_partes(conn, ids: list[UUID] | None = None) -> dict[UUID, list[Parte]]:
 
 def ler_por_ids(conn, ids: list[UUID]) -> list[Lancamento]:
     """Os lançamentos não excluídos com esses ids."""
-    return _todos(conn, "id = ANY(%s)", (ids,))
+    return ler_lancamentos(conn, "id = ANY(%s)", (ids,))
 
 
 def _um(conn, id: UUID) -> Lancamento:
-    return _todos(conn, "id = %s", (id,))[0]
+    return ler_lancamentos(conn, "id = %s", (id,))[0]
 
 
 @router.get("/lancamentos", response_model=list[Lancamento], operation_id="listar_lancamentos")
 def listar_lancamentos(usuario: UsuarioLogado, request: Request) -> list[Lancamento]:
     with conectar(url_do_banco(request)) as conn:
-        return _todos(conn)
+        return ler_lancamentos(conn)
 
 
 @router.patch(
@@ -2007,7 +2007,7 @@ def editar_lancamento(
 def contas_da_semana_de_hoje(conn) -> list[Lancamento]:
     """Os atrasados e os previstos até `contasDaSemanaDias` dias a partir de hoje."""
     ate = hoje() + timedelta(days=valores_iniciais()["contasDaSemanaDias"])
-    return _todos(
+    return ler_lancamentos(
         conn,
         "situacao = 'previsto' AND NOT COALESCE(automatico, false) AND data <= %s",
         (ate,),

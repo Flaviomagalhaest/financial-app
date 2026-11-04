@@ -217,7 +217,7 @@ function AnteciparOuQuitar({ parcelamento, previstas }: { parcelamento: Parcelam
 /** O formulário nasce com o parcelamento que a primeira leitura trouxe; a releitura não apaga o que se digita. */
 function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const id = parcelamento.id;
-  // As parcelas vêm do servidor: as antigas de um parcelamento longo saem da janela do aparelho (ADR 0024).
+  // As parcelas vêm do servidor: as antigas de um parcelamento longo saem da janela do aparelho (ADR 0025).
   const daLeitura = useCallback(() => api.GET("/api/parcelamentos/{id}/lancamentos", { params: { path: { id } } }), [id]);
   const dele = useCallback((l: LancamentoNaTela) => l.parcelamento_id === id, [id]);
   const { lancamentos, semDados: semParcelas, atualizadoEm: parcelasDeAntes } = useLancamentosDaTela(`/api/parcelamentos/${id}/lancamentos`, daLeitura, dele);
