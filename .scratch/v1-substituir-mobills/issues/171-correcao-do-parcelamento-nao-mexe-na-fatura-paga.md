@@ -1,7 +1,7 @@
 # A correção do parcelamento não mexe na fatura paga
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
