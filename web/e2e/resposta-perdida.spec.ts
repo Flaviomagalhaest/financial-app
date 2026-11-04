@@ -1,0 +1,100 @@
+import { expect, test, type Page } from "@playwright/test";
+import { apiDaPagina } from "./api";
+import { entrar } from "./entrar";
+import { cadastrar, digitar, lancar } from "./lancar";
+
+// A edição chega ao servidor, mas a resposta não volta ao aparelho, e a pessoa reabre o app (ticket 169).
+
+const linhaDe = (page: Page, texto: string) => page.getByRole("listitem").filter({ hasText: texto });
+
+/**
+ * Lança "Jantar <s>" de R$ 1,00 e o edita para R$ 10,07: o servidor grava a edição, mas a resposta
+ * cai (`"resposta"`) ou a pessoa recarrega antes de ela voltar (`"recarga"`). Depois recarrega, com
+ * o envio da fila parado até `soltar()`: a próxima mudança entra no lugar da edição, como quando
+ * a pessoa mexe antes de a fila subir.
+ */
+async function editarSemResposta(page: Page, perder: "resposta" | "recarga") {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const [conta, mercado, descricao] = [`Corrente ${s}`, `Mercado ${s}`, `Jantar ${s}`];
+  await page.goto("/#/contas-e-categorias");
+  await entrar(page);
+  await cadastrar(page, "Nova conta", conta, "corrente");
+  await cadastrar(page, "Nova categoria", mercado, "despesa");
+  await lancar(page, { teclas: ["1", "00"], conta, categoria: mercado, descricao });
+  const linha = linhaDe(page, descricao);
+  await expect(linha).not.toContainText("não enviado");
+
+  let gravadas = 0;
+  await page.route("**/api/lancamentos/lote", async (rota) => {
+    if (gravadas > 0) return rota.continue();
+    await rota.fetch();
+    gravadas++;
+    if (perder === "resposta") await rota.abort("connectionreset");
+    // Na recarga, o pedido fica sem resposta até a página sair.
+  });
+  await linha.getByRole("link", { name: `Editar ${descricao}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 1,00");
+  await digitar(page, "7");
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(linha).toContainText("− R$ 10,07");
+  await expect.poll(() => gravadas).toBe(1);
+  await expect(linha).toContainText("não enviado");
+
+  // Outra aba segura a trava da fila: ao abrir, o envio espera até `soltar()`.
+  const outra = await page.context().newPage();
+  await outra.goto("/service-worker.js");
+  await outra.evaluate(
+    () =>
+      new Promise<void>((segurou) => {
+        void navigator.locks.request("financial-app-fila", { mode: "exclusive" }, () => {
+          segurou();
+          return new Promise<void>((soltar) => ((window as unknown as { soltarFila: () => void }).soltarFila = soltar));
+        });
+      }),
+  );
+  await page.reload();
+  await expect(linha).toContainText("− R$ 10,07");
+  await expect(linha).toContainText("não enviado");
+  const soltar = () => outra.evaluate(() => (window as unknown as { soltarFila: () => void }).soltarFila());
+  return { linha, descricao, soltar, api: await apiDaPagina(page) };
+}
+
+for (const perder of ["resposta", "recarga"] as const) {
+  test(`excluir ao reabrir, sobre a edição sem ${perder}, não vira conflito`, async ({ page }) => {
+    const { linha, descricao, soltar, api } = await editarSemResposta(page, perder);
+    page.once("dialog", (dialogo) => void dialogo.accept());
+    await linha.getByRole("button", { name: `Excluir ${descricao}` }).click();
+    await expect(linha).toHaveCount(0);
+    await soltar();
+
+    await expect.poll(async () => (await api.ler("/api/lancamentos")).some((l: { descricao: string }) => l.descricao === descricao)).toBe(false);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+    await expect(linha).toHaveCount(0);
+    await expect(page.getByText("conflito")).toHaveCount(0);
+  });
+}
+
+test("editar de novo ao reabrir, sobre a edição sem resposta, não vira conflito", async ({ page }) => {
+  const { linha, descricao, soltar, api } = await editarSemResposta(page, "resposta");
+  await linha.getByRole("link", { name: `Editar ${descricao}` }).click();
+  await expect(page.getByTestId("valor")).toHaveText("R$ 10,07");
+  await digitar(page, "Apagar", "8");
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(linha).toContainText("− R$ 10,08");
+  await soltar();
+
+  await expect(linha).not.toContainText("não enviado");
+  await expect(linha).not.toContainText("conflito");
+  await expect
+    .poll(async () => (await api.ler("/api/lancamentos")).find((l: { descricao: string }) => l.descricao === descricao)?.valor_centavos)
+    .toBe(1008);
+});
+
+test("a edição sem resposta sobe sozinha ao reabrir o app", async ({ page }) => {
+  const { linha, soltar } = await editarSemResposta(page, "resposta");
+  await soltar();
+  // Sem a pessoa mexer de novo: a fila sobe ao abrir.
+  await expect(linha).not.toContainText("não enviado");
+  await expect(linha).not.toContainText("conflito");
+});
