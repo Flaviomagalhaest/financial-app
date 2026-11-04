@@ -1,7 +1,7 @@
 # A exclusão do parcelamento deixa as parcelas de fatura paga
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
