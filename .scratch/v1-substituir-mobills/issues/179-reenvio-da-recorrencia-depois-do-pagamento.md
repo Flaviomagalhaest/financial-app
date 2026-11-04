@@ -1,7 +1,7 @@
 # Reenvio da recorrência depois do pagamento entre os lotes da geração
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
