@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { api } from "../api/cliente";
 import {
   anteciparParcelas,
   corrigirParcelamento,
@@ -9,13 +10,14 @@ import {
   useCadastro,
   useConexao,
   useAvisoDePlanejamento,
-  useLancamentos,
+  useLancamentosDaTela,
   useParcelamentos,
   usePessoas,
   useTags,
   type AlteracaoDeParcelamento,
   type AvisoDeExclusao,
   type AvisoDeRealizadas,
+  type LancamentoNaTela,
   type Parcelamento,
 } from "../dados";
 import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
@@ -208,7 +210,10 @@ function AnteciparOuQuitar({ parcelamento, previstas }: { parcelamento: Parcelam
 /** O formulário nasce com o parcelamento que a primeira leitura trouxe; a releitura não apaga o que se digita. */
 function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const id = parcelamento.id;
-  const { lancamentos } = useLancamentos();
+  // As parcelas vêm do servidor: as antigas de um parcelamento longo saem da janela do aparelho (ADR 0024).
+  const daLeitura = useCallback(() => api.GET("/api/parcelamentos/{id}/lancamentos", { params: { path: { id } } }), [id]);
+  const dele = useCallback((l: LancamentoNaTela) => l.parcelamento_id === id, [id]);
+  const { lancamentos, semDados: semParcelas, atualizadoEm: parcelasDeAntes } = useLancamentosDaTela(`/api/parcelamentos/${id}/lancamentos`, daLeitura, dele);
   const { contasECartoes, categorias } = useCadastro();
   const { pessoas, nomeDe } = usePessoas();
   const opcoesDeTags = useTags();
@@ -221,7 +226,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const [itemTocado, setItemTocado] = useState<string | null>(null);
   // Gravada a correção, as parcelas que ficaram como estavam porque alguém as mudou à mão.
   const [mantidas, setMantidas] = useState("");
-  const doParcelamento = (lancamentos ?? []).filter((l) => l.parcelamento_id === id).sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
+  const doParcelamento = (lancamentos ?? []).slice().sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
   const primeira = doParcelamento[0];
   const noCartao = !!primeira?.fatura_mes;
   // O aviso mostra a 1ª parcela com o que o formulário tem; sem ela no aparelho, fica sem aviso.
@@ -419,6 +424,12 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
       <AnteciparOuQuitar parcelamento={parcelamento} previstas={doParcelamento.filter((l) => l.situacao === "previsto")} />
 
       <h3>Parcelas</h3>
+      {parcelasDeAntes && <p className="vazio">Sem internet: as parcelas são as da última leitura.</p>}
+      {semParcelas && (
+        <p role="alert" className="erro">
+          Sem internet: as parcelas precisam de internet.
+        </p>
+      )}
       <ul className="lista parcelas" aria-label={`Parcelas de ${parcelamento.descricao}`}>
         {doParcelamento.map((l) => (
           <li key={l.id}>

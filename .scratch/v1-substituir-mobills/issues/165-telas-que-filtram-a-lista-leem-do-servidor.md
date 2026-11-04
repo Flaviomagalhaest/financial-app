@@ -1,7 +1,7 @@
 # Telas que filtram a lista guardada passam a ler do servidor
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -21,6 +21,10 @@ Cada tela guarda a resposta dela no aparelho, como as outras leituras, e soma os
 
 ## Checklist
 
-- [ ] Endpoint (ou o `POST /api/busca` com o filtro Fatura) para as compras da fatura e os lançamentos do mês, com testes do backend
-- [ ] Fatura, Mês e parcelamento leem do servidor, com testes de navegador com e sem internet
-- [ ] Não enviados continuam aparecendo nessas telas sem internet
+- [x] Endpoints `GET /api/cartoes/{id}/faturas/{mes}/lancamentos`, `GET /api/meses/{mes}/lancamentos` e `GET /api/parcelamentos/{id}/lancamentos`, com testes do backend (`test_lancamentos_das_telas.py`)
+- [x] Fatura, Mês e parcelamento leem do servidor (`useLancamentosDaTela`), com testes de navegador com e sem internet (`telas-leem-do-servidor.spec.ts`)
+- [x] Não enviados continuam aparecendo nessas telas sem internet
+
+## Notas
+
+- O índice de estornos da Fatura ainda olha a lista guardada (o estorno pode estar em outra fatura): fica para o [ticket 166](166-janela-do-aparelho.md), que já cobre o índice de estornos.

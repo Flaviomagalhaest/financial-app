@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { api } from "../api/cliente";
-import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, useParcelamentos, usePessoas, type Fatura } from "../dados";
+import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, useLancamentosDaTela, type LancamentoNaTela, useParcelamentos, usePessoas, type Fatura } from "../dados";
 import { eCredito, eEstorno, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { mesEmQueConta } from "../dados/aviso";
 import { dataPorExtenso, mesPorExtenso } from "../lancamentos/datas";
@@ -89,7 +89,6 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const online = useConexao();
   const [ajustando, setAjustando] = useState(false);
   const [corrigindo, setCorrigindo] = useState(false);
-  const { lancamentos } = useLancamentos();
   const { nomeDe } = usePessoas();
   const [categoria, setCategoria] = useState(TODAS);
   const [tag, setTag] = useState(TODAS);
@@ -99,16 +98,21 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const paga = !!fatura && pagaPeloPagamento(fatura);
   // As compras do adicional caem na fatura do titular.
   const doCartao = useMemo(() => new Set(cartoes.filter((c) => c.id === cartaoId || c.titular_id === cartaoId).map((c) => c.id)), [cartoes, cartaoId]);
-  // A compra criada só no aparelho ainda não tem `mes`: vale a fatura escolhida ou a da data (ADR 0003).
-  const compras = useMemo(
-    () =>
-      (lancamentos ?? []).filter((l) => {
-        if (!doCartao.has(l.conta_id)) return false;
-        const doMes = l.mes ?? (cartao && mesEmQueConta(l, undefined, { titular: cartao, faturas: faturas ?? [] }));
-        return doMes === mes;
-      }),
-    [lancamentos, mes, doCartao, cartao, faturas],
+  // A lista vem do servidor (a guardada só tem a janela do aparelho, ADR 0024); a compra criada só no
+  // aparelho ainda não tem `mes`: vale a fatura escolhida ou a da data (ADR 0003).
+  const daFatura = useCallback(
+    (l: LancamentoNaTela) => {
+      if (!doCartao.has(l.conta_id)) return false;
+      const doMes = l.mes ?? (cartao && mesEmQueConta(l, undefined, { titular: cartao, faturas: faturas ?? [] }));
+      return doMes === mes;
+    },
+    [doCartao, cartao, faturas, mes],
   );
+  const leitura = useCallback(() => api.GET("/api/cartoes/{id}/faturas/{mes}/lancamentos", { params: { path: { id: cartaoId, mes } } }), [cartaoId, mes]);
+  const { lancamentos: daLeitura, semDados: semInternet, atualizadoEm } = useLancamentosDaTela(`/api/cartoes/${cartaoId}/faturas/${mes}/lancamentos`, leitura, daFatura);
+  const compras = useMemo(() => daLeitura ?? [], [daLeitura]);
+  // O índice de estornos olha a lista guardada: o estorno pode estar em outra fatura (ticket 166).
+  const { lancamentos } = useLancamentos();
   const { dados: parcelamentos } = useParcelamentos();
   const indice = useMemo(() => indiceDeEstornos(lancamentos ?? [], parcelamentos ?? []), [lancamentos, parcelamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
@@ -221,7 +225,13 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
       {filtrando && <p className="vazio">Filtrado: {formatarCentavos(somaFiltrada)}</p>}
       {/* A busca pelo filtro Fatura, com a categoria e a tag escolhidas aqui. */}
       <a href={enderecoDaBusca({ fatura: { mes, cartao_id: cartaoId }, categoria_ids: categoria === TODAS ? undefined : [categoria], tags: tag === TODAS ? undefined : [tag] })}>Ver os lançamentos</a>
-      {lancamentos && filtradas.length === 0 && <p className="vazio">Nenhuma compra nesta fatura.</p>}
+      {atualizadoEm && <p className="vazio">Sem internet: as compras são as da última leitura.</p>}
+      {semInternet && (
+        <p role="alert" className="erro">
+          Sem internet: as compras desta fatura precisam de internet.
+        </p>
+      )}
+      {daLeitura && !semInternet && filtradas.length === 0 && <p className="vazio">Nenhuma compra nesta fatura.</p>}
       {dias.map((dia) => (
         <div key={dia} role="group" aria-label={dataPorExtenso(dia)}>
           <h3>{dataPorExtenso(dia)}</h3>

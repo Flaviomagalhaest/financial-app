@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { api } from "../api/cliente";
 import {
   aplicarModeloPadrao,
   atualizadoAs,
@@ -10,7 +11,7 @@ import {
   mudarItemDoPlanejamento,
   useCadastro,
   useConexao,
-  useLancamentos,
+  useLancamentosDaTela,
   useMes,
   usePessoas,
   type LancamentoNaTela,
@@ -328,17 +329,22 @@ function buscaDaLinha(mes: string, dimensao: Dimensao, chave: string | null): st
 }
 
 /** Os lançamentos de uma linha do ranking, numa folha que sobe de baixo. */
-function FolhaDoRanking({ linha, categorias, lancamentos, aoFechar }: { linha: LinhaAberta; categorias: Categorias; lancamentos: LancamentoNaTela[]; aoFechar: () => void }) {
+function FolhaDoRanking({ linha, categorias, lancamentos, aoFechar }: { linha: LinhaAberta; categorias: Categorias; lancamentos: LancamentoNaTela[] | null; aoFechar: () => void }) {
   const folha = useRef<HTMLDialogElement>(null);
   const { contasECartoes } = useCadastro();
   const { nomeDe } = usePessoas();
   useEffect(() => folha.current?.showModal(), []);
-  const daLinha = linha.ids.flatMap((id) => lancamentos.filter((l) => l.id === id));
+  const daLinha = linha.ids.flatMap((id) => (lancamentos ?? []).filter((l) => l.id === id));
   const partesDaLinha = (l: LancamentoNaTela) => (l.partes ?? []).filter((p) => linha.parteIds.includes(p.id));
   return (
     <dialog ref={folha} className="folha" aria-labelledby="titulo-da-linha" onClose={aoFechar}>
       <h3 id="titulo-da-linha">{linha.nome}</h3>
       <p className="vazio">{formatarCentavos(linha.centavos)}</p>
+      {!lancamentos && (
+        <p role="alert" className="erro">
+          Sem internet: os lançamentos desta linha precisam de internet.
+        </p>
+      )}
       <ul className="lista">
         {daLinha.map((l) => (
           <li key={l.id}>
@@ -363,7 +369,7 @@ function FolhaDoRanking({ linha, categorias, lancamentos, aoFechar }: { linha: L
 }
 
 /** Para onde foi o dinheiro: barras por categoria, tag ou pessoa, sem pizza. */
-function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; categorias: Categorias; lancamentos: LancamentoNaTela[] }) {
+function Ranking({ leitura, categorias, lancamentos }: { leitura: LeituraDoMes; categorias: Categorias; lancamentos: LancamentoNaTela[] | null }) {
   const [dimensao, setDimensao] = useState(DIMENSOES[0]);
   const [aberta, setAberta] = useState<LinhaAberta | null>(null);
   const { nomeDe } = usePessoas();
@@ -419,7 +425,10 @@ const SITUACAO: Record<LeituraDoMes["situacao"], string> = { passado: "mês fech
 export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
   const { dados: leitura, atualizadoEm, semDados, buscar } = useMes(mes);
   const { categorias } = useCadastro();
-  const { lancamentos } = useLancamentos();
+  // Os lançamentos do mês vêm do servidor: a lista guardada só tem a janela do aparelho (ADR 0024).
+  const leituraDosLancamentos = useCallback(() => api.GET("/api/meses/{mes}/lancamentos", { params: { path: { mes } } }), [mes]);
+  const doMes = useCallback((l: LancamentoNaTela) => (l.mes ?? l.data).slice(0, 7) === mes, [mes]);
+  const { lancamentos, semDados: semLancamentos, atualizadoEm: lancamentosDeAntes } = useLancamentosDaTela(`/api/meses/${mes}/lancamentos`, leituraDosLancamentos, doMes);
 
   return (
     <section className="aba-mes">
@@ -442,13 +451,19 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
           Sem internet: não foi possível carregar este mês.
         </p>
       )}
+      {lancamentosDeAntes && <p className="vazio">Sem internet: os lançamentos do mês são os da última leitura.</p>}
+      {semLancamentos && (
+        <p role="alert" className="erro">
+          Sem internet: o &quot;A escolher&quot; e o Ranking precisam dos lançamentos do mês, que não estão no aparelho.
+        </p>
+      )}
       {leitura && (
         <>
           {leitura.situacao === "passado" ? <Fechamento leitura={leitura} categorias={categorias} /> : <BarraDoMes leitura={leitura} />}
           <AEscolher leitura={leitura} categorias={categorias} lancamentos={lancamentos ?? []} aoEscolher={() => void buscar()} />
           <Itens leitura={leitura} categorias={categorias} aoMudar={() => void buscar()} />
           <Comparacao leitura={leitura} categorias={categorias} />
-          <Ranking leitura={leitura} categorias={categorias} lancamentos={lancamentos ?? []} />
+          <Ranking leitura={leitura} categorias={categorias} lancamentos={lancamentos} />
         </>
       )}
     </section>
