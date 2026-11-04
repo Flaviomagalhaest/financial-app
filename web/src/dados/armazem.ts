@@ -51,9 +51,9 @@ export interface ItemDeLancamento extends PedidoNaFila {
   /** A exclusão venceu: a mudança não foi salva e espera "Lançar de novo" ou ser dispensada. */
   exclusao?: Exclusao;
   /**
-   * A edição ou a confirmação que saiu e ainda não teve resposta: a revisão e as ações dela. Ela
-   * talvez já esteja gravada; se o item mudou depois, ela sobe de novo antes, e a mudança nova
-   * vai sobre a versão que ela gerou, não sobre a de antes (ticket 169).
+   * A mudança (criar, edição ou confirmação) que saiu e ainda não teve resposta: a revisão e as
+   * ações dela. Ela talvez já esteja gravada; se o item mudou depois, ela sobe de novo antes, e a
+   * mudança nova vai sobre a versão que ela gerou, não sobre a de antes (tickets 169 e 173).
    */
   enviadoSemResposta?: { revisao: number; acoes: components["schemas"]["Lote"]["acoes"] };
 }
