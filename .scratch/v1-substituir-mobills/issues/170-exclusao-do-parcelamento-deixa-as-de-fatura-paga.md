@@ -1,7 +1,7 @@
 # A exclusão do parcelamento deixa as parcelas de fatura paga
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -21,10 +21,18 @@ Só vale para a fatura paga pelo pagamento (`paga_pelo_pagamento`). A parcela da
 
 ## Checklist
 
-- [ ] A exclusão apaga só as parcelas fora da fatura paga pelo pagamento e encolhe o parcelamento até a última parcela de fatura paga (parcelas e total), sem gerar mais nada; a parcela do meio que não está em fatura paga sai como excluída uma a uma
-- [ ] Sem nenhuma parcela de fatura paga, a exclusão continua igual a hoje (o parcelamento some)
-- [ ] O aviso de exclusão (`AvisoDeExclusao`) diz quantas parcelas de fatura paga **ficam**, com a mensagem para corrigir a fatura se quiser tirá-las; a tela mostra esse aviso
-- [ ] A parcela da fatura importada do Mobills segue saindo com o aviso, como hoje
-- [ ] A exclusão em lotes não fica pela metade: o que fica é decidido antes do primeiro lote
-- [ ] Testes de API em `backend/tests/test_fatura_paga.py`
-- [ ] Conferir se o `GLOSSARY.md` (**Exclusão do parcelamento**) bate com o que foi feito
+- [x] A exclusão apaga só as parcelas fora da fatura paga pelo pagamento e encolhe o parcelamento até a última parcela de fatura paga (parcelas e total), sem gerar mais nada; a parcela do meio que não está em fatura paga sai como excluída uma a uma
+- [x] Sem nenhuma parcela de fatura paga, a exclusão continua igual a hoje (o parcelamento some)
+- [x] O aviso de exclusão (`AvisoDeExclusao`) diz quantas parcelas de fatura paga **ficam**, com a mensagem para corrigir a fatura se quiser tirá-las; a tela mostra esse aviso
+- [x] A parcela da fatura importada do Mobills segue saindo com o aviso, como hoje
+- [x] A exclusão em lotes não fica pela metade: o que fica é decidido antes do primeiro lote
+- [x] Testes de API em `backend/tests/test_fatura_paga.py`
+- [x] Conferir se o `GLOSSARY.md` (**Exclusão do parcelamento**) bate com o que foi feito
+
+## Resolução
+
+- A exclusão decide tudo numa transação antes do primeiro lote (`_exclusao`): as parcelas da fatura paga pelo pagamento ficam, o parcelamento encolhe até a última delas (`parcelas = geradas`, total = soma delas) e só as outras saem, em lotes.
+- A correção do parcelamento (também a da tarefa diária) deixa como está a parcela da fatura paga pelo pagamento: sem isso, o encolhido com uma parcela do meio excluída (1, 2, 3 e 5) dividiria de novo o total pelas cinco e mudaria as faturas pagas. É o primeiro item do [ticket 171](171-correcao-do-parcelamento-nao-mexe-na-fatura-paga.md), sem a contagem em `parcelas_mantidas`, que fica com ele.
+- O aviso traz `ficam_de_fatura_paga`; sem nada a sair (excluir de novo o encolhido), a exclusão não pergunta e responde 204.
+- Pendências: [ticket 176](176-parcelamento-que-encolhe-para-uma-parcela.md) (só a 1ª de fatura paga: a tabela recusa 1x, fica um 2x provisório) e [ticket 177](177-antecipacao-sem-internet-intermitente.md) (teste de navegador intermitente visto nesta sessão).
+- `GLOSSARY.md` (**Exclusão do parcelamento**) já descrevia o comportamento.
