@@ -400,6 +400,7 @@
     "/api/lancamentos": {
       "get": {
         "summary": "Listar Lancamentos",
+        "description": "A janela do aparelho (ADR 0024): os que contam nos últimos meses, pelo mês em que contam (o\nda fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem.",
         "operationId": "listar_lancamentos",
         "responses": {
           "200": {
@@ -477,6 +478,53 @@
       }
     },
     "/api/lancamentos/{id}": {
+      "get": {
+        "summary": "Ler Lancamento",
+        "description": "O lançamento que ficou fora da janela do aparelho, para abrir, editar ou estornar com internet.",
+        "operationId": "ler_lancamento",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LancamentoELigados"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "lançamento não encontrado ou excluído"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "summary": "Editar Lancamento",
         "description": "Só os campos mudados, sobre uma versão: campos diferentes se mesclam, o mesmo campo\nmudado depois pelo outro lado é 409, e o excluído é 410 (ADR 0011).",
@@ -7041,6 +7089,27 @@
           "alterado_em"
         ],
         "title": "Lancamento"
+      },
+      "LancamentoELigados": {
+        "properties": {
+          "lancamento": {
+            "$ref": "#/components/schemas/Lancamento"
+          },
+          "ligados": {
+            "items": {
+              "$ref": "#/components/schemas/Lancamento"
+            },
+            "type": "array",
+            "title": "Ligados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lancamento",
+          "ligados"
+        ],
+        "title": "LancamentoELigados",
+        "description": "Um lançamento e os ligados a ele pelo estorno: os estornos dele, a compra do estorno e, na\nparcela, as outras parcelas, os estornos delas e os de todas as parcelas."
       },
       "LeituraDoMes": {
         "properties": {

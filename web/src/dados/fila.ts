@@ -23,6 +23,7 @@ import {
   type NovoLancamento,
   type NovoParcelamento,
   type Antecipacao,
+  versaoDaFila,
 } from "./armazem";
 import { comOsEnviados } from "./saldo";
 
@@ -374,7 +375,8 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         if (intacto && lancamento) await pedido(fila.put({ ...atual, conflito: { motivo: motivo ?? "conflito", lancamento, campos: campos ?? [] } }));
         continue;
       }
-      const antes = await naLista(enviado.id);
+      // Fora da janela do aparelho, o saldo guardado conta a versão sobre a qual a mudança foi feita.
+      const antes = (await naLista(enviado.id)) ?? (temLista ? versaoDaFila(enviado) : undefined);
       if (resultado === "descartada") {
         await guardar(enviado.id, undefined);
         if (atual?.lancamento && exclusao) await pedido(fila.put({ ...atual, exclusao }));

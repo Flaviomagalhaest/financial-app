@@ -1,6 +1,6 @@
 // O que o aparelho guarda para funcionar sem internet (ADR 0011): a última resposta de cada
-// leitura (a lista de lançamentos, um registro por lançamento) e a fila do que não foi
-// enviado. Banco próprio, separado do da sessão; a tela e o
+// leitura (a lista de lançamentos, que é a janela do aparelho do ADR 0024, um registro por
+// lançamento) e a fila do que não foi enviado. Banco próprio, separado do da sessão; a tela e o
 // service worker usam este mesmo módulo.
 import type { components } from "../api/schema";
 
@@ -101,6 +101,15 @@ export type ItemDaFila = ItemDeLancamento | ItemDeRegra;
 
 const ACOES_DE_LANCAMENTO: ReadonlySet<string> = new Set<ItemDeLancamento["acao"]>(["criar", "editar", "excluir", "confirmar"]);
 export const deLancamento = (item: Pick<ItemDaFila, "acao">): item is ItemDeLancamento => ACOES_DE_LANCAMENTO.has(item.acao);
+
+/**
+ * A versão do servidor sobre a qual a mudança da fila foi feita, para o lançamento que não está na
+ * lista guardada: o que ficou fora da janela do aparelho (ADR 0024), aberto com internet. O criar
+ * não tem: a base dele é o que foi enviado, que talvez nem esteja no servidor.
+ */
+export function versaoDaFila(item: ItemDeLancamento): Lancamento | undefined {
+  return item.acao === "criar" ? undefined : (item.base as Lancamento | undefined);
+}
 
 export interface Guardada<T> {
   dados: T;
@@ -257,17 +266,20 @@ export const temResposta = (caminho: string) => emTransacao("readonly", async (_
 
 /**
  * Guarda a lista lida: grava só os lançamentos que mudaram desde a guardada e apaga os que o
- * servidor não mandou mais.
+ * servidor não mandou mais. A lista é a janela do aparelho (ADR 0024): quando o mês vira, o que
+ * saiu dela some, menos o que tem mudança na fila (não enviada, recusada ou em conflito), que a
+ * tela ainda mostra e que a fila edita sobre a versão guardada.
  */
-async function guardarALista(respostas: IDBObjectStore, lancamentos: IDBObjectStore, lida: Guardada<Lancamento[]>) {
+async function guardarALista(fila: IDBObjectStore, respostas: IDBObjectStore, lancamentos: IDBObjectStore, lida: Guardada<Lancamento[]>) {
   const { dados, ...marca } = lida;
   const guardados = new Map(((await pedido(lancamentos.getAll())) as Lancamento[]).map((l) => [l.id, JSON.stringify(l)]));
+  const naFila = new Set(((await pedido(fila.getAll())) as ItemDaFila[]).filter(deLancamento).map((item) => item.id));
   const escritas: Promise<unknown>[] = [];
   for (const lancamento of dados) {
     if (guardados.get(lancamento.id) !== JSON.stringify(lancamento)) escritas.push(pedido(lancamentos.put(lancamento)));
     guardados.delete(lancamento.id);
   }
-  for (const id of guardados.keys()) escritas.push(pedido(lancamentos.delete(id)));
+  for (const id of guardados.keys()) if (!naFila.has(id)) escritas.push(pedido(lancamentos.delete(id)));
   escritas.push(pedido(respostas.put(marca, LISTA)));
   await Promise.all(escritas);
 }
@@ -308,11 +320,11 @@ export function lerEGuardar<D>(caminho: string, ler: () => Promise<D | undefined
     const numero = numerarLeitura();
     const dados = await ler().catch(() => undefined);
     if (dados === undefined) return undefined;
-    await emTransacao("readwrite", async (_, respostas, lancamentos) => {
+    await emTransacao("readwrite", async (fila, respostas, lancamentos) => {
       const guardada = (await pedido(respostas.get(caminho))) as Omit<Guardada<D>, "dados"> | undefined;
       if (maisNova(guardada, numero)) return;
       const lida = { dados, em: Date.now(), leitura: numero } satisfies Guardada<D>;
-      if (caminho === LISTA) await guardarALista(respostas, lancamentos, lida as Guardada<unknown> as Guardada<Lancamento[]>);
+      if (caminho === LISTA) await guardarALista(fila, respostas, lancamentos, lida as Guardada<unknown> as Guardada<Lancamento[]>);
       else await pedido(respostas.put(lida, caminho));
     });
     return dados;

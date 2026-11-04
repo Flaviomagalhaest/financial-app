@@ -145,7 +145,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Listar Lancamentos */
+        /**
+         * Listar Lancamentos
+         * @description A janela do aparelho (ADR 0024): os que contam nos últimos meses, pelo mês em que contam (o
+         *     da fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem.
+         */
         get: operations["listar_lancamentos"];
         put?: never;
         /**
@@ -166,7 +170,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Ler Lancamento
+         * @description O lançamento que ficou fora da janela do aparelho, para abrir, editar ou estornar com internet.
+         */
+        get: operations["ler_lancamento"];
         put?: never;
         post?: never;
         /**
@@ -2453,6 +2461,16 @@ export interface components {
             parece_repetido_de?: string | null;
         };
         /**
+         * LancamentoELigados
+         * @description Um lançamento e os ligados a ele pelo estorno: os estornos dele, a compra do estorno e, na
+         *     parcela, as outras parcelas, os estornos delas e os de todas as parcelas.
+         */
+        LancamentoELigados: {
+            lancamento: components["schemas"]["Lancamento"];
+            /** Ligados */
+            ligados: components["schemas"]["Lancamento"][];
+        };
+        /**
          * LeituraDoMes
          * @description Tudo o que a aba Mês mostra de um mês, numa leitura só.
          */
@@ -4266,6 +4284,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Exclusao"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LancamentoELigados"];
+                };
+            };
+            /** @description lançamento não encontrado ou excluído */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

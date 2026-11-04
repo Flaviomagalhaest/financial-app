@@ -1984,10 +1984,51 @@ def _um(conn, id: UUID) -> Lancamento:
     return _todos(conn, "id = %s", (id,))[0]
 
 
+def inicio_da_janela() -> date:
+    """O primeiro mês da janela do aparelho: o deste mês e os `janelaDoAparelhoMeses` - 1 antes dele."""
+    dia = hoje()
+    meses = dia.year * 12 + dia.month - 1 - (int(valores_iniciais()["janelaDoAparelhoMeses"]) - 1)
+    return date(meses // 12, meses % 12 + 1, 1)
+
+
 @router.get("/lancamentos", response_model=list[Lancamento], operation_id="listar_lancamentos")
 def listar_lancamentos(usuario: UsuarioLogado, request: Request) -> list[Lancamento]:
+    """A janela do aparelho (ADR 0024): os que contam nos últimos meses, pelo mês em que contam (o
+    da fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem."""
     with conectar(url_do_banco(request)) as conn:
-        return _todos(conn)
+        return _todos(conn, f"{MES_EM_QUE_CONTA} >= %s", (inicio_da_janela(),))
+
+
+class LancamentoELigados(BaseModel):
+    """Um lançamento e os ligados a ele pelo estorno: os estornos dele, a compra do estorno e, na
+    parcela, as outras parcelas, os estornos delas e os de todas as parcelas."""
+
+    lancamento: Lancamento
+    ligados: list[Lancamento]
+
+
+@router.get(
+    "/lancamentos/{id}",
+    response_model=LancamentoELigados,
+    operation_id="ler_lancamento",
+    responses={404: {"description": "lançamento não encontrado ou excluído"}},
+)
+def ler_lancamento(id: UUID, usuario: UsuarioLogado, request: Request) -> LancamentoELigados:
+    """O lançamento que ficou fora da janela do aparelho, para abrir, editar ou estornar com internet."""
+    with conectar(url_do_banco(request)) as conn:
+        lidos = _todos(conn, "id = %s", (id,))
+        if not lidos:
+            raise HTTPException(status_code=404, detail="lançamento não encontrado")
+        lido = lidos[0]
+        parcelamento = lido.parcelamento_id
+        ligados = _todos(
+            conn,
+            "id <> %(id)s AND (estorno_de = %(id)s OR id = %(compra)s"
+            " OR parcelamento_id = %(parcelamento)s OR estorno_parcelamento_id = %(parcelamento)s"
+            " OR estorno_de IN (SELECT p.id FROM lancamentos p WHERE p.parcelamento_id = %(parcelamento)s))",
+            {"id": id, "compra": lido.estorno_de, "parcelamento": parcelamento},
+        )
+        return LancamentoELigados(lancamento=lido, ligados=ligados)
 
 
 @router.patch(

@@ -22,6 +22,7 @@ import { contagem, SITUACOES, TIPOS } from "./apresentacao";
 import { FiltrosSalvos } from "./FiltrosSalvos";
 import { FolhaDeFiltros } from "./FolhaDeFiltros";
 import { FolhaDaEdicaoEmLote } from "./FolhaDaEdicaoEmLote";
+import { config } from "../config";
 
 type Cadastro = ReturnType<typeof useCadastro>;
 
@@ -289,7 +290,7 @@ export function TelaDaBusca({ consulta }: { consulta: string }) {
       {!criterios.fatura && <p className="vazio">Período pela data da compra; a aba Mês conta pelo mês da fatura.</p>}
       {parcial && (
         <p role="status" className="erro">
-          Resultado parcial, sem internet: só o que este aparelho guarda.
+          Sem internet: a busca olhou só os últimos {config.janelaDoAparelhoMeses} meses.
         </p>
       )}
       {totais && (

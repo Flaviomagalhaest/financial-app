@@ -10,5 +10,6 @@
   "horizonteDaRecorrenciaMeses": 24,
   "contasDaSemanaDias": 7,
   "maximoDeParcelas": 420,
-  "buscaPorPagina": 50
+  "buscaPorPagina": 50,
+  "janelaDoAparelhoMeses": 12
 }

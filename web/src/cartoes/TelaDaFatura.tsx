@@ -111,10 +111,16 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const leitura = useCallback(() => api.GET("/api/cartoes/{id}/faturas/{mes}/lancamentos", { params: { path: { id: cartaoId, mes } } }), [cartaoId, mes]);
   const { lancamentos: daLeitura, semDados: semInternet, atualizadoEm } = useLancamentosDaTela(`/api/cartoes/${cartaoId}/faturas/${mes}/lancamentos`, leitura, daFatura);
   const compras = useMemo(() => daLeitura ?? [], [daLeitura]);
-  // O índice de estornos olha a lista guardada: o estorno pode estar em outra fatura (ticket 166).
+  // O índice de estornos olha a janela do aparelho (o estorno pode estar em outra fatura) e as compras
+  // desta fatura, que podem estar antes dela (ADR 0024). O estorno de uma compra fora da janela, numa
+  // fatura antiga, fica "estorno de uma compra" até abri-lo.
   const { lancamentos } = useLancamentos();
   const { dados: parcelamentos } = useParcelamentos();
-  const indice = useMemo(() => indiceDeEstornos(lancamentos ?? [], parcelamentos ?? []), [lancamentos, parcelamentos]);
+  const indice = useMemo(() => {
+    const naJanela = lancamentos ?? [];
+    const ids = new Set(naJanela.map((l) => l.id));
+    return indiceDeEstornos([...naJanela, ...compras.filter((l) => !ids.has(l.id))], parcelamentos ?? []);
+  }, [lancamentos, compras, parcelamentos]);
   // Os estornos que o servidor já somou na fatura; o que só está na fila ainda não entra no total dela.
   const estornosCentavos = compras.filter((l) => eEstorno(l) && !l.naoEnviado).reduce((soma, l) => soma + l.valor_centavos, 0);
   const ligacoes = useMemo(() => new Map(compras.map((l) => [l.id, ligacaoDoEstorno(l, indice, categorias)])), [compras, indice, categorias]);

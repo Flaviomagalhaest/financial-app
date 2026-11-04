@@ -8,7 +8,7 @@ import {
   useCadastro,
   useCartoesComArquivados,
   useContasComArquivadas,
-  useLancamentos,
+  useLancamentosComOsDeFora,
   useMudancasDaRecorrenciaNaoEnviadas,
   usePessoas,
   useRecorrencias,
@@ -111,7 +111,8 @@ function alteracaoDo(f: Formulario, r: RecorrenciaNaTela, ocorrencia: number, da
  * (ADR 0020); o servidor refaz os previstos quando a mudança sobe.
  */
 export function TelaDaRecorrencia({ id }: { id: string }) {
-  const { lancamentos } = useLancamentos();
+  // O lançamento pode estar fora da janela do aparelho (ADR 0024): com internet, vem do servidor.
+  const { lancamentos, foraDoAparelho } = useLancamentosComOsDeFora(id);
   const { recorrencias, semDados } = useRecorrencias();
   const mudancas = useMudancasDaRecorrenciaNaoEnviadas();
   const { contasECartoes, categorias } = useCadastro();
@@ -146,11 +147,20 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   }, [regra, lancamento, form]);
 
   if (!lancamento || !regra || !form || !lancamento.ocorrencia) {
-    const carregou = lancamentos && (recorrencias || semDados);
+    // Sem o lançamento, vale o que se sabe dele; com ele, o que se sabe da regra.
+    const fora = foraDoAparelho(id);
+    const aviso =
+      fora === "sem-internet"
+        ? "Sem internet: este lançamento não está no aparelho."
+        : fora === "nao-existe" || (!fora && recorrencias)
+          ? "Recorrência não encontrada."
+          : !fora && semDados
+            ? "Sem internet: esta recorrência não está no aparelho."
+            : "";
     return (
       <section>
         <h2>Recorrência</h2>
-        {carregou && <p className="vazio">{semDados ? "Sem internet: esta recorrência não está no aparelho." : "Recorrência não encontrada."}</p>}
+        {aviso && <p className="vazio">{aviso}</p>}
         <a href="#/historico">Voltar ao Histórico</a>
       </section>
     );

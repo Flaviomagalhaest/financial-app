@@ -161,7 +161,7 @@ test("sem internet, a busca mostra o que o aparelho guarda, com os não enviados
   await lancar(page, { teclas: ["7", "00"], conta: `Corrente ${s}`, categoria: `Mercado ${s}`, descricao: `Padaria ${s}` });
   await page.getByRole("link", { name: "Buscar lançamentos" }).click();
   await buscarPeloTexto(page, s);
-  await expect(page.getByRole("status")).toHaveText("Resultado parcial, sem internet: só o que este aparelho guarda.");
+  await expect(page.getByRole("status")).toHaveText("Sem internet: a busca olhou só os últimos 12 meses.");
   await expect(linhas).toHaveCount(2);
   await expect(linhas.filter({ hasText: `Padaria ${s}` })).toContainText("⏳ não enviado");
   await expect(page.getByLabel("Totais da busca")).toContainText("R$ 107,00");
