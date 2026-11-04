@@ -1110,7 +1110,7 @@ export interface paths {
         };
         /**
          * Listar Lancamentos Do Parcelamento
-         * @description Todas as parcelas do parcelamento, da primeira à última.
+         * @description Todas as parcelas do parcelamento, da primeira à última; 404 se ele não existe.
          */
         get: operations["listar_lancamentos_do_parcelamento"];
         put?: never;
