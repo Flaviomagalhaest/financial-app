@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from uuid import uuid4
 
+import psycopg
 import pytest
 
 from app import lancamentos
@@ -11,7 +12,12 @@ from tests.conftest import Casal
 from tests.test_cartoes import comprar, lancamento, novo_cartao
 from tests.test_contas import nova_conta
 from tests.test_pagamento_de_fatura import faturas, numeros, pagamento, pagar
-from tests.test_parcelamentos import parcelamento, parcelas
+from tests.test_parcelamentos import (
+    excluir_parcelamento,
+    fazer_tarefa_diaria,
+    parcelamento,
+    parcelas,
+)
 
 RECUSA = "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
 
@@ -646,3 +652,140 @@ def test_a_parcela_da_fatura_importada_segue_a_correcao_com_o_aviso(
     assert [v for _, v, _ in numero_valor_e_fatura(casal, criado["id"])] == (
         [12000] + [10000] * 2 + [12000] * 7
     )
+
+
+def parcelamento_de_janeiro(casal: Casal, monkeypatch, pagas: list[str], hoje: str) -> tuple:
+    """10x de 1.000,00 comprado em 20/01 no cartão que fecha dia 25: a parcela n cai na fatura
+    do mês n. Com as parcelas já geradas, o casal paga as faturas de `pagas`, cada uma com o
+    valor da parcela, no dia 2 do mês seguinte."""
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date.fromisoformat(hoje))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    novo = parcelamento(
+        cartao, [casal.categoria()], data="2026-01-20", parcelas=10, valor_total_centavos=100000
+    )
+    assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+    for mes in pagas:
+        seguinte = date.fromisoformat(mes).replace(day=2, month=int(mes[5:7]) + 1)
+        pago = pagar(
+            casal, conta, cartao, fatura_mes=mes, valor_centavos=10000, data=seguinte.isoformat()
+        )
+        assert pago.status_code == 201, pago.text
+    return cartao, novo["id"]
+
+
+def o_parcelamento(casal: Casal, id: str) -> dict | None:
+    lista = casal.pedir("esposa", "GET", "/api/parcelamentos").json()
+    return next((p for p in lista if p["id"] == id), None)
+
+
+def test_excluir_o_parcelamento_deixa_as_parcelas_de_fatura_paga_e_o_encolhe_ate_elas(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch, database_url: str
+):
+    # Hoje é 10/05: janeiro a março estão pagas; abril fechou sem pagamento.
+    cartao, id = parcelamento_de_janeiro(
+        casal, monkeypatch, ["2026-01-01", "2026-02-01", "2026-03-01"], "2026-05-10"
+    )
+    antes = {mes: numeros(f) for mes, f in faturas(casal, cartao).items()}
+
+    excluida = excluir_parcelamento(casal, id, confirmar_realizadas=True)
+    fazer_tarefa_diaria(database_url)
+
+    assert excluida.status_code == 204, excluida.text
+    assert [(l["parcela"], l["fatura_mes"]) for l in parcelas(casal, id)] == [
+        (1, "2026-01-01"),
+        (2, "2026-02-01"),
+        (3, "2026-03-01"),
+    ]
+    regra = o_parcelamento(casal, id)
+    assert (regra["parcelas"], regra["valor_total_centavos"]) == (3, 30000)
+    depois = {mes: numeros(f) for mes, f in faturas(casal, cartao).items()}
+    for mes in ("2026-01-01", "2026-02-01", "2026-03-01"):
+        assert depois[mes] == antes[mes]
+    assert depois["2026-04-01"][0] == 0
+
+
+def test_a_parcela_antes_da_ultima_de_fatura_paga_sai_e_o_aviso_diz_quantas_ficam(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch, database_url: str
+):
+    # Hoje é 10/06: janeiro, fevereiro, março e maio estão pagas; abril fechou sem pagamento.
+    _, id = parcelamento_de_janeiro(
+        casal,
+        monkeypatch,
+        ["2026-01-01", "2026-02-01", "2026-03-01", "2026-05-01"],
+        "2026-06-10",
+    )
+
+    aviso = excluir_parcelamento(casal, id)
+
+    assert aviso.status_code == 409
+    assert aviso.json() == {
+        "motivo": "isto apaga lançamentos já pagos e pode desconfigurar o histórico",
+        "parcelas": 6,
+        "de_fatura_paga": 0,
+        # A de abril, fechada sem pagamento, e a de junho, que entrou na fatura aberta.
+        "realizadas": 2,
+        "alteradas_a_mao": 0,
+        "ficam_de_fatura_paga": 4,
+    }
+    assert len(parcelas(casal, id)) == 10
+
+    assert excluir_parcelamento(casal, id, confirmar_realizadas=True).status_code == 204
+    fazer_tarefa_diaria(database_url)
+
+    # A tarefa diária não divide de novo o total pelas cinco: as da fatura paga ficam como estão.
+    assert [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, id)] == [
+        (1, 10000),
+        (2, 10000),
+        (3, 10000),
+        (5, 10000),
+    ]
+    regra = o_parcelamento(casal, id)
+    assert (regra["parcelas"], regra["valor_total_centavos"]) == (5, 40000)
+    # Excluir de novo não tira nem pergunta nada: o que ficou é da fatura paga.
+    assert excluir_parcelamento(casal, id).status_code == 204
+    assert [l["parcela"] for l in parcelas(casal, id)] == [1, 2, 3, 5]
+
+
+def test_a_parcela_da_fatura_importada_do_mobills_sai_com_o_aviso(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch, database_url: str
+):
+    # Hoje é 10/05: fevereiro está paga pelo pagamento; janeiro é como a importada do Mobills,
+    # sem datas, que conta como paga sem pagamento de fatura.
+    cartao, id = parcelamento_de_janeiro(casal, monkeypatch, ["2026-02-01"], "2026-05-10")
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE faturas SET fechamento = NULL, vencimento = NULL"
+            " WHERE cartao_id = %s AND mes = '2026-01-01'",
+            (cartao,),
+        )
+
+    aviso = excluir_parcelamento(casal, id)
+
+    assert aviso.status_code == 409
+    assert {c: aviso.json()[c] for c in ("parcelas", "de_fatura_paga", "ficam_de_fatura_paga")} == {
+        "parcelas": 9,
+        "de_fatura_paga": 1,
+        "ficam_de_fatura_paga": 1,
+    }
+    assert excluir_parcelamento(casal, id, confirmar_realizadas=True).status_code == 204
+    fazer_tarefa_diaria(database_url)
+    assert [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, id)] == [(2, 10000)]
+    regra = o_parcelamento(casal, id)
+    assert (regra["parcelas"], regra["valor_total_centavos"]) == (2, 10000)
+    assert faturas(casal, cartao)["2026-01-01"]["total_centavos"] == 0
+
+
+def test_sem_parcela_de_fatura_paga_a_exclusao_tira_o_parcelamento(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    # Hoje é 10/05: nenhuma fatura paga; as de janeiro a abril fecharam sem pagamento.
+    _, id = parcelamento_de_janeiro(casal, monkeypatch, [], "2026-05-10")
+
+    aviso = excluir_parcelamento(casal, id)
+    assert aviso.status_code == 409
+    assert (aviso.json()["parcelas"], aviso.json()["ficam_de_fatura_paga"]) == (10, 0)
+    assert excluir_parcelamento(casal, id, confirmar_realizadas=True).status_code == 204
+
+    assert parcelas(casal, id) == []
+    assert o_parcelamento(casal, id) is None

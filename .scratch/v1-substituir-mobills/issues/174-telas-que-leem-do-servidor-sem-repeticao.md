@@ -1,7 +1,7 @@
 # Telas que leem do servidor: uma definição por tela, sem repetição
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `codebase-design`
 Modelo recomendado: Sonnet
@@ -22,7 +22,7 @@ Sem mudar comportamento: os testes de `web/e2e/telas-leem-do-servidor.spec.ts` s
 
 ## Checklist
 
-- [ ] Caminho e leitura de cada tela definidos uma vez
-- [ ] Aviso "Sem internet" compartilhado
-- [ ] Nomes que dizem a fonte da lista
+- [x] Caminho e leitura de cada tela definidos uma vez
+- [x] Aviso "Sem internet" compartilhado
+- [x] Nomes que dizem a fonte da lista
 - [ ] `telas-leem-do-servidor.spec.ts`, `cartoes.spec.ts`, `mes.spec.ts` e `parcelamento.spec.ts` passando
