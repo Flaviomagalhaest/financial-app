@@ -5,6 +5,7 @@ import boto3
 import psycopg
 from botocore.config import Config
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -61,6 +62,8 @@ def create_app(
     bucket_de_exportacoes: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Financial App", version="0.1.0")
+    # A Lambda recusa resposta acima de 6 MiB e o CloudFront não comprime /api/*: a compressão é daqui.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.state.url = url
     app.state.verificador = verificador or verificador_da_configuracao()
 
