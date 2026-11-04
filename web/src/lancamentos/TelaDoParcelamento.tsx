@@ -325,7 +325,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         </p>
       )}
       {parcelamento.mudanca_recusada && (
-        <p className="aviso">Uma mudança nas parcelas parou no meio: {parcelamento.mudanca_recusada}. Para terminar, mude de novo uma das parcelas que faltaram, em “Esta e as próximas” ou “Todas”.</p>
+        <p className="aviso">Uma mudança nas parcelas parou no meio: {parcelamento.mudanca_recusada}. Para terminar, mude de novo uma das parcelas que faltaram, em “Esta e as próximas” ou “Todas”, ou, se a correção do parcelamento parou, corrija-o de novo.</p>
       )}
       {!online && <p className="aviso">Sem internet: corrigir e excluir o parcelamento precisam de internet.</p>}
 

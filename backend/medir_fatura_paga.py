@@ -1,5 +1,6 @@
-"""Mede o custo de `cartoes.protegida` (ticket 127): o tempo de um lançamento no cartão e de um lote
-de 50 ações, com e sem a proteção, num banco com o volume do histórico do Mobills (dois cartões
+"""Mede o custo de `cartoes.protegida` (ticket 127): o tempo de um lançamento no cartão, de um lote
+de 50 ações e da correção de um parcelamento longo (o refazer em lotes, ticket 180), com e sem a
+proteção, num banco com o volume do histórico do Mobills (dois cartões
 titulares, uma fatura por mês desde 2019, todas as passadas pagas). Apaga o schema `public`: use só
 num banco de teste.
 
@@ -16,7 +17,7 @@ from uuid import uuid4
 
 import psycopg
 
-from app import cartoes, lancamentos, lote
+from app import cartoes, lancamentos, lote, parcelamentos
 from app.banco import em_transacao
 from app.lancamentos import NovoLancamento
 from app.migrations import aplicar_migrations
@@ -106,6 +107,37 @@ def lote_de_50(cartao, categoria) -> float:
     return (time.perf_counter() - inicio) * 1000
 
 
+def parcelamento_longo(cartao, categoria) -> parcelamentos.NovoParcelamento:
+    """O parcelamento mais longo que o app aceita, todo em faturas que ainda não fecharam."""
+    novo = parcelamentos.NovoParcelamento(
+        id=uuid4(),
+        valor_total_centavos=1_000_000,
+        parcelas=parcelamentos.MAXIMO_DE_PARCELAS,
+        data=date(2026, 11, 10),
+        descricao="Medida",
+        conta_id=cartao,
+        categoria_ids=[categoria],
+    )
+    em_transacao(URL, lambda c: parcelamentos.gravar(c, novo, "flavio"))
+    parcelamentos.gerar_as_parcelas(URL, novo.id)
+    return novo
+
+
+def corrigir_o_longo(novo: parcelamentos.NovoParcelamento) -> float:
+    """Corrige o valor (cada rodada muda o total, para todas as parcelas mudarem) e refaz."""
+    with psycopg.connect(URL) as conn:
+        (total,) = conn.execute(
+            "SELECT valor_total_centavos FROM parcelamentos WHERE id = %s", (novo.id,)
+        ).fetchone()
+    alteracao = parcelamentos.AlteracaoDeParcelamento(valor_total_centavos=total + 100)
+    inicio = time.perf_counter()
+    gravada = em_transacao(
+        URL, lambda c: parcelamentos.gravar_correcao(c, novo.id, alteracao, "flavio")
+    )
+    parcelamentos.refazer_as_parcelas(URL, novo.id, "flavio", gravada.classificacao)
+    return (time.perf_counter() - inicio) * 1000
+
+
 def mediana(medida, repeticoes, *args) -> float:
     return statistics.median(medida(*args) for _ in range(repeticoes))
 
@@ -123,13 +155,19 @@ def main() -> None:
         inicio = time.perf_counter()
         cartoes._todas(conn)
         print(f"uma leitura de todas as faturas: {(time.perf_counter() - inicio) * 1000:.0f} ms")
-    for rotulo, medida, vezes in (
-        ("lançamento", lancar, repeticoes),
-        ("lote de 50 ações", lote_de_50, max(repeticoes // 2, 1)),
+    longo = parcelamento_longo(cartao, categoria)
+    with psycopg.connect(URL) as conn:
+        [regra] = parcelamentos._ler(conn, "id = %s", (longo.id,))
+        por_lote = parcelamentos.parcelas_por_lote(conn, regra)
+    print(f"parcelamento de {longo.parcelas} parcelas, {por_lote} por lote")
+    for rotulo, medida, vezes, args in (
+        ("lançamento", lancar, repeticoes, (cartao, categoria)),
+        ("lote de 50 ações", lote_de_50, max(repeticoes // 2, 1), (cartao, categoria)),
+        ("correção do longo", corrigir_o_longo, repeticoes, (longo,)),
     ):
-        with_ = mediana(medida, vezes, cartao, categoria)
+        with_ = mediana(medida, vezes, *args)
         with mock.patch.object(cartoes, "protegida", lambda trabalho, corrigida=None: trabalho):
-            sem = mediana(medida, vezes, cartao, categoria)
+            sem = mediana(medida, vezes, *args)
         print(
             f"{rotulo:18} com proteção {with_:8.0f} ms | sem {sem:8.0f} ms | custo {with_ - sem:8.0f} ms"
         )
