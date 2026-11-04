@@ -12,6 +12,7 @@ from tests.test_cartoes import comprar, lancamento, novo_cartao
 from tests.test_contas import nova_conta
 from tests.test_pagamento_de_fatura import faturas, numeros, pagamento, pagar
 from tests.test_parcelamentos import parcelamento
+from tests.test_recorrencias import gerados, recorrencia
 
 RECUSA = "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
 
@@ -490,3 +491,99 @@ def test_correcao_acerta_as_partes_da_compra_junto_com_o_valor(casal: Casal):
         ]
         assert vista["valor_centavos"] == 90000
         assert [p["valor_centavos"] for p in vista["partes"]] == [60000, 30000]
+
+
+def recorrencia_no_cartao(cartao: str, categorias: list[str], dia: str, **campos) -> dict:
+    """A recorrência lançada no dia `dia` (a fila que sobe depois), com o início nele."""
+    return recorrencia(cartao, categorias, inicio=dia, dia_do_lancamento=dia) | campos
+
+
+def test_recorrencia_cuja_ocorrencia_do_lancamento_cairia_na_fatura_paga_e_recusada(
+    casal: Casal, abril_paga
+):
+    nova = recorrencia_no_cartao(abril_paga.cartao, [casal.categoria()], "2026-04-20")
+
+    pela_rota = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+    pela_fila = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json={"acoes": [{"acao": "criar_recorrencia", "recorrencia": nova}]},
+    ).json()["resultados"][0]
+
+    assert recusado(pela_rota)
+    assert (pela_fila["resultado"], pela_fila["motivo"]) == ("recusada", RECUSA)
+    assert casal.pedir("esposa", "GET", "/api/recorrencias").json() == []
+    assert abril(casal, abril_paga) == ABRIL_PAGA
+
+
+def test_recorrencia_lancada_depois_do_fechamento_da_paga_entra_na_seguinte(
+    casal: Casal, abril_paga
+):
+    nova = recorrencia_no_cartao(abril_paga.cartao, [casal.categoria()], "2026-04-28")
+
+    criada = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+
+    assert criada.status_code == 201, criada.text
+    [primeira, *_] = gerados(casal, nova["id"])
+    assert (primeira["data"], primeira["situacao"]) == ("2026-04-28", "realizado")
+    assert abril(casal, abril_paga) == ABRIL_PAGA
+
+
+def test_alterar_a_recorrencia_deixa_o_atrasado_da_fatura_paga_e_refaz_o_resto(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    # Lançada em 15/04, a luz de 20/04 entrou em abril; em 10/05, abril fechou e foi paga com
+    # ela ainda prevista (atrasada).
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 4, 15))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    nova = recorrencia(cartao, [casal.categoria()], inicio="2026-04-20", vezes=3)
+    assert casal.pedir("flavio", "POST", "/api/recorrencias", json=nova).status_code == 201
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 5, 10))
+    assert pagar(casal, conta, cartao, valor_centavos=18990, data="2026-05-02").status_code == 201
+    antes = numeros(faturas(casal, cartao)["2026-04-01"])
+
+    alterada = casal.pedir(
+        "esposa",
+        "PATCH",
+        f"/api/recorrencias/{nova['id']}",
+        json={"a_partir_da_ocorrencia": 1, "valor_centavos": 25000, "descricao": "Energia"},
+    )
+
+    assert alterada.status_code == 200, alterada.text
+    assert [
+        (l["data"], l["valor_centavos"], l["descricao"]) for l in gerados(casal, nova["id"])
+    ] == [
+        ("2026-04-20", 18990, "Luz"),
+        ("2026-05-20", 25000, "Energia"),
+        ("2026-06-20", 25000, "Energia"),
+    ]
+    assert antes == (18990, 0, 18990, 0, "paga")
+    assert numeros(faturas(casal, cartao)["2026-04-01"]) == antes
+
+
+def test_alterar_a_recorrencia_nao_leva_o_atrasado_para_dentro_da_fatura_paga(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    # Abril foi paga com a luz de 20/04; maio fechou sem pagamento com a de 20/05 atrasada.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 4, 15))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    nova = recorrencia(cartao, [casal.categoria()], inicio="2026-04-20", vezes=2)
+    assert casal.pedir("flavio", "POST", "/api/recorrencias", json=nova).status_code == 201
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 5, 10))
+    assert pagar(casal, conta, cartao, valor_centavos=18990, data="2026-05-02").status_code == 201
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+
+    # O calendário novo poria a de maio em 22/04, dentro da paga.
+    alterada = casal.pedir(
+        "esposa",
+        "PATCH",
+        f"/api/recorrencias/{nova['id']}",
+        json={"a_partir_da_ocorrencia": 2, "inicio": "2026-04-22"},
+    )
+
+    assert alterada.status_code == 200, alterada.text
+    assert [l["data"] for l in gerados(casal, nova["id"])] == ["2026-04-20", "2026-05-20"]
+    assert numeros(faturas(casal, cartao)["2026-04-01"]) == (18990, 0, 18990, 0, "paga")
