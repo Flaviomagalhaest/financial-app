@@ -1,7 +1,7 @@
 # Recusa da correção parada no meio: a parcela em que parou e a tentativa de cada dia
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -18,6 +18,10 @@ A correção do parcelamento que uma fatura paga para no meio do refazer grava e
 
 ## Checklist
 
-- [ ] A recusa da correção diz a parcela a partir da qual as parcelas ficaram como estavam
-- [ ] A tentativa diária não apaga a recusa de uma mudança com alcance sem o casal ver (ou fica registrado que basta a mais nova)
-- [ ] Testes de API em `backend/tests/test_fatura_paga.py`
+- [x] A recusa da correção diz a parcela a partir da qual as parcelas ficaram como estavam
+- [x] A tentativa diária não apaga a recusa de uma mudança com alcance sem o casal ver (ou fica registrado que basta a mais nova)
+- [x] Testes de API em `backend/tests/test_fatura_paga.py`
+
+## Decisão
+
+A tentativa diária (`completar_todos`) só regrava a recusa da própria correção: a de uma mudança com alcance (ticket 149), mais nova, fica. A primeira parada da correção, no pedido, substitui a que houver. A recusa diz "da Nª parcela em diante".
