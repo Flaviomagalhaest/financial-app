@@ -1,7 +1,7 @@
 # Sincronizar: o card não volta para TODO enquanto o PR não é mesclado
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `writing-for-agents` (AGENTS.md)
 Modelo recomendado: Sonnet
