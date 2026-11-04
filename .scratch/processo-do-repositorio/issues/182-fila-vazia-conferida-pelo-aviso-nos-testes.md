@@ -1,7 +1,7 @@
 # Testes de navegador conferem a fila vazia pelo aviso, que some antes de a tela ler a fila
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -17,6 +17,6 @@ A mesma conferência aparece 25 vezes em 8 arquivos de `web/e2e/` (`conflito`, `
 
 ## Checklist
 
-- [ ] Uma conferência comum da fila vazia (IndexedDB, como `filaDoAparelho`, ou o aviso só depois de a tela marcar a fila como lida), num módulo de `web/e2e/`
-- [ ] Trocar as 25 ocorrências onde a fila vazia é pré-condição do passo seguinte
-- [ ] Prova: com a CPU estrangulada (`Emulation.setCPUThrottlingRate`), um teste que hoje passa a conferência com a fila cheia passa a esperar
+- [x] Uma conferência comum da fila vazia (IndexedDB, como `filaDoAparelho`, ou o aviso só depois de a tela marcar a fila como lida), num módulo de `web/e2e/`
+- [x] Trocar as 25 ocorrências onde a fila vazia é pré-condição do passo seguinte
+- [x] Prova: com a CPU estrangulada (`Emulation.setCPUThrottlingRate`), um teste que hoje passa a conferência com a fila cheia passa a esperar

@@ -4,6 +4,7 @@ import { apiDaPagina, tokenDaPagina } from "./api";
 import { renovacoes } from "./cognito-falso";
 import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
+import { esperarFilaVazia } from "./fila";
 
 /** Entra, cadastra uma conta e uma categoria de despesa e deixa as duas guardadas no aparelho. */
 async function prepararCasal(page: Page, email?: string) {
@@ -31,7 +32,7 @@ test("lança sem internet, mostra ⏳ e a contagem na Hoje e envia uma vez só q
   await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento não enviado");
 
   await context.setOffline(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await aba(page, "Histórico");
   await expect(linha).not.toContainText("não enviado");
   await page.reload();
@@ -75,7 +76,7 @@ test("edita e exclui sem internet e, se a resposta do envio se perde, reenviar n
   await expect(page.getByTestId("nao-enviados")).toContainText("3 lançamentos não enviados");
 
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await page.reload();
   await aba(page, "Histórico");
   await expect(feira).toHaveCount(1);
@@ -124,7 +125,7 @@ test("recusado pelo servidor fica 'não enviado: <motivo>' para corrigir ou desc
   await expect(bom).toHaveCount(1);
   await expect(descartar).toHaveCount(0);
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   // Uma leitura das contas ainda em andamento não pode estourar no teste seguinte.
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
@@ -196,7 +197,7 @@ test("rede que não responde: a tela mostra a resposta guardada, o lançamento f
   respondendo = true;
   await expect(page.getByRole("form", { name: "Nova conta" }).getByRole("button", { name: "Cadastrar" })).toBeEnabled({ timeout: 25_000 });
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0, { timeout: 20_000 });
+  await esperarFilaVazia(page);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
@@ -223,7 +224,7 @@ test("sair com lançamentos não enviados pede confirmação e, confirmado, apag
   await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
   await aba(page, "Hoje");
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await aba(page, "Histórico");
   await expect(page.getByRole("listitem").filter({ hasText: `Antes de sair ${s}` })).toHaveCount(0);
 });
@@ -301,7 +302,7 @@ test("no Android, o service worker sobe a fila em segundo plano, sem o app abert
 
   await page.goto("/#/hoje");
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
 });
 
 test("criado com a resposta perdida e depois editado ou excluído sem internet: a mudança não se perde", async ({ page, context }) => {
@@ -341,7 +342,7 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   comRede = true;
   await context.setOffline(false);
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await page.reload();
   await aba(page, "Histórico");
   await expect(editado).toContainText("− R$ 0,19");
@@ -436,7 +437,7 @@ test("a rede volta, mas a lista não chega antes do envio: o lançamento não so
   await context.setOffline(false);
   await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await context.setOffline(true);
   await aba(page, "Histórico");
   await expect(linha).toContainText("− R$ 3,00");
@@ -450,7 +451,7 @@ test("lançado sem internet antes de a lista ser guardada continua no Histórico
   await aba(page, "Hoje");
   await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento não enviado");
   await context.setOffline(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
 
   await context.setOffline(true);
   await aba(page, "Histórico");

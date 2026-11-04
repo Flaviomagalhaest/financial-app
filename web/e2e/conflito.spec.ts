@@ -2,6 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar, lancar } from "./lancar";
+import { esperarFilaVazia } from "./fila";
 
 test.use({ timezoneId: "America/Sao_Paulo" });
 
@@ -127,7 +128,7 @@ test("descartar a minha mudança deixa a versão da outra pessoa", async ({ page
   await expect(linha(page, descricao)).toContainText("− R$ 10,05");
   await expect(linha(page, descricao)).not.toContainText("conflito");
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await contextoDela.close();
 });
 

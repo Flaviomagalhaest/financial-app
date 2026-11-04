@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from "@
 import { apiDaPagina, tokenDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
+import { esperarFilaVazia } from "./fila";
 
 // Sem service worker: o envio dele em segundo plano não passa pelo `page.route` e correria com o
 // envio da página que os testes seguram ou derrubam. Só o teste do envio em segundo plano o usa.
@@ -111,7 +112,7 @@ test("sem internet, encerrar e mudar daqui para frente ficam na fila, um pedido 
   await expect(page.getByTestId("nao-enviados")).toContainText("2 mudanças de recorrência não enviadas");
 
   await context.setOffline(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await aba(page, "Histórico");
   await expect(naoEnviadas).toHaveCount(0);
   await expect(previstos).toHaveCount(2);
@@ -253,7 +254,7 @@ test("a recorrência criada que talvez já esteja no servidor se exclui em vez d
   // Com internet, a exclusão sobe logo; o aviso vazio logo ao abrir a Hoje não prova isso.
   await aba(page, "Hoje");
   await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await aba(page, "Histórico");
   await expect(linha(page, descricao)).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -281,7 +282,7 @@ test("a recorrência descartada no meio do envio chega ao servidor e sai de lá 
   await expect.poll(() => parados).toBe(2);
   await aba(page, "Hoje");
   await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await aba(page, "Histórico");
   await expect(linha(page, descricao)).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -341,7 +342,7 @@ test("a recorrência descartada no meio de um envio que fica sem resposta sai do
   // Talvez tenha chegado: o aparelho guarda a exclusão, que sobe no envio seguinte.
   await aba(page, "Hoje");
   await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 

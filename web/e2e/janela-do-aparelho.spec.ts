@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
+import { esperarFilaVazia } from "./fila";
 
 // O dia do casal é o de São Paulo, como na API.
 test.use({ timezoneId: "America/Sao_Paulo" });
@@ -126,7 +127,7 @@ test("quando o mês vira, o que saiu da janela some do aparelho, menos o que tem
   await page.unroute("**/api/lancamentos/lote");
   await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   expect((await api.ler(`/api/lancamentos/${editado.id}`)).lancamento.valor_centavos).toBe(45000);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Hoje", level: 2 })).toBeVisible();
@@ -167,7 +168,7 @@ test("a edição sem resposta de uma parcela fora da janela aparece editada, com
   await page.unroute("**/api/lancamentos/lote");
   await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   const gravada = (await api.ler(`/api/lancamentos/${primeira.id}`)).lancamento;
   expect(gravada.valor_centavos).toBe(100000);
   expect(gravada.parcela).toBe(1);

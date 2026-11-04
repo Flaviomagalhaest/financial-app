@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { entrar } from "./entrar";
+import { esperarFilaVazia } from "./fila";
 
 // O dia do casal é o de São Paulo, como na API.
 test.use({ timezoneId: "America/Sao_Paulo" });
@@ -193,7 +194,7 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await expect.poll(() => perdidas).toBe(1);
   await expect(page.getByTestId("nao-enviados")).toContainText("3 lançamentos não enviados");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await expect(minhas).toHaveCount(0);
 
   await page.reload();
