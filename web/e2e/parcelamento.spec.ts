@@ -230,7 +230,7 @@ test("corrige o parcelamento pela tela e confirma antes de mudar as parcelas rea
   await page.getByRole("button", { name: "Corrigir mesmo assim" }).click();
 
   // A 6ª, mudada à mão, ficou como estava, e a tela avisa antes de voltar.
-  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão.");
+  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão ou ela está numa fatura paga.");
   await page.getByRole("link", { name: "Voltar ao Histórico" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
   await expect(parcela("01/06")).toContainText("R$ 200,00");
@@ -270,7 +270,7 @@ test("muda uma parcela com alcance: esta e as próximas, todas com a realizada c
   await context.setOffline(false);
   await alcance.getByRole("button", { name: "Esta e as próximas" }).click();
 
-  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão.");
+  await expect(page.getByRole("status")).toContainText("1 parcela ficou como estava: alguém a mudou à mão ou ela está numa fatura paga.");
   expect((await doParcelamento()).map((l) => l.descricao)).toEqual([descricao, descricao, novaDescricao, `${descricao} da sala`, novaDescricao, novaDescricao]);
   await page.getByRole("link", { name: "Voltar ao Histórico" }).click();
 
@@ -449,7 +449,7 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(6);
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
   await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
-  // A lista das parcelas vem do servidor: sem ela lida, sem internet não há o que antecipar.
+  // As parcelas vêm de uma leitura própria da tela (ticket 165), do servidor: a rede só cai depois de ela chegar e ficar guardada.
   await expect(page.getByRole("list", { name: `Parcelas de ${descricao}` }).getByRole("listitem")).toHaveCount(6);
 
   // As parcelas vêm do servidor (ticket 165): só fica sem internet depois de elas chegarem.

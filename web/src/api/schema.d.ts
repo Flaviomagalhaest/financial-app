@@ -145,7 +145,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Listar Lancamentos */
+        /**
+         * Listar Lancamentos
+         * @description A janela do aparelho (ADR 0025): os que contam nos últimos meses, pelo mês em que contam (o
+         *     da fatura, no cartão), e todos daqui para frente. O resto se lê pelas telas que o pedem.
+         */
         get: operations["listar_lancamentos"];
         put?: never;
         /**
@@ -166,7 +170,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Ler Lancamento
+         * @description O lançamento que ficou fora da janela do aparelho, para abrir, editar ou estornar com internet.
+         */
+        get: operations["ler_lancamento"];
         put?: never;
         post?: never;
         /**
@@ -816,9 +824,11 @@ export interface paths {
         /**
          * Alterar Parcelamento
          * @description Corrige o parcelamento e põe as parcelas de acordo; a que uma pessoa mudou à mão fica como
-         *     está nos campos que mudou, e a resposta diz quantas ficaram assim. Se uma parcela realizada
-         *     mudar ou sair, responde 409 com o aviso e não grava nada até o pedido vir com
-         *     `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.
+         *     está nos campos que mudou, a de fatura paga fica como está no valor, na data e na fatura, e a
+         *     resposta diz quantas ficaram assim. Encolher para menos parcelas que a última de fatura paga
+         *     ou levar uma parcela para dentro de uma fatura paga recusa o pedido (422) sem gravar nada. Se
+         *     uma parcela realizada mudar ou sair, responde 409 com o aviso e não grava nada até o pedido
+         *     vir com `confirmar_realizadas`. Se parar no meio, repetir o pedido continua.
          */
         patch: operations["alterar_parcelamento"];
         trace?: never;
@@ -2456,6 +2466,16 @@ export interface components {
             proporcao_das_partes: number[];
             /** Parece Repetido De */
             parece_repetido_de?: string | null;
+        };
+        /**
+         * LancamentoELigados
+         * @description Um lançamento e os ligados a ele pelo estorno: os estornos dele, a compra do estorno e, na
+         *     parcela, as outras parcelas, os estornos delas e os de todas as parcelas.
+         */
+        LancamentoELigados: {
+            lancamento: components["schemas"]["Lancamento"];
+            /** Ligados */
+            ligados: components["schemas"]["Lancamento"][];
         };
         /**
          * LeituraDoMes
@@ -4271,6 +4291,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Exclusao"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LancamentoELigados"];
+                };
+            };
+            /** @description lançamento não encontrado ou excluído */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

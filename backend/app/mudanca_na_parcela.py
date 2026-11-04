@@ -177,7 +177,8 @@ def _falta(
 ) -> tuple[list[tuple[Lancamento, dict]], set[int]]:
     """As outras parcelas do alcance que ainda faltam mudar, na ordem do número, com os campos de
     cada uma (menos os que alguém mudou nela), e o número das que ficam como estão em algum
-    campo pedido porque uma pessoa o mudou só nelas."""
+    campo pedido porque uma pessoa o mudou só nelas ou porque estão numa fatura paga, que não
+    muda de valor, data, conta nem fatura (ticket 171)."""
     outras = lancamentos.ler_por_ids(
         conn,
         [
@@ -190,11 +191,15 @@ def _falta(
         ],
     )
     a_mao = lancamentos.campos_a_mao(conn, [l.id for l in outras])
+    nas_pagas = parcelamentos.parcelas_nas_faturas_pagas(conn, parcelamento_id)
     falta: list[tuple[Lancamento, dict]] = []
     mantidas: set[int] = set()
     for outra in sorted(outras, key=lambda l: l.parcela):
         valores = _valores_na_outra(pendente, outra)
         maos = a_mao.get(outra.id, set())
+        if outra.parcela in nas_pagas:
+            # A da fatura paga fica como está, como a mudada à mão (ticket 171).
+            maos = maos | parcelamentos.CRONOGRAMA
         if any(c in maos and not iguais(c, v, getattr(outra, c)) for c, v in valores.items()):
             mantidas.add(outra.parcela)
         valores = {
@@ -209,8 +214,9 @@ def _falta(
 
 def _conferir_antes_de_gravar(conn, falta: list[tuple[Lancamento, dict]], quantas: int) -> None:
     """As regras da fatura paga (ADR 0021, `cartoes.protegida`) em cada lote das outras parcelas,
-    simulado antes de gravar: a parcela que sai de uma fatura paga ou entra numa, ou o pagamento
-    que passaria do valor da fatura, recusa o pedido inteiro, e não só o lote em que ela cai."""
+    simulado antes de gravar: a parcela que entra numa fatura paga, ou o pagamento que passaria
+    do valor da fatura, recusa o pedido inteiro, e não só o lote em que ela cai. A que já está
+    numa fatura paga não chega aqui: fica como está (`_falta`, ticket 171)."""
     passos = []
     for inicio in range(0, len(falta), quantas):
         passo: Counter = Counter()
@@ -417,9 +423,10 @@ def _desistir(conn, parcelamento_id: UUID, recusa: HTTPException) -> None:
 
 def terminar_o_pendente(url: str | None, parcelamento_id: UUID) -> bool:
     """Termina, em lotes, a parte parcela a parcela que um pedido deixou no parcelamento, e
-    devolve se havia alguma. Se uma parcela que falta passou a recusar a mudança depois do
-    pedido (a fatura dela foi paga no meio), as que faltam ficam como estão, a recusa fica
-    gravada no parcelamento e sobe."""
+    devolve se havia alguma. A parcela cuja fatura foi paga no meio fica como está, como as de
+    fatura paga desde o pedido (ticket 171). Se uma parcela que falta passou a recusar a mudança
+    depois do pedido (a fatura em que ela entraria foi paga no meio), as que faltam ficam como
+    estão, a recusa fica gravada no parcelamento e sobe."""
     feito = False
     try:
         while em_transacao(

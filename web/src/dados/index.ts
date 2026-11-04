@@ -29,6 +29,7 @@ import {
   type NovoLancamento,
   type NovoParcelamento,
   type Antecipacao,
+  baseDaMudanca,
 } from "./armazem";
 import {
   CONTAS,
@@ -363,7 +364,10 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
   for (const item of fila) {
     // Os previstos e as parcelas são do servidor: até a regra subir, o aparelho só mostra a regra.
     if (!deLancamento(item)) continue;
-    const anterior = porId.get(item.id);
+    // Fora da lista (fora da janela do aparelho), a mudança vale sobre a versão que a tela mostrava:
+    // a edição não entra como lançamento novo nem perde os campos que a fila não leva.
+    const daFila = porId.has(item.id) ? undefined : baseDaMudanca(item);
+    const anterior = porId.get(item.id) ?? (daFila && { ...daFila, naoEnviado: false });
     if (item.conflito) {
       const servidor = anterior ?? { ...item.conflito.lancamento, naoEnviado: false };
       porId.set(item.id, { ...servidor, conflito: true });
@@ -413,6 +417,71 @@ export const leituraDoParcelamento = (id: string): LeituraDaTela => ({
   caminho: `/api/parcelamentos/${id}/lancamentos`,
   ler: () => api.GET("/api/parcelamentos/{id}/lancamentos", { params: { path: { id } } }),
 });
+
+/** O que se sabe de um lançamento que não está no aparelho: lendo do servidor, sem internet ou que não existe. */
+export type ForaDoAparelho = "lendo" | "sem-internet" | "nao-existe";
+type LidoDeFora = Lancamento[] | Exclude<ForaDoAparelho, "lendo">;
+
+/**
+ * A lista do aparelho com a fila por cima e, com internet, os lançamentos de `ids` que ficaram fora
+ * da janela do aparelho (ADR 0025), lidos do servidor sem guardar, com os ligados a eles pelo
+ * estorno (os estornos, a compra, as outras parcelas). `foraDoAparelho` diz, do id que a lista não
+ * tem, se ainda está lendo, se faltou internet ou se ele não existe.
+ */
+export function useLancamentosComOsDeFora(...ids: (string | null | undefined)[]) {
+  const { dados, atualizadoEm, semDados } = useResposta(LISTA);
+  const { itens: fila, lida } = useFilaLida();
+  const [lidos, setLidos] = useState<ReadonlyMap<string, LidoDeFora>>(new Map());
+  const procurados = [...new Set(ids.filter((id): id is string => !!id))].join();
+  // Os que nem a lista nem a fila têm; antes de as duas chegarem, não se sabe.
+  const faltam = useMemo(() => {
+    if (!lida || (!dados && !semDados)) return null;
+    const noAparelho = new Set([...(dados ?? []).map((l) => l.id), ...fila.filter(deLancamento).map((item) => item.id)]);
+    return procurados ? procurados.split(",").filter((id) => !noAparelho.has(id)) : [];
+  }, [procurados, dados, semDados, fila, lida]);
+
+  const chaveDosQueFaltam = faltam?.join() ?? "";
+  useEffect(() => {
+    if (!chaveDosQueFaltam) return;
+    let ativo = true;
+    const ler = () =>
+      chaveDosQueFaltam.split(",").forEach(async (id) => {
+        const lido: LidoDeFora = await api.GET("/api/lancamentos/{id}", { params: { path: { id } } }).then(
+          ({ data, response }) => (data ? [data.lancamento, ...data.ligados] : response.status === 404 ? "nao-existe" : "sem-internet"),
+          () => "sem-internet" as const,
+        );
+        if (ativo) setLidos((antes) => new Map(antes).set(id, lido));
+      });
+    ler();
+    // A rede voltou: o que faltou por falta dela se lê de novo.
+    window.addEventListener("online", ler);
+    return () => {
+      ativo = false;
+      window.removeEventListener("online", ler);
+    };
+  }, [chaveDosQueFaltam]);
+
+  const lancamentos = useMemo(() => {
+    if (!dados && !semDados) return null;
+    const porId = new Map((dados ?? []).map((l) => [l.id, l]));
+    for (const id of faltam ?? []) {
+      const lido = lidos.get(id);
+      if (Array.isArray(lido)) for (const l of lido) if (!porId.has(l.id)) porId.set(l.id, l);
+    }
+    return naTela([...porId.values()], fila);
+  }, [dados, semDados, faltam, lidos, fila]);
+
+  const foraDoAparelho = useCallback(
+    (id: string): ForaDoAparelho | null => {
+      if (lancamentos?.some((l) => l.id === id)) return null;
+      if (!faltam?.includes(id)) return faltam ? "nao-existe" : "lendo";
+      const lido = lidos.get(id);
+      return lido === undefined ? "lendo" : Array.isArray(lido) ? "nao-existe" : lido;
+    },
+    [lancamentos, faltam, lidos],
+  );
+  return { lancamentos, atualizadoEm, semDados, filaLida: lida, foraDoAparelho };
+}
 
 /**
  * Os lançamentos de uma tela que filtra a lista (a fatura, o Mês, o parcelamento), lidos do servidor
@@ -639,7 +708,12 @@ function useComSaldoDoAparelho(contas: Conta[]): ContaNaTela[] {
   const dados = useRespostaGuardada<Lancamento[]>(LISTA);
   const fila = useFila();
   return useMemo(() => {
-    const doServidor = new Map((dados ?? []).map((l) => [l.id, l]));
+    const doServidor = new Map<string, Lancamento>((dados ?? []).map((l) => [l.id, l]));
+    // A mudança num lançamento fora da janela mexe no saldo pela diferença para a versão dela.
+    for (const item of fila) {
+      const versao = deLancamento(item) && !doServidor.has(item.id) ? baseDaMudanca(item) : undefined;
+      if (versao) doServidor.set(item.id, versao);
+    }
     const naTelaPorId = new Map(naTela(dados ?? [], fila).map((l) => [l.id, l]));
     return contas.map((conta) => {
       const { centavos, naoEnviado } = saldoNoAparelho(conta, doServidor, naTelaPorId, fila);
@@ -775,7 +849,9 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
   const mudancas: MudancaTalvezJaContada[] = [];
   for (const item of fila) {
     if (!deLancamento(item) || item.conflito || item.exclusao) continue;
-    const antes = porId.get(item.id);
+    // Fora da janela do aparelho, o planejamento do servidor conta a versão sobre a qual a mudança foi feita.
+    const daFila = porId.has(item.id) ? undefined : baseDaMudanca(item);
+    const antes = porId.get(item.id) ?? (daFila && { ...daFila, em: Date.parse(daFila.alterado_em) });
     if (item.acao === "excluir" || !item.lancamento) {
       porId.delete(item.id);
       mudancas.push({ antes });
@@ -1160,7 +1236,7 @@ async function relerAsParcelas(id?: string | null) {
 
 /**
  * O que o servidor disse da correção: gravou (`mantidas`, as parcelas que ficaram como estavam por
- * terem sido mudadas à mão), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`).
+ * terem sido mudadas à mão ou por estarem numa fatura paga), pede confirmar as realizadas (`aviso`) ou recusou (`motivo`).
  */
 export type Correcao = { mantidas?: number; aviso?: AvisoDeRealizadas; motivo?: string };
 

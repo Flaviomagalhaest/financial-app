@@ -300,7 +300,7 @@ def test_a_tarefa_diaria_termina_a_mudanca_parcela_a_parcela_que_parou_no_meio(
     assert fazer_tarefa_diaria(casal.client.app.state.url)["mudancas_na_parcela"] == 0
 
 
-def test_fatura_paga_num_lote_seguinte_recusa_a_mudanca_antes_de_gravar(
+def test_a_parcela_de_fatura_paga_fica_como_esta_na_mudanca_com_alcance(
     casal: Casal, monkeypatch: pytest.MonkeyPatch
 ):
     from tests.test_contas import nova_conta
@@ -327,7 +327,7 @@ def test_fatura_paga_num_lote_seguinte_recusa_a_mudanca_antes_de_gravar(
     )
     assert pago.status_code == 201, pago.text
 
-    # A 2ª cabe no primeiro lote; a 3ª, da fatura paga, viria no seguinte.
+    # A 3ª, da fatura paga, fica como está, como a mudada à mão (ticket 171).
     resposta = mudar_parcela(
         casal,
         primeira,
@@ -336,11 +336,47 @@ def test_fatura_paga_num_lote_seguinte_recusa_a_mudanca_antes_de_gravar(
         confirmar_realizadas=True,
     )
 
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["parcelas_mantidas"] == 1
+    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [12000, 12000, 10000]
+
+
+def test_parcela_que_entraria_numa_fatura_paga_num_lote_seguinte_recusa_antes_de_gravar(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/06: as parcelas caem em março, abril e maio, todas fechadas; só abril foi paga.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    nubank = cartao(casal)
+    novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        nubank,
+        fatura_mes="2026-04-01",
+        valor_centavos=10000,
+        data="2026-05-05",
+    )
+    assert pago.status_code == 201, pago.text
+
+    # Um mês para trás: a 2ª, de abril (paga), fica; a 3ª, no lote seguinte, entraria em abril.
+    resposta = mudar_parcela(
+        casal, primeira, "esta_e_as_proximas", data="2026-02-20", confirmar_realizadas=True
+    )
+
     assert resposta.status_code == 422
     assert resposta.json()["detail"] == (
-        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
+        "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura"
     )
-    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [10000] * 3
+    assert [l["fatura_mes"] for l in parcelas(casal, novo["id"])] == [
+        "2026-03-01",
+        "2026-04-01",
+        "2026-05-01",
+    ]
 
 
 def test_esta_e_as_proximas_nao_leva_o_valor_novo_as_de_antes_da_classificacao_pendente(
@@ -426,6 +462,7 @@ def test_a_recusa_na_tarefa_diaria_fica_no_parcelamento_ate_a_proxima_mudanca(
     casal: Casal, monkeypatch: pytest.MonkeyPatch
 ):
     from app.tarefa_diaria import fazer_tarefa_diaria
+    from tests.test_cartoes import comprar
     from tests.test_contas import nova_conta
     from tests.test_pagamento_de_fatura import pagar
 
@@ -433,6 +470,8 @@ def test_a_recusa_na_tarefa_diaria_fica_no_parcelamento_ate_a_proxima_mudanca(
     monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
     um_lote_por_parcela(monkeypatch)
     nubank = cartao(casal)
+    # Abril tem outra compra, para poder ser paga depois que a 2ª sair dela.
+    comprar(casal, nubank, "2026-04-10", valor_centavos=10000)
     novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
     [primeira, *_] = parcelas(casal, novo["id"])
     assert parcelamento(casal, novo["id"])["mudanca_recusada"] is None
@@ -443,15 +482,15 @@ def test_a_recusa_na_tarefa_diaria_fica_no_parcelamento_ate_a_proxima_mudanca(
                 casal,
                 primeira,
                 "esta_e_as_proximas",
-                valor_centavos=12000,
+                data="2026-02-20",
                 confirmar_realizadas=True,
             )
-    # Maio é paga entre o pedido que caiu e a tarefa diária.
+    # Abril, em que a 3ª entraria, é paga entre o pedido que caiu e a tarefa diária.
     pago = pagar(
         casal,
         nova_conta(casal)["id"],
         nubank,
-        fatura_mes="2026-05-01",
+        fatura_mes="2026-04-01",
         valor_centavos=10000,
         data="2026-06-05",
     )
@@ -459,9 +498,13 @@ def test_a_recusa_na_tarefa_diaria_fica_no_parcelamento_ate_a_proxima_mudanca(
 
     assert fazer_tarefa_diaria(casal.client.app.state.url)["mudancas_na_parcela"] == 0
 
-    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [12000, 12000, 10000]
+    assert [l["fatura_mes"] for l in parcelas(casal, novo["id"])] == [
+        "2026-02-01",
+        "2026-03-01",
+        "2026-05-01",
+    ]
     assert parcelamento(casal, novo["id"])["mudanca_recusada"] == (
-        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
+        "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
         " Da 3ª parcela em diante, as que faltavam mudar ficaram como estavam"
     )
 
@@ -475,12 +518,15 @@ def test_a_recusa_na_tarefa_diaria_fica_no_parcelamento_ate_a_proxima_mudanca(
 def test_a_recusa_achada_ao_terminar_o_pedido_anterior_fica_no_parcelamento(
     casal: Casal, monkeypatch: pytest.MonkeyPatch
 ):
+    from tests.test_cartoes import comprar
     from tests.test_contas import nova_conta
     from tests.test_pagamento_de_fatura import pagar
 
     monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
     um_lote_por_parcela(monkeypatch)
     nubank = cartao(casal)
+    # Abril tem outra compra, para poder ser paga depois que a 2ª sair dela.
+    comprar(casal, nubank, "2026-04-10", valor_centavos=10000)
     novo = criar_geladeira(casal, nubank, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
     [primeira, *_] = parcelas(casal, novo["id"])
     with monkeypatch.context() as queda:
@@ -490,14 +536,14 @@ def test_a_recusa_achada_ao_terminar_o_pedido_anterior_fica_no_parcelamento(
                 casal,
                 primeira,
                 "esta_e_as_proximas",
-                valor_centavos=12000,
+                data="2026-02-20",
                 confirmar_realizadas=True,
             )
     pago = pagar(
         casal,
         nova_conta(casal)["id"],
         nubank,
-        fatura_mes="2026-05-01",
+        fatura_mes="2026-04-01",
         valor_centavos=10000,
         data="2026-06-05",
     )
@@ -508,9 +554,13 @@ def test_a_recusa_achada_ao_terminar_o_pedido_anterior_fica_no_parcelamento(
     resposta = mudar_parcela(casal, primeira, "todas", descricao="Geladeira nova")
 
     assert resposta.status_code == 200, resposta.text
-    assert [l["valor_centavos"] for l in parcelas(casal, novo["id"])] == [12000, 12000, 10000]
+    assert [l["fatura_mes"] for l in parcelas(casal, novo["id"])] == [
+        "2026-02-01",
+        "2026-03-01",
+        "2026-05-01",
+    ]
     assert parcelamento(casal, novo["id"])["mudanca_recusada"] == (
-        "a fatura de 05/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
+        "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
         " Da 3ª parcela em diante, as que faltavam mudar ficaram como estavam"
     )
 

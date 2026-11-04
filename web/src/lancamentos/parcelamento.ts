@@ -54,8 +54,8 @@ export function rotuloDasParcelas(valores: Valores): string {
 export function avisoDasMantidas(mantidas: number | undefined): string {
   if (!mantidas) return "";
   return mantidas === 1
-    ? "1 parcela ficou como estava: alguém a mudou à mão."
-    : `${mantidas} parcelas ficaram como estavam: alguém as mudou à mão.`;
+    ? "1 parcela ficou como estava: alguém a mudou à mão ou ela está numa fatura paga."
+    : `${mantidas} parcelas ficaram como estavam: alguém as mudou à mão ou elas estão numa fatura paga.`;
 }
 
 /** "01/06 · R$ 100,00 → R$ 200,00 · 01/08/2026", ou "· sai": uma parcela realizada que a mudança muda. */

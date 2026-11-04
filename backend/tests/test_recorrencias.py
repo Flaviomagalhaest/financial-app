@@ -430,6 +430,12 @@ def no_dia(monkeypatch: pytest.MonkeyPatch, dia: str) -> None:
     monkeypatch.setattr(lancamentos, "hoje", lambda: date.fromisoformat(dia))
 
 
+def sem_a_janela(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lista sem a janela do aparelho (ticket 166): o teste que anda anos no tempo ainda lê por ela
+    as ocorrências do começo da regra."""
+    monkeypatch.setattr(lancamentos, "inicio_da_janela", lambda: date.min)
+
+
 def test_tarefa_diaria_estende_o_horizonte_das_recorrencias(
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
@@ -862,6 +868,7 @@ def test_virar_automatica_nao_realiza_o_atrasado(casal: Casal, monkeypatch: pyte
 def test_mudar_o_calendario_sem_informar_o_inicio_continua_da_data_que_a_ocorrencia_tinha(
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
+    sem_a_janela(monkeypatch)
     conta, seguro = casal.conta(), casal.categoria("Seguro")
     nova = recorrencia(conta, [seguro], inicio="2026-11-10")
     casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
@@ -1037,6 +1044,7 @@ def test_excluir_o_que_o_fim_ja_tirou_conta_como_pular_o_mes(casal: Casal):
 def test_o_mes_pulado_que_o_horizonte_tirou_segue_pulado_quando_ele_chega(
     casal: Casal, database_url: str, monkeypatch: pytest.MonkeyPatch
 ):
+    sem_a_janela(monkeypatch)
     conta, luz = casal.conta(), casal.categoria("Luz")
     nova = recorrencia(conta, [luz], inicio="2026-11-10")
     casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)

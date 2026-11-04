@@ -233,7 +233,8 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [itemTocado, setItemTocado] = useState<string | null>(null);
-  // Gravada a correção, as parcelas que ficaram como estavam porque alguém as mudou à mão.
+  // Gravada a correção, as parcelas que ficaram como estavam porque alguém as mudou à mão ou
+  // porque estão numa fatura paga (ticket 171).
   const [mantidas, setMantidas] = useState("");
   const doParcelamento = (lancamentos ?? []).slice().sort((a, b) => (a.parcela ?? 0) - (b.parcela ?? 0));
   const primeira = doParcelamento[0];
@@ -359,7 +360,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         <label htmlFor="data-do-parcelamento">{noCartao ? "Data da compra" : "Primeira parcela"}</label>
         <input id="data-do-parcelamento" type="date" value={form.data} onChange={(e) => e.target.value && mudar({ data: e.target.value })} />
       </div>
-      <p className="vazio">Valor, parcelas e data refazem as parcelas, menos as que alguém mudou à mão.</p>
+      <p className="vazio">Valor, parcelas e data refazem as parcelas, menos as que alguém mudou à mão e as de fatura paga.</p>
 
       {comPartes ? (
         <>
