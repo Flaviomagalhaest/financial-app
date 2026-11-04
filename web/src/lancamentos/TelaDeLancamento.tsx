@@ -131,7 +131,8 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const [escolhendoAlcance, setEscolhendoAlcance] = useState(false);
   // O alcance pedido que muda parcelas já realizadas: nada foi gravado até confirmar.
   const [realizadas, setRealizadas] = useState<{ alcance: AlcanceComOutras; aviso: AvisoDeRealizadas } | null>(null);
-  // Gravada a mudança, as parcelas que ficaram como estavam porque alguém as mudou à mão.
+  // Gravada a mudança, as parcelas que ficaram como estavam porque alguém as mudou à mão ou
+  // porque estão numa fatura paga (ticket 171).
   const [mantidas, setMantidas] = useState("");
   // As partes da compra à vista, parcelada ou da recorrência (ADR 0022); sem elas, a compra é uma só.
   const [partes, setPartes] = useState<ParteEmEdicao[] | null>(null);
@@ -852,7 +853,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
             </button>
           </div>
           {!online && <p className="vazio">Sem internet: só esta parcela muda agora; mudar as outras precisa de internet.</p>}
-          <p className="vazio">Nas outras, o que alguém mudou à mão fica como está.</p>
+          <p className="vazio">Nas outras, o que alguém mudou à mão fica como está, e as de fatura paga não mudam de valor, data nem fatura.</p>
         </div>
       )}
       {realizadas && existente && (
