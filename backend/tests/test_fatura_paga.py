@@ -1010,7 +1010,8 @@ def test_a_fatura_paga_no_meio_do_refazer_da_correcao_nao_recebe_a_parcela(
     assert numeros(faturas(casal, cartao)["2026-04-01"]) == abril_paga
     assert o_lido(casal, id)["mudanca_recusada"] == (
         "a fatura de 04/2026 do Nubank está paga: para mudá-la, use a correção da fatura."
-        " A correção do parcelamento parou: as parcelas que faltavam corrigir ficaram como estavam"
+        " A correção do parcelamento parou: da 3ª parcela em diante, as parcelas que faltavam"
+        " corrigir ficaram como estavam"
     )
 
     # A próxima correção, que não leva parcela para abril, tira o aviso.
@@ -1071,7 +1072,8 @@ def test_a_fatura_paga_depois_da_conferencia_para_a_correcao_no_pedido(
     ]
     assert numeros(faturas(casal, cartao)["2026-04-01"]) == abril_paga
     assert o_lido(casal, id)["mudanca_recusada"].endswith(
-        "A correção do parcelamento parou: as parcelas que faltavam corrigir ficaram como estavam"
+        "A correção do parcelamento parou: da 3ª parcela em diante, as parcelas que faltavam"
+        " corrigir ficaram como estavam"
     )
 
     # Sem o pagamento, abril deixa de estar paga (a API não tira o pagamento da paga: só a
@@ -1085,3 +1087,38 @@ def test_a_fatura_paga_depois_da_conferencia_para_a_correcao_no_pedido(
         "2026-04-01",
     ]
     assert o_lido(casal, id)["mudanca_recusada"] is None
+
+
+def test_a_tentativa_diaria_nao_troca_a_recusa_de_uma_mudanca_com_alcance(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from app import parcelamentos
+    from tests.test_alcance_da_mudanca_na_parcela import parcelamento as o_lido
+
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-04-10", valor_centavos=10000)
+    criado = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/parcelamentos",
+        json=parcelamento(
+            cartao, [casal.categoria()], data="2026-03-20", parcelas=3, valor_total_centavos=30000
+        ),
+    )
+    id = criado.json()["id"]
+    pago = pagar(
+        casal, conta, cartao, fatura_mes="2026-04-01", valor_centavos=20000, data="2026-06-05"
+    )
+    assert pago.status_code == 201, pago.text
+    monkeypatch.setattr(parcelamentos, "_conferir_os_lotes", lambda *_: None)
+    corrigir_parcelamento(casal, id, data="2026-02-20", confirmar_realizadas=True)
+    # Uma mudança com alcance, mais nova, recusada depois da correção.
+    outra = "a mudança de alcance foi recusada. Da 2ª parcela em diante, ficaram como estavam"
+    with psycopg.connect(casal.client.app.state.url, autocommit=True) as conn:
+        conn.execute("UPDATE parcelamentos SET mudanca_recusada = %s WHERE id = %s", (outra, id))
+
+    fazer_tarefa_diaria(casal.client.app.state.url)
+
+    assert o_lido(casal, id)["mudanca_recusada"] == outra

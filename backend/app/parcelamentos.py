@@ -637,9 +637,8 @@ def completar_todos(url: str | None) -> int:
     return consertados
 
 
-_A_CORRECAO_PAROU = (
-    "A correção do parcelamento parou: as parcelas que faltavam corrigir ficaram como estavam"
-)
+_A_CORRECAO_PAROU = "A correção do parcelamento parou:"
+_FICARAM_COMO_ESTAVAM = "as parcelas que faltavam corrigir ficaram como estavam"
 
 
 def tirar_a_recusa(conn, id: UUID, so_a_da_correcao: bool = False) -> None:
@@ -648,19 +647,32 @@ def tirar_a_recusa(conn, id: UUID, so_a_da_correcao: bool = False) -> None:
     conn.execute(
         "UPDATE parcelamentos SET mudanca_recusada = NULL WHERE id = %s"
         " AND mudanca_recusada IS NOT NULL AND (NOT %s OR mudanca_recusada LIKE %s)",
-        (id, so_a_da_correcao, f"%{_A_CORRECAO_PAROU}"),
+        (id, so_a_da_correcao, f"%{_A_CORRECAO_PAROU}%"),
     )
 
 
-def _desistir_do_conserto(conn, id: UUID, recusa: HTTPException) -> None:
+def _desistir_do_conserto(
+    conn, id: UUID, recusa: HTTPException, manter_a_de_alcance: bool = False
+) -> None:
     """Tira a classificação pendente que o refazer não consegue levar e grava a recusa no
-    parcelamento, para o casal ver (ticket 157)."""
+    parcelamento, com a parcela em que a correção parou, para o casal ver (tickets 157 e 182).
+    A tentativa diária (`manter_a_de_alcance`) não troca a recusa de uma mudança com alcance
+    (ticket 149), que é mais nova que a correção: só a recusa da própria correção se regrava."""
+    texto = f"{_A_CORRECAO_PAROU} {_FICARAM_COMO_ESTAVAM}"
+    if lidos := _ler(conn, "id = %s", (id,)):
+        [regra] = lidos
+        (geradas,) = conn.execute(
+            "SELECT geradas FROM parcelamentos WHERE id = %s", (id,)
+        ).fetchone()
+        faltam = _correcoes(conn, regra, geradas, classificacao_pendente(conn, id))
+        if faltam:
+            desde = min(c.parcela for c in faltam)
+            texto = f"{_A_CORRECAO_PAROU} da {desde}ª parcela em diante, {_FICARAM_COMO_ESTAVAM}"
     conn.execute(
-        "UPDATE parcelamentos SET classificacao_pendente = '', mudanca_recusada = %s WHERE id = %s",
-        (
-            f"{recusa.detail}. {_A_CORRECAO_PAROU}",
-            id,
-        ),
+        "UPDATE parcelamentos SET classificacao_pendente = '',"
+        " mudanca_recusada = CASE WHEN %s AND mudanca_recusada IS NOT NULL"
+        " AND mudanca_recusada NOT LIKE %s THEN mudanca_recusada ELSE %s END WHERE id = %s",
+        (manter_a_de_alcance, f"%{_A_CORRECAO_PAROU}%", f"{recusa.detail}. {texto}", id),
     )
 
 
@@ -669,7 +681,13 @@ def completar(url: str | None, id: UUID) -> bool:
     if not em_transacao(url, lambda conn: _falta_conserto(conn, id)):
         return False
     pendente = em_transacao(url, lambda conn: classificacao_pendente(conn, id))
-    _refazer_protegido(url, id, lambda conn: _reajustar_do_parcelamento(conn, id), pendente)
+    _refazer_protegido(
+        url,
+        id,
+        lambda conn: _reajustar_do_parcelamento(conn, id),
+        pendente,
+        manter_a_de_alcance=True,
+    )
     return True
 
 
@@ -725,6 +743,7 @@ def _refazer_protegido(
     id: UUID,
     um_lote: Callable[[psycopg.Connection], bool],
     classificacao: Classificacao,
+    manter_a_de_alcance: bool = False,
 ) -> None:
     """Os lotes do refazer da correção e a geração das parcelas que faltam, cada um com as
     regras da fatura paga (`cartoes.protegida`). A conferência de antes de gravar
@@ -741,7 +760,12 @@ def _refazer_protegido(
             pass
         em_transacao(url, lambda conn: tirar_a_recusa(conn, id, so_a_da_correcao=True))
     except HTTPException as recusa:
-        em_transacao(url, lambda conn, recusa=recusa: _desistir_do_conserto(conn, id, recusa))
+        em_transacao(
+            url,
+            lambda conn, recusa=recusa: _desistir_do_conserto(
+                conn, id, recusa, manter_a_de_alcance
+            ),
+        )
         raise
 
 
