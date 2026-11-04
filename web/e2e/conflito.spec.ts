@@ -185,6 +185,26 @@ test("excluir o que a outra pessoa mudou depois pergunta antes", async ({ page, 
   await contextoDela.close();
 });
 
+test("excluir por cima da própria edição não enviada ainda pergunta se a outra pessoa mudou depois", async ({ page, context, browser }) => {
+  const { descricao, dela, contextoDela } = await prepararCasal(page, browser);
+
+  // A exclusão guarda os valores da edição que substitui (ticket 169): só o que o aparelho mandou
+  // deixa de ser conflito, e o valor que ela pôs é outro.
+  await context.setOffline(true);
+  await editarValor(page, descricao, "7");
+  await editarValor(dela, descricao, "5");
+  await esperarNoServidor(dela, descricao, 1005);
+  page.once("dialog", (dialogo) => void dialogo.accept());
+  await linha(page, descricao).getByRole("button", { name: `Excluir ${descricao}` }).click();
+  await expect(linha(page, descricao)).toHaveCount(0);
+  await context.setOffline(false);
+
+  const minha = linha(page, descricao);
+  await expect(minha).toContainText("⚠ conflito");
+  await expect(minha).toContainText("− R$ 10,05");
+  await contextoDela.close();
+});
+
 test("confirmar com ajuste o que a outra pessoa já confirmou leva à tela de conflito", async ({ page, browser }) => {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const [conta, luz, descricao] = [`Corrente ${s}`, `Luz ${s}`, `Conta de luz ${s}`];

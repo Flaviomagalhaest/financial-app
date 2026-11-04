@@ -1,7 +1,7 @@
 # Edição com a resposta perdida não sobe ao reabrir e a exclusão seguinte vira conflito
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
@@ -28,5 +28,13 @@ O teste do 164 passou a esperar a edição subir antes de recarregar, que é o q
 
 ## Checklist
 
-- [ ] Teste de navegador com a resposta da edição perdida, o `reload` e a exclusão: o lançamento sai sem conflito
-- [ ] A fila sobe ao reabrir, sem esperar a pessoa mexer de novo
+- [x] Teste de navegador com a resposta da edição perdida, o `reload` e a exclusão: o lançamento sai sem conflito
+- [x] A fila sobe ao reabrir, sem esperar a pessoa mexer de novo
+
+## Resolução
+
+Diagnóstico com o teste `web/e2e/resposta-perdida.spec.ts`. O envio passa por `page.route`: o primeiro pedido chega ao servidor e a resposta cai, e a rede fica fora até a pessoa recarregar.
+
+- **A fila sobe ao reabrir.** Na `main` de agora, a edição sobe uns 200 ms depois do `reload`, mesmo desfazendo o `fb3afa7` (ticket 165). Esse commit fez a tela reler a lista só quando a fila encolhe, e antes a leitura sem rede marcava a rede como sem resposta. O atraso de 3 s a 10 s não voltou a aparecer. O primeiro teste do arquivo guarda esse comportamento: o "não enviado" some em até 3 s depois do `reload`. O servidor aceita a edição reenviada sobre a versão 1, porque em `editar` a mudança igual à gravada não conta.
+- **O conflito.** A hipótese confirmada: `enfileirarExcluir` herdava a base da edição (versão 1), e o servidor, já na versão 2 gerada por essa mesma edição, respondia `conflito`. Isso acontece quando a pessoa exclui antes de a edição subir (reabriu ainda sem rede, ou excluiu nos primeiros instantes). O segundo teste reabre sem rede, exclui e só depois volta a rede.
+- **Correção** (`web/src/dados/fila.ts`, só no aparelho, sem mudar a API): a exclusão que entra no lugar de uma mudança não enviada guarda os valores dela (`lancamento`). Quando o servidor responde conflito e todo campo mudado depois da base tem lá o valor que o aparelho mandou, a exclusão volta à fila sobre a versão do servidor e sobe de novo na mesma rodada (`soAMudancaSubstituida`). É a mesma regra da edição. Se a outra pessoa mudou um campo para outro valor, continua sendo conflito: há um teste novo em `conflito.spec.ts`, que fica vermelho se a comparação dos valores for ignorada.

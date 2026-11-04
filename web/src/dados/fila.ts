@@ -215,13 +215,28 @@ export function enfileirarAntecipacao(parcelamentoId: string, descricao: string,
   return mudar(id, () => ({ acao: "antecipar_parcelas", parcelamento_id: parcelamentoId, descricao, antecipacao: { ...antecipacao, id } }));
 }
 
-/** Excluir o que com certeza não chegou ao servidor só o tira da fila. */
+/**
+ * Excluir o que com certeza não chegou ao servidor só o tira da fila. No lugar de uma mudança não
+ * enviada, a exclusão guarda os valores dela: se a mudança chegou e a resposta se perdeu, a versão
+ * que ela gerou não é conflito (ticket 169).
+ */
 export function enfileirarExcluir(id: string, base?: Base): Promise<void> {
   return mudar(id, (atual, aceito) =>
     atual?.acao === "criar" && atual.talvezNoServidor === undefined
       ? null
-      : { acao: "excluir", base: atual?.conflito?.lancamento ?? atual?.base ?? base ?? aceito },
+      : { acao: "excluir", base: atual?.conflito?.lancamento ?? atual?.base ?? base ?? aceito, lancamento: atual?.conflito ? undefined : atual?.lancamento },
   );
+}
+
+/**
+ * A exclusão em conflito só com a mudança que ela substituiu: todo campo mudado depois da base
+ * dela tem no servidor o valor que o aparelho mandou, como na edição, em que mudança igual à
+ * gravada não conta.
+ */
+function soAMudancaSubstituida(enviado: ItemDeLancamento, servidor: Lancamento, campos: { campo: Campo }[]): boolean {
+  const meu = enviado.lancamento;
+  if (enviado.acao !== "excluir" || !meu || campos.length === 0) return false;
+  return campos.every(({ campo }) => comparavel(campo, (meu as Partial<Lancamento>)[campo]) === comparavel(campo, servidor[campo]));
 }
 
 /** Desiste da mudança não enviada: o aparelho volta a mostrar o que o servidor tem. */
@@ -369,6 +384,11 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         continue;
       }
       if (resultado === "conflito") {
+        // A mudança que a exclusão substituiu tinha chegado: ela sobe de novo, sobre essa versão.
+        if (intacto && atual && lancamento && soAMudancaSubstituida(enviado, lancamento, campos ?? [])) {
+          await pedido(fila.put({ ...atual, base: lancamento, lancamento: undefined }));
+          continue;
+        }
         // O aparelho passa a mostrar a versão do servidor enquanto a decisão espera.
         if (lancamento) await guardar(enviado.id, lancamento);
         if (intacto && lancamento) await pedido(fila.put({ ...atual, conflito: { motivo: motivo ?? "conflito", lancamento, campos: campos ?? [] } }));

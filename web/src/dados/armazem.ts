@@ -35,7 +35,11 @@ interface PedidoNaFila {
 /** Uma mudança de lançamento não enviada: no máximo uma por lançamento, a soma do que se fez nele. */
 export interface ItemDeLancamento extends PedidoNaFila {
   acao: "criar" | "editar" | "excluir" | "confirmar";
-  /** O lançamento como fica; no confirmar, o previsto já realizado, com os ajustes. */
+  /**
+   * O lançamento como fica; no confirmar, o previsto já realizado, com os ajustes. Na exclusão, a
+   * mudança não enviada que ela substituiu, se havia: a versão que ela talvez tenha gerado no
+   * servidor não é conflito (ticket 169).
+   */
   lancamento?: NovoLancamento;
   /** Quando o envio que talvez gravou o criar saiu (ms): o planejamento lido depois dele já pode contá-lo. */
   tentadoEm?: number;
