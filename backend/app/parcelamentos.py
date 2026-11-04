@@ -741,9 +741,9 @@ def _conferir_faturas_das_parcelas(conn, novo: NovoParcelamento, primeira: date)
     a geração em lotes não volta atrás."""
     titular = faturas.ler_cartao(conn, novo.conta_id).titular
     ultima = faturas.somar_meses(primeira, novo.parcelas - 1)
-    for fatura in cartoes.faturas_do_titular(conn, titular.id):
-        if primeira <= fatura.mes <= ultima and cartoes.paga_pelo_pagamento(fatura):
-            raise cartoes.recusa_da_paga(conn, titular.id, fatura.mes)
+    for mes in sorted(cartoes.meses_pagos(conn, titular.id)):
+        if primeira <= mes <= ultima:
+            raise cartoes.recusa_da_paga(conn, titular.id, mes)
 
 
 def gravar(conn, novo: NovoParcelamento, usuario: str) -> tuple[Parcelamento, bool]:

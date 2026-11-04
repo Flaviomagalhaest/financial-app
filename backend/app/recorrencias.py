@@ -264,7 +264,7 @@ def ocorrencias_puladas(regra: NovaRecorrencia, hoje: date) -> int:
     while True:
         n = puladas + 1
         dia = _depois_do_inicio(regra, n - 1)
-        if dia >= hoje or _fora_do_fim(regra, n, dia):  # type: ignore[arg-type]
+        if dia >= hoje or _fora_do_fim(regra, n, dia):
             return puladas
         puladas += 1
 
@@ -300,48 +300,40 @@ def _termina_antes_do_lancamento(nova: NovaRecorrencia) -> bool:
     )
 
 
-type _NaFaturaPaga = Callable[[UUID, date, date | None], tuple[UUID, date] | None]
-
-
-def _faturas_pagas(conn) -> _NaFaturaPaga:
-    """Diz em que fatura paga pelo pagamento (titular e mês) cai o lançamento no cartão
-    `conta_id`: a do `mes` dado ou, sem ele, a da compra na data; `None` fora dela e fora do
+def _em_que_fatura_paga(conn) -> Callable[[UUID, date, date | None], tuple[UUID, date] | None]:
+    """Uma consulta: em que fatura paga pelo pagamento (titular e mês) cai o lançamento no cartão
+    `conta_id`, pelo `mes` gravado ou, sem ele, pela compra na data; `None` fora dela e fora do
     cartão (ADR 0021). A importada do Mobills fica de fora, como em `cartoes.protegida`. Lê as
     faturas de cada cartão uma vez só, e só quando perguntam por ele."""
     pagas: dict[UUID, tuple[faturas.Titular, set[date]] | None] = {}
 
-    def na_paga(conta_id: UUID, dia: date, mes: date | None = None) -> tuple[UUID, date] | None:
+    def consultar(conta_id: UUID, dia: date, mes: date | None) -> tuple[UUID, date] | None:
         if conta_id not in pagas:
             cartao = faturas.ler_cartao(conn, conta_id)
-            pagas[conta_id] = cartao and (
-                cartao.titular,
-                {
-                    f.mes
-                    for f in cartoes.faturas_do_titular(conn, cartao.titular.id)
-                    if cartoes.paga_pelo_pagamento(f)
-                },
+            pagas[conta_id] = (
+                (cartao.titular, cartoes.meses_pagos(conn, cartao.titular.id)) if cartao else None
             )
-        if not (do_cartao := pagas[conta_id]) or not do_cartao[1]:
+        if (do_cartao := pagas[conta_id]) is None or not do_cartao[1]:
             return None
         titular, meses = do_cartao
-        mes = mes or faturas.mes_da_compra(conn, titular, dia)
-        return (titular.id, mes) if mes in meses else None
+        fatura = mes or faturas.mes_da_compra(conn, titular, dia)
+        return (titular.id, fatura) if fatura in meses else None
 
-    return na_paga
+    return consultar
 
 
 def _conferir_as_faturas_do_passado(conn, nova: NovaRecorrencia, lancada: date) -> None:
-    """Nenhuma ocorrência que a geração cria antes de hoje (a do dia do lançamento em diante, que
+    """Nenhuma ocorrência que a geração cria antes de hoje (do dia do lançamento em diante, que
     a fila sobe depois) cai numa fatura paga pelo pagamento (ADR 0021). A geração grava em
     lotes e não volta atrás: a recusa vem antes de gravar a regra. De hoje em diante a fatura
     ainda não fechou, e só a fechada recebe pagamento."""
-    na_paga, dia_de_hoje, n = _faturas_pagas(conn), lancamentos.hoje(), 1
-    while (dia := _depois_do_inicio(nova, n - 1)) < dia_de_hoje and not _fora_do_fim(
-        nova,  # type: ignore[arg-type]
-        n,
-        dia,
-    ):
-        if dia >= lancada and (paga := na_paga(nova.conta_id, dia, None)):
+    dia_de_hoje = lancamentos.hoje()
+    if lancada >= dia_de_hoje:
+        return
+    em_que_paga = _em_que_fatura_paga(conn)
+    n = ocorrencias_puladas(nova, lancada) + 1
+    while (dia := _depois_do_inicio(nova, n - 1)) < dia_de_hoje and not _fora_do_fim(nova, n, dia):
+        if paga := em_que_paga(nova.conta_id, dia, None):
             raise cartoes.recusa_da_paga(conn, *paga)
         n += 1
 
@@ -691,7 +683,7 @@ def listar_recorrencias(usuario: UsuarioLogado, request: Request) -> list[Recorr
         return _ler(conn, com_proximo=True)
 
 
-def _fora_do_fim(regra: Recorrencia, n: int, dia: date) -> bool:
+def _fora_do_fim(regra: NovaRecorrencia, n: int, dia: date) -> bool:
     return bool((regra.vezes and n > regra.vezes) or (regra.ate and dia > regra.ate))
 
 
@@ -782,7 +774,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
     partes = lancamentos.ler_partes(conn, ids)
     regras = _campos_da_regra(regra)
     ultimo_dia, dia_de_hoje = horizonte(), lancamentos.hoje()
-    na_paga = _faturas_pagas(conn)
+    em_que_paga = _em_que_fatura_paga(conn)
     trabalho: list[tuple[UUID, int, list[str], date, bool] | _Retirada] = []
     for (
         lancamento_id,
@@ -800,7 +792,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         a_mao,
     ) in previstos:
         # O atrasado de fatura paga conta nas compras dela: fica como está (ADR 0021).
-        if dia < dia_de_hoje and na_paga(conta, dia, mes):
+        if dia < dia_de_hoje and em_que_paga(conta, dia, mes):
             continue
         if _fora_do_fim(regra, n, dia):
             trabalho.append(_Retirada(lancamento_id, n))
@@ -828,7 +820,7 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
             trabalho.append(_Retirada(lancamento_id, n, antes_de_hoje=True))
             continue
         # Nem o atrasado vai para dentro de uma: fica como está, como o de fatura paga.
-        if dia < dia_de_hoje and na_paga(regra.conta_id, dia_novo, None):
+        if dia < dia_de_hoje and em_que_paga(regra.conta_id, dia_novo, None):
             continue
         quer = regras | {
             "data": dia_novo,
