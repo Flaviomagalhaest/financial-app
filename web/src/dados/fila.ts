@@ -23,7 +23,8 @@ import {
   type NovoLancamento,
   type NovoParcelamento,
   type Antecipacao,
-  versaoDaFila,
+  baseDaMudanca,
+  inicioDaJanela,
 } from "./armazem";
 import { comOsEnviados } from "./saldo";
 
@@ -376,7 +377,7 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
         continue;
       }
       // Fora da janela do aparelho, o saldo guardado conta a versão sobre a qual a mudança foi feita.
-      const antes = (await naLista(enviado.id)) ?? (temLista ? versaoDaFila(enviado) : undefined);
+      const antes = (await naLista(enviado.id)) ?? (temLista ? baseDaMudanca(enviado) : undefined);
       if (resultado === "descartada") {
         await guardar(enviado.id, undefined);
         if (atual?.lancamento && exclusao) await pedido(fila.put({ ...atual, exclusao }));
@@ -386,7 +387,8 @@ async function aplicar(enviados: ItemDaFila[], resultados: Resultado[]) {
       // Excluído no aparelho enquanto subia: agora que existe no servidor, sai de lá também.
       const excluidoNoCaminho = !atual && enviado.acao === "criar";
       const depois = lancamento && !excluidoNoCaminho ? lancamento : undefined;
-      await guardar(enviado.id, depois);
+      // O aceito que conta antes da janela do aparelho (o de fora dela, aberto com internet) não fica na lista.
+      await guardar(enviado.id, depois && depois.mes >= inicioDaJanela() ? depois : undefined);
       noSaldo.push([antes, depois]);
       if (lancamento) aceitos[enviado.id] = { base: lancamento, em: Date.now() };
       if (excluidoNoCaminho) await pedido(fila.put({ id: enviado.id, acao: "excluir", base: lancamento, desde: enviado.desde, revisao: 1 }));

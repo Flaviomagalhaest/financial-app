@@ -29,7 +29,7 @@ import {
   type NovoLancamento,
   type NovoParcelamento,
   type Antecipacao,
-  versaoDaFila,
+  baseDaMudanca,
 } from "./armazem";
 import {
   CONTAS,
@@ -366,7 +366,7 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
     if (!deLancamento(item)) continue;
     // Fora da lista (fora da janela do aparelho), a mudança vale sobre a versão que a tela mostrava:
     // a edição não entra como lançamento novo nem perde os campos que a fila não leva.
-    const daFila = porId.has(item.id) ? undefined : versaoDaFila(item);
+    const daFila = porId.has(item.id) ? undefined : baseDaMudanca(item);
     const anterior = porId.get(item.id) ?? (daFila && { ...daFila, naoEnviado: false });
     if (item.conflito) {
       const servidor = anterior ?? { ...item.conflito.lancamento, naoEnviado: false };
@@ -691,7 +691,7 @@ function useComSaldoDoAparelho(contas: Conta[]): ContaNaTela[] {
     const doServidor = new Map<string, Lancamento>((dados ?? []).map((l) => [l.id, l]));
     // A mudança num lançamento fora da janela mexe no saldo pela diferença para a versão dela.
     for (const item of fila) {
-      const versao = deLancamento(item) && !doServidor.has(item.id) ? versaoDaFila(item) : undefined;
+      const versao = deLancamento(item) && !doServidor.has(item.id) ? baseDaMudanca(item) : undefined;
       if (versao) doServidor.set(item.id, versao);
     }
     const naTelaPorId = new Map(naTela(dados ?? [], fila).map((l) => [l.id, l]));
@@ -830,7 +830,7 @@ function contagensNoAparelho(servidor: Lancamento[], fila: ItemDaFila[], cartaoD
   for (const item of fila) {
     if (!deLancamento(item) || item.conflito || item.exclusao) continue;
     // Fora da janela do aparelho, o planejamento do servidor conta a versão sobre a qual a mudança foi feita.
-    const daFila = porId.has(item.id) ? undefined : versaoDaFila(item);
+    const daFila = porId.has(item.id) ? undefined : baseDaMudanca(item);
     const antes = porId.get(item.id) ?? (daFila && { ...daFila, em: Date.parse(daFila.alterado_em) });
     if (item.acao === "excluir" || !item.lancamento) {
       porId.delete(item.id);

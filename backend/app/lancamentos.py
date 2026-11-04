@@ -1986,9 +1986,9 @@ def _um(conn, id: UUID) -> Lancamento:
 
 def inicio_da_janela() -> date:
     """O primeiro mês da janela do aparelho: o deste mês e os `janelaDoAparelhoMeses` - 1 antes dele."""
-    dia = hoje()
-    meses = dia.year * 12 + dia.month - 1 - (int(valores_iniciais()["janelaDoAparelhoMeses"]) - 1)
-    return date(meses // 12, meses % 12 + 1, 1)
+    return faturas.somar_meses(
+        faturas.mes_de(hoje()), 1 - int(valores_iniciais()["janelaDoAparelhoMeses"])
+    )
 
 
 @router.get("/lancamentos", response_model=list[Lancamento], operation_id="listar_lancamentos")

@@ -54,6 +54,9 @@ test("o lançamento fora da janela não fica no aparelho: com internet abre do s
   await page.getByRole("button", { name: "0", exact: true }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect.poll(async () => (await api.ler(`/api/lancamentos/${antigo.id}`)).lancamento.valor_centavos).toBe(45000);
+  // Enviada a edição, ele continua fora da janela: o Histórico não o mostra.
+  await expect(page.getByRole("listitem").filter({ hasText: `Padaria ${s}` })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: `Geladeira ${s}` })).toHaveCount(0);
 });
 
 test("o estorno de uma compra fora da janela lê a compra do servidor e, sem internet, pede internet", async ({ page, context }) => {

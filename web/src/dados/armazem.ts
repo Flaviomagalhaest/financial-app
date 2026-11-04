@@ -3,6 +3,8 @@
 // lançamento) e a fila do que não foi enviado. Banco próprio, separado do da sessão; a tela e o
 // service worker usam este mesmo módulo.
 import type { components } from "../api/schema";
+import { config } from "../config";
+import { hoje, mesDepois } from "../lancamentos/datas";
 
 export type NovoLancamento = components["schemas"]["NovoLancamento"];
 export type Lancamento = components["schemas"]["Lancamento"];
@@ -102,12 +104,15 @@ export type ItemDaFila = ItemDeLancamento | ItemDeRegra;
 const ACOES_DE_LANCAMENTO: ReadonlySet<string> = new Set<ItemDeLancamento["acao"]>(["criar", "editar", "excluir", "confirmar"]);
 export const deLancamento = (item: Pick<ItemDaFila, "acao">): item is ItemDeLancamento => ACOES_DE_LANCAMENTO.has(item.acao);
 
+/** O primeiro mês da janela do aparelho (`AAAA-MM-01`), como o servidor a conta (`inicio_da_janela`). */
+export const inicioDaJanela = () => mesDepois(hoje(), 1 - config.janelaDoAparelhoMeses);
+
 /**
  * A versão do servidor sobre a qual a mudança da fila foi feita, para o lançamento que não está na
  * lista guardada: o que ficou fora da janela do aparelho (ADR 0024), aberto com internet. O criar
  * não tem: a base dele é o que foi enviado, que talvez nem esteja no servidor.
  */
-export function versaoDaFila(item: ItemDeLancamento): Lancamento | undefined {
+export function baseDaMudanca(item: ItemDeLancamento): Lancamento | undefined {
   return item.acao === "criar" ? undefined : (item.base as Lancamento | undefined);
 }
 
