@@ -1,7 +1,7 @@
 # Testes de navegador conferem a fila vazia pelo aviso, que some antes de a tela ler a fila
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
