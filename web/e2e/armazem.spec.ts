@@ -75,7 +75,9 @@ const contagem = (page: Page) => page.evaluate(() => ({ ...(window as unknown as
 
 test("abrir a tela de lançamento faz um GET da lista só", async ({ page }) => {
   await prepararCasal(page);
-  await page.goto("/#/novo");
+  // Troca o endereço sem `hashchange`: com `goto("/#/novo")` a tela abria já ali e pedia a lista, e
+  // o reload logo abaixo cortava esse GET depois de o contador o ver (ticket 15 de processo-do-repositorio).
+  await page.evaluate(() => history.replaceState(null, "", "/#/novo"));
   const lidas: string[] = [];
   page.on("request", (pedido) => void (daLista(pedido.url()) && pedido.method() === "GET" && lidas.push(pedido.url())));
   const primeira = page.waitForResponse((r) => daLista(r.url()) && r.request().method() === "GET");
