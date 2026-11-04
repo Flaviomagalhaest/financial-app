@@ -1,7 +1,7 @@
 # Testes de navegador: três execuções verdes na main e as próximas falhas com trace
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 15
 Skills: `diagnosing-bugs`; apoio: `run`
 Modelo recomendado: Opus
@@ -17,9 +17,9 @@ Modo de falha ainda sem causa: `parcelamento.spec.ts:445` nos CIs da `main` de 0
 
 ## Checklist
 
-- [ ] Três execuções seguidas do `verificar` verdes na `main`
-- [ ] Cada falha que aparecer: causa achada pelo trace do artefato e consertada, ou registrada aqui com o trace
-- [ ] `parcelamento.spec.ts:445` com a antecipação não aplicada: causa achada, ou nenhuma ocorrência nas execuções acima
+- [x] Três execuções seguidas do `verificar` verdes na `main`
+- [x] Cada falha que aparecer: causa achada pelo trace do artefato e consertada, ou registrada aqui com o trace
+- [x] `parcelamento.spec.ts:445` com a antecipação não aplicada: causa achada, ou nenhuma ocorrência nas execuções acima
 
 ## Diagnóstico do `parcelamento.spec.ts` (antecipação não aplicada)
 
@@ -35,6 +35,10 @@ Modo de falha ainda sem causa: `parcelamento.spec.ts:445` nos CIs da `main` de 0
 Desde o merge do 15 (PR #439), as execuções do `verificar` na `main` foram verdes: 446 (41773153844), 447 (41774862545) e 449 (41821249937, tentativa 1). Re-execuções da 449, sem mudar nada:
 
 - tentativa 2: verde (15:12 UTC)
+- tentativa 3: verde (15:50 UTC)
+- tentativa 4: verde (16:47 UTC)
+
+Nenhuma ocorrência da antecipação não aplicada nas seis execuções. A única falha que apareceu (no CI do PR, abaixo) teve a causa achada pelo trace e foi consertada.
 
 ## Falha no CI do PR #451 (execução 41854192551)
 
