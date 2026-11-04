@@ -306,6 +306,11 @@ def paga_pelo_pagamento(f: Fatura) -> bool:
     return f.situacao == "paga" and not faturas.importada(f.fechamento, f.vencimento)
 
 
+def meses_pagos(conn, titular_id: UUID) -> set[date]:
+    """Os meses das faturas do titular pagas pelo pagamento (`paga_pelo_pagamento`)."""
+    return {f.mes for f in faturas_do_titular(conn, titular_id) if paga_pelo_pagamento(f)}
+
+
 def recusa_da_paga(conn, cartao_id: UUID, mes: date) -> HTTPException:
     (nome,) = conn.execute("SELECT nome FROM cartoes WHERE id = %s", (cartao_id,)).fetchone()
     return recusar(

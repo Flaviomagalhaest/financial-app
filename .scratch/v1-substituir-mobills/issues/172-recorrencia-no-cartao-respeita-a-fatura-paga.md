@@ -1,7 +1,7 @@
 # A recorrência no cartão respeita a fatura paga
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -20,7 +20,13 @@ A exclusão da recorrência não muda: ela só tira previstos de hoje em diante,
 
 ## Checklist
 
-- [ ] A criação cuja ocorrência do dia do lançamento cairia numa fatura paga é recusada antes de gravar (rota 422, fila `recusada`)
-- [ ] O reajuste da alteração deixa intocado o atrasado de fatura paga e refaz o resto
-- [ ] Conferir que nenhum outro caminho da recorrência (geração diária, realização automática, partes) muda uma fatura paga
-- [ ] Testes de API em `backend/tests/test_fatura_paga.py`
+- [x] A criação cuja ocorrência do dia do lançamento cairia numa fatura paga é recusada antes de gravar (rota 422, fila `recusada`)
+- [x] O reajuste da alteração deixa intocado o atrasado de fatura paga e refaz o resto
+- [x] Conferir que nenhum outro caminho da recorrência (geração diária, realização automática, partes) muda uma fatura paga
+- [x] Testes de API em `backend/tests/test_fatura_paga.py`
+
+## Answer
+
+- **Criação**: `_conferir_as_faturas_do_passado` recusa, antes de gravar a regra, a recorrência no cartão com alguma ocorrência entre o dia do lançamento e ontem (a do dia do lançamento e, num calendário curto, as seguintes, que nascem atrasadas) que cairia numa fatura paga pelo pagamento: 422 na rota, `recusada` na fila. A importada do Mobills fica de fora (`cartoes.meses_pagos`, pelo mesmo critério de `paga_pelo_pagamento`).
+- **Alteração**: o reajuste pula o atrasado de fatura paga (pelo `mes` gravado) antes de qualquer outra regra, inclusive a retirada pelo fim, e o resto é refeito. Também pula o atrasado que a data nova levaria para dentro de uma fatura paga: escolha provisória, para o dono confirmar no [ticket 178](178-atrasado-levado-para-dentro-da-fatura-paga.md).
+- **Outros caminhos conferidos**: a geração diária e a da mudança só criam de hoje em diante (fatura ainda aberta); a realização automática só muda a `situacao`, que não muda o total da fatura; as partes só mudam pelo reajuste, que pula o atrasado; a exclusão só tira de hoje em diante. Fica de fora o reenvio da criação depois de um pagamento entre os lotes da geração: [ticket 179](179-reenvio-da-recorrencia-depois-do-pagamento.md).

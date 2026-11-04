@@ -73,7 +73,7 @@ _Avoid_: motor de sugestão
 ### Futuro
 
 **Recorrência**:
-Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz). Só gera do dia do lançamento em diante: com o início no passado, as ocorrências de antes dele não viram lançamento (nem atrasado, nem realizado), mas o calendário e as `vezes` seguem contados desde o início; a do dia do lançamento nasce realizada só na criação da regra e só se for de valor estimado ou automática; a de valor fixo que não é automática nasce prevista, e a gerada depois (tarefa diária, mudança da regra) é prevista até o casal confirmar, salvo a automática. A tarefa diária e a mudança da regra também não lançam ocorrência que já passou: mudada a regra, conta de hoje. A regra que termina antes do dia do lançamento é recusada.
+Regra que gera um lançamento previsto a cada N semanas ou N meses, com ou sem fim (o salário, a conta de luz, o seguro anual); não é um lançamento. Tem valor fixo (o Spotify) ou estimado (o salário, a luz). Só gera do dia do lançamento em diante: com o início no passado, as ocorrências de antes dele não viram lançamento (nem atrasado, nem realizado), mas o calendário e as `vezes` seguem contados desde o início; a do dia do lançamento nasce realizada só na criação da regra e só se for de valor estimado ou automática; a de valor fixo que não é automática nasce prevista, e a gerada depois (tarefa diária, mudança da regra) é prevista até o casal confirmar, salvo a automática. A tarefa diária e a mudança da regra também não lançam ocorrência que já passou: mudada a regra, conta de hoje. A regra que termina antes do dia do lançamento é recusada, e também a regra no cartão cuja ocorrência de antes de hoje (do dia do lançamento em diante) cairia numa fatura paga.
 _Avoid_: repetição, despesa fixa, gasto fixo, assinatura
 
 **Recorrência ativa**:
@@ -88,7 +88,7 @@ Cada vez em que uma recorrência acontece, numerada desde o início (1ª, 2ª...
 _Avoid_: instância, repetição
 
 **Daqui para frente**:
-Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número. Nada vira lançamento antes de hoje: o previsto que a data nova leva de hoje ou depois para antes sai, marcado como da regra, e volta se outra mudança o trouxer para hoje ou depois. O atrasado não vira automático.
+Mudança de uma recorrência a partir de uma ocorrência: a regra passa a valer assim e os previstos dessa ocorrência em diante são refeitos, menos os alterados à mão. O passado e o realizado ficam. Mudar o calendário (a cada quantos, o dia) remarca o início da regra naquela ocorrência, que mantém o número. Nada vira lançamento antes de hoje: o previsto que a data nova leva de hoje ou depois para antes sai, marcado como da regra, e volta se outra mudança o trouxer para hoje ou depois. O atrasado não vira automático. No cartão, o atrasado de fatura paga fica como está, e o atrasado que a data nova levaria para dentro de uma fatura paga também.
 _Avoid_: a partir de agora, mudar tudo
 
 **Encerrar**:
