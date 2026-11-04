@@ -1,7 +1,7 @@
 # Endpoints das telas: leitura pública e 404 do parcelamento inexistente
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
