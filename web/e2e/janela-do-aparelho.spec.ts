@@ -255,10 +255,11 @@ test("o mês que vira poupa o lançamento em conflito, como o da mudança não e
   await page.getByRole("button", { name: "0", exact: true }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(feira).toContainText("⏳ não enviado");
-  await api.mudar(`/api/lancamentos/${conflitante.id}`, { valor_centavos: 7000 });
+  const versao = (await api.ler(`/api/lancamentos/${conflitante.id}`)).lancamento.versao;
+  await api.mudar(`/api/lancamentos/${conflitante.id}`, { valor_centavos: 7000, versao });
 
   await context.setOffline(false);
-  await expect(feira).toContainText("conflito");
+  await expect(feira).toContainText("⚠ conflito");
 
   // O mês virou: a janela do servidor não traz mais os dois, e o conflito continua no aparelho.
   await page.route((url) => url.pathname === "/api/lancamentos", (rota) => (rota.request().method() === "GET" ? rota.fulfill({ json: [] }) : rota.fallback()));
@@ -267,5 +268,5 @@ test("o mês que vira poupa o lançamento em conflito, como o da mudança não e
   await releitura;
   await aba(page, "Histórico");
   await expect(farmacia).toHaveCount(0);
-  await expect(feira).toContainText("conflito");
+  await expect(feira).toContainText("⚠ conflito");
 });

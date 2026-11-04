@@ -492,7 +492,9 @@ export function useLancamentosComOsDeFora(...ids: (string | null | undefined)[])
     },
     [lancamentos, faltam, lidos],
   );
-  return { lancamentos, atualizadoEm, semDados, filaLida: lida, foraDoAparelho };
+  // Com os ligados de um lançamento do aparelho ainda por ler, o que depende deles (o restante do estorno) ainda não vale.
+  const lendoLigados = comLigados.some((id) => !lidos.has(id));
+  return { lancamentos, atualizadoEm, semDados, filaLida: lida, foraDoAparelho, lendoLigados };
 }
 
 /**
