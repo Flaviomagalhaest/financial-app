@@ -1,7 +1,7 @@
 # A recorrência no cartão respeita a fatura paga
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
