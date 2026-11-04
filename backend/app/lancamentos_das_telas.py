@@ -6,6 +6,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 from app import faturas
 from app.banco import conectar
@@ -59,3 +60,22 @@ def listar_lancamentos_do_parcelamento(
         if not conn.execute("SELECT 1 FROM parcelamentos WHERE id = %s", (id,)).fetchone():
             raise HTTPException(status_code=404, detail="parcelamento não encontrado")
         return ler_lancamentos(conn, "parcelamento_id = %s", (id,), ordem="parcela, id")
+
+
+class PrimeiroMes(BaseModel):
+    mes: date | None
+
+
+@router.get(
+    "/lancamentos-primeiro-mes",
+    response_model=PrimeiroMes,
+    operation_id="ler_primeiro_mes_com_lancamento",
+)
+def ler_primeiro_mes(usuario: UsuarioLogado, request: Request) -> PrimeiroMes:
+    """O mês mais antigo em que um lançamento conta: até onde o Histórico lê do servidor, mês a
+    mês, depois da janela do aparelho (ticket 167). `None` sem lançamentos."""
+    with conectar(url_do_banco(request)) as conn:
+        linha = conn.execute(
+            f"SELECT MIN({MES_EM_QUE_CONTA}) FROM lancamentos WHERE excluido_em IS NULL"
+        ).fetchone()
+        return PrimeiroMes(mes=linha[0] if linha else None)

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   atualizadoAs,
   descartarNaoEnviado,
@@ -26,6 +26,8 @@ import { dataPorExtenso, quando } from "./datas";
 import { divisao, rotuloDasParcelas } from "./parcelamento";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
 import { PartesDaCompra } from "./partes";
+import { useHistoricoMesAMes } from "./useHistoricoMesAMes";
+import { inicioDaJanela } from "../dados/armazem";
 
 /** A recorrência ou o parcelamento que ainda não subiu, como a lista o mostra. */
 type RegraNaLista = {
@@ -156,6 +158,178 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
     await excluirRecorrencia(recorrencia).catch(() => setErro("Não foi possível excluir no aparelho."));
   }
 
+  const linha = (l: LancamentoNaTela) => {
+    const titulo = tituloDoLancamento(l, categorias);
+    const ligacao = ligacaoDoEstorno(l, estornos, categorias);
+    return (
+      <li key={l.id} id={`lancamento-${l.id}`}>
+        <div>
+          <strong>
+            {titulo}
+            {l.parcela && l.parcelas ? ` ${numeroDaParcela(l.parcela, l.parcelas)}` : ""}
+          </strong>
+          <ValorComSinal l={l} />
+        </div>
+        <p className="vazio">
+          {[dataPorExtenso(l.data), nome(contasECartoes, l.conta_id), !l.partes?.length && l.categoria_ids.map((c) => nome(categorias, c)).join(", ")].filter(Boolean).join(" · ")}
+          {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
+          {ligacao && ` · ${ligacao}`}
+          {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
+          {l.alterada_a_mao && " · alterada à mão"}
+          {!l.partes?.length && ` · ${l.pessoa ? nomeDe(l.pessoa) : "conjunto"}`}
+        </p>
+        {!!l.partes?.length && <PartesDaCompra partes={l.partes} categorias={categorias} nomeDe={nomeDe} titulo={titulo} />}
+        {l.parece_repetido_de && euId && l.criado_por !== euId && !l.naoEnviado && (
+          <div className="aviso" role="group" aria-label={`Parece repetido ${titulo}`}>
+            <p className="erro">Parece repetido: {nomeDe(l.criado_por)} lançou o mesmo valor na mesma conta.</p>
+            <div className="acoes">
+              <button type="button" aria-label={`Manter os dois ${titulo}`} onClick={() => void manter(l)}>
+                Manter os dois
+              </button>
+              <button type="button" className="secundario" aria-label={`Excluir este ${titulo}`} onClick={() => void excluir(l)}>
+                Excluir este
+              </button>
+            </div>
+          </div>
+        )}
+        {comEstorno === l.id && (
+          <div className="aviso" role="group" aria-label="Compra com estorno">
+            <p className="erro">A compra tem estorno; exclua o estorno antes.</p>
+            <ul>
+              {estornosDe(l.id).map((e) => (
+                <li key={e.id}>
+                  <a
+                    href={`#lancamento-${e.id}`}
+                    onClick={(ev) => {
+                      ev.preventDefault();
+                      document.getElementById(`lancamento-${e.id}`)?.scrollIntoView({ block: "center" });
+                    }}
+                  >
+                    Estorno de {formatarCentavos(e.valor_centavos)} em {dataPorExtenso(e.data)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <div className="acoes">
+              <button type="button" className="secundario" onClick={() => setComEstorno(null)}>
+                Voltar
+              </button>
+            </div>
+          </div>
+        )}
+        {sugerindoEstorno === l.id && (
+          <div className="aviso" role="group" aria-label="Fatura fechada">
+            <p>
+              A fatura de {mesPorExtenso(l.mes!)} já fechou: excluir a compra não devolve o valor cobrado. Estorne a compra para acertar a fatura.
+            </p>
+            <div className="acoes">
+              {podeEstornar(l, cartoes, estornos) && (
+                <a className="botao" href={`#/estornar/${l.id}`}>
+                  Estornar
+                </a>
+              )}
+              <button type="button" className="secundario" onClick={() => void excluir(l, true)}>
+                Excluir mesmo assim
+              </button>
+              <button type="button" className="secundario" onClick={() => setSugerindoEstorno(null)}>
+                Voltar
+              </button>
+            </div>
+          </div>
+        )}
+        {l.conflito ? (
+          <p className="erro">⚠ conflito: sua mudança espera decisão</p>
+        ) : l.exclusao ? (
+          <p className="erro">
+            {l.exclusao.por_voce ? "Você excluiu este lançamento em outro aparelho" : `${nomeDe(l.exclusao.excluido_por)} excluiu este lançamento`}; sua alteração não foi
+            salva.
+          </p>
+        ) : (
+          l.naoEnviado && <p className={l.recusa ? "erro" : "vazio"}>{l.recusa ? `⏳ não enviado: ${l.recusa}` : "⏳ não enviado"}</p>
+        )}
+        <div className="acoes">
+          {l.conflito ? (
+            <a className="botao" href={`#/conflito/${l.id}`} aria-label={`Decidir ${titulo}`}>
+              Decidir
+            </a>
+          ) : l.exclusao ? (
+            <>
+              <button type="button" aria-label={`Lançar de novo ${titulo}`} onClick={() => void lancarDeNovo(l)}>
+                Lançar de novo
+              </button>
+              <button type="button" className="secundario" aria-label={`Dispensar ${titulo}`} onClick={() => void descartar(l)}>
+                Dispensar
+              </button>
+            </>
+          ) : (
+            <>
+              <a className="botao secundario" href={`#/novo/${l.id}`} aria-label={`${l.recusa ? "Corrigir" : "Editar"} ${titulo}`}>
+                {l.recusa ? "Corrigir" : "Editar"}
+              </a>
+              {podeEstornar(l, cartoes, estornos) && (
+                <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${titulo}`}>
+                  Estornar
+                </a>
+              )}
+              {l.recusa ? (
+                <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(l)}>
+                  Descartar
+                </button>
+              ) : (
+                <button type="button" className="secundario" aria-label={`Excluir ${titulo}`} onClick={() => void excluir(l)}>
+                  Excluir
+                </button>
+              )}
+            </>
+          )}
+          <details className="menu">
+            <summary aria-label={`Mais ações ${titulo}`}>⋯</summary>
+            <button type="button" className="secundario" aria-label={`Informações ${titulo}`} onClick={() => setInformacoes(informacoes === l.id ? null : l.id)}>
+              Informações
+            </button>
+            {l.recorrencia_id && l.ocorrencia && (!regras || regras.some((r) => r.id === l.recorrencia_id)) && (
+              <a className="botao secundario" href={`#/recorrencia/${l.id}`} aria-label={`Recorrência ${titulo}`}>
+                Recorrência
+              </a>
+            )}
+            {l.parcelamento_id && !l.naoEnviado && (
+              <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
+                Parcelamento
+              </a>
+            )}
+          </details>
+        </div>
+        {informacoes === l.id && (
+          <dl className="informacoes" aria-label={`Informações de ${titulo}`}>
+            <dt>Criado por</dt>
+            <dd>
+              {quem(l.criado_por)}
+              {l.criado_em ? `, ${quando(l.criado_em)}` : ", ainda não enviado"}
+            </dd>
+            <dt>Alterado por último por</dt>
+            <dd>
+              {quem(l.alterado_por)}
+              {l.alterado_em ? `, ${quando(l.alterado_em)}` : ", ainda não enviado"}
+            </dd>
+            <dt>Origem</dt>
+            <dd>{l.fonte === "mobills" ? "importado do Mobills" : "app"}</dd>
+          </dl>
+        )}
+      </li>
+    );
+  };
+
+  const historico = useHistoricoMesAMes(lancamentos ?? []);
+  const fim = useRef<HTMLDivElement>(null);
+  // Chegar ao fim da tela desenha o mês anterior; a cada mudança o fim é observado de novo, e se
+  // ele ainda está à vista (tela grande, mês curto) o próximo mês vem também.
+  useEffect(() => {
+    if (!fim.current || !lancamentos || historico.acabou || historico.semInternet) return;
+    const olho = new IntersectionObserver((entradas) => entradas.some((e) => e.isIntersecting) && historico.chegouAoFim());
+    olho.observe(fim.current);
+    return () => olho.disconnect();
+  }, [lancamentos, historico.acabou, historico.semInternet, historico.depoisDe, historico.chegouAoFim]);
+
   return (
     <section>
       <h2>Histórico</h2>
@@ -232,168 +406,14 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
         onDescartar={(id) => void descartar({ id })}
       />
       {!semDados && lancamentos?.length === 0 && <p className="vazio">Nenhum lançamento ainda.</p>}
-      <ul className="lista">
-        {lancamentos?.map((l) => {
-          const titulo = tituloDoLancamento(l, categorias);
-          const ligacao = ligacaoDoEstorno(l, estornos, categorias);
-          return (
-            <li key={l.id} id={`lancamento-${l.id}`}>
-              <div>
-                <strong>
-                  {titulo}
-                  {l.parcela && l.parcelas ? ` ${numeroDaParcela(l.parcela, l.parcelas)}` : ""}
-                </strong>
-                <ValorComSinal l={l} />
-              </div>
-              <p className="vazio">
-                {[dataPorExtenso(l.data), nome(contasECartoes, l.conta_id), !l.partes?.length && l.categoria_ids.map((c) => nome(categorias, c)).join(", ")].filter(Boolean).join(" · ")}
-                {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
-                {ligacao && ` · ${ligacao}`}
-                {l.situacao === "previsto" && (l.atrasado ? " · previsto, atrasado" : " · previsto")}
-                {l.alterada_a_mao && " · alterada à mão"}
-                {!l.partes?.length && ` · ${l.pessoa ? nomeDe(l.pessoa) : "conjunto"}`}
-              </p>
-              {!!l.partes?.length && <PartesDaCompra partes={l.partes} categorias={categorias} nomeDe={nomeDe} titulo={titulo} />}
-              {l.parece_repetido_de && euId && l.criado_por !== euId && !l.naoEnviado && (
-                <div className="aviso" role="group" aria-label={`Parece repetido ${titulo}`}>
-                  <p className="erro">Parece repetido: {nomeDe(l.criado_por)} lançou o mesmo valor na mesma conta.</p>
-                  <div className="acoes">
-                    <button type="button" aria-label={`Manter os dois ${titulo}`} onClick={() => void manter(l)}>
-                      Manter os dois
-                    </button>
-                    <button type="button" className="secundario" aria-label={`Excluir este ${titulo}`} onClick={() => void excluir(l)}>
-                      Excluir este
-                    </button>
-                  </div>
-                </div>
-              )}
-              {comEstorno === l.id && (
-                <div className="aviso" role="group" aria-label="Compra com estorno">
-                  <p className="erro">A compra tem estorno; exclua o estorno antes.</p>
-                  <ul>
-                    {estornosDe(l.id).map((e) => (
-                      <li key={e.id}>
-                        <a
-                          href={`#lancamento-${e.id}`}
-                          onClick={(ev) => {
-                            ev.preventDefault();
-                            document.getElementById(`lancamento-${e.id}`)?.scrollIntoView({ block: "center" });
-                          }}
-                        >
-                          Estorno de {formatarCentavos(e.valor_centavos)} em {dataPorExtenso(e.data)}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="acoes">
-                    <button type="button" className="secundario" onClick={() => setComEstorno(null)}>
-                      Voltar
-                    </button>
-                  </div>
-                </div>
-              )}
-              {sugerindoEstorno === l.id && (
-                <div className="aviso" role="group" aria-label="Fatura fechada">
-                  <p>
-                    A fatura de {mesPorExtenso(l.mes!)} já fechou: excluir a compra não devolve o valor cobrado. Estorne a compra para acertar a fatura.
-                  </p>
-                  <div className="acoes">
-                    {podeEstornar(l, cartoes, estornos) && (
-                      <a className="botao" href={`#/estornar/${l.id}`}>
-                        Estornar
-                      </a>
-                    )}
-                    <button type="button" className="secundario" onClick={() => void excluir(l, true)}>
-                      Excluir mesmo assim
-                    </button>
-                    <button type="button" className="secundario" onClick={() => setSugerindoEstorno(null)}>
-                      Voltar
-                    </button>
-                  </div>
-                </div>
-              )}
-              {l.conflito ? (
-                <p className="erro">⚠ conflito: sua mudança espera decisão</p>
-              ) : l.exclusao ? (
-                <p className="erro">
-                  {l.exclusao.por_voce ? "Você excluiu este lançamento em outro aparelho" : `${nomeDe(l.exclusao.excluido_por)} excluiu este lançamento`}; sua alteração não foi
-                  salva.
-                </p>
-              ) : (
-                l.naoEnviado && <p className={l.recusa ? "erro" : "vazio"}>{l.recusa ? `⏳ não enviado: ${l.recusa}` : "⏳ não enviado"}</p>
-              )}
-              <div className="acoes">
-                {l.conflito ? (
-                  <a className="botao" href={`#/conflito/${l.id}`} aria-label={`Decidir ${titulo}`}>
-                    Decidir
-                  </a>
-                ) : l.exclusao ? (
-                  <>
-                    <button type="button" aria-label={`Lançar de novo ${titulo}`} onClick={() => void lancarDeNovo(l)}>
-                      Lançar de novo
-                    </button>
-                    <button type="button" className="secundario" aria-label={`Dispensar ${titulo}`} onClick={() => void descartar(l)}>
-                      Dispensar
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <a className="botao secundario" href={`#/novo/${l.id}`} aria-label={`${l.recusa ? "Corrigir" : "Editar"} ${titulo}`}>
-                      {l.recusa ? "Corrigir" : "Editar"}
-                    </a>
-                    {podeEstornar(l, cartoes, estornos) && (
-                      <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${titulo}`}>
-                        Estornar
-                      </a>
-                    )}
-                    {l.recusa ? (
-                      <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(l)}>
-                        Descartar
-                      </button>
-                    ) : (
-                      <button type="button" className="secundario" aria-label={`Excluir ${titulo}`} onClick={() => void excluir(l)}>
-                        Excluir
-                      </button>
-                    )}
-                  </>
-                )}
-                <details className="menu">
-                  <summary aria-label={`Mais ações ${titulo}`}>⋯</summary>
-                  <button type="button" className="secundario" aria-label={`Informações ${titulo}`} onClick={() => setInformacoes(informacoes === l.id ? null : l.id)}>
-                    Informações
-                  </button>
-                  {l.recorrencia_id && l.ocorrencia && (!regras || regras.some((r) => r.id === l.recorrencia_id)) && (
-                    <a className="botao secundario" href={`#/recorrencia/${l.id}`} aria-label={`Recorrência ${titulo}`}>
-                      Recorrência
-                    </a>
-                  )}
-                  {l.parcelamento_id && !l.naoEnviado && (
-                    <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
-                      Parcelamento
-                    </a>
-                  )}
-                </details>
-              </div>
-              {informacoes === l.id && (
-                <dl className="informacoes" aria-label={`Informações de ${titulo}`}>
-                  <dt>Criado por</dt>
-                  <dd>
-                    {quem(l.criado_por)}
-                    {l.criado_em ? `, ${quando(l.criado_em)}` : ", ainda não enviado"}
-                  </dd>
-                  <dt>Alterado por último por</dt>
-                  <dd>
-                    {quem(l.alterado_por)}
-                    {l.alterado_em ? `, ${quando(l.alterado_em)}` : ", ainda não enviado"}
-                  </dd>
-                  <dt>Origem</dt>
-                  <dd>{l.fonte === "mobills" ? "importado do Mobills" : "app"}</dd>
-                </dl>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {historico.meses.map(({ mes, lancamentos: doMes }) => (
+        <section key={mes} aria-labelledby={`mes-${mes}`}>
+          <h3 id={`mes-${mes}`}>{mesPorExtenso(mes)}</h3>
+          <ul className="lista">{doMes.map(linha)}</ul>
+        </section>
+      ))}
+      {historico.semInternet && <p className="vazio">Para ver antes de {mesPorExtenso(inicioDaJanela())}, conecte-se à internet.</p>}
+      <div ref={fim} data-testid="fim-da-lista" />
     </section>
   );
 }

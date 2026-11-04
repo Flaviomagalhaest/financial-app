@@ -3483,6 +3483,30 @@
         }
       }
     },
+    "/api/lancamentos-primeiro-mes": {
+      "get": {
+        "summary": "Ler Primeiro Mes",
+        "description": "O mês mais antigo em que um lançamento conta: até onde o Histórico lê do servidor, mês a\nmês, depois da janela do aparelho (ticket 167). `None` sem lançamentos.",
+        "operationId": "ler_primeiro_mes_com_lancamento",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrimeiroMes"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/edicoes-em-lote/previa": {
       "post": {
         "summary": "Ver Previa",
@@ -9617,6 +9641,27 @@
           "recusa"
         ],
         "title": "PreviaDaEdicaoEmLote"
+      },
+      "PrimeiroMes": {
+        "properties": {
+          "mes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mes"
+        ],
+        "title": "PrimeiroMes"
       },
       "ProximoPrevisto": {
         "properties": {

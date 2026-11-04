@@ -1133,6 +1133,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lancamentos-primeiro-mes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ler Primeiro Mes
+         * @description O mês mais antigo em que um lançamento conta: até onde o Histórico lê do servidor, mês a
+         *     mês, depois da janela do aparelho (ticket 167). `None` sem lançamentos.
+         */
+        get: operations["ler_primeiro_mes_com_lancamento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/edicoes-em-lote/previa": {
         parameters: {
             query?: never;
@@ -3502,6 +3523,11 @@ export interface components {
             amostra: components["schemas"]["AntesEDepois"][];
             /** Recusa */
             recusa: string | null;
+        };
+        /** PrimeiroMes */
+        PrimeiroMes: {
+            /** Mes */
+            mes: string | null;
         };
         /**
          * ProximoPrevisto
@@ -6336,6 +6362,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ler_primeiro_mes_com_lancamento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrimeiroMes"];
                 };
             };
         };

@@ -77,3 +77,24 @@ def test_parcelas_do_parcelamento_vem_todas_e_so_as_dele(casal: Casal):
 def test_parcelamento_que_nao_existe_e_404(casal: Casal):
     resposta = casal.pedir("flavio", "GET", f"/api/parcelamentos/{uuid4()}/lancamentos")
     assert resposta.status_code == 404
+
+
+def test_primeiro_mes_e_o_mais_antigo_em_que_um_lancamento_conta_e_vazio_sem_lancamentos(
+    casal: Casal,
+):
+    assert ler_um(casal, "/api/lancamentos-primeiro-mes") == {"mes": None}
+
+    conta, cartao = casal.conta(), novo_cartao(casal)["id"]
+    categoria = casal.categoria()
+    casal.pedir(
+        "flavio", "POST", "/api/lancamentos", json=lancamento(conta, [categoria], data="2024-05-10")
+    )
+    comprar(casal, cartao, "2024-03-28")  # fatura fecha dia 25: conta em abril de 2024
+
+    assert ler_um(casal, "/api/lancamentos-primeiro-mes") == {"mes": "2024-04-01"}
+
+
+def ler_um(casal: Casal, caminho: str) -> dict:
+    resposta = casal.pedir("flavio", "GET", caminho)
+    assert resposta.status_code == 200, resposta.text
+    return resposta.json()
