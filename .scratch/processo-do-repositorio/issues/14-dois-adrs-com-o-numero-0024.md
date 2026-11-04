@@ -1,7 +1,7 @@
 # Dois ADRs com o número 0024
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `domain-modeling`
 Modelo recomendado: Sonnet
