@@ -23,6 +23,22 @@ function porMes(lancamentos: LancamentoNaTela[]): MesDoHistorico[] {
 }
 
 /**
+ * Os meses lidos do servidor depois dos da tela. Um mês que a tela já tem (a edição não enviada de um
+ * lançamento antigo o põe lá) recebe só o que ainda não tem, para o mês e o lançamento não repetirem.
+ */
+function juntar(daTela: MesDoHistorico[], doServidor: MesDoHistorico[]): MesDoHistorico[] {
+  const jaNaTela = new Set(daTela.flatMap((m) => m.lancamentos.map((l) => l.id)));
+  const meses = daTela.map((m) => ({ ...m }));
+  for (const { mes, lancamentos } of doServidor) {
+    const novos = lancamentos.filter((l) => !jaNaTela.has(l.id));
+    const dele = meses.find((m) => m.mes === mes);
+    if (dele) dele.lancamentos = [...dele.lancamentos, ...novos];
+    else if (novos.length > 0) meses.push({ mes, lancamentos: novos });
+  }
+  return meses.sort((a, b) => (a.mes < b.mes ? 1 : -1));
+}
+
+/**
  * O Histórico mês a mês (ticket 167, ADR 0025). Desenha os meses mais recentes da janela do aparelho
  * e, a cada `chegouAoFim`, mais um. Depois do fim da janela, com internet, lê do servidor um mês por
  * vez (`/api/meses/{mes}/lancamentos`) até o mais antigo que existe, sem guardar no aparelho. Sem
@@ -87,7 +103,9 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
   }, [desenhados, daJanela.length, lerDoServidor]);
 
   // O mês com algo na fila (não enviado, recusado, em conflito) aparece sempre: a pessoa precisa vê-lo.
-  const meses = [...daJanela.filter((m, i) => i < desenhados || m.lancamentos.some((l) => l.naoEnviado)), ...(desenhados >= daJanela.length ? doServidor : [])];
-  const noFimDaJanela = desenhados >= daJanela.length;
+  const daTela = daJanela.filter((m, i) => i < desenhados || m.lancamentos.some((l) => l.naoEnviado));
+  const noFimDaJanelaAgora = desenhados >= daJanela.length;
+  const meses = noFimDaJanelaAgora ? juntar(daTela, doServidor) : daTela;
+  const noFimDaJanela = noFimDaJanelaAgora;
   return { meses, chegouAoFim, semInternet: noFimDaJanela && semInternet, acabou: noFimDaJanela && acabou, depoisDe: doServidor.length + daJanela.length, noFimDaJanela };
 }
