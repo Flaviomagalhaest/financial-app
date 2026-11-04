@@ -449,6 +449,8 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(6);
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
   await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
+  // As parcelas vêm de uma leitura própria da tela (ticket 165): a rede só cai depois de ela chegar e ficar guardada.
+  await expect(page.getByRole("list", { name: `Parcelas de ${descricao}` }).getByRole("listitem")).toHaveCount(6);
 
   await context.setOffline(true);
   const antecipar = page.getByRole("region", { name: "Antecipar ou quitar" });
