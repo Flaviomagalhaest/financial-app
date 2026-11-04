@@ -13,7 +13,9 @@ export default defineConfig({
   // Um teste por vez: os testes dividem os usuários do Cognito falso e um deles derruba as
   // sessões de um usuário.
   workers: 1,
-  use: { baseURL: "http://127.0.0.1:4173" },
+  // A falha guarda o trace e o vídeo em test-results/, que o CI sobe como artefato (ticket 15 de
+  // processo-do-repositorio): a falha intermitente deixa o material para o diagnóstico.
+  use: { baseURL: "http://127.0.0.1:4173", trace: "retain-on-failure", video: "retain-on-failure" },
   webServer: [
     {
       command: "node e2e/cognito-falso.ts",
