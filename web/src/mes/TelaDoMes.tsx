@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/cliente";
 import {
   aplicarModeloPadrao,
@@ -11,12 +11,14 @@ import {
   mudarItemDoPlanejamento,
   useCadastro,
   useConexao,
+  leituraDoMes,
   useLancamentosDaTela,
   useMes,
   usePessoas,
   type LancamentoNaTela,
   type LeituraDoMes,
 } from "../dados";
+import { AvisoDeLeituraDoServidor } from "../lancamentos/AvisoDeLeituraDoServidor";
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
 import { dataPorExtenso, hoje } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
@@ -426,9 +428,9 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
   const { dados: leitura, atualizadoEm, semDados, buscar } = useMes(mes);
   const { categorias } = useCadastro();
   // Os lançamentos do mês vêm do servidor: a lista guardada só tem a janela do aparelho (ADR 0024).
-  const leituraDosLancamentos = useCallback(() => api.GET("/api/meses/{mes}/lancamentos", { params: { path: { mes } } }), [mes]);
+  const leituraDosLancamentos = useMemo(() => leituraDoMes(mes), [mes]);
   const doMes = useCallback((l: LancamentoNaTela) => (l.mes ?? l.data).slice(0, 7) === mes, [mes]);
-  const { lancamentos, semDados: semLancamentos, atualizadoEm: lancamentosDeAntes } = useLancamentosDaTela(`/api/meses/${mes}/lancamentos`, leituraDosLancamentos, doMes);
+  const { lancamentos, semDados: semLancamentos, atualizadoEm: lancamentosDaUltimaLeitura } = useLancamentosDaTela(leituraDosLancamentos, doMes);
 
   return (
     <section className="aba-mes">
@@ -451,12 +453,12 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
           Sem internet: não foi possível carregar este mês.
         </p>
       )}
-      {lancamentosDeAntes && <p className="vazio">Sem internet: os lançamentos do mês são os da última leitura.</p>}
-      {semLancamentos && (
-        <p role="alert" className="erro">
-          Sem internet: o &quot;A escolher&quot; e o Ranking precisam dos lançamentos do mês, que não estão no aparelho.
-        </p>
-      )}
+      <AvisoDeLeituraDoServidor
+        daUltimaLeitura={lancamentosDaUltimaLeitura}
+        semDados={semLancamentos}
+        oQue="os lançamentos do mês"
+        precisam={<>o &quot;A escolher&quot; e o Ranking precisam dos lançamentos do mês, que não estão no aparelho.</>}
+      />
       {leitura && (
         <>
           {leitura.situacao === "passado" ? <Fechamento leitura={leitura} categorias={categorias} /> : <BarraDoMes leitura={leitura} />}
