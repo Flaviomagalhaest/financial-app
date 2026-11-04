@@ -1,7 +1,7 @@
 # Edição em lote: conferir as regras provisórias
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: 61
 Skills: `grilling` para o dono decidir; depois `implement`, `tdd` se uma regra mudar; HITL (decisão de produto)
 Modelo recomendado: Sonnet
@@ -27,5 +27,25 @@ Origem: [ticket 61](61-edicao-em-lote.md): a spec (histórias 147 a 151), o [tic
 
 ## Checklist
 
-- [ ] O dono responde cada pergunta e a resposta vai para `## Answer`
-- [ ] Se uma regra mudar: teste de API em `backend/tests/test_edicao_em_lote.py`, ajuste em `backend/app/edicao_em_lote.py` e na tela (`web/src/busca/`), e o README (seção Busca) acompanha
+- [x] O dono responde cada pergunta e a resposta vai para `## Answer`
+- [x] (não se aplica: nenhuma regra mudou) Se uma regra mudar: teste de API em `backend/tests/test_edicao_em_lote.py`, ajuste em `backend/app/edicao_em_lote.py` e na tela (`web/src/busca/`), e o README (seção Busca) acompanha
+
+## Answer
+
+O dono respondeu "sim a tudo" (grilling, Q1 a Q13): **nenhuma regra provisória muda**. Os 13 comportamentos descritos acima passam a ser a decisão do produto:
+
+1. O desfazer pula o lançamento cujas categorias, tags ou escolha de item qualquer pessoa mudou depois do lote, inclusive quem fez o lote.
+2. Qualquer um do casal desfaz qualquer edição em lote.
+3. Categoria de outro tipo não recusa o lote; a prévia diz quantos ficam como estão.
+4. O estorno segue a compra; o estorno marcado sem a compra fica de fora, com contagem na prévia.
+5. Transferências ficam fora do lote.
+6. Acrescentar ou trocar por categoria/tag arquivada recusa o lote; tirar uma arquivada pode.
+7. Categoria ou tag que sumiu depois do lote faz o desfazer pular o lançamento.
+8. Amostra da prévia: 5 primeiros pela data, do mais recente ao mais antigo.
+9. A folha da tela muda categorias ou tags, uma por vez.
+10. A lista mostra só as edições que ainda se desfazem (30 dias, não desfeitas).
+11. A barra mostra as linhas marcadas; a contagem expandida só aparece na prévia.
+12. O lote muda também a classificação do parcelamento; o desfazer a volta se ninguém a mudou depois.
+13. 30 dias, amostra de 5 e 50 lançamentos por transação (este último a conferir no [ticket 35](35-teste-nos-dois-celulares.md)).
+
+Sem mudança de código, de teste ou de README.

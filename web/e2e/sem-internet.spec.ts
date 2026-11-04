@@ -505,10 +505,11 @@ function listaGuardadaTem(page: Page, descricao: string) {
       new Promise<boolean>((resolve, reject) => {
         const abrir = indexedDB.open("financial-app-dados");
         abrir.onsuccess = () => {
-          const ler = abrir.result.transaction("respostas").objectStore("respostas").get("/api/lancamentos");
+          // A lista fica lançamento por lançamento (ticket 164).
+          const ler = abrir.result.transaction("lancamentos").objectStore("lancamentos").getAll();
           ler.onsuccess = () => {
             abrir.result.close();
-            resolve(!!ler.result?.dados.some((l: { descricao: string }) => l.descricao === descricao));
+            resolve(ler.result.some((l: { descricao: string }) => l.descricao === descricao));
           };
         };
         abrir.onerror = reject;

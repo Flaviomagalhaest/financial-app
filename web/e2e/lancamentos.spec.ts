@@ -57,6 +57,9 @@ test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ pa
   await salvar.click();
   await expect(linha).toContainText("− R$ 230,00");
   await expect(linha).toContainText(viagem);
+  // Recarregar antes de a edição subir a deixaria na fila sobre a versão de antes, e a exclusão
+  // logo abaixo iria sobre essa versão e voltaria como conflito.
+  await expect(linha).not.toContainText("não enviado");
 
   // A edição vale também depois de recarregar (veio do servidor, não da memória da tela).
   await page.reload();
