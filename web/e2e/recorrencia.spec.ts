@@ -3,6 +3,7 @@ import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
 import { diaEmSaoPaulo } from "../src/lancamentos/datas";
+import { esperarFilaVazia } from "./fila";
 
 /** Entra e cadastra uma conta e uma categoria de despesa, guardadas no aparelho. */
 async function prepararCasal(page: Page) {
@@ -96,7 +97,7 @@ test("sem internet, a recorrência fica na fila como um pedido só e sobe uma ve
   await expect(naoEnviadas.getByRole("button", { name: `Descartar Luz ${s}` })).toHaveCount(0);
   await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
 
   await aba(page, "Histórico");
   await expect(naoEnviadas).toHaveCount(0);
@@ -137,7 +138,7 @@ test("recorrência recusada fica 'não enviado: <motivo>' até ser descartada", 
   await naoEnviadas.getByRole("button", { name: `Descartar Seguro ${s}` }).click();
   await expect(naoEnviadas).toHaveCount(0);
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
@@ -160,7 +161,7 @@ test("lançada sem internet ontem e enviada hoje, a ocorrência de ontem chega r
   await context.setOffline(false);
   await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
 
   const api = await apiDaPagina(page);
   const ontemIso = diaEmSaoPaulo(ontem);

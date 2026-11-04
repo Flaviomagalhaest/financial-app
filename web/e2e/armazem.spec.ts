@@ -3,6 +3,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
+import { esperarFilaVazia } from "./fila";
 
 const LISTA = "/api/lancamentos";
 const daLista = (url: string) => new URL(url).pathname === LISTA;
@@ -127,7 +128,7 @@ test("o envio da fila grava no aparelho só o lançamento enviado, não a lista 
   await expect(page.getByTestId("nao-enviados")).toContainText("1 lançamento não enviado");
   const antes = (await contagem(page)).gravadosNoEnvio;
   await context.setOffline(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   expect((await contagem(page)).gravadosNoEnvio - antes).toBe(1);
 
   await context.setOffline(true);

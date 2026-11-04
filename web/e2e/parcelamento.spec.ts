@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
+import { esperarFilaVazia, filaDoAparelho } from "./fila";
 
 /** Entra e cadastra uma conta e uma categoria de despesa, guardadas no aparelho. */
 async function prepararCasal(page: Page) {
@@ -16,23 +17,6 @@ async function prepararCasal(page: Page) {
 }
 
 const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: nome }).click();
-
-/** A fila guardada no aparelho, com a recusa de cada pedido, lida direto do IndexedDB. */
-const filaDoAparelho = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<unknown[]>((resolve, reject) => {
-        const abertura = indexedDB.open("financial-app-dados");
-        abertura.onerror = () => reject(abertura.error);
-        abertura.onsuccess = () => {
-          const pedido = abertura.result.transaction("fila").objectStore("fila").getAll();
-          pedido.onsuccess = () => {
-            abertura.result.close();
-            resolve(pedido.result);
-          };
-        };
-      }),
-  );
 
 /** Abre o novo lançamento pelo app, preenche valor, conta, categoria e descrição e marca "Parcelado". */
 async function comecarParcelado(page: Page, { teclas, conta, categoria, descricao }: { teclas: string[]; conta: string; categoria: string; descricao: string }) {
@@ -114,7 +98,7 @@ test("sem internet, o parcelamento fica na fila como um pedido só e sobe uma ve
   await expect(naoEnviados.getByRole("button", { name: `Descartar Fogão ${s}` })).toHaveCount(0);
   await aba(page, "Hoje");
   await page.getByRole("button", { name: "Enviar agora" }).click();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
 
   await aba(page, "Histórico");
   await expect(naoEnviados).toHaveCount(0);
@@ -166,7 +150,7 @@ test("parcelamento recusado fica 'não enviado: <motivo>' até ser descartado", 
   await naoEnviados.getByRole("button", { name: `Descartar Sofá ${s}` }).click();
   await expect(naoEnviados).toHaveCount(0);
   await aba(page, "Hoje");
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
@@ -190,7 +174,7 @@ test("parcelamentos longos sobem em lotes separados, para o servidor responder a
   await expect(page.getByTestId("nao-enviados")).toContainText("2 parcelamentos não enviados");
   // A rede volta e a fila sobe sozinha.
   await context.setOffline(false);
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
   // As 600 parcelas passam das 420 de um lote: cada parcelamento vai num.
   expect(lotes).toEqual([1, 1]);
 });
@@ -509,7 +493,7 @@ test("antecipa parcelas sem internet: fica na fila e o reenvio com a mesma chave
     if ((await enviar.count()) > 0) await enviar.click({ timeout: 2_000 }).catch(() => {});
     expect(await filaDoAparelho(page), `resposta ao envio perdido: ${respostaPerdida}`).toEqual([]);
   }).toPass();
-  await expect(page.getByTestId("nao-enviados")).toHaveCount(0);
+  await esperarFilaVazia(page);
 
   // Todo envio que a página viu leva a mesma chave (o service worker também pode enviar, fora da vista dela).
   expect(chaves.length).toBeGreaterThan(0);
