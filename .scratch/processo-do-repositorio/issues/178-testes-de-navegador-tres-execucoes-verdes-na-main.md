@@ -33,3 +33,12 @@ Modo de falha ainda sem causa: `parcelamento.spec.ts:445` nos CIs da `main` de 0
 ## Execuções da `main`
 
 Desde o merge do 15 (PR #439), as execuções do `verificar` na `main` foram verdes: 446 (41773153844), 447 (41774862545) e 449 (41821249937, tentativa 1). Re-execuções da 449, sem mudar nada:
+
+- tentativa 2: verde (15:12 UTC)
+
+## Falha no CI do PR #451 (execução 41854192551)
+
+- `parcelamento.spec.ts`, "a tela do parcelamento mostra a mudança nas parcelas que uma recusa parou no meio": `apiResponse.json: Response has been disposed`.
+- Trace do artefato: a asserção do teste passou; das duas leituras de `/api/parcelamentos` que a rota pegou (tela e service worker), uma foi atendida e a outra ainda estava no handler quando o contexto fechou, descartando a resposta antes do `json()`.
+- Laço: um pedido extra pego pela rota no fim do teste, 20 ms ou 60 ms entre o `fetch` e o `json`: o erro do CI 3 de 3. Correção: `unrouteAll({ behavior: "wait" })` no fim do teste; com a mesma injeção, 3 de 3 verdes, e o arquivo 16 de 16.
+- O mesmo padrão em outros arquivos: [ticket 183](183-rotas-abertas-no-fim-do-teste.md).
