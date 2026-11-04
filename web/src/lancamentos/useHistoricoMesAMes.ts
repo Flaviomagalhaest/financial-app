@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/cliente";
 import type { LancamentoNaTela } from "../dados";
 import { inicioDaJanela } from "../dados/armazem";
-import { mesDepois } from "./datas";
+import { hoje, mesDepois } from "./datas";
 
-/** Quantos meses da janela o Histórico desenha de início; a cada chegada ao fim da tela, mais um. */
+/** Quantos meses o Histórico desenha de início, contando do atual para trás (o futuro vem todo); a cada chegada ao fim da tela, mais um. */
 const MESES_DE_INICIO = 3;
 
 export type MesDoHistorico = { mes: string; lancamentos: LancamentoNaTela[] };
@@ -30,7 +30,8 @@ function porMes(lancamentos: LancamentoNaTela[]): MesDoHistorico[] {
  */
 export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
   const daJanela = porMes(lancamentos);
-  const [desenhados, setDesenhados] = useState(MESES_DE_INICIO);
+  // Quantos meses além dos de início a pessoa já pediu ao chegar ao fim da tela.
+  const [alemDosDeInicio, setAlemDosDeInicio] = useState(0);
   const [doServidor, setDoServidor] = useState<MesDoHistorico[]>([]);
   const [semInternet, setSemInternet] = useState(false);
   const [acabou, setAcabou] = useState(false);
@@ -75,12 +76,18 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
     return () => window.removeEventListener("online", voltou);
   }, []);
 
+  // O futuro (parcelas e previstos) vem inteiro na frente: os meses de início contam do atual.
+  const mesAtual = `${hoje().slice(0, 7)}-01`;
+  const futuros = daJanela.filter((m) => m.mes > mesAtual).length;
+  const desenhados = futuros + MESES_DE_INICIO + alemDosDeInicio;
+
   const chegouAoFim = useCallback(() => {
-    if (desenhados < daJanela.length) setDesenhados((n) => n + 1);
+    if (desenhados < daJanela.length) setAlemDosDeInicio((n) => n + 1);
     else void lerDoServidor();
   }, [desenhados, daJanela.length, lerDoServidor]);
 
-  const meses = [...daJanela.slice(0, desenhados), ...(desenhados >= daJanela.length ? doServidor : [])];
+  // O mês com algo na fila (não enviado, recusado, em conflito) aparece sempre: a pessoa precisa vê-lo.
+  const meses = [...daJanela.filter((m, i) => i < desenhados || m.lancamentos.some((l) => l.naoEnviado)), ...(desenhados >= daJanela.length ? doServidor : [])];
   const noFimDaJanela = desenhados >= daJanela.length;
   return { meses, chegouAoFim, semInternet: noFimDaJanela && semInternet, acabou: noFimDaJanela && acabou, depoisDe: doServidor.length + daJanela.length, noFimDaJanela };
 }
