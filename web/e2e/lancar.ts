@@ -12,8 +12,14 @@ export async function cadastrar(page: Page, formulario: string, nome: string, ti
   await expect(page.getByRole("listitem").filter({ hasText: nome })).toBeVisible();
 }
 
-/** Abre o novo lançamento pelo app (sem recarregar, para funcionar sem internet) e salva. */
-export async function lancar(page: Page, { teclas, conta, categoria, descricao, pessoa }: { teclas: string[]; conta: string; categoria: string; descricao: string; pessoa?: string }) {
+/**
+ * Abre o novo lançamento pelo app (sem recarregar, para funcionar sem internet) e salva. Com
+ * `vezes`, ele é recorrente, todo mês, e termina depois dessas vezes.
+ */
+export async function lancar(
+  page: Page,
+  { teclas, conta, categoria, descricao, pessoa, vezes }: { teclas: string[]; conta: string; categoria: string; descricao: string; pessoa?: string; vezes?: number },
+) {
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
   await page.getByRole("link", { name: "+ Novo lançamento" }).click();
   await digitar(page, ...teclas);
@@ -22,6 +28,11 @@ export async function lancar(page: Page, { teclas, conta, categoria, descricao, 
   await page.getByRole("button", { name: /^Detalhes/ }).click();
   if (pessoa) await page.getByRole("group", { name: "Pessoa" }).getByRole("button", { name: pessoa }).click();
   await page.getByLabel("Descrição").fill(descricao);
+  if (vezes) {
+    await page.getByRole("group", { name: "Repete?" }).getByRole("button", { name: "Recorrente" }).click();
+    await page.getByRole("group", { name: "Termina" }).getByRole("button", { name: "Depois de" }).click();
+    await page.getByLabel("Vezes").fill(String(vezes));
+  }
   await page.getByRole("button", { name: "Pronto" }).click();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();

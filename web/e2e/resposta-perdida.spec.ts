@@ -151,3 +151,55 @@ for (const sair of ["recarga", "aba fechada"] as const) {
     await expect(page.getByText("conflito")).toHaveCount(0);
   });
 }
+
+// O mesmo com a regra (ticket 181): a recorrência sai, chega ao servidor e a aba fecha antes da
+// resposta. Ao reabrir, descartá-la deixaria os previstos no servidor. Sem rede, o pedido nem sai,
+// e ela segue descartável.
+for (const rede of ["com rede", "sem rede"] as const) {
+  test(`a recorrência criada com a aba fechada no meio do envio (${rede}), ao reabrir`, async ({ page }) => {
+    const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const [conta, casa, descricao] = [`Corrente ${s}`, `Casa ${s}`, `Luz ${s}`];
+    await page.goto("/#/contas-e-categorias");
+    await entrar(page);
+    await cadastrar(page, "Nova conta", conta, "corrente");
+    await cadastrar(page, "Nova categoria", casa, "despesa");
+
+    let gravadas = 0;
+    await page.route("**/api/lancamentos/lote", async (rota) => {
+      if (gravadas > 0) return rota.continue();
+      await rota.fetch();
+      gravadas++;
+      // O pedido fica sem resposta até a página sair.
+    });
+    const contexto = page.context();
+    if (rede === "sem rede") await contexto.setOffline(true);
+    await lancar(page, { teclas: ["1", "8", "9", "9", "0"], conta, categoria: casa, descricao, vezes: 2 });
+    const naoEnviadas = (p: Page) => p.getByRole("region", { name: "Recorrências não enviadas" });
+    await expect(naoEnviadas(page)).toContainText(`${descricao}, `);
+    if (rede === "com rede") await expect.poll(() => gravadas).toBe(1);
+
+    await page.close();
+    if (rede === "sem rede") await contexto.setOffline(false);
+    const soltar = await segurarAFila(await contexto.newPage());
+    page = await contexto.newPage();
+    await page.goto("/#/historico");
+    await expect(naoEnviadas(page)).toContainText(`${descricao}, `);
+    const descartar = naoEnviadas(page).getByRole("button", { name: `Descartar ${descricao}` });
+    if (rede === "sem rede") {
+      await expect(descartar).toBeVisible();
+      await soltar();
+      return;
+    }
+    const api = await apiDaPagina(page);
+    const noServidor = async () => (await api.ler("/api/recorrencias")).some((r: { descricao: string }) => r.descricao === descricao);
+    expect(await noServidor()).toBe(true);
+    // Talvez gravada: não se descarta, e a exclusão a tira do servidor.
+    await expect(naoEnviadas(page)).toContainText("talvez já esteja no servidor");
+    await expect(descartar).toHaveCount(0);
+    page.once("dialog", (dialogo) => void dialogo.accept());
+    await naoEnviadas(page).getByRole("button", { name: `Excluir ${descricao}` }).click();
+    await expect(naoEnviadas(page)).toHaveCount(0);
+    await soltar();
+    await expect.poll(noServidor).toBe(false);
+  });
+}

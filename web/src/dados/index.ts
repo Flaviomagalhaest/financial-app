@@ -52,6 +52,7 @@ import {
   pelaData,
   regraAceita,
   RELIDAS_DEPOIS_DE_REGRA,
+  talvezGravada,
   alteracao as alteracaoDo,
   type Ajustes,
   type Remessa,
@@ -594,9 +595,10 @@ export function useBusca(criterios: Criterios) {
 
 /**
  * A regra só se descarta quando com certeza não está no servidor: nunca saiu do aparelho ou foi
- * recusada. A que ficou sem resposta talvez já tenha gerado os previstos ou as parcelas.
+ * recusada (ou saiu desta página e a resposta ainda vem). A que ficou sem resposta, ou saiu de uma
+ * página que fechou no caminho, talvez já tenha gerado os previstos ou as parcelas (ticket 181).
  */
-const podeDescartar = (item: ItemDaFila) => !!item.recusa || item.talvezNoServidor === undefined;
+const podeDescartar = (item: ItemDaFila) => !!item.recusa || !talvezGravada(item);
 
 /** A recorrência na fila, com o motivo da recusa quando o servidor não a aceitou. */
 export type RecorrenciaNaoEnviada = NovaRecorrencia & { recusa?: string; podeDescartar: boolean };
