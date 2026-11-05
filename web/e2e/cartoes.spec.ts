@@ -11,6 +11,13 @@ function dia(deslocamento: number): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(Date.now() + deslocamento * 86_400_000));
 }
 
+/**
+ * Dia de fechamento 15 dias à frente de hoje (no máximo 28, que existe em todo mês): hoje fica no
+ * meio da fatura aberta, e as compras de 35 dias atrás e 35 dias à frente caem na fatura anterior e
+ * na próxima em qualquer dia do ano. Com o fechamento fixo, o teste quebrava uns dez dias por mês.
+ */
+const diaDoFechamento = () => Math.min(Number(dia(15).slice(8)), 28);
+
 const porExtenso = (iso: string) => iso.split("-").reverse().join("/");
 /** `2026-11-01` vira `11/2026`. */
 const mesDaFatura = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
@@ -27,7 +34,7 @@ test("a aba Cartões mostra a fatura anterior, a atual e a próxima, e o detalhe
     expect(resposta.ok(), await resposta.text()).toBe(true);
     return resposta.json();
   };
-  const cartao = await criar("/api/cartoes", { nome: visa, dia_fechamento: 10, dia_vencimento: 20 });
+  const cartao = await criar("/api/cartoes", { nome: visa, dia_fechamento: diaDoFechamento(), dia_vencimento: 20 });
   const filho = await criar("/api/cartoes", { nome: adicional, titular_id: cartao.id });
   const catMercado = await criar("/api/categorias", { nome: mercado, tipo: "despesa" });
   const catViagem = await criar("/api/categorias", { nome: viagem, tipo: "despesa" });
@@ -126,7 +133,7 @@ test("sem fatura no mês do meio a vizinha é 'Depois', não 'Próxima', e a lin
     expect(resposta.ok(), await resposta.text()).toBe(true);
     return resposta.json();
   };
-  const cartao = await criar("/api/cartoes", { nome: visa, dia_fechamento: 10, dia_vencimento: 20 });
+  const cartao = await criar("/api/cartoes", { nome: visa, dia_fechamento: diaDoFechamento(), dia_vencimento: 20 });
   const categoria = await criar("/api/categorias", { nome: mercado, tipo: "despesa" });
   const comprar = (data: string, descricao: string) =>
     criar("/api/lancamentos", { id: randomUUID(), tipo: "despesa", valor_centavos: 1000, data, descricao, conta_id: cartao.id, categoria_ids: [categoria.id] });
