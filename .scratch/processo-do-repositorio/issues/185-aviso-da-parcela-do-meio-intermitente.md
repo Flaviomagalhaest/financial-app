@@ -1,7 +1,7 @@
 # Aviso de planejamento da parcela do meio aparece de vez em quando no teste
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
