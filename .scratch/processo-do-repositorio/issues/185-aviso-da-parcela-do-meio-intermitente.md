@@ -1,7 +1,7 @@
 # Aviso de planejamento da parcela do meio aparece de vez em quando no teste
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -18,4 +18,4 @@ Hipótese, não verificada: o arquivo não bloqueia o service worker (`serviceWo
 ## Checklist
 
 - [ ] Reproduzir com taxa alta (por exemplo, `--repeat-each` com a leitura do service worker forçada antes da da página)
-- [ ] Corrigir o teste (bloquear o service worker no teste ou rotear no contexto), sem desligá-lo
+- [x] Corrigir o teste (bloquear o service worker no teste ou rotear no contexto), sem desligá-lo
