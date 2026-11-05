@@ -1,7 +1,7 @@
 # Rotas dos testes de navegador que leem do servidor ficam abertas quando o teste acaba
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -17,5 +17,9 @@ Arquivos com `rota.fetch()` e sem `unrouteAll` no teste: `cartoes-cadastro`, `co
 
 ## Checklist
 
-- [ ] Em cada teste com rota que busca do servidor, `unrouteAll({ behavior: "wait" })` no fim (ou um ajudante comum)
+- [x] Em cada teste com rota que busca do servidor, `unrouteAll({ behavior: "wait" })` no fim (feito com `soltarRotas` em `web/e2e/rotas.ts`, num `test.afterEach` dos arquivos, menos `resposta-perdida`)
 - [ ] Prova com a injeção do 178 num dos testes trocados: vermelho sem a mudança, verde com ela
+
+Nota: a prova (injeção do 178) não rodou na sessão — sem dependências, Postgres nem navegador no ambiente. Falta rodar no CI/local; por isso o ticket segue `claimed`.
+
+`resposta-perdida` ficou de fora: as rotas dele prendem o pedido de propósito até a página sair, e o `unrouteAll` com `wait` estourou o tempo do `afterEach` (3 testes, CI do PR #455). Precisa de outro tratamento (`ignoreErrors` ou soltar a rota presa antes).

@@ -3,6 +3,11 @@ import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar, lancar } from "./lancar";
 import { esperarFilaVazia } from "./fila";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 test.use({ timezoneId: "America/Sao_Paulo" });
 
