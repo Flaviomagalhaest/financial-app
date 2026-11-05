@@ -3,6 +3,11 @@ import { apiDaPagina, tokenDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
 import { esperarFilaVazia } from "./fila";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 // Sem service worker: o envio dele em segundo plano não passa pelo `page.route` e correria com o
 // envio da página que os testes seguram ou derrubam. Só o teste do envio em segundo plano o usa.

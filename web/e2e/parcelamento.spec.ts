@@ -4,6 +4,11 @@ import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
 import { esperarFilaVazia, filaDoAparelho } from "./fila";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 /** Entra e cadastra uma conta e uma categoria de despesa, guardadas no aparelho. */
 async function prepararCasal(page: Page) {

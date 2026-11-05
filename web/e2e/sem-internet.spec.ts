@@ -5,6 +5,11 @@ import { renovacoes } from "./cognito-falso";
 import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
 import { esperarFilaVazia } from "./fila";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 /** Entra, cadastra uma conta e uma categoria de despesa e deixa as duas guardadas no aparelho. */
 async function prepararCasal(page: Page, email?: string) {

@@ -90,3 +90,33 @@ test("sem internet, o fim da janela diz que é preciso internet para ver antes",
   await context.setOffline(false);
   await expect(aviso).toHaveCount(0);
 });
+
+test("excluir um lançamento do mês lido do servidor tira a linha na hora", async ({ page }) => {
+  const { lancar, linha } = await preparar(page);
+  await lancar("Padaria", hoje());
+  await lancar("Geladeira", mesDeslocado(-26).data);
+  await page.reload();
+  await rolarAte(page, linha("Geladeira"));
+
+  page.once("dialog", (d) => void d.accept());
+  await linha("Geladeira").getByRole("button", { name: /^Excluir/ }).click();
+  await expect(linha("Geladeira")).toHaveCount(0);
+});
+
+test("a leitura que falha com a rede de pé não diz que falta internet e tenta de novo a pedido", async ({ page }) => {
+  const { lancar, linha } = await preparar(page);
+  await lancar("Padaria", hoje());
+  await lancar("Geladeira", mesDeslocado(-26).data);
+  await page.reload();
+  await expect(linha("Padaria")).toBeVisible();
+
+  let quebrar = true;
+  await page.route("**/api/lancamentos-primeiro-mes", (rota) => (quebrar ? rota.fulfill({ status: 500, body: "{}" }) : rota.continue()));
+  const erro = page.getByText("Não foi possível ler os meses anteriores.");
+  await rolarAte(page, erro);
+  await expect(page.getByText(/conecte-se à internet/)).toHaveCount(0);
+
+  quebrar = false;
+  await page.getByRole("button", { name: "Tentar de novo" }).click();
+  await rolarAte(page, linha("Geladeira"));
+});

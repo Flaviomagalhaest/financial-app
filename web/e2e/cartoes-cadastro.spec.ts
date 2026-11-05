@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { tokenDaPagina } from "./api";
 import { entrar } from "./entrar";
+import { soltarRotas } from "./rotas";
+
+test.afterEach(async ({ page }) => {
+  await soltarRotas(page);
+});
 
 test("cadastra um cartão titular e um adicional ligado a ele, que não tem dias nem limite próprios", async ({ page }) => {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;

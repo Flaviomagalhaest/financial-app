@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
-import { esperarFilaVazia } from "./fila";
+import { esperarFilaVazia, filaDoAparelho } from "./fila";
 
 // O dia do casal é o de São Paulo, como na API.
 test.use({ timezoneId: "America/Sao_Paulo" });
@@ -126,7 +126,12 @@ test("quando o mês vira, o que saiu da janela some do aparelho, menos o que tem
   // O envio sobe a edição sobre a versão guardada, sem conflito, e o lançamento sai do aparelho na leitura seguinte.
   await page.unroute("**/api/lancamentos/lote");
   await aba(page, "Hoje");
-  await page.getByRole("button", { name: "Enviar agora" }).click();
+  // Com a rota solta, a fila pode subir sozinha e levar o botão antes do clique; se não, "Enviar agora" sobe.
+  await expect(async () => {
+    const enviar = page.getByRole("button", { name: "Enviar agora" });
+    if ((await enviar.count()) > 0) await enviar.click({ timeout: 2_000 }).catch(() => {});
+    expect(await filaDoAparelho(page)).toEqual([]);
+  }).toPass();
   await esperarFilaVazia(page);
   expect((await api.ler(`/api/lancamentos/${editado.id}`)).lancamento.valor_centavos).toBe(45000);
   await page.reload();
@@ -167,7 +172,12 @@ test("a edição sem resposta de uma parcela fora da janela aparece editada, com
 
   await page.unroute("**/api/lancamentos/lote");
   await aba(page, "Hoje");
-  await page.getByRole("button", { name: "Enviar agora" }).click();
+  // Com a rota solta, a fila pode subir sozinha e levar o botão antes do clique; se não, "Enviar agora" sobe.
+  await expect(async () => {
+    const enviar = page.getByRole("button", { name: "Enviar agora" });
+    if ((await enviar.count()) > 0) await enviar.click({ timeout: 2_000 }).catch(() => {});
+    expect(await filaDoAparelho(page)).toEqual([]);
+  }).toPass();
   await esperarFilaVazia(page);
   const gravada = (await api.ler(`/api/lancamentos/${primeira.id}`)).lancamento;
   expect(gravada.valor_centavos).toBe(100000);
