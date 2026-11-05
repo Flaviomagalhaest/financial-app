@@ -7,6 +7,9 @@ import { hoje, mesDepois } from "./datas";
 /** Quantos meses o Histórico desenha de início, contando do atual para trás (o futuro vem todo); a cada chegada ao fim da tela, mais um. */
 const MESES_DE_INICIO = 3;
 
+/** Quantos meses vazios seguidos uma leitura do servidor atravessa antes de devolver a vez à tela (que lê de novo se o fim ainda está à vista). */
+const MESES_VAZIOS_POR_LEITURA = 12;
+
 export type MesDoHistorico = { mes: string; lancamentos: LancamentoNaTela[] };
 
 /** O mês em que o lançamento conta (`AAAA-MM-01`): o da fatura, na compra no cartão; no resto, o da data. */
@@ -51,6 +54,10 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
   const [doServidor, setDoServidor] = useState<MesDoHistorico[]>([]);
   const [semInternet, setSemInternet] = useState(false);
   const [acabou, setAcabou] = useState(false);
+  // A leitura falhou com a rede de pé (o servidor errou): a tela oferece tentar de novo, sem dizer que falta internet.
+  const [falhou, setFalhou] = useState(false);
+  // Conta as leituras que andaram sem achar mês: muda `depoisDe` e a tela observa o fim de novo.
+  const [passos, setPassos] = useState(0);
   const lendo = useRef(false);
   // O próximo mês a ler do servidor e o mais antigo que existe (lido uma vez).
   const proximo = useRef(mesDepois(inicioDaJanela(), -1));
@@ -60,18 +67,20 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
     if (lendo.current || acabou) return;
     lendo.current = true;
     try {
+      const falha = () => (navigator.onLine ? setFalhou(true) : setSemInternet(true));
       if (!navigator.onLine) return setSemInternet(true);
       if (maisAntigo.current === undefined) {
         const { data } = await api.GET("/api/lancamentos-primeiro-mes");
-        if (!data) return setSemInternet(true);
+        if (!data) return falha();
         maisAntigo.current = data.mes ?? null;
       }
       // Meses sem lançamento não têm cabeçalho: segue para o anterior até achar um.
-      for (;;) {
+      for (let vazios = 0; ; vazios++) {
+        if (vazios >= MESES_VAZIOS_POR_LEITURA) return setPassos((n) => n + 1);
         const mes = proximo.current;
         if (!maisAntigo.current || mes < maisAntigo.current) return setAcabou(true);
         const { data } = await api.GET("/api/meses/{mes}/lancamentos", { params: { path: { mes: mes.slice(0, 7) } } });
-        if (!data) return setSemInternet(true);
+        if (!data) return falha();
         proximo.current = mesDepois(mes, -1);
         if (data.length > 0) {
           setDoServidor((antes) => [...antes, { mes, lancamentos: data.map((l) => ({ ...l, naoEnviado: false })) }]);
@@ -79,7 +88,8 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
         }
       }
     } catch {
-      setSemInternet(true);
+      if (navigator.onLine) setFalhou(true);
+      else setSemInternet(true);
     } finally {
       lendo.current = false;
     }
@@ -87,9 +97,19 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
 
   // A rede voltou: o fim da janela tenta de novo.
   useEffect(() => {
-    const voltou = () => setSemInternet(false);
+    const voltou = () => {
+      setSemInternet(false);
+      setFalhou(false);
+    };
     window.addEventListener("online", voltou);
     return () => window.removeEventListener("online", voltou);
+  }, []);
+
+  const tentarDeNovo = useCallback(() => setFalhou(false), []);
+
+  /** O lançamento excluído sai do mês lido do servidor (essa leitura não se atualiza sozinha). */
+  const esquecer = useCallback((id: string) => {
+    setDoServidor((antes) => antes.map((m) => ({ ...m, lancamentos: m.lancamentos.filter((l) => l.id !== id) })).filter((m) => m.lancamentos.length > 0));
   }, []);
 
   // O futuro (parcelas e previstos) vem inteiro na frente: os meses de início contam do atual.
@@ -106,5 +126,15 @@ export function useHistoricoMesAMes(lancamentos: LancamentoNaTela[]) {
   const daTela = daJanela.filter((m, i) => i < desenhados || m.lancamentos.some((l) => l.naoEnviado));
   const noFimDaJanela = desenhados >= daJanela.length;
   const meses = noFimDaJanela ? juntar(daTela, doServidor) : daTela;
-  return { meses, chegouAoFim, semInternet: noFimDaJanela && semInternet, acabou: noFimDaJanela && acabou, depoisDe: doServidor.length + daJanela.length, noFimDaJanela };
+  return {
+    meses,
+    chegouAoFim,
+    esquecer,
+    tentarDeNovo,
+    semInternet: noFimDaJanela && semInternet,
+    falhou: noFimDaJanela && falhou,
+    acabou: noFimDaJanela && acabou,
+    depoisDe: doServidor.length + daJanela.length + passos,
+    noFimDaJanela,
+  };
 }

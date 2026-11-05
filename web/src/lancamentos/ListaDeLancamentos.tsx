@@ -128,7 +128,9 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
     }
     if (!window.confirm(`Excluir "${l.descricao || "este lançamento"}"?`)) return;
     setErro("");
-    await excluirLancamento(l).catch(() => setErro("Não foi possível excluir no aparelho."));
+    await excluirLancamento(l)
+      .then(() => historico.esquecer(l.id))
+      .catch(() => setErro("Não foi possível excluir no aparelho."));
   }
 
   async function lancarDeNovo(l: LancamentoNaTela) {
@@ -324,11 +326,11 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   // Chegar ao fim da tela desenha o mês anterior; a cada mudança o fim é observado de novo, e se
   // ele ainda está à vista (tela grande, mês curto) o próximo mês vem também.
   useEffect(() => {
-    if (!fim.current || !lancamentos || historico.acabou || historico.semInternet) return;
+    if (!fim.current || !lancamentos || historico.acabou || historico.semInternet || historico.falhou) return;
     const olho = new IntersectionObserver((entradas) => entradas.some((e) => e.isIntersecting) && historico.chegouAoFim());
     olho.observe(fim.current);
     return () => olho.disconnect();
-  }, [lancamentos, historico.acabou, historico.semInternet, historico.depoisDe, historico.chegouAoFim]);
+  }, [lancamentos, historico.acabou, historico.semInternet, historico.falhou, historico.depoisDe, historico.chegouAoFim]);
 
   return (
     <section>
@@ -413,6 +415,14 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
         </section>
       ))}
       {historico.semInternet && <p className="vazio">Para ver antes de {mesPorExtenso(inicioDaJanela())}, conecte-se à internet.</p>}
+      {historico.falhou && (
+        <p role="alert" className="erro">
+          Não foi possível ler os meses anteriores.{" "}
+          <button type="button" className="secundario" onClick={historico.tentarDeNovo}>
+            Tentar de novo
+          </button>
+        </p>
+      )}
       <div ref={fim} data-testid="fim-da-lista" />
     </section>
   );
