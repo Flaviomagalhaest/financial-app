@@ -22,6 +22,10 @@ Hipóteses descartadas pela leitura do código:
 - **Geração assíncrona**: `criar` gera em lotes de forma síncrona antes de responder.
 - **Ordem da listagem**: `data DESC, criado_em DESC, id` com três datas distintas é determinística.
 
+Segunda sessão (07/11/2026): mais 25 execuções seriais do teste isolado passaram. Rodar várias instâncias do pytest em paralelo contra o mesmo banco dá erro no setup, mas é artefato (o banco é compartilhado), não a falha do CI.
+
+Terceira sessão (07/11/2026): mais 6 execuções de `tests/test_recorrencias.py` inteiro (72 testes cada, `--tb=short`) passaram. Total sem reproduzir: 40 do teste isolado + 9 do arquivo + 1 suíte completa.
+
 Resta a falha que não deixou mensagem (`SerializationFailure` entre lotes, carga do banco no CI/ambiente). Sem a mensagem não há causa a corrigir.
 
 ## Checklist
