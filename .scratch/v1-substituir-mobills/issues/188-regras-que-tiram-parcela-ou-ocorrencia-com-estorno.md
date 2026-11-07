@@ -1,7 +1,7 @@
 # Regras que tiram parcela ou ocorrência com estorno
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -22,9 +22,16 @@ Hoje `lancamentos.excluir` recusa (422) a compra com estorno por qualquer caminh
 
 ## Checklist
 
-- [ ] Teste de API: corrigir o parcelamento para menos parcelas com estorno na que sairia volta 422 e não grava nada (parcelamento e parcelas como antes)
-- [ ] Teste de API: com estorno de todas, corrigir o parcelamento para um total abaixo do estornado, ou excluir a parcela que o deixaria abaixo, volta 422 e não grava nada; a correção e a exclusão que ficam no limite passam
-- [ ] Teste de API: reajuste e exclusão da regra de recorrência deixam o previsto com estorno e tiram os outros
-- [ ] Teste de API: correção de fatura com o estorno depois da compra em `compras_excluidas` exclui os dois
-- [ ] Implementar os cinco caminhos
-- [ ] Conferir se o app (correção do parcelamento sem internet) precisa mostrar a recusa nova; se precisar, ticket próprio
+- [x] Teste de API: corrigir o parcelamento para menos parcelas com estorno na que sairia volta 422 e não grava nada (parcelamento e parcelas como antes)
+- [x] Teste de API: com estorno de todas, corrigir o parcelamento para um total abaixo do estornado, ou excluir a parcela que o deixaria abaixo, volta 422 e não grava nada; a correção e a exclusão que ficam no limite passam
+- [x] Teste de API: reajuste e exclusão da regra de recorrência deixam o previsto com estorno e tiram os outros
+- [x] Teste de API: correção de fatura com o estorno depois da compra em `compras_excluidas` exclui os dois
+- [x] Implementar os cinco caminhos
+- [x] Conferir se o app (correção do parcelamento sem internet) precisa mostrar a recusa nova; se precisar, ticket próprio
+
+## Resolução
+
+- Correção do parcelamento: `gravar_correcao` confere, antes de gravar e antes do aviso de realizadas, `conferir_sem_estorno` nas parcelas que saem (`excluir`/`pular`) e `conferir_o_que_fica_do_estorno_de_todas` (soma das parcelas que ficam, e da parte, não abaixo do já estornado). A exclusão de uma parcela pela rota e pelo lote da fila (`da_pessoa=True`) usa a mesma conta.
+- Reajuste da recorrência: o previsto com estorno sai do trabalho do lote. Exclusão da regra: a consulta pula o previsto com estorno.
+- Correção de fatura: os estornos de `compras_excluidas` saem antes das compras.
+- App: a recusa 422 da correção já aparece pelo `erro` da `TelaDoParcelamento` (a correção exige internet); sem ticket novo.

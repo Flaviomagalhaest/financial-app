@@ -197,7 +197,10 @@ def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
             return Resultado(resultado="aceita", lancamento=confirmado)
         case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
             em_transacao(
-                url, cartoes.protegida(lambda conn: excluir(conn, id, versao, usuario, acao_em))
+                url,
+                cartoes.protegida(
+                    lambda conn: excluir(conn, id, versao, usuario, acao_em, da_pessoa=True)
+                ),
             )
             return Resultado(resultado="aceita")
         case AcaoCriarParcelamento(parcelamento=novo):

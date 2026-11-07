@@ -838,6 +838,18 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         fica_automatico = regra.automatico and (automatico or dia_novo >= dia_de_hoje)
         if mudou or automatico != fica_automatico:
             trabalho.append((lancamento_id, versao, mudou, quer["data"], fica_automatico))
+    # O previsto com estorno fica como está, por inteiro, como o mexido à mão (ticket 188): fora do
+    # trabalho, o lote seguinte não volta a ele.
+    com_estorno = {
+        i
+        for (i,) in conn.execute(
+            "SELECT estorno_de FROM lancamentos WHERE estorno_de = ANY(%s) AND excluido_em IS NULL",
+            ([t.id if isinstance(t, _Retirada) else t[0] for t in trabalho],),
+        )
+    }
+    trabalho = [
+        t for t in trabalho if (t.id if isinstance(t, _Retirada) else t[0]) not in com_estorno
+    ]
     tags_da_regra = _tags_da_regra(conn, id)
     tags_das_partes = partes_da_regra.tags(conn, id)
     agora = datetime.now(UTC)
@@ -1043,7 +1055,11 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
         lancamento_id
         for (lancamento_id,) in conn.execute(
             "SELECT id FROM lancamentos WHERE recorrencia_id = %s AND situacao = 'previsto'"
-            " AND excluido_em IS NULL AND data >= %s ORDER BY ocorrencia LIMIT %s",
+            " AND excluido_em IS NULL AND data >= %s"
+            # O previsto com estorno fica, como o realizado e o atrasado (ticket 188).
+            " AND NOT EXISTS (SELECT 1 FROM lancamentos e WHERE e.estorno_de = lancamentos.id"
+            " AND e.excluido_em IS NULL)"
+            " ORDER BY ocorrencia LIMIT %s",
             (id, lancamentos.hoje(), por_lote + 1),
         )
     ]

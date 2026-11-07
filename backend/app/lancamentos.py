@@ -1790,8 +1790,83 @@ def conferir_parcelamento_sem_estorno(conn, parcelamento_id: UUID) -> None:
         raise recusar("o parcelamento tem estorno; exclua o estorno antes")
 
 
+def conferir_o_que_fica_do_estorno_de_todas(
+    conn,
+    parcelamento_id: UUID,
+    parcelas: int,
+    total: int,
+    valor_novo: Callable[[int], int] | None = None,
+    exceto: UUID | None = None,
+) -> None:
+    """No parcelamento com estorno de todas as parcelas, o que sai (parcela excluída, total menor,
+    menos parcelas) não deixa a soma das parcelas que ficam abaixo do já estornado, de todas e de
+    cada parcela; na parte, a soma da parte nelas (ticket 188). `exceto` é a parcela que sai;
+    `valor_novo` dá o valor de depois de cada parcela (a correção)."""
+    if not conn.execute(
+        "SELECT 1 FROM lancamentos WHERE estorno_parcelamento_id = %s AND excluido_em IS NULL"
+        " LIMIT 1",
+        (parcelamento_id,),
+    ).fetchone():
+        return
+    from app.parcelamentos import valor_da_parcela
+
+    linhas = {
+        n: (id, valor, excluido, pela_regra)
+        for n, id, valor, excluido, pela_regra in conn.execute(
+            "SELECT parcela, id, valor_centavos, excluido_em IS NOT NULL, excluido_pela_regra"
+            " FROM lancamentos WHERE parcelamento_id = %s",
+            (parcelamento_id,),
+        )
+    }
+    ficam: list[int] = []
+    for n in range(1, parcelas + 1):
+        linha = linhas.get(n)
+        if linha and (linha[0] == exceto or (linha[2] and not linha[3])):
+            continue  # saiu, ou uma pessoa a excluiu
+        if valor_novo:
+            ficam.append(valor_novo(n))
+        else:
+            ficam.append(linha[1] if linha else valor_da_parcela(total, parcelas, n))
+    (estornado,) = conn.execute(
+        "SELECT COALESCE(SUM(valor_centavos), 0) FROM lancamentos"
+        " WHERE excluido_em IS NULL AND (estorno_parcelamento_id = %s"
+        " OR estorno_de IN (SELECT id FROM lancamentos WHERE parcelamento_id = %s))",
+        (parcelamento_id, parcelamento_id),
+    ).fetchone()
+    if sum(ficam) < estornado:
+        raise recusar(
+            f"o parcelamento tem {estornado} centavos estornados: as parcelas que ficam não"
+            " podem somar menos"
+        )
+    if valor_novo:
+        return  # a correção confere as partes em `conferir_partes_do_parcelamento_com_estorno`
+    ids = []
+    partes = []
+    for parte_id, valor in conn.execute(
+        "SELECT id, valor_centavos FROM parcelamento_partes WHERE parcelamento_id = %s"
+        " ORDER BY ordem",
+        (parcelamento_id,),
+    ):
+        ids.append(parte_id)
+        partes.append(valor)
+    somas = [0] * len(partes)
+    for valor in ficam:
+        somas = [s + v for s, v in zip(somas, dividir_pela_proporcao(valor, partes))]
+    for parte_id, centavos in estornado_nas_partes_do_parcelamento(conn, parcelamento_id).items():
+        if somas[ids.index(parte_id)] < centavos:
+            raise recusar(
+                f"a parte tem estornos de {centavos} centavos: as parcelas que ficam não"
+                " podem somar menos nela"
+            )
+
+
 def excluir(
-    conn, id: UUID, versao: int | None, usuario: str, acao_em: datetime | None = None
+    conn,
+    id: UUID,
+    versao: int | None,
+    usuario: str,
+    acao_em: datetime | None = None,
+    da_pessoa: bool = False,
 ) -> None:
     """Marca a exclusão: sem a marca, a edição que chega depois não saberia que perdeu para
     ela. Com `versao`, excluir o que o outro lado mudou depois é conflito."""
@@ -1802,6 +1877,17 @@ def excluir(
         return
     if not linha[1]:
         conferir_sem_estorno(conn, [id])
+        if da_pessoa:
+            # A regra (correção, reajuste) já conferiu o pedido inteiro antes de gravar.
+            parcela = conn.execute(
+                "SELECT parcelamento_id, p.parcelas, p.valor_total_centavos FROM lancamentos l"
+                " JOIN parcelamentos p ON p.id = l.parcelamento_id WHERE l.id = %s",
+                (id,),
+            ).fetchone()
+            if parcela:
+                conferir_o_que_fica_do_estorno_de_todas(
+                    conn, parcela[0], parcela[1], parcela[2], exceto=id
+                )
     if linha[1]:
         # A pessoa que exclui o que a regra da recorrência já tirou (a exclusão que estava
         # offline) pulou o mês: a geração não o traz de volta.
@@ -2166,7 +2252,9 @@ def excluir_lancamento(
 ) -> Response:
     """Idempotente: excluir o que já não existe também dá 204. Com `versao`, o que o outro lado
     mudou depois dela é 409, para perguntar antes."""
-    resposta = na_rota(request, lambda conn: excluir(conn, id, versao, usuario, acao_em))
+    resposta = na_rota(
+        request, lambda conn: excluir(conn, id, versao, usuario, acao_em, da_pessoa=True)
+    )
     return resposta if isinstance(resposta, JSONResponse) else Response(status_code=204)
 
 
