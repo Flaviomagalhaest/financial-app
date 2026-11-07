@@ -1,7 +1,7 @@
 # Acertar fatura de cartão falha de vez em quando no teste de navegador
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -17,6 +17,10 @@ Causa provável: o `FormularioDeFatura` (`web/src/contas-e-categorias/SecaoDeCar
 
 ## Checklist
 
-- [ ] Reproduzir (o teste repetido com `--repeat-each`, ou com a CPU saturada como no ticket 109)
-- [ ] Confirmar a causa e corrigir sem desligar o teste: o seletor exato (`getByLabel("Fatura", { exact: true })`) e a espera pela fatura nascida (`toHaveValue` do `select`) antes de escolher; se a janela com "Outro mês…" selecionado for ruim para quem usa, tratar na tela e registrar à parte
-- [ ] O teste verde com `--repeat-each 10`; verificações do projeto e PR para `main`
+- [x] Reproduzir (o teste repetido com `--repeat-each`, ou com a CPU saturada como no ticket 109)
+- [x] Confirmar a causa e corrigir sem desligar o teste: o seletor exato (`getByLabel("Fatura", { exact: true })`) e a espera pela fatura nascida (`toHaveValue` do `select`) antes de escolher; se a janela com "Outro mês…" selecionado for ruim para quem usa, tratar na tela e registrar à parte
+- [x] O teste verde com `--repeat-each 10`; verificações do projeto e PR para `main`
+
+## Resolução
+
+O seletor `getByLabel("Fatura")` sem `exact` casava também "Mês da fatura". O teste agora usa `{ exact: true }` e espera o `select` ter o valor da fatura nascida (`toHaveValue`) antes de escolher. Verde com `--repeat-each 10`. A janela com "Outro mês…" selecionado na tela não foi tratada: é só um instante até a lista nova chegar e não afeta quem usa.

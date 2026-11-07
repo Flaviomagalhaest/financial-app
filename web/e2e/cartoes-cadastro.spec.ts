@@ -100,7 +100,9 @@ test("acerta o fechamento e o vencimento de uma fatura existente e de outra esco
   await page.getByRole("button", { name: `Acertar fatura de ${nome}` }).click();
   const form = page.getByRole("form", { name: `Acertar fatura de ${nome}` });
   await expect(form).toContainText("as compras delas se redistribuem");
-  await form.getByLabel("Fatura").selectOption(nascida.mes);
+  const fatura = form.getByLabel("Fatura", { exact: true });
+  await expect(fatura).toHaveValue(nascida.mes);
+  await fatura.selectOption(nascida.mes);
   await expect(form.getByLabel("Fechamento")).toHaveValue(nascida.fechamento);
   await form.getByLabel("Fechamento").fill(maisDias(nascida.fechamento, 1));
   await form.getByLabel("Vencimento").fill(maisDias(nascida.vencimento, 1));
@@ -113,7 +115,7 @@ test("acerta o fechamento e o vencimento de uma fatura existente e de outra esco
   const [ano, mes] = nascida.mes.split("-").map(Number);
   const futuro = new Date(Date.UTC(ano, mes - 1 + 3, 1)).toISOString().slice(0, 7);
   await page.getByRole("button", { name: `Acertar fatura de ${nome}` }).click();
-  await form.getByLabel("Fatura").selectOption("outro");
+  await form.getByLabel("Fatura", { exact: true }).selectOption("outro");
   await form.getByLabel("Mês da fatura").fill(futuro);
   await form.getByLabel("Fechamento").fill(`${futuro}-12`);
   await form.getByLabel("Vencimento").fill(`${futuro}-22`);
