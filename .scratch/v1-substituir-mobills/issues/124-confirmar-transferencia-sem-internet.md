@@ -1,7 +1,7 @@
 # Confirmar transferência prevista sem internet
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` para o dono decidir se vale; depois `implement`, `tdd`; HITL na decisão
 Modelo recomendado: Sonnet
