@@ -1,7 +1,7 @@
 # Teste da recorrência por três vezes falha de vez em quando
 
 Type: task
-Status: claimed
+Status: needs-info
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`
 Modelo recomendado: Sonnet
@@ -21,6 +21,8 @@ Hipóteses descartadas pela leitura do código:
 - **Relógio real**: o arquivo fixa `lancamentos.hoje` (autouse, `HOJE = 28/10/2026`). A geração (`horizonte()`, `_gerar_um_lote`) e a listagem (`inicio_da_janela`, `ler_lancamentos`) leem `lancamentos.hoje()` pelo módulo, então o monkeypatch vale. Os únicos `from app.lancamentos import hoje` estão em `filtros_salvos.py` e `favoritos.py`, fora desse caminho. O horizonte (24 meses) cobre 15/11/2027 com folga.
 - **Geração assíncrona**: `criar` gera em lotes de forma síncrona antes de responder.
 - **Ordem da listagem**: `data DESC, criado_em DESC, id` com três datas distintas é determinística.
+
+Segunda sessão (07/11/2026): mais 25 execuções seriais do teste isolado passaram. Rodar várias instâncias do pytest em paralelo contra o mesmo banco dá erro no setup, mas é artefato (o banco é compartilhado), não a falha do CI.
 
 Resta a falha que não deixou mensagem (`SerializationFailure` entre lotes, carga do banco no CI/ambiente). Sem a mensagem não há causa a corrigir.
 
