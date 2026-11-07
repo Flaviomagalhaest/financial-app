@@ -118,7 +118,7 @@ def test_previa_conta_as_partes_que_trocam_de_item(casal: Casal):
     assert (vista["mudam"], vista["trocam_de_item"]) == (1, 2)
 
 
-def test_desfazer_volta_as_partes_e_pula_a_compra_cujas_partes_mudaram_depois(casal: Casal):
+def test_desfazer_volta_as_partes_e_pula_cada_parte_reclassificada_depois(casal: Casal):
     compra, roupa, casa, _ = _tres_partes(casal)
     outra, *_ = _tres_partes(casal)
     mudanca = {"tags": {"acao": "acrescentar", "tags": ["obra"]}}
@@ -133,9 +133,9 @@ def test_desfazer_volta_as_partes_e_pula_a_compra_cujas_partes_mudaram_depois(ca
     assert resposta.status_code == 200, resposta.text
     desfeito = resposta.json()
     assert desfeito["desfeitos"] == 1, desfeito
-    assert [(p["lancamento_id"], p["motivo"]) for p in desfeito["pulados"]] == [
-        (outra["id"], "mudou_depois")
-    ]
+    assert [
+        (p["lancamento_id"], p["parte_descricao"], p["motivo"]) for p in desfeito["pulados"]
+    ] == [(outra["id"], descricao, "mudou_depois") for descricao in ("Vestido", "Fone", "Cortina")]
     assert classificacao_das_partes(casal, compra) == [
         ({roupa}, set()),
         ({roupa}, set()),
@@ -227,3 +227,207 @@ def test_na_ocorrencia_da_recorrencia_muda_as_partes_como_so_este(
     assert [p["tags"] for p in agora[dezembro["id"]]["partes"]] == [["combo"], ["combo"]]
     assert [p["categoria_ids"] for p in agora[dezembro["id"]]["partes"]] == [[celular], [internet]]
     assert [p["categoria_ids"] for p in agora[novembro["id"]]["partes"]] == [[internet], [celular]]
+
+
+def _reclassificar(casal: Casal, compra: dict, indice: int, quem="flavio", **campos) -> dict:
+    """Muda depois do lote uma parte da compra (ou, sem `campos`, nada nela), à mão."""
+    agora = todos(casal)[compra["id"]]
+    partes = [p | campos if i == indice else p for i, p in enumerate(agora["partes"])]
+    editada = editar(casal, compra["id"], quem, versao=agora["versao"], partes=partes)
+    assert editada.status_code == 200, editada.text
+    return editada.json()
+
+
+def test_desfazer_pula_so_a_parte_reclassificada_depois_e_volta_as_outras(casal: Casal):
+    compra, roupa, casa, presente = _tres_partes(casal)
+    lote = aplicada(casal, marcados(compra), tags={"acao": "acrescentar", "tags": ["obra"]})
+    _reclassificar(casal, compra, 1, categoria_ids=[presente])
+
+    resposta = desfazer(casal, lote)
+
+    assert resposta.status_code == 200, resposta.text
+    desfeito = resposta.json()
+    assert desfeito["desfeitos"] == 1
+    [pulado] = desfeito["pulados"]
+    fone = todos(casal)[compra["id"]]["partes"][1]
+    assert (
+        pulado["lancamento_id"],
+        pulado["descricao"],
+        pulado["parte_id"],
+        pulado["parte_descricao"],
+        pulado["motivo"],
+        pulado["alterado_por"],
+        pulado["por_voce"],
+    ) == (compra["id"], "Mercado Livre", fone["id"], "Fone", "mudou_depois", "flavio", False)
+    assert pulado["alterado_em"] is not None
+    assert classificacao_das_partes(casal, compra) == [
+        ({roupa}, set()),
+        ({presente}, {"obra"}),
+        ({casa}, set()),
+    ]
+
+
+def test_descricao_valor_pessoa_e_ordem_mudados_depois_nao_impedem_o_desfazer(casal: Casal):
+    compra, roupa, casa, _ = _tres_partes(casal)
+    lote = aplicada(casal, marcados(compra), tags={"acao": "acrescentar", "tags": ["obra"]})
+    agora = todos(casal)[compra["id"]]
+    vestido, fone, cortina = agora["partes"]
+    editada = editar(
+        casal,
+        compra["id"],
+        versao=agora["versao"],
+        partes=[
+            cortina | {"pessoa": "esposa"},
+            fone | {"valor_centavos": 500},
+            vestido | {"descricao": "Vestido azul", "valor_centavos": 250},
+        ],
+    )
+    assert editada.status_code == 200, editada.text
+
+    desfeito = desfazer(casal, lote).json()
+
+    assert (desfeito["desfeitos"], desfeito["pulados"]) == (1, [])
+    assert classificacao_das_partes(casal, compra) == [
+        ({casa}, set()),
+        ({roupa}, set()),
+        ({roupa}, set()),
+    ]
+    assert [p["descricao"] for p in todos(casal)[compra["id"]]["partes"]] == [
+        "Cortina",
+        "Fone",
+        "Vestido azul",
+    ]
+
+
+def test_a_parte_apagada_depois_e_pulada_e_a_criada_depois_fica_como_esta(casal: Casal):
+    compra, roupa, casa, _ = _tres_partes(casal)
+    lote = aplicada(casal, marcados(compra), tags={"acao": "acrescentar", "tags": ["obra"]})
+    agora = todos(casal)[compra["id"]]
+    vestido, fone, cortina = agora["partes"]
+    bolsa = parte([roupa], 250, descricao="Bolsa", tags=["obra"])
+    editada = editar(casal, compra["id"], versao=agora["versao"], partes=[vestido, bolsa, cortina])
+    assert editada.status_code == 200, editada.text
+
+    desfeito = desfazer(casal, lote, "flavio").json()
+
+    assert desfeito["desfeitos"] == 1
+    [pulado] = desfeito["pulados"]
+    assert (
+        pulado["parte_id"],
+        pulado["parte_descricao"],
+        pulado["motivo"],
+        pulado["alterado_por"],
+        pulado["por_voce"],
+    ) == (fone["id"], "", "excluido", "flavio", True)
+    assert classificacao_das_partes(casal, compra) == [
+        ({roupa}, set()),
+        ({roupa}, {"obra"}),
+        ({casa}, set()),
+    ]
+
+
+def test_a_parte_com_categoria_de_antes_juntada_depois_sai_e_as_outras_voltam(casal: Casal):
+    compra, roupa, casa, presente = _tres_partes(casal)
+    lote = aplicada(
+        casal,
+        marcados(compra),
+        categorias={"acao": "trocar", "categoria_ids": [roupa], "por": presente},
+        tags={"acao": "acrescentar", "tags": ["obra"]},
+    )
+    juntada = casal.pedir(
+        "flavio", "POST", f"/api/categorias/{roupa}/juntar", json={"destino_id": casa}
+    )
+    assert juntada.status_code == 200, juntada.text
+
+    desfeito = desfazer(casal, lote).json()
+
+    assert desfeito["desfeitos"] == 1
+    assert [
+        (p["parte_descricao"], p["motivo"], p["alterado_por"]) for p in desfeito["pulados"]
+    ] == [("Vestido", "saiu", None), ("Fone", "saiu", None)]
+    assert classificacao_das_partes(casal, compra) == [
+        ({presente}, {"obra"}),
+        ({presente}, {"obra"}),
+        ({casa}, set()),
+    ]
+
+
+def test_a_compra_que_perdeu_todas_as_partes_depois_e_pulada_inteira(casal: Casal):
+    compra, roupa, _, _ = _tres_partes(casal)
+    outra, *_ = _tres_partes(casal)
+    lote = aplicada(casal, marcados(compra, outra), tags={"acao": "acrescentar", "tags": ["obra"]})
+    agora = todos(casal)[compra["id"]]
+    editada = editar(casal, compra["id"], versao=agora["versao"], partes=[], categoria_ids=[roupa])
+    assert editada.status_code == 200, editada.text
+
+    desfeito = desfazer(casal, lote).json()
+
+    assert desfeito["desfeitos"] == 1
+    [pulado] = desfeito["pulados"]
+    assert (
+        pulado["lancamento_id"],
+        pulado["parte_id"],
+        pulado["parte_descricao"],
+        pulado["motivo"],
+        pulado["alterado_por"],
+    ) == (compra["id"], None, "", "mudou_depois", "flavio")
+    assert [t for _, t in classificacao_das_partes(casal, outra)] == [set()] * 3
+    assert (todos(casal)[compra["id"]]["categoria_ids"], todos(casal)[compra["id"]]["partes"]) == (
+        [roupa],
+        [],
+    )
+
+
+def test_no_parcelamento_pula_so_a_parte_reclassificada_e_volta_as_outras(casal: Casal, categorias):
+    from tests.test_partes_pela_tela_do_parcelamento import mudar_partes
+
+    roupa, eletronico, casa = categorias
+    criado = parcelado(casal, casal.conta(), [parte([roupa], 20000), parte([casa], 10000)]).json()
+    [primeira, *_] = parcelas(casal, criado["id"])
+    lote = aplicada(casal, marcados(primeira), tags={"acao": "acrescentar", "tags": ["loja"]})
+    [blusa, cortina] = regra(casal, criado["id"])["partes"]
+    mudada = mudar_partes(casal, criado["id"], [blusa | {"categoria_ids": [eletronico]}, cortina])
+    assert mudada.status_code == 200, mudada.text
+
+    desfeito = desfazer(casal, lote).json()
+
+    assert desfeito["desfeitos"] == 3
+    assert [p["motivo"] for p in desfeito["pulados"]] == ["mudou_depois"] * 3
+    assert [(p["categoria_ids"], p["tags"]) for p in regra(casal, criado["id"])["partes"]] == [
+        ([eletronico], ["loja"]),
+        ([casa], []),
+    ]
+    assert [
+        [(p["categoria_ids"], p["tags"]) for p in l["partes"]]
+        for l in parcelas(casal, criado["id"])
+    ] == [[([eletronico], ["loja"]), ([casa], [])]] * 3
+
+
+def test_na_parcela_com_partes_proprias_pula_so_a_parte_reclassificada(casal: Casal, categorias):
+    roupa, eletronico, casa = categorias
+    criado = parcelado(casal, casal.conta(), [parte([roupa], 20000), parte([casa], 10000)]).json()
+    [primeira, segunda, _] = parcelas(casal, criado["id"])
+    lote = aplicada(casal, marcados(primeira), tags={"acao": "acrescentar", "tags": ["loja"]})
+    segunda = parcelas(casal, criado["id"])[1]
+    so_nela = [segunda["partes"][0] | {"categoria_ids": [eletronico]}, segunda["partes"][1]]
+    editar_so_nela(casal, segunda, partes=so_nela)
+
+    desfeito = desfazer(casal, lote).json()
+
+    assert desfeito["desfeitos"] == 3
+    [pulado] = desfeito["pulados"]
+    assert (pulado["lancamento_id"], pulado["parte_id"], pulado["motivo"]) == (
+        segunda["id"],
+        segunda["partes"][0]["id"],
+        "mudou_depois",
+    )
+    assert pulado["alterado_por"] == "flavio"
+    assert [p["tags"] for p in regra(casal, criado["id"])["partes"]] == [[], []]
+    assert [
+        [(p["categoria_ids"], p["tags"]) for p in l["partes"]]
+        for l in parcelas(casal, criado["id"])
+    ] == [
+        [([roupa], []), ([casa], [])],
+        [([eletronico], ["loja"]), ([casa], [])],
+        [([roupa], []), ([casa], [])],
+    ]

@@ -18,7 +18,7 @@ import psycopg
 
 from app.faturas import datas_padrao, ler_cartao
 
-VERSAO_FORMATO = 35
+VERSAO_FORMATO = 36
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -707,6 +707,22 @@ def _da_versao_34_para_a_35(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_35_para_a_36(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 36 (ticket 201) guarda em cada parte o resultado do desfazer da edição em lote, e
+    quem a mudou depois e quando, porque ele pula só a parte mudada. Antes dela o desfazer voltava
+    a compra inteira."""
+    colunas, linhas = tabelas["edicao_em_lote_partes"]
+    novas = [
+        c for c in ("resultado_do_desfazer", "alterado_por", "alterado_em") if c not in colunas
+    ]
+    if novas:
+        tabelas["edicao_em_lote_partes"] = (
+            [*colunas, *novas],
+            [[*linha, *[None] * len(novas)] for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -744,6 +760,7 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     32: _da_versao_32_para_a_33,
     33: _da_versao_33_para_a_34,
     34: _da_versao_34_para_a_35,
+    35: _da_versao_35_para_a_36,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

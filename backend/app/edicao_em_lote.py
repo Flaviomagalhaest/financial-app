@@ -56,8 +56,9 @@ PARADO_HA = timedelta(minutes=5)
 PRAZO_EM_DIAS: int = valores_iniciais()["desfazerEdicaoEmLoteDias"]
 TAMANHO_DA_AMOSTRA: int = valores_iniciais()["amostraDaEdicaoEmLote"]
 # Os campos que o lote muda (na compra com partes, as partes): mudou um deles depois, o desfazer
-# pula o lançamento.
+# pula o lançamento. Nas partes, o desfazer olha cada uma (`_voltar_partes`).
 CAMPOS_DO_LOTE = ["categoria_ids", "tags", "item_categoria_id", "partes"]
+CAMPOS_DA_COMPRA = CAMPOS_DO_LOTE[:3]
 
 Acao = Literal["acrescentar", "remover", "trocar", "substituir"]
 
@@ -179,6 +180,10 @@ class EdicaoEmLote(BaseModel):
 class PuladoNoDesfazer(BaseModel):
     lancamento_id: UUID
     descricao: str
+    # A parte pulada da compra com partes; vazios quando o pulado é o lançamento inteiro. A parte
+    # apagada vem sem descrição: o lote não a guarda.
+    parte_id: UUID | None = None
+    parte_descricao: str = ""
     # `mudou_depois`: alguém mudou as categorias, as tags ou o item depois do lote; `excluido`;
     # `saiu`: uma categoria ou tag de antes do lote foi juntada a outra ou excluída.
     motivo: Literal["mudou_depois", "excluido", "saiu"]
@@ -974,56 +979,124 @@ class _AntesDoLote(NamedTuple):
     item_atual_categoria_id: UUID | None
 
 
-def _partes_do_lote(conn, lote_id: UUID, dono_id: UUID) -> list[tuple]:
-    return conn.execute(
-        "SELECT parte_id, categoria_ids_antes, tag_ids_antes, item_categoria_id_antes,"
-        " item_atual_categoria_id_antes, categoria_ids_depois, tag_ids_depois"
-        " FROM edicao_em_lote_partes WHERE lote_id = %s AND dono_id = %s",
-        (lote_id, dono_id),
-    ).fetchall()
+class _ParteDoLote(NamedTuple):
+    """O que uma parte tinha antes do lote e o que ele deu a ela."""
+
+    parte_id: UUID
+    categoria_ids_antes: str
+    tag_ids_antes: str
+    item_categoria_id_antes: UUID | None
+    item_atual_categoria_id_antes: UUID | None
+    categoria_ids_depois: str
+    tag_ids_depois: str
+
+    @property
+    def item_depois(self) -> UUID | None:
+        """A escolha do item sai com a categoria dela, como na aplicação (`partes_depois`)."""
+        escolhida = self.item_categoria_id_antes
+        return escolhida if escolhida in _ids(self.categoria_ids_depois) else None
 
 
-def _voltar_partes(conn, de: str, registros: list[tuple]) -> str:
-    """Volta a classificação das partes que o lote mudou, se todas ainda existem com a que o lote
-    deu; a compra (ou o parcelamento) volta inteira ou fica como está."""
+def _partes_do_lote(conn, lote_id: UUID, dono_id: UUID) -> list[_ParteDoLote]:
+    return [
+        _ParteDoLote(*linha)
+        for linha in conn.execute(
+            f"SELECT {', '.join(_ParteDoLote._fields)}"
+            " FROM edicao_em_lote_partes WHERE lote_id = %s AND dono_id = %s",
+            (lote_id, dono_id),
+        )
+    ]
+
+
+def _voltar_parte(conn, de: str, parte: _ParteDoLote) -> str:
+    """Volta a classificação de uma parte que o lote mudou, se ela ainda tem a que o lote deu.
+    A descrição, o valor, a pessoa e a ordem dela não contam (ticket 191)."""
     categorias_das_partes, tags_das_partes, tabela = _TABELAS_DAS_PARTES[de]
-    for parte_id, *_, categorias_depois, tags_depois in registros:
-        if not conn.execute(f"SELECT 1 FROM {tabela} WHERE id = %s", (parte_id,)).fetchone():
-            return "mudou_depois"
-        categorias = {
-            c
-            for (c,) in conn.execute(
-                f"SELECT categoria_id FROM {categorias_das_partes} WHERE parte_id = %s",
-                (parte_id,),
-            )
-        }
-        tags = {
-            t
-            for (t,) in conn.execute(
-                f"SELECT tag_id FROM {tags_das_partes} WHERE parte_id = %s", (parte_id,)
-            )
-        }
-        if categorias != {*_ids(categorias_depois)} or tags != {*_ids(tags_depois)}:
-            return "mudou_depois"
-    antes = [(r[0], _ids(r[1]), _ids(r[2]), r[3], r[4]) for r in registros]
-    if not _existem(
-        conn, list({c for a in antes for c in a[1]}), list({t for a in antes for t in a[2]})
-    ):
+    id = parte.parte_id
+    linha = conn.execute(f"SELECT item_categoria_id FROM {tabela} WHERE id = %s", (id,)).fetchone()
+    if not linha:
+        return "excluido"
+    categorias = {
+        c
+        for (c,) in conn.execute(
+            f"SELECT categoria_id FROM {categorias_das_partes} WHERE parte_id = %s", (id,)
+        )
+    }
+    tags = {
+        t
+        for (t,) in conn.execute(f"SELECT tag_id FROM {tags_das_partes} WHERE parte_id = %s", (id,))
+    }
+    antes = _ids(parte.categoria_ids_antes), _ids(parte.tag_ids_antes)
+    # Antes de olhar se mudou: juntar a tag de antes muda a parte sem ninguém a ter mudado.
+    if not _existem(conn, *antes):
         return "saiu"
-    for parte_id, categorias, tags, escolhida, item_atual in antes:
-        _religar(conn, categorias_das_partes, "parte_id", "categoria_id", parte_id, categorias)
-        _religar(conn, tags_das_partes, "parte_id", "tag_id", parte_id, tags)
-        if de == "lancamento":
-            conn.execute(
-                "UPDATE lancamento_partes SET item_categoria_id = %s, item_atual_categoria_id = %s"
-                " WHERE id = %s",
-                (escolhida, item_atual, parte_id),
-            )
-        else:
-            conn.execute(
-                f"UPDATE {tabela} SET item_categoria_id = %s WHERE id = %s", (escolhida, parte_id)
-            )
+    if (
+        categorias != {*_ids(parte.categoria_ids_depois)}
+        or tags != {*_ids(parte.tag_ids_depois)}
+        or linha[0] != parte.item_depois
+    ):
+        return "mudou_depois"
+    categorias, tags = antes
+    _religar(conn, categorias_das_partes, "parte_id", "categoria_id", id, categorias)
+    _religar(conn, tags_das_partes, "parte_id", "tag_id", id, tags)
+    if de == "lancamento":
+        conn.execute(
+            "UPDATE lancamento_partes SET item_categoria_id = %s, item_atual_categoria_id = %s"
+            " WHERE id = %s",
+            (parte.item_categoria_id_antes, parte.item_atual_categoria_id_antes, id),
+        )
+    else:
+        conn.execute(
+            f"UPDATE {tabela} SET item_categoria_id = %s WHERE id = %s",
+            (parte.item_categoria_id_antes, id),
+        )
     return "desfeito"
+
+
+def _quem_mudou_as_partes(conn, de: str, dono_id: UUID, versao: int | None) -> tuple:
+    """Quem mudou as partes depois do lote, e quando: a versão do campo das partes da compra (o
+    desfazer a sobrescreve, por isso fica gravado com a parte) ou a última mudança no
+    parcelamento. A parte refeita pelo parcelamento não sobe a versão de um campo da parcela."""
+    if de == "parcelamento":
+        return conn.execute(
+            "SELECT alterado_por, alterado_em FROM parcelamentos WHERE id = %s", (dono_id,)
+        ).fetchone() or (None, None)
+    return conn.execute(
+        "SELECT alterado_por, alterado_em FROM lancamento_campos"
+        " WHERE lancamento_id = %s AND campo = 'partes' AND versao > %s",
+        (dono_id, versao),
+    ).fetchone() or (None, None)
+
+
+def _voltar_partes(
+    conn,
+    lote_id: UUID,
+    de: str,
+    dono_id: UUID,
+    partes: list[_ParteDoLote],
+    versao: int | None = None,
+) -> str:
+    """Volta, uma a uma, as partes que o lote mudou numa compra (ou num parcelamento, sem
+    `versao`) e grava o resultado de cada uma; a parte criada depois do lote fica como está. A
+    compra que perdeu todas as partes é pulada inteira. Devolve `desfeito` se pelo menos uma
+    parte voltou."""
+    tabela = _TABELAS_DAS_PARTES[de][2]
+    dono = "lancamento_id" if de == "lancamento" else "parcelamento_id"
+    if not conn.execute(f"SELECT 1 FROM {tabela} WHERE {dono} = %s", (dono_id,)).fetchone():
+        return "mudou_depois"
+    quem = _quem_mudou_as_partes(conn, de, dono_id, versao)
+    voltou = False
+    for parte in partes:
+        resultado = _voltar_parte(conn, de, parte)
+        voltou |= resultado == "desfeito"
+        por, em = quem if resultado in ("mudou_depois", "excluido") else (None, None)
+        conn.execute(
+            "UPDATE edicao_em_lote_partes SET resultado_do_desfazer = %s, alterado_por = %s,"
+            " alterado_em = %s WHERE lote_id = %s AND parte_id = %s",
+            (resultado, por, em, lote_id, parte.parte_id),
+        )
+    # Nenhuma voltou: os pulados são as partes, cada uma com o seu motivo.
+    return "desfeito" if voltou else "mudou_depois"
 
 
 def _desfazer_lancamento(
@@ -1034,15 +1107,18 @@ def _desfazer_lancamento(
     excluido = conn.execute("SELECT excluido_em FROM lancamentos WHERE id = %s", (id,)).fetchone()
     if not excluido or excluido[0]:
         return "excluido"
+    partes = _partes_do_lote(conn, lote_id, id)
     if conn.execute(
         "SELECT 1 FROM lancamento_campos WHERE lancamento_id = %s AND campo = ANY(%s)"
         " AND versao > %s",
-        (id, CAMPOS_DO_LOTE, antes.versao),
+        (id, CAMPOS_DA_COMPRA if partes else CAMPOS_DO_LOTE, antes.versao),
     ).fetchone():
         return "mudou_depois"
-    if partes := _partes_do_lote(conn, lote_id, id):
+    if partes:
         (atual,) = ler_por_ids(conn, [id])
-        if (resultado := _voltar_partes(conn, "lancamento", partes)) != "desfeito":
+        if (
+            resultado := _voltar_partes(conn, lote_id, "lancamento", id, partes, antes.versao)
+        ) != "desfeito":
             return resultado
         versao = subir_versao(
             conn, id, atual.versao, "alterado_por = %s, alterado_em = %s", (usuario, momento)
@@ -1073,7 +1149,7 @@ def _desfazer_parcelamento(conn, lote_id: UUID, registro: tuple) -> str:
     lote."""
     id, categorias_antes, tags_antes, escolhida, categorias_depois, tags_depois = registro
     if partes := _partes_do_lote(conn, lote_id, id):
-        resultado = _voltar_partes(conn, "parcelamento", partes)
+        resultado = _voltar_partes(conn, lote_id, "parcelamento", id, partes)
         if resultado == "desfeito":
             acompanhar_estornos_do_parcelamento(conn, id)
         return resultado
@@ -1204,6 +1280,17 @@ def _cancelar(url: str | None, id: UUID, usuario: str, motivo: str) -> str:
             ).fetchone()[0]
             for tabela in ("edicao_em_lote_lancamentos", "edicao_em_lote_parcelamentos")
         )
+    with conectar(url) as conn:
+        # A compra que voltou só em parte também ficou com a mudança do lote.
+        (em_parte,) = conn.execute(
+            "SELECT count(DISTINCT r.dono_id) FROM edicao_em_lote_partes r"
+            " JOIN edicao_em_lote_lancamentos e ON e.lote_id = r.lote_id"
+            " AND e.lancamento_id = r.dono_id"
+            " WHERE r.lote_id = %s AND r.resultado_do_desfazer <> 'desfeito'"
+            " AND e.resultado_do_desfazer = 'desfeito'",
+            (id,),
+        ).fetchone()
+    ficaram += em_parte
     if ficaram:
         motivo += (
             f"; {ficaram} lançamento{'s' if ficaram > 1 else ''} mudado depois "
@@ -1313,16 +1400,51 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
         return _ler(conn, nova.id).edicao, True
 
 
+def _partes_puladas(conn, lote_id: UUID) -> dict[UUID, list[tuple]]:
+    """As partes que o desfazer pulou, por compra, na ordem delas (a apagada no fim, sem
+    descrição)."""
+    puladas: dict[UUID, list[tuple]] = {}
+    for dono_id, *pulada in conn.execute(
+        "SELECT r.dono_id, r.parte_id, COALESCE(p.descricao, ''), r.resultado_do_desfazer,"
+        " r.alterado_por, r.alterado_em FROM edicao_em_lote_partes r"
+        " JOIN edicao_em_lote_lancamentos e ON e.lote_id = r.lote_id"
+        " AND e.lancamento_id = r.dono_id"
+        " LEFT JOIN lancamento_partes p ON p.id = r.parte_id"
+        " WHERE r.lote_id = %s AND r.resultado_do_desfazer <> 'desfeito'"
+        " ORDER BY r.dono_id, p.ordem NULLS LAST, r.parte_id",
+        (lote_id,),
+    ):
+        puladas.setdefault(dono_id, []).append(pulada)
+    return puladas
+
+
 def _pulados(conn, lote_id: UUID, usuario: str) -> list[PuladoNoDesfazer]:
     pulados = []
+    partes = _partes_puladas(conn, lote_id)
     for id, motivo, versao, descricao, excluido_por, excluido_em in conn.execute(
         "SELECT r.lancamento_id, r.resultado_do_desfazer, r.versao, l.descricao, l.excluido_por,"
         " l.excluido_em FROM edicao_em_lote_lancamentos r"
         " JOIN lancamentos l ON l.id = r.lancamento_id"
-        " WHERE r.lote_id = %s AND r.resultado_do_desfazer <> 'desfeito'"
-        " ORDER BY l.data DESC, l.criado_em DESC, l.id",
-        (lote_id,),
+        " WHERE r.lote_id = %s AND (r.resultado_do_desfazer <> 'desfeito' OR r.lancamento_id"
+        " = ANY(%s)) ORDER BY l.data DESC, l.criado_em DESC, l.id",
+        (lote_id, list(partes)),
     ):
+        if id in partes:
+            # O desfazer olhou cada parte: os pulados são as partes.
+            pulados.extend(
+                PuladoNoDesfazer(
+                    lancamento_id=id,
+                    descricao=descricao,
+                    parte_id=parte_id,
+                    parte_descricao=parte_descricao,
+                    motivo=motivo_da_parte,
+                    alterado_por=por,
+                    alterado_em=em,
+                    por_voce=por == usuario,
+                )
+                for parte_id, parte_descricao, motivo_da_parte, por, em in partes[id]
+            )
+            continue
         por, em = excluido_por, excluido_em
         if motivo == "mudou_depois":
             # A parte refeita pelo parcelamento não sobe a versão de um campo da parcela.

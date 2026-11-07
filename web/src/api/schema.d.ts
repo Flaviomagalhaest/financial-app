@@ -3587,6 +3587,13 @@ export interface components {
             lancamento_id: string;
             /** Descricao */
             descricao: string;
+            /** Parte Id */
+            parte_id?: string | null;
+            /**
+             * Parte Descricao
+             * @default
+             */
+            parte_descricao: string;
             /**
              * Motivo
              * @enum {string}

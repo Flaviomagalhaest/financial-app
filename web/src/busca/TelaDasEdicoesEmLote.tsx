@@ -24,7 +24,14 @@ export function TelaDasEdicoesEmLote() {
       ? `excluído por ${quem(p.alterado_por)}`
       : p.motivo === "mudou_depois"
         ? `${quem(p.alterado_por)} mudou as categorias ou as tags depois${p.alterado_em ? `, ${quando(p.alterado_em)}` : ""}`
-        : "uma categoria ou tag que ele tinha foi juntada a outra ou excluída";
+        : `uma categoria ou tag que ${p.parte_id ? "ela" : "ele"} tinha foi juntada a outra ou excluída`;
+  // Na compra com partes, o desfazer pula só a parte (ticket 201): "Compra › Parte: motivo".
+  const pulado = (p: Pulado) => {
+    const compra = p.descricao || "Sem descrição";
+    if (!p.parte_id) return `${compra}: ${porque(p)}`;
+    if (p.motivo === "excluido") return `${compra} › parte apagada por ${quem(p.alterado_por)}`;
+    return `${compra} › ${p.parte_descricao || "Sem descrição"}: ${porque(p)}`;
+  };
 
   async function desfazer(edicao: EdicaoEmLote) {
     setDesfazendo(edicao.id);
@@ -57,9 +64,7 @@ export function TelaDasEdicoesEmLote() {
               <p>{contagem(desfeita.resultado.pulados.length, "ficou como está", "ficaram como estão")}:</p>
               <ul aria-label="Pulados no desfazer">
                 {desfeita.resultado.pulados.map((p) => (
-                  <li key={p.lancamento_id}>
-                    {p.descricao || "Sem descrição"}: {porque(p)}
-                  </li>
+                  <li key={p.parte_id ?? p.lancamento_id}>{pulado(p)}</li>
                 ))}
               </ul>
             </>

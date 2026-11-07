@@ -1496,3 +1496,43 @@ def test_backup_da_versao_34_restaura_recorrencia_sem_ocorrencia_pulada_pela_fat
         assert conn.execute(
             "SELECT valor_centavos, puladas_pela_fatura_paga FROM recorrencias"
         ).fetchall() == [(1000, None)]
+
+
+def test_backup_da_versao_35_restaura_as_partes_do_lote_sem_o_resultado_do_desfazer(database_url):
+    # O formato 35, anterior ao ticket 201: o desfazer voltava a compra inteira, sem resultado
+    # por parte.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO edicao_em_lote_partes (lote_id, parte_id, dono_id, categoria_ids_antes,"
+            " tag_ids_antes, categoria_ids_depois, tag_ids_depois)"
+            " VALUES ('00000000-0000-0000-0000-000000000001',"
+            " '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003',"
+            " '[]', '[]', '[]', '[]')"
+        )
+        atual = gerar_backup(conn)
+        conn.execute("DELETE FROM edicao_em_lote_partes")
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            conteudo = origem.read(nome)
+            if nome == "edicao_em_lote_partes.csv":
+                # Sem o resultado, quem mudou a parte e quando, as 3 últimas colunas.
+                linhas = conteudo.decode().strip("\r\n").splitlines()
+                conteudo = (
+                    "\r\n".join(linha.rsplit(",", 3)[0] for linha in linhas).encode() + b"\r\n"
+                )
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 35
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute(
+            "SELECT dono_id::text, resultado_do_desfazer, alterado_por, alterado_em"
+            " FROM edicao_em_lote_partes"
+        ).fetchall() == [("00000000-0000-0000-0000-000000000003", None, None, None)]

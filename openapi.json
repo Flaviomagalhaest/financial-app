@@ -9758,6 +9758,23 @@
             "type": "string",
             "title": "Descricao"
           },
+          "parte_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parte Id"
+          },
+          "parte_descricao": {
+            "type": "string",
+            "title": "Parte Descricao",
+            "default": ""
+          },
           "motivo": {
             "type": "string",
             "enum": [

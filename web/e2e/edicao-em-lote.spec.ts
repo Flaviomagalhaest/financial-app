@@ -135,3 +135,53 @@ test("a compra com partes muda nas partes, e a prévia mostra cada parte que mud
   const [compra] = (await api.ler("/api/lancamentos")).filter((l: { descricao: string }) => l.descricao === `Loja ${s}`);
   expect(compra.partes.map((p: { categoria_ids: string[] }) => p.categoria_ids.sort())).toEqual([[casa.id], [mercado.id, casa.id].sort()]);
 });
+
+test("o desfazer diz qual parte da compra ficou como está e qual foi apagada", async ({ page }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/#/busca");
+  await entrar(page);
+  const api = await apiDaPagina(page);
+  const { conta, mercado, casa } = await preparar(api, s);
+  const parte = (descricao: string, valor_centavos: number) => ({ id: randomUUID(), descricao, valor_centavos, categoria_ids: [mercado.id], tags: [] });
+  const compra = await api.criar("/api/lancamentos", {
+    id: randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 10000,
+    data: "2026-03-02",
+    descricao: `Loja ${s}`,
+    conta_id: conta.id,
+    categoria_ids: [],
+    tags: [],
+    partes: [parte("Vassoura", 5000), parte("Arroz", 3000), parte("Sabão", 2000)],
+  });
+
+  await buscar(page, s);
+  await page.getByRole("button", { name: "Selecionar para editar em lote" }).click();
+  await page.getByLabel(`Marcar Loja ${s}`).check();
+  await page.getByRole("button", { name: "Editar em lote" }).click();
+  const folha = page.getByRole("dialog", { name: "Editar em lote" });
+  await folha.getByRole("group", { name: "Categorias de despesa" }).getByRole("button", { name: `Casa ${s}` }).click();
+  await folha.getByRole("button", { name: "Ver prévia" }).click();
+  await folha.getByRole("button", { name: "Aplicar em 1 lançamento" }).click();
+  await expect(folha).toBeHidden();
+
+  // Depois do lote: o arroz vai só para a Casa e o sabão sai da compra.
+  const [agora] = (await api.ler("/api/lancamentos")).filter((l: { id: string }) => l.id === compra.id);
+  const [vassoura, arroz] = agora.partes;
+  await api.mudar(`/api/lancamentos/${compra.id}`, {
+    versao: agora.versao,
+    partes: [{ ...vassoura, valor_centavos: 7000 }, { ...arroz, categoria_ids: [casa.id] }],
+  });
+
+  await page.getByRole("status").getByRole("link", { name: "Desfazer" }).click();
+  await page.getByRole("button", { name: `Desfazer Categorias: acrescentar Casa ${s}` }).click();
+
+  const status = page.getByRole("status");
+  await expect(status).toContainText(`Desfeita: Categorias: acrescentar Casa ${s}, em 1 lançamento.`);
+  const pulados = status.getByRole("list", { name: "Pulados no desfazer" }).getByRole("listitem");
+  await expect(pulados).toHaveCount(2);
+  await expect(pulados.first()).toContainText(`Loja ${s} › Arroz: você mudou as categorias ou as tags depois`);
+  await expect(pulados.last()).toHaveText(`Loja ${s} › parte apagada por você`);
+  const [desfeita] = (await api.ler("/api/lancamentos")).filter((l: { id: string }) => l.id === compra.id);
+  expect(desfeita.partes.map((p: { categoria_ids: string[] }) => p.categoria_ids)).toEqual([[mercado.id], [casa.id]]);
+});
