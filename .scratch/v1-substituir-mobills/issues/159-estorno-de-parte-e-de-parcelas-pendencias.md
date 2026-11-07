@@ -33,6 +33,6 @@ Decidido com o dono (adendo do ticket 159 na [ADR 0016](../../../docs/adr/0016-e
 - **Dividir uma compra com estorno**: fica como está (o estorno antigo fica no todo, com a classificação e a pessoa que tinha).
 - **Juntar ou tirar parte com estorno**: continua recusado; exclui-se o estorno antes.
 - **Estorno de todas de uma parte do parcelamento**: já resolvido pelo [160](160-estorno-de-todas-de-uma-parte-do-parcelamento.md).
-- **Item do estorno de todas**: segue a escolha de item do parcelamento, como o de uma parte. Implementação no [190](190-item-e-pessoa-do-estorno-acompanham-a-compra.md).
+- **Item do estorno de todas**: segue a escolha de item do parcelamento, como o de uma parte. Implementação no [191](191-item-e-pessoa-do-estorno-acompanham-a-compra.md).
 - **Parcelamento com estorno de todas**: a correção ou a exclusão de parcela que deixaria o total abaixo do já estornado é recusada (422) antes de gravar. Implementação junto do [188](188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
-- **Pessoa do estorno**: acompanha a da compra, da parte ou do parcelamento, como as categorias e tags; o avulso guarda a dada. Implementação no [190](190-item-e-pessoa-do-estorno-acompanham-a-compra.md).
+- **Pessoa do estorno**: acompanha a da compra, da parte ou do parcelamento, como as categorias e tags; o avulso guarda a dada. Implementação no [191](191-item-e-pessoa-do-estorno-acompanham-a-compra.md).
