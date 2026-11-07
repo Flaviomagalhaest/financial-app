@@ -51,7 +51,7 @@ import { avisoDasMantidas, comoMuda, divisao, pedidoDo, problemaDo, rotuloDasPar
 import { problemaDa, regraDa, rotuloDaRecorrencia, type RecorrenciaNaFolha } from "./recorrencia";
 import { avisoDasPuladas, ocorrenciasPuladas, parcelasPuladas } from "./puladas";
 import { Teclado } from "./Teclado";
-import { EditorDePartes, emEdicao, emEdicaoNaProporcao, parteNova, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
+import { dividirEmPartes, EditorDePartes, emEdicao, emEdicaoNaProporcao, juntarPartes, partesParaSalvar, problemaDasPartes, proporcaoAposMudar, redividirNaProporcao, type ParteEmEdicao } from "./partes";
 
 type Tipo = "despesa" | "receita";
 type Situacao = LancamentoNaTela["situacao"];
@@ -378,15 +378,15 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
 
   // O valor mudou: as partes que vieram de um favorito ou sugestão se dividem de novo na mesma proporção.
   useEffect(() => {
-    if (!proporcao || !partes || centavos <= 0 || proporcao.length !== partes.length) return;
-    const valores = dividirNaProporcao(proporcao, centavos).map(comoDigitado);
-    if (partes.every((p, i) => p.valor === valores[i])) return;
-    setPartes(partes.map((p, i) => ({ ...p, valor: valores[i] })));
+    if (!partes) return;
+    const novas = redividirNaProporcao(partes, proporcao, centavos);
+    if (!novas || partes.every((p, i) => p.valor === novas[i].valor)) return;
+    setPartes(novas);
   }, [centavos, proporcao, partes]);
 
   /** O editor mudou as partes: só a classificação mantém a proporção; valor tocado ou parte posta ou tirada a solta. */
   function mudarPartes(novas: ParteEmEdicao[]) {
-    if (proporcao && (novas.length !== partes?.length || novas.some((p, i) => p.valor !== partes[i].valor))) setProporcao(null);
+    setProporcao(proporcaoAposMudar(proporcao, partes, novas));
     setPartes(novas);
   }
 
@@ -473,7 +473,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   /** A compra se divide em duas partes: a primeira com o que ela tinha, a segunda vazia, com o resto do valor. */
   function dividir() {
     setProporcao(null);
-    setPartes([{ ...parteNova(), categoria_ids: categoriaIds, tags, pessoa }, parteNova()]);
+    setPartes(dividirEmPartes({ categoria_ids: categoriaIds, tags, pessoa }));
     setCategoriaIds([]);
     setTags([]);
     setPessoa(null);
@@ -482,14 +482,15 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
 
   /** Tirar a penúltima parte: a compra volta a ser uma, com a classificação da parte que ficou. */
   function juntar(fica: ParteEmEdicao) {
+    const junta = juntarPartes(fica, descricao);
     setPartes(null);
     setProporcao(null);
     // A compra que se nomeava pelas partes fica com o nome da que sobrou.
-    if (!descricao.trim()) setDescricao(fica.descricao);
-    setCategoriaIds(fica.categoria_ids);
-    setTags(fica.tags);
-    setPessoa(fica.pessoa ?? null);
-    setItemTocado(fica.item_categoria_id ?? null);
+    setDescricao(junta.descricao);
+    setCategoriaIds(junta.classificacao.categoria_ids);
+    setTags(junta.classificacao.tags);
+    setPessoa(junta.classificacao.pessoa);
+    setItemTocado(junta.item);
   }
 
   /** As partes com a escolha de item que o aviso de cada uma decidiu (a tocada ou a que ela tinha). */

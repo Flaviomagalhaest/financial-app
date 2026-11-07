@@ -1,7 +1,7 @@
 # Editor de partes com a mesma lógica nas telas de lançamento e do parcelamento
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `codebase-design`, `implement`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -15,5 +15,5 @@ A tela do parcelamento (`web/src/lancamentos/TelaDoParcelamento.tsx`) repete a l
 
 ## Checklist
 
-- [ ] As regras de dividir, juntar e seguir a proporção num lugar só, usado pelas telas
-- [ ] Specs de partes (`partes-da-compra`, `partes-na-compra-parcelada`, `partes-pela-tela-do-parcelamento`, `partes-na-recorrencia`) verdes; verificações do projeto e PR para `main`
+- [x] As regras de dividir, juntar e seguir a proporção num lugar só, usado pelas telas
+- [x] Specs de partes (`partes-da-compra`, `partes-na-compra-parcelada`, `partes-pela-tela-do-parcelamento`, `partes-na-recorrencia`) verdes; verificações do projeto e PR para `main`

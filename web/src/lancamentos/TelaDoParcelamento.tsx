@@ -28,7 +28,7 @@ import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, hoje, rotuloDaFatura } from "./datas";
 import { comoDigitado, dividirNaProporcao, emCentavos, formatarCentavos } from "./dinheiro";
 import { avisoDasMantidas, comoMuda, divisao, type ValorDigitado } from "./parcelamento";
-import { EditorDePartes, emEdicao, mesmasPartes, parteNova, partesParaSalvar, problemaDasPartes, PartesDaCompra, valoresDasPartes, type Parte, type ParteEmEdicao } from "./partes";
+import { dividirEmPartes, EditorDePartes, emEdicao, juntarPartes, mesmasPartes, partesParaSalvar, proporcaoAposMudar, redividirNaProporcao, problemaDasPartes, PartesDaCompra, valoresDasPartes, type Parte, type ParteEmEdicao } from "./partes";
 
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -310,29 +310,26 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
     const centavos = emCentavos(novo.valor) ?? 0;
     const trocouOModo = novo.valorDigitado !== form.valorDigitado;
     const pesos = novo.proporcao ?? (trocouOModo && form.partes ? valoresDasPartes(form.partes, centavosDoForm) : null);
-    if (novo.partes && pesos && centavos > 0 && (trocouOModo || novo.proporcao) && pesos.every((v) => v > 0)) {
-      const valores = dividirNaProporcao(pesos, centavos);
-      novo.partes = novo.partes.map((x, i) => ({ ...x, valor: comoDigitado(valores[i]) }));
-    }
+    if (novo.partes && (trocouOModo || novo.proporcao)) novo.partes = redividirNaProporcao(novo.partes, pesos, centavos) ?? novo.partes;
     setForm(novo);
     setAviso(null);
   };
   /** O editor mudou as partes: só a classificação mantém a proporção; valor tocado ou parte posta ou tirada a solta. */
   const mudarPartes = (novas: ParteEmEdicao[]) => {
-    const tocou = !form.partes || novas.length !== form.partes.length || novas.some((x, i) => x.valor !== form.partes![i].valor);
-    setForm({ ...form, partes: novas, proporcao: tocou ? null : form.proporcao });
+    setForm({ ...form, partes: novas, proporcao: proporcaoAposMudar(form.proporcao, form.partes, novas) });
     setAviso(null);
   };
   /** O parcelamento se divide em duas partes: a primeira com a classificação que ele tinha, a segunda vazia, com o resto do valor. */
   const dividir = () => {
-    setForm({ ...form, partes: [{ ...parteNova(), categoria_ids: form.categoriaIds, tags: form.tags, pessoa: form.pessoa }, parteNova()], proporcao: null, categoriaIds: [], tags: [], pessoa: null });
+    setForm({ ...form, partes: dividirEmPartes({ categoria_ids: form.categoriaIds, tags: form.tags, pessoa: form.pessoa }), proporcao: null, categoriaIds: [], tags: [], pessoa: null });
     setItemTocado(null);
     setAviso(null);
   };
   /** Tirar a penúltima parte: o parcelamento volta a ser um, com a classificação da parte que ficou. */
   const juntar = (fica: ParteEmEdicao) => {
-    setForm({ ...form, partes: null, proporcao: null, categoriaIds: fica.categoria_ids, tags: fica.tags ?? [], pessoa: fica.pessoa ?? null, descricao: form.descricao.trim() ? form.descricao : (fica.descricao ?? "") });
-    setItemTocado(fica.item_categoria_id ?? null);
+    const junta = juntarPartes(fica, form.descricao);
+    setForm({ ...form, partes: null, proporcao: null, categoriaIds: junta.classificacao.categoria_ids, tags: junta.classificacao.tags, pessoa: junta.classificacao.pessoa, descricao: junta.descricao });
+    setItemTocado(junta.item);
     setAviso(null);
   };
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
