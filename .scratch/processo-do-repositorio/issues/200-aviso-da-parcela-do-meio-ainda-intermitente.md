@@ -1,7 +1,7 @@
 # Aviso da parcela do meio ainda falha de vez em quando no teste
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -15,5 +15,9 @@ O teste "a tela do parcelamento com a lista sem a 1ª parcela não calcula o avi
 
 ## Checklist
 
-- [ ] Achar a causa (a leitura de antes, com a 1ª parcela, ainda na memória? o `page.route` chegando depois da releitura?) e corrigir o teste ou a tela
-- [ ] O teste verde com `--repeat-each 10`; verificações do projeto e PR para `main`
+- [x] Achar a causa (a leitura de antes, com a 1ª parcela, ainda na memória? o `page.route` chegando depois da releitura?) e corrigir o teste ou a tela
+- [x] O teste verde com `--repeat-each 10`; verificações do projeto e PR para `main`
+
+## Resolução
+
+Causa: no teste, `aba(page, "Hoje")` só clica; o `location.hash` do passo seguinte rodava antes de a tela sair, então o app nunca remontava o parcelamento, nenhuma leitura passava pelo `page.route` e as asserções passavam/falhavam sobre a tela velha (com a 1ª parcela). A tela está certa. O teste agora espera a tela do parcelamento sair e a resposta filtrada chegar antes de verificar. 10 de 10 com `--repeat-each 10` (antes 7 de 10 falhavam).
