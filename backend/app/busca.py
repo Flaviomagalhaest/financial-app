@@ -157,6 +157,7 @@ class _Filtro:
     def __init__(self, *condicoes: str) -> None:
         self.condicoes, self.parametros = list(condicoes), []
         self.de, self.parametros_do_de, self.valor = "lancamentos", [], "lancamentos.valor_centavos"
+        self.com_partes = False  # `de` junta as partes achadas (`achadas`)
 
     @property
     def todos_os_parametros(self) -> list:
@@ -250,11 +251,16 @@ def _do_lancamento(criterios: CriteriosDaBusca) -> _Filtro:
             f" WHERE p.lancamento_id = lancamentos.id AND {da_parte.sql}) achadas ON true"
         )
         filtro.parametros_do_de = da_parte.parametros
+        filtro.com_partes = True
         filtro.valor = "COALESCE(achadas.valor, lancamentos.valor_centavos)"
         filtro.exigir(
             f"(achadas.ids IS NOT NULL OR (NOT {_TEM_PARTES} AND {do_lancamento.sql}))",
             *do_lancamento.parametros,
         )
+    if _agrupar(criterios):
+        # Um join no lugar de uma subconsulta por lançamento: no DSQL, 100 mil subconsultas
+        # custavam cerca de 7 s por passada (ticket 119).
+        filtro.de += " LEFT JOIN parcelamentos data_do_parcelamento ON data_do_parcelamento.id = lancamentos.parcelamento_id"
     if criterios.conta_ids:
         filtro.exigir("lancamentos.conta_id = ANY(%s)", criterios.conta_ids)
     if criterios.periodo_de:
@@ -322,10 +328,7 @@ def _data_da_linha(criterios: CriteriosDaBusca) -> str:
     """A data da compra: a do parcelamento quando ele é uma linha (no boleto, a 1ª parcela)."""
     if not _agrupar(criterios):
         return "lancamentos.data"
-    return (
-        "COALESCE((SELECT p.data FROM parcelamentos p"
-        " WHERE p.id = lancamentos.parcelamento_id), lancamentos.data)"
-    )
+    return "COALESCE(data_do_parcelamento.data, lancamentos.data)"
 
 
 def _filtro_de_valor(criterios: CriteriosDaBusca) -> tuple[str, list]:
@@ -409,7 +412,7 @@ def partes_achadas_no_resultado(
     pessoa (a edição em lote só muda essas, ticket 150); vazio para a que não tem nenhuma. Sem
     esses filtros, `None`: valem todas as partes."""
     do_lancamento = _do_lancamento(criterios)
-    if do_lancamento.de == "lancamentos":
+    if not do_lancamento.com_partes:
         return None
     achadas = _partes_achadas(conn, do_lancamento, ids)
     return {id: set(achadas.get(id, [])) for id in ids}
@@ -418,17 +421,23 @@ def partes_achadas_no_resultado(
 def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
     do_lancamento = _do_lancamento(criterios)
     linhas, parametros_das_linhas = _linhas(criterios)
-    quantidade, *centavos = conn.execute(
-        f"SELECT count(*) FILTER (WHERE NOT transferencia), {', '.join(f'COALESCE(sum({t}_{s}), 0)::bigint' for t, s in _SOMAS)}"
-        f" FROM {linhas}",
-        parametros_das_linhas,
-    ).fetchone()
-    soma = dict(zip(_SOMAS, centavos))
-    pagina = conn.execute(
-        f"SELECT chave, parcelado, transferencia FROM {linhas} ORDER BY {_ORDENS[criterios.ordem]}"
-        " LIMIT %s OFFSET %s",
+    # Uma passada só pelo histórico: os totais e a página saem da mesma `base` materializada. Duas
+    # consultas liam o histórico duas vezes, e no DSQL cada leitura custa o mesmo (ticket 119).
+    somas = ", ".join(f"COALESCE(sum({t}_{s}), 0)::bigint" for t, s in _SOMAS)
+    ordem = _ORDENS[criterios.ordem]
+    linhas_lidas = conn.execute(
+        f"WITH base AS MATERIALIZED (SELECT * FROM {linhas}),"
+        f" totais AS (SELECT count(*) FILTER (WHERE NOT transferencia), {somas} FROM base),"
+        " pagina AS (SELECT chave, parcelado, transferencia, data, criado_em, valor FROM base"
+        f" ORDER BY {ordem} LIMIT %s OFFSET %s)"
+        " SELECT totais.*, pagina.chave, pagina.parcelado, pagina.transferencia"
+        f" FROM totais LEFT JOIN pagina ON true ORDER BY {ordem}",
         [*parametros_das_linhas, POR_PAGINA + 1, criterios.pagina * POR_PAGINA],
     ).fetchall()
+    quantidade, *centavos = linhas_lidas[0][: 1 + len(_SOMAS)]
+    soma = dict(zip(_SOMAS, centavos))
+    # Sem linha na página, o LEFT JOIN traz uma só, com a chave nula.
+    pagina = [l[1 + len(_SOMAS) :] for l in linhas_lidas if l[1 + len(_SOMAS)] is not None]
     tem_mais = len(pagina) > POR_PAGINA
     pagina = pagina[:POR_PAGINA]
     parcelamentos = _parcelamentos(conn, do_lancamento, [c for c, e_parc, _ in pagina if e_parc])
@@ -464,7 +473,7 @@ def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
 
 def _partes_achadas(conn, do_lancamento: _Filtro, ids: list[UUID]) -> dict[UUID, list[UUID]]:
     """Das compras com partes, as partes que batem com os filtros de classificação."""
-    if not ids or do_lancamento.de == "lancamentos":
+    if not ids or not do_lancamento.com_partes:
         return {}
     return dict(
         conn.execute(
