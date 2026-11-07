@@ -1,7 +1,7 @@
 # Busca: medir no Aurora DSQL real e ler a página numa passada só
 
 Type: task
-Status: claimed
+Status: ready-for-human
 Blocked by: 112
 Skills: `run`, `implement`; HITL (precisa do DSQL do dono)
 Modelo recomendado: Sonnet
