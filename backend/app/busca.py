@@ -421,17 +421,23 @@ def partes_achadas_no_resultado(
 def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
     do_lancamento = _do_lancamento(criterios)
     linhas, parametros_das_linhas = _linhas(criterios)
-    quantidade, *centavos = conn.execute(
-        f"SELECT count(*) FILTER (WHERE NOT transferencia), {', '.join(f'COALESCE(sum({t}_{s}), 0)::bigint' for t, s in _SOMAS)}"
-        f" FROM {linhas}",
-        parametros_das_linhas,
-    ).fetchone()
-    soma = dict(zip(_SOMAS, centavos))
-    pagina = conn.execute(
-        f"SELECT chave, parcelado, transferencia FROM {linhas} ORDER BY {_ORDENS[criterios.ordem]}"
-        " LIMIT %s OFFSET %s",
+    # Uma passada só pelo histórico: os totais e a página saem da mesma `base` materializada. Duas
+    # consultas liam o histórico duas vezes, e no DSQL cada leitura custa o mesmo (ticket 119).
+    somas = ", ".join(f"COALESCE(sum({t}_{s}), 0)::bigint" for t, s in _SOMAS)
+    ordem = _ORDENS[criterios.ordem]
+    linhas_lidas = conn.execute(
+        f"WITH base AS MATERIALIZED (SELECT * FROM {linhas}),"
+        f" totais AS (SELECT count(*) FILTER (WHERE NOT transferencia), {somas} FROM base),"
+        " pagina AS (SELECT chave, parcelado, transferencia, data, criado_em, valor FROM base"
+        f" ORDER BY {ordem} LIMIT %s OFFSET %s)"
+        " SELECT totais.*, pagina.chave, pagina.parcelado, pagina.transferencia"
+        f" FROM totais LEFT JOIN pagina ON true ORDER BY {ordem}",
         [*parametros_das_linhas, POR_PAGINA + 1, criterios.pagina * POR_PAGINA],
     ).fetchall()
+    quantidade, *centavos = linhas_lidas[0][: 1 + len(_SOMAS)]
+    soma = dict(zip(_SOMAS, centavos))
+    # Sem linha na página, o LEFT JOIN traz uma só, com a chave nula.
+    pagina = [l[1 + len(_SOMAS) :] for l in linhas_lidas if l[1 + len(_SOMAS)] is not None]
     tem_mais = len(pagina) > POR_PAGINA
     pagina = pagina[:POR_PAGINA]
     parcelamentos = _parcelamentos(conn, do_lancamento, [c for c, e_parc, _ in pagina if e_parc])

@@ -76,13 +76,14 @@ def gerar(conn, avulsos: int, parcelamentos: int) -> None:
             f"""INSERT INTO parcelamentos (id, valor_total_centavos, parcelas, data, automatico,
                 descricao, conta_id, criado_por, alterado_por)
             SELECT md5('p' || n)::uuid, 50000, 5, date '2019-01-01' + (n * 131) % 2700, false,
-                'Compra parcelada ' || n, (SELECT id FROM contas LIMIT 1), 'flavio', 'flavio'
+                'Compra parcelada ' || n,
+                (SELECT id FROM contas ORDER BY id OFFSET n % 4 LIMIT 1), 'flavio', 'flavio'
             FROM generate_series({de}, {ate}) n"""
         )
         conn.execute(
             f"""INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,
                 conta_id, criado_por, alterado_por, mes, parcelamento_id, parcela)
-            SELECT md5('q' || n || '-' || k)::uuid, 'despesa', 'realizado', 10000, p.data + 30 * k,
+            SELECT md5('q' || n || '-' || k)::uuid, 'despesa', 'realizado', 5000 + (n * 37) % 20000, p.data + 30 * k,
                 p.descricao, p.conta_id, 'flavio', 'flavio', date_trunc('month', p.data + 30 * k)::date,
                 p.id, k + 1
             FROM generate_series({de}, {ate}) n, generate_series(0, 4) k,
