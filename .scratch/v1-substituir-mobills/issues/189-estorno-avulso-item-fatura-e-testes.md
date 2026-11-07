@@ -1,7 +1,7 @@
 # Estorno avulso: item na tela, crédito sem fatura, recusa do devido negativo e testes
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
