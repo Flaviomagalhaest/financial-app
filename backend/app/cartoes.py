@@ -311,10 +311,15 @@ def meses_pagos(conn, titular_id: UUID) -> set[date]:
     return {f.mes for f in faturas_do_titular(conn, titular_id) if paga_pelo_pagamento(f)}
 
 
-def recusa_da_paga(conn, cartao_id: UUID, mes: date) -> HTTPException:
+def a_fatura(conn, cartao_id: UUID, mes: date) -> str:
+    """Como os avisos chamam a fatura do titular `cartao_id` no `mes`."""
     (nome,) = conn.execute("SELECT nome FROM cartoes WHERE id = %s", (cartao_id,)).fetchone()
+    return f"fatura de {mes:%m/%Y} do {nome}"
+
+
+def recusa_da_paga(conn, cartao_id: UUID, mes: date) -> HTTPException:
     return recusar(
-        f"a fatura de {mes:%m/%Y} do {nome} está paga: para mudá-la, use a correção da fatura"
+        f"a {a_fatura(conn, cartao_id, mes)} está paga: para mudá-la, use a correção da fatura"
     )
 
 

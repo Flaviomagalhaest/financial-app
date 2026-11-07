@@ -13,6 +13,8 @@ Origem: decisão do [ticket 184](184-aviso-da-ocorrencia-que-a-fatura-paga-tirou
 
 A tela da recorrência mostra o aviso que o ticket 192 grava (como a tela do parcelamento mostra a recusa travada), com o botão para o casal dispensar ("Entendi"), que chama o endpoint de dispensa. Só na tela da regra: não entra nos avisos da aba inicial.
 
+Contrato do 192: a regra lida (`GET /api/recorrencias`) traz `aviso_da_fatura_paga` (texto pronto, ou `null`), e a dispensa é `DELETE /api/recorrencias/{id}/aviso-da-fatura-paga` (204).
+
 ## Checklist
 
 - [ ] Teste da tela: com aviso aparece; sem aviso não; dispensar some e chama o endpoint
