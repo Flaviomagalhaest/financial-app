@@ -8,10 +8,12 @@ import mesDaCompraTabela from "../../tabelas-de-teste/mes-da-compra.json" with {
 import divisaoTabela from "../../tabelas-de-teste/divisao-das-parcelas.json" with { type: "json" };
 import puladasTabela from "../../tabelas-de-teste/puladas.json" with { type: "json" };
 import redivisaoTabela from "../../tabelas-de-teste/redivisao-das-partes.json" with { type: "json" };
+import idsTabela from "../../tabelas-de-teste/ids-das-partes-nas-parcelas.json" with { type: "json" };
 import somasTabela from "../../tabelas-de-teste/somas-das-partes.json" with { type: "json" };
 import { mesDaCompra, ondeConta, percentual } from "../src/dados/aviso";
-import { somasDasPartes } from "../src/lancamentos/apresentacao";
+import { parteDaParcela, parteDoParcelamento, somasDasPartes } from "../src/lancamentos/apresentacao";
 import { dividirEmParcelas, redividir } from "../src/lancamentos/dinheiro";
+import { uuid5 } from "../src/lancamentos/uuid5";
 import { ocorrenciasPuladas, parcelasPuladas } from "../src/lancamentos/puladas";
 import type { RecorrenciaNaFolha } from "../src/lancamentos/recorrencia";
 
@@ -89,4 +91,30 @@ test.describe("parcelas puladas do boleto", () => {
       expect(parcelasPuladas(c.parcelas, c.data, c.hoje, c.no_cartao)).toBe(c.puladas);
     });
   }
+});
+
+test.describe("id da parte na parcela", () => {
+  for (const c of idsTabela.casos) {
+    test(c.caso, () => {
+      expect(uuid5(c.parcela_id, c.parte_id)).toBe(c.id);
+    });
+  }
+});
+
+test.describe("ligação da parte da parcela à do parcelamento", () => {
+  const regra = { id: "r", valor_total_centavos: 300, parcelas: 3, partes: [{ id: "a", valor_centavos: 200 }, { id: "b", valor_centavos: 100 }] };
+  const parcela = (partes: { id: string; valor_centavos: number }[]) => ({ id: idsTabela.casos[0].parcela_id, partes }) as never;
+  const deB = uuid5(idsTabela.casos[0].parcela_id, "b");
+
+  test("liga pelo id, em qualquer posição", () => {
+    const p = parcela([{ id: deB, valor_centavos: 100 }, { id: "propria", valor_centavos: 200 }]);
+    expect(parteDoParcelamento(p, deB, regra)).toBe("b");
+    expect(parteDaParcela(p, "b", regra)).toBe(deB);
+  });
+
+  test("a parte própria, com o mesmo número de partes, não é de nenhuma parte do parcelamento", () => {
+    const p = parcela([{ id: "x", valor_centavos: 200 }, { id: "y", valor_centavos: 100 }]);
+    expect(parteDoParcelamento(p, "x", regra)).toBeUndefined();
+    expect(parteDaParcela(p, "a", regra)).toBeUndefined();
+  });
 });

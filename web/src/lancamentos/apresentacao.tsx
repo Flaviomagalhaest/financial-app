@@ -1,5 +1,6 @@
 import { dividirEmParcelas, dividirNaProporcao, formatarCentavos } from "./dinheiro";
 import { dataPorExtenso } from "./datas";
+import { idNaParcela } from "./uuid5";
 import type { Cartao, NovoLancamento } from "../dados";
 
 type ComNome = { id: string; nome: string };
@@ -116,20 +117,18 @@ export function somasDasPartes(regra: ParcelamentoDoEstorno): Map<string, number
 }
 
 /**
- * A parte do parcelamento de que veio a parte de uma parcela: a da mesma posição, quando a parcela tem tantas partes quanto ele.
- * O servidor liga as duas pelo id; o aparelho, só para mostrar, pela posição.
+ * A parte do parcelamento de que veio a parte de uma parcela: a cujo `idNaParcela` (uuid5 da parcela e da parte) é o da parte da
+ * parcela, a mesma ligação do servidor (`id_na_parcela`, ticket 190). A parte própria da parcela não tem parte do parcelamento.
  */
 export function parteDoParcelamento(parcela: ParaEstorno, parteId: string, regra: ParcelamentoDoEstorno | undefined): string | undefined {
-  const i = parcela.partes?.findIndex((p) => p.id === parteId) ?? -1;
-  if (i < 0 || !regra?.partes || regra.partes.length !== parcela.partes?.length) return undefined;
-  return regra.partes[i].id;
+  return regra?.partes?.find((r) => idNaParcela(parcela.id, r.id) === parteId)?.id;
 }
 
-/** A parte da parcela que veio de uma parte do parcelamento, o caminho inverso de `parteDoParcelamento`. */
+/** A parte da parcela que veio de uma parte do parcelamento, o caminho inverso de `parteDoParcelamento`, pela mesma conta. */
 export function parteDaParcela(parcela: ParaEstorno, parteId: string, regra: ParcelamentoDoEstorno | undefined): string | undefined {
-  const i = regra?.partes?.findIndex((p) => p.id === parteId) ?? -1;
-  if (i < 0 || regra?.partes?.length !== parcela.partes?.length) return undefined;
-  return parcela.partes?.[i].id;
+  if (!regra?.partes?.some((r) => r.id === parteId)) return undefined;
+  const id = idNaParcela(parcela.id, parteId);
+  return parcela.partes?.find((p) => p.id === id)?.id;
 }
 
 /**
