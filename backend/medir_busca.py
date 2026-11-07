@@ -91,7 +91,11 @@ def gerar(conn, avulsos: int, parcelamentos: int) -> None:
             SELECT md5('q' || n || '-' || k)::uuid, (SELECT id FROM categorias LIMIT 1)
             FROM generate_series({de}, {ate}) n, generate_series(0, 4) k"""
         )
-    conn.execute("ANALYZE")
+    # O DSQL só analisa uma tabela por comando.
+    for (tabela,) in conn.execute(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+    ).fetchall():
+        conn.execute(f'ANALYZE public."{tabela}"')
 
 
 CENARIOS = {
