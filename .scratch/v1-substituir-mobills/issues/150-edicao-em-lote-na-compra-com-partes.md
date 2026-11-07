@@ -1,7 +1,7 @@
 # Edição em lote na compra com partes
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Opus
