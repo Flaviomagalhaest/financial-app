@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   descartarNaoEnviado,
+  dispensarAvisoDaFatura,
   excluirLancamento,
   excluirRecorrencia,
   mudarRecorrencia,
   useAvisoDePlanejamento,
   useCadastro,
   useCartoesComArquivados,
+  useConexao,
   useContasComArquivadas,
   useLancamentosComOsDeFora,
   useMudancasDaRecorrenciaNaoEnviadas,
@@ -121,6 +123,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const { cartoes: comArquivados } = useCartoesComArquivados();
   const { pessoas } = usePessoas();
   const opcoesDeTags = useTags();
+  const online = useConexao();
   const lancamento = lancamentos?.find((l) => l.id === id);
   const regra = recorrencias?.find((r) => r.id === lancamento?.recorrencia_id);
   const [form, setForm] = useState<Formulario | null>(null);
@@ -225,6 +228,11 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
     window.location.hash = "#/historico";
   }
 
+  async function dispensarAviso() {
+    const motivo = await dispensarAvisoDaFatura(regra!.id);
+    if (motivo) setErro(`Não foi possível dispensar o aviso: ${motivo}.`);
+  }
+
   async function excluir() {
     if (!window.confirm(`Excluir a recorrência ${titulo}? Os previstos de hoje em diante saem; o atrasado e o realizado ficam.`)) return;
     await excluirRecorrencia(regra!).catch(() => setErro("Não foi possível guardar no aparelho."));
@@ -244,6 +252,15 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
       <p className="vazio">
         Esta vez: {dataPorExtenso(lancamento.data)}, {lancamento.situacao}
       </p>
+      {regra.aviso_da_fatura_paga && (
+        <div className="aviso" role="status">
+          <p>{regra.aviso_da_fatura_paga}</p>
+          <button type="button" className="secundario" disabled={!online} onClick={() => void dispensarAviso()}>
+            Entendi
+          </button>
+          {!online && <p className="vazio">Dispensar precisa de internet.</p>}
+        </div>
+      )}
       {naoEnviadas.length > 0 && (
         <ul className="lista" aria-label="Mudanças não enviadas">
           {naoEnviadas.map((m) => (

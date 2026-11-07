@@ -1405,6 +1405,13 @@ export function dispensarSugerido(chave: string): Promise<string | null> {
   return mudarFavoritos(() => api.POST("/api/favoritos/sugeridos/dispensar", { body: { chave } }), "o servidor recusou dispensar o sugerido");
 }
 
+/** O casal dispensa o aviso da ocorrência que a fatura paga tirou (ticket 193); precisa de internet. */
+export async function dispensarAvisoDaFatura(recorrenciaId: string): Promise<string | null> {
+  const motivo = await recusaDe(() => api.DELETE("/api/recorrencias/{id}/aviso-da-fatura-paga", { params: { path: { id: recorrenciaId } } }).then((r) => ({ ...r, data: r.response.ok ? true : undefined })), "o servidor recusou dispensar o aviso");
+  if (motivo === null) await buscarEGuardar("/api/recorrencias", LEITURAS["/api/recorrencias"]);
+  return motivo;
+}
+
 /** O planejamento precisa de internet (ADR 0011). Copia os itens de `de` para `mes`, que precisa estar vazio. */
 export function copiarPlanejamento(mes: string, de: string): Promise<string | null> {
   return recusaDe(() => api.POST("/api/planejamento/{mes}/copiar", { params: { path: { mes } }, body: { de } }), "o servidor recusou a cópia");

@@ -1,7 +1,7 @@
 # Tela da regra mostra e dispensa o aviso da ocorrência pulada
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 192
 Skills: `implement`, `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -17,6 +17,6 @@ Contrato do 192: a regra lida (`GET /api/recorrencias`) traz `aviso_da_fatura_pa
 
 ## Checklist
 
-- [ ] Teste da tela: com aviso aparece; sem aviso não; dispensar some e chama o endpoint
-- [ ] Mostrar o aviso e o botão na tela da regra
-- [ ] Ver funcionando no app (`run`)
+- [x] Teste da tela: com aviso aparece; sem aviso não; dispensar some e chama o endpoint
+- [x] Mostrar o aviso e o botão na tela da regra
+- [x] Ver funcionando no app (`run`)
