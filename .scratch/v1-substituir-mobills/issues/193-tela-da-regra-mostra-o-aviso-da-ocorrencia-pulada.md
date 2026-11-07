@@ -1,0 +1,20 @@
+# Tela da regra mostra e dispensa o aviso da ocorrência pulada
+
+Type: task
+Status: ready-for-agent
+Blocked by: 192
+Skills: `implement`, `tdd`, `run`
+Modelo recomendado: Sonnet
+Effort recomendado: low
+Issue: #483
+Origem: decisão do [ticket 184](184-aviso-da-ocorrencia-que-a-fatura-paga-tirou.md)
+
+## O que fazer
+
+A tela da recorrência mostra o aviso que o ticket 192 grava (como a tela do parcelamento mostra a recusa travada), com o botão para o casal dispensar ("Entendi"), que chama o endpoint de dispensa. Só na tela da regra: não entra nos avisos da aba inicial.
+
+## Checklist
+
+- [ ] Teste da tela: com aviso aparece; sem aviso não; dispensar some e chama o endpoint
+- [ ] Mostrar o aviso e o botão na tela da regra
+- [ ] Ver funcionando no app (`run`)
