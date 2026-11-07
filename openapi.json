@@ -2497,6 +2497,45 @@
         }
       }
     },
+    "/api/recorrencias/{id}/aviso-da-fatura-paga": {
+      "delete": {
+        "summary": "Dispensar Aviso Da Fatura Paga",
+        "description": "Idempotente. Tira da regra o aviso das ocorrências puladas pela fatura paga (ticket 192):\nelas não voltam, o casal as lança à mão se precisar.",
+        "operationId": "dispensar_aviso_da_fatura_paga",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/parcelamentos": {
       "get": {
         "summary": "Listar Parcelamentos",
@@ -4742,6 +4781,14 @@
             },
             "type": "array",
             "title": "Tags"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
           }
         },
         "type": "object",
@@ -9620,10 +9667,9 @@
             "type": "integer",
             "title": "Estornos Fora"
           },
-          "com_partes_fora": {
+          "partes_que_mudam": {
             "type": "integer",
-            "title": "Com Partes Fora",
-            "default": 0
+            "title": "Partes Que Mudam"
           },
           "amostra": {
             "items": {
@@ -9653,6 +9699,7 @@
           "de_outro_tipo",
           "trocam_de_item",
           "estornos_fora",
+          "partes_que_mudam",
           "amostra",
           "recusa"
         ],
@@ -10018,6 +10065,17 @@
                 "type": "null"
               }
             ]
+          },
+          "aviso_da_fatura_paga": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aviso Da Fatura Paga"
           }
         },
         "type": "object",

@@ -40,4 +40,4 @@ Feito na API, na tela e nos testes ([ADR 0022](../../../docs/adr/0022-partes-da-
 - **Estorno**: "Todas as parcelas" soma as partes pela `proporcao_das_partes`, como o servidor.
 - **Testes**: `backend/tests/test_partes_pela_tela_do_parcelamento.py` (5) e `web/e2e/partes-pela-tela-do-parcelamento.spec.ts`; o 139 passa a esperar as partes somando o total. Backend inteiro (845) e as specs de parcelamento, partes e estorno (51) verdes.
 
-Pendências gravadas: [194](194-editor-de-partes-com-a-mesma-logica-nas-telas.md) (a lógica de partes repetida nas telas) e [195](195-trocar-total-e-parcela-sem-perder-o-valor.md) (decisão do dono: trocar o modo do valor descarta o digitado).
+Pendências gravadas: [199](199-editor-de-partes-com-a-mesma-logica-nas-telas.md) (a lógica de partes repetida nas telas) e [195](195-trocar-total-e-parcela-sem-perder-o-valor.md) (decisão do dono: trocar o modo do valor descarta o digitado). Ao integrar a `main`: [200](../../processo-do-repositorio/issues/200-aviso-da-parcela-do-meio-ainda-intermitente.md) (o teste do aviso da parcela do meio ainda falha de vez em quando, também na `main`).

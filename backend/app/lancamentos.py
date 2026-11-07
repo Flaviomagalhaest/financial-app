@@ -123,6 +123,7 @@ class Parte(BaseModel):
         return self
 
 
+AJUSTE_DE_VALOR_COM_PARTES = "a compra com partes não confirma com outro valor: edite as partes"
 SEM_CENTAVO_POR_PARTE = "a parcela não chega a um centavo por parte"
 SEM_CLASSIFICACAO_PROPRIA = "a compra com partes não tem categoria, tag nem pessoa próprias"
 DUAS_PARTES_OU_MAIS = "a compra tem duas partes ou mais"
@@ -847,7 +848,7 @@ def apagar_partes(conn, ids: list[UUID], so_as_ligacoes: bool = False) -> None:
 
 def acompanhar_estornos(conn, compra_id: UUID) -> None:
     """Os estornos de uma compra valem o que ela tem agora: categorias, tags (mesmo arquivadas) e o
-    item do planejamento. O estorno não guarda classificação própria (ticket 133, ADR 0016): esta
+    item do planejamento e a pessoa (ticket 191). O estorno não guarda classificação própria (ticket 133, ADR 0016): esta
     cópia roda onde a compra muda, e a leitura segue igual para quem soma. O estorno de uma parte
     segue a parte (ticket 138). O que foi estornado antes de a compra ser dividida fica com o que
     tinha: não há parte a seguir."""
@@ -881,7 +882,7 @@ def _copiar_da_compra(conn, estornos: list[UUID], compra_id: UUID) -> None:
         # contava sozinha): ele diminui o mesmo item e não fica "a escolher" em outro mês.
         "UPDATE lancamentos e SET"
         " item_categoria_id = COALESCE(c.item_categoria_id, c.item_atual_categoria_id),"
-        " item_atual_categoria_id = c.item_atual_categoria_id"
+        " item_atual_categoria_id = c.item_atual_categoria_id, pessoa = c.pessoa"
         " FROM lancamentos c WHERE c.id = %s AND e.id = ANY(%s)",
         (compra_id, estornos),
     )
@@ -898,7 +899,7 @@ def _copiar_da_parte(conn, estornos: list[UUID], parte_id: UUID) -> None:
     conn.execute(
         "UPDATE lancamentos e SET"
         " item_categoria_id = COALESCE(p.item_categoria_id, p.item_atual_categoria_id),"
-        " item_atual_categoria_id = p.item_atual_categoria_id"
+        " item_atual_categoria_id = p.item_atual_categoria_id, pessoa = p.pessoa"
         " FROM lancamento_partes p WHERE p.id = %s AND e.id = ANY(%s)",
         (parte_id, estornos),
     )
@@ -906,8 +907,8 @@ def _copiar_da_parte(conn, estornos: list[UUID], parte_id: UUID) -> None:
 
 def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
     """O estorno de todas as parcelas vale as categorias e as tags que o parcelamento tem agora
-    (ticket 138). Não tem escolha de item: conta no item do mês, como o crédito avulso. O de uma
-    parte segue a parte, com a escolha de item dela (ticket 160); o de antes da divisão do
+    (ticket 138), a escolha de item e a pessoa dele (ticket 191). O de uma parte segue a parte,
+    com a escolha de item e a pessoa dela (tickets 160 e 191); o de antes da divisão do
     parcelamento fica com o que tinha: não há parte a seguir."""
     estornos = conn.execute(
         "SELECT id, estorno_parte_id FROM lancamentos WHERE estorno_parcelamento_id = %s"
@@ -928,6 +929,11 @@ def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
             "SELECT tag_id FROM parcelamento_tags WHERE parcelamento_id = %s",
             parcelamento_id,
         )
+        conn.execute(
+            "UPDATE lancamentos e SET item_categoria_id = p.item_categoria_id, pessoa = p.pessoa"
+            " FROM parcelamentos p WHERE p.id = %s AND e.id = ANY(%s)",
+            (parcelamento_id, [e for e, _ in estornos]),
+        )
         return
     for parte_id in {p for _, p in estornos if p}:
         da_parte = [e for e, p in estornos if p == parte_id]
@@ -939,7 +945,7 @@ def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
             parte_id,
         )
         conn.execute(
-            "UPDATE lancamentos e SET item_categoria_id = p.item_categoria_id"
+            "UPDATE lancamentos e SET item_categoria_id = p.item_categoria_id, pessoa = p.pessoa"
             " FROM parcelamento_partes p WHERE p.id = %s AND e.id = ANY(%s)",
             (parte_id, da_parte),
         )
@@ -1561,6 +1567,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
             raise recusar("estorno leva as mesmas categorias e tags da compra")
         if "item_categoria_id" in mudancas:
             raise recusar("estorno conta no item do planejamento em que a compra conta")
+        if "pessoa" in mudancas:
+            raise recusar("estorno leva a pessoa da compra")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             if atual.estorno_de:
                 _conferir_estorno(conn, id, editado, atual.estorno_de)
@@ -1789,8 +1797,83 @@ def conferir_parcelamento_sem_estorno(conn, parcelamento_id: UUID) -> None:
         raise recusar("o parcelamento tem estorno; exclua o estorno antes")
 
 
+def conferir_o_que_fica_do_estorno_de_todas(
+    conn,
+    parcelamento_id: UUID,
+    parcelas: int,
+    total: int,
+    valor_novo: Callable[[int], int] | None = None,
+    exceto: UUID | None = None,
+) -> None:
+    """No parcelamento com estorno de todas as parcelas, o que sai (parcela excluída, total menor,
+    menos parcelas) não deixa a soma das parcelas que ficam abaixo do já estornado, de todas e de
+    cada parcela; na parte, a soma da parte nelas (ticket 188). `exceto` é a parcela que sai;
+    `valor_novo` dá o valor de depois de cada parcela (a correção)."""
+    if not conn.execute(
+        "SELECT 1 FROM lancamentos WHERE estorno_parcelamento_id = %s AND excluido_em IS NULL"
+        " LIMIT 1",
+        (parcelamento_id,),
+    ).fetchone():
+        return
+    from app.parcelamentos import valor_da_parcela
+
+    linhas = {
+        n: (id, valor, excluido, pela_regra)
+        for n, id, valor, excluido, pela_regra in conn.execute(
+            "SELECT parcela, id, valor_centavos, excluido_em IS NOT NULL, excluido_pela_regra"
+            " FROM lancamentos WHERE parcelamento_id = %s",
+            (parcelamento_id,),
+        )
+    }
+    ficam: list[int] = []
+    for n in range(1, parcelas + 1):
+        linha = linhas.get(n)
+        if linha and (linha[0] == exceto or (linha[2] and not linha[3])):
+            continue  # saiu, ou uma pessoa a excluiu
+        if valor_novo:
+            ficam.append(valor_novo(n))
+        else:
+            ficam.append(linha[1] if linha else valor_da_parcela(total, parcelas, n))
+    (estornado,) = conn.execute(
+        "SELECT COALESCE(SUM(valor_centavos), 0) FROM lancamentos"
+        " WHERE excluido_em IS NULL AND (estorno_parcelamento_id = %s"
+        " OR estorno_de IN (SELECT id FROM lancamentos WHERE parcelamento_id = %s))",
+        (parcelamento_id, parcelamento_id),
+    ).fetchone()
+    if sum(ficam) < estornado:
+        raise recusar(
+            f"o parcelamento tem {estornado} centavos estornados: as parcelas que ficam não"
+            " podem somar menos"
+        )
+    if valor_novo:
+        return  # a correção confere as partes em `conferir_partes_do_parcelamento_com_estorno`
+    ids = []
+    partes = []
+    for parte_id, valor in conn.execute(
+        "SELECT id, valor_centavos FROM parcelamento_partes WHERE parcelamento_id = %s"
+        " ORDER BY ordem",
+        (parcelamento_id,),
+    ):
+        ids.append(parte_id)
+        partes.append(valor)
+    somas = [0] * len(partes)
+    for valor in ficam:
+        somas = [s + v for s, v in zip(somas, dividir_pela_proporcao(valor, partes))]
+    for parte_id, centavos in estornado_nas_partes_do_parcelamento(conn, parcelamento_id).items():
+        if somas[ids.index(parte_id)] < centavos:
+            raise recusar(
+                f"a parte tem estornos de {centavos} centavos: as parcelas que ficam não"
+                " podem somar menos nela"
+            )
+
+
 def excluir(
-    conn, id: UUID, versao: int | None, usuario: str, acao_em: datetime | None = None
+    conn,
+    id: UUID,
+    versao: int | None,
+    usuario: str,
+    acao_em: datetime | None = None,
+    da_pessoa: bool = False,
 ) -> None:
     """Marca a exclusão: sem a marca, a edição que chega depois não saberia que perdeu para
     ela. Com `versao`, excluir o que o outro lado mudou depois é conflito."""
@@ -1801,6 +1884,17 @@ def excluir(
         return
     if not linha[1]:
         conferir_sem_estorno(conn, [id])
+        if da_pessoa:
+            # A regra (correção, reajuste) já conferiu o pedido inteiro antes de gravar.
+            parcela = conn.execute(
+                "SELECT parcelamento_id, p.parcelas, p.valor_total_centavos FROM lancamentos l"
+                " JOIN parcelamentos p ON p.id = l.parcelamento_id WHERE l.id = %s",
+                (id,),
+            ).fetchone()
+            if parcela:
+                conferir_o_que_fica_do_estorno_de_todas(
+                    conn, parcela[0], parcela[1], parcela[2], exceto=id
+                )
     if linha[1]:
         # A pessoa que exclui o que a regra da recorrência já tirou (a exclusão que estava
         # offline) pulou o mês: a geração não o traz de volta.
@@ -2096,6 +2190,13 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
     if so_redivide:
         # A parcela com partes confirmada com outro valor se divide de novo na mesma proporção.
         conferir_divisao(ajustes["valor_centavos"], proporcao_das_partes(conn, [id])[id])
+    if (
+        atual.partes
+        and "valor_centavos" in ajustes
+        and not (atual.parcelamento_id or atual.recorrencia_id)
+    ):
+        # Na compra à vista as partes são valores: outro valor pede editar as partes (ticket 156).
+        raise recusar(AJUSTE_DE_VALOR_COM_PARTES)
     mes, a_mao = _fatura_depois(conn, atual, _com_mudancas(atual, ajustes), ajustes)
     if mes != atual.mes:
         guardar_item_atual_do_lancamento(conn, id)  # no mês novo, fica no item em que estava
@@ -2118,7 +2219,7 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
         ),
     )
     # O valor de verdade (a conta de luz que veio maior) divide as partes da ocorrência de novo
-    # (ADR 0022); a compra à vista com partes é do ticket 156.
+    # (ADR 0022); a compra à vista com partes recusa o ajuste lá em cima (ticket 156).
     if "valor_centavos" in ajustes and atual.partes and atual.recorrencia_id:
         gravar_partes(conn, id, redivididas(atual.partes, ajustes["valor_centavos"]), usuario)
         ajustes["partes"] = True
@@ -2158,7 +2259,9 @@ def excluir_lancamento(
 ) -> Response:
     """Idempotente: excluir o que já não existe também dá 204. Com `versao`, o que o outro lado
     mudou depois dela é 409, para perguntar antes."""
-    resposta = na_rota(request, lambda conn: excluir(conn, id, versao, usuario, acao_em))
+    resposta = na_rota(
+        request, lambda conn: excluir(conn, id, versao, usuario, acao_em, da_pessoa=True)
+    )
     return resposta if isinstance(resposta, JSONResponse) else Response(status_code=204)
 
 

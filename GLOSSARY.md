@@ -172,7 +172,7 @@ Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: 
 _Avoid_: teto, limite, meta
 
 **Escolha do item**:
-A categoria, entre as do lançamento, cujo item do planejamento o casal escolheu para ele contar quando duas ou mais têm item no mês. Vale em qualquer mês em que essa categoria tem item, nunca muda sozinha e sai quando a categoria sai do lançamento; a recorrência e o parcelamento a guardam, e seus lançamentos já nascem com ela. O estorno não tem escolha própria: conta no item em que a compra conta.
+A categoria, entre as do lançamento, cujo item do planejamento o casal escolheu para ele contar quando duas ou mais têm item no mês. Vale em qualquer mês em que essa categoria tem item, nunca muda sozinha e sai quando a categoria sai do lançamento; a recorrência e o parcelamento a guardam, e seus lançamentos já nascem com ela. O estorno ligado a uma compra não tem escolha própria: conta no item em que a compra conta. O estorno avulso tem a dele, como a compra.
 _Avoid_: item principal, categoria principal
 
 **A escolher**:
@@ -202,7 +202,7 @@ Busca que o casal guarda com nome: os critérios (texto e filtros), a ordenaçã
 _Avoid_: busca salva, visão
 
 **Edição em lote**:
-Mudança de categorias e tags de vários lançamentos de uma vez, a partir do resultado de uma busca; mostra uma prévia, aplica tudo ou nada e pode ser desfeita por 30 dias. Uma compra parcelada conta como uma só.
+Mudança de categorias e tags de vários lançamentos de uma vez, a partir do resultado de uma busca; mostra uma prévia, aplica tudo ou nada e pode ser desfeita por 30 dias. Uma compra parcelada conta como uma só. Na compra com partes, a mudança vale em cada **Parte da compra** ou, na busca com filtro de categoria, tag ou pessoa, só nas partes que ela achou ([ADR 0022](docs/adr/0022-partes-da-compra.md)).
 _Avoid_: edição em massa, ação em massa
 
 **Evolução**:
@@ -253,6 +253,10 @@ _Avoid_: cartão dependente, segunda via
 Fatura fechada que recebeu um pagamento, de qualquer valor. O que faltou pagar passa para a fatura seguinte como saldo anterior. Daí em diante ela não recebe mais pagamento, compra, troca de fatura nem estorno; só muda pela correção de fatura ([ADR 0021](docs/adr/0021-o-pagamento-quita-a-fatura.md)).
 _Avoid_: fatura quitada, paga em parte
 
+**Ocorrência pulada pela fatura paga**:
+Ocorrência de recorrência no cartão, de antes de hoje, que não virou lançamento porque a fatura em que cairia foi paga depois da criação da regra, no meio da geração. Não volta, nem se a fatura for corrigida: a regra mostra um aviso com a data, o cartão e o mês da fatura, que junta as datas das puladas seguintes até o casal dispensá-lo, e o casal a lança à mão se precisar ([ADR 0021](docs/adr/0021-o-pagamento-quita-a-fatura.md)).
+_Avoid_: ocorrência perdida, ocorrência excluída, mês pulado
+
 **Correção de fatura**:
 Edição de uma fatura paga para consertar um erro (pagamentos, compras, datas, ajuste), que vale toda de uma vez ao salvar; a fatura continua paga e o saldo anterior que passou para a seguinte é refeito.
 _Avoid_: reabrir a fatura, fatura reaberta
@@ -262,11 +266,11 @@ O que faltou pagar de uma fatura paga (o total menos o pago), que passa para a f
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
 
 **Estorno**:
-Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original (ou à parte dela) e com as categorias e tags dela, que acompanham as da compra quando ela muda. Na compra parcelada, é de uma parcela ou de todas, num estorno só. A compra, parcela ou ocorrência com estorno não sai por regra nenhuma: a correção do parcelamento que a tiraria é recusada, e a recorrência que a tiraria a deixa como está. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
+Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original (ou à parte dela) e com as categorias, as tags, a escolha de item e a pessoa dela, que acompanham as da compra quando ela muda (o estorno anterior à divisão da compra fica com as que tinha). Na compra parcelada, é de uma parcela ou de todas, num estorno só; o de todas não deixa o parcelamento ficar abaixo do já estornado. A compra, parcela ou ocorrência com estorno não sai por regra nenhuma: a correção do parcelamento que a tiraria é recusada, e a recorrência que a tiraria a deixa como está. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
 _Avoid_: reembolso, devolução
 
 **Estorno avulso**:
-Crédito que aparece como linha própria na fatura sem uma compra identificável (uma correção de centavos, um crédito de loja), lançado um por um quando aparece; diminui o total da fatura e do mês, como o estorno, mas não está ligado a compra nem tem o limite do valor dela; a categoria, as tags e a pessoa são opcionais.
+Crédito que aparece como linha própria na fatura sem uma compra identificável (uma correção de centavos, um crédito de loja), lançado um por um quando aparece; diminui o total da fatura e do mês, como o estorno, mas não está ligado a compra nem tem o limite do valor dela, mas não pode deixar a fatura devendo menos que zero; a categoria, as tags e a pessoa são opcionais, e o item do planejamento é escolhido nele como na compra.
 _Avoid_: crédito avulso, reembolso
 
 **Parte da compra**:

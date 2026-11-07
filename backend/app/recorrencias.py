@@ -122,6 +122,9 @@ class Recorrencia(NovaRecorrencia):
     # viriam) a regra não está ativa: o aviso de arquivar conta, cartão ou categoria não a conta
     # (ticket 97).
     proximo_previsto: ProximoPrevisto | None = None
+    # O aviso das ocorrências de antes de hoje que a geração passou sem lançar porque a fatura
+    # do cartão foi paga no meio dela (ticket 192); fica até o casal dispensar.
+    aviso_da_fatura_paga: str | None = None
 
 
 class CamposDaRecorrencia(BaseModel):
@@ -234,12 +237,46 @@ _GRAVADAS = (
     " dia_do_lancamento"
 )
 # Recorrência de antes do ticket 45 não tem a ocorrência do início: é a 1ª.
-_COLUNAS = f"{_GRAVADAS}, COALESCE(ocorrencia_do_inicio, 1)"
+_COLUNAS = f"{_GRAVADAS}, COALESCE(ocorrencia_do_inicio, 1), puladas_pela_fatura_paga"
 # A coluna `item_id` (migration 0039, ticket 45) guarda a categoria do item escolhido.
 _NOMES_DAS_COLUNAS = [
     *_GRAVADAS.replace(" ", "").replace("item_id", "item_categoria_id").split(","),
     "ocorrencia_do_inicio",
 ]
+
+
+def _aviso_da_fatura_paga(puladas: str | None) -> str | None:
+    """O aviso das ocorrências puladas pela fatura paga, uma por linha na coluna."""
+    if not puladas:
+        return None
+    linhas = puladas.splitlines()
+    quais = "Ocorrências não lançadas" if len(linhas) > 1 else "Ocorrência não lançada"
+    return f"{quais} porque a fatura estava paga: {'; '.join(linhas)}. Lance à mão se precisar."
+
+
+def _avisar_da_pulada(conn, id: UUID, dia: date, cartao_id: UUID, mes: date) -> None:
+    """Junta ao aviso da regra a ocorrência de `dia`, pulada pela fatura paga do cartão
+    `cartao_id` no `mes` (ticket 192). Só informa: a ocorrência não volta. A mesma data não
+    entra duas vezes, se a geração voltar a passar por ela (mesmo com o cartão renomeado)."""
+    data = f"{dia:%d/%m/%Y}"
+    linha = f"{data}, na {cartoes.a_fatura(conn, cartao_id, mes)}"
+    conn.execute(
+        "UPDATE recorrencias SET puladas_pela_fatura_paga = CASE"
+        " WHEN puladas_pela_fatura_paga IS NULL OR puladas_pela_fatura_paga = '' THEN %s"
+        " WHEN EXISTS (SELECT 1 FROM unnest(string_to_array(puladas_pela_fatura_paga, E'\\n'))"
+        " AS pulada WHERE pulada LIKE %s) THEN puladas_pela_fatura_paga"
+        " ELSE puladas_pela_fatura_paga || E'\\n' || %s END WHERE id = %s",
+        (linha, f"{data},%", linha, id),
+    )
+
+
+def dispensar_o_aviso_da_fatura_paga(conn, id: UUID) -> bool:
+    """Tira da regra o aviso das ocorrências puladas pela fatura paga; devolve se ela existe."""
+    return bool(
+        conn.execute(
+            "UPDATE recorrencias SET puladas_pela_fatura_paga = NULL WHERE id = %s", (id,)
+        ).rowcount
+    )
 
 
 def mais_meses(dia: date, meses: int) -> date:
@@ -389,16 +426,21 @@ def _ler(
         tags.setdefault(recorrencia_id, []).append(nome)
     partes = partes_da_regra.ler(conn, ids)
     proximos = _proximos_previstos(conn, ids) if com_proximo else {}
-    return [
-        Recorrencia(
-            **dict(zip(_NOMES_DAS_COLUNAS, linha)),
-            categoria_ids=categorias.get(linha[0], []),
-            tags=tags.get(linha[0], []),
-            partes=partes.get(linha[0], []),
-            proximo_previsto=proximos.get(linha[0]),
+    regras = []
+    for linha in linhas:
+        campos = dict(zip([*_NOMES_DAS_COLUNAS, "puladas_pela_fatura_paga"], linha))
+        puladas = campos.pop("puladas_pela_fatura_paga")
+        regras.append(
+            Recorrencia(
+                **campos,
+                aviso_da_fatura_paga=_aviso_da_fatura_paga(puladas),
+                categoria_ids=categorias.get(linha[0], []),
+                tags=tags.get(linha[0], []),
+                partes=partes.get(linha[0], []),
+                proximo_previsto=proximos.get(linha[0]),
+            )
         )
-        for linha in linhas
-    ]
+    return regras
 
 
 def _gerar_um_lote(conn, id: UUID) -> bool:
@@ -412,7 +454,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu), salvo a de
     valor fixo que não é automática: essa o casal confirma no pagamento (ticket 129); fora dela,
     só a automática que chegou. A de antes de hoje que cairia numa fatura paga também passa: a
-    criação confere as pagas, mas o pagamento pode chegar entre os lotes (ticket 179)."""
+    criação confere as pagas, mas o pagamento pode chegar entre os lotes (ticket 179); ela deixa o
+    aviso na regra (ticket 192)."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -439,8 +482,11 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         ultima = n
         # ADR 0021: a fatura paga depois da conferência não recebe a de antes de hoje.
         na_paga = dia < dia_de_hoje and em_que_paga(regra.conta_id, dia, None)
-        if dia >= desde and not na_paga:
-            proximas.append((n, dia))
+        if dia >= desde:
+            if na_paga:
+                _avisar_da_pulada(conn, id, dia, *na_paga)
+            else:
+                proximas.append((n, dia))
     if ultima == geradas:
         return False
     # Volta, com a regra de hoje, o que o fim ou o horizonte excluiu, nunca o mês que uma pessoa
@@ -838,6 +884,18 @@ def _reajustar_um_lote(conn, id: UUID, desde: int, usuario: str) -> bool:
         fica_automatico = regra.automatico and (automatico or dia_novo >= dia_de_hoje)
         if mudou or automatico != fica_automatico:
             trabalho.append((lancamento_id, versao, mudou, quer["data"], fica_automatico))
+    # O previsto com estorno fica como está, por inteiro, como o mexido à mão (ticket 188): fora do
+    # trabalho, o lote seguinte não volta a ele.
+    com_estorno = {
+        i
+        for (i,) in conn.execute(
+            "SELECT estorno_de FROM lancamentos WHERE estorno_de = ANY(%s) AND excluido_em IS NULL",
+            ([t.id if isinstance(t, _Retirada) else t[0] for t in trabalho],),
+        )
+    }
+    trabalho = [
+        t for t in trabalho if (t.id if isinstance(t, _Retirada) else t[0]) not in com_estorno
+    ]
     tags_da_regra = _tags_da_regra(conn, id)
     tags_das_partes = partes_da_regra.tags(conn, id)
     agora = datetime.now(UTC)
@@ -1043,7 +1101,11 @@ def _excluir_um_lote(conn, id: UUID, usuario: str) -> bool:
         lancamento_id
         for (lancamento_id,) in conn.execute(
             "SELECT id FROM lancamentos WHERE recorrencia_id = %s AND situacao = 'previsto'"
-            " AND excluido_em IS NULL AND data >= %s ORDER BY ocorrencia LIMIT %s",
+            " AND excluido_em IS NULL AND data >= %s"
+            # O previsto com estorno fica, como o realizado e o atrasado (ticket 188).
+            " AND NOT EXISTS (SELECT 1 FROM lancamentos e WHERE e.estorno_de = lancamentos.id"
+            " AND e.excluido_em IS NULL)"
+            " ORDER BY ocorrencia LIMIT %s",
             (id, lancamentos.hoje(), por_lote + 1),
         )
     ]
@@ -1057,6 +1119,21 @@ def excluir_recorrencia(id: UUID, usuario: UsuarioLogado, request: Request) -> R
     """Idempotente. Tira a regra e os previstos de hoje em diante; o realizado e o atrasado
     ficam, como lançamentos que a regra gerou."""
     excluir_regra(url_do_banco(request), id, usuario)
+    return Response(status_code=204)
+
+
+@router.delete(
+    "/recorrencias/{id}/aviso-da-fatura-paga",
+    status_code=204,
+    operation_id="dispensar_aviso_da_fatura_paga",
+)
+def dispensar_aviso_da_fatura_paga(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
+    """Idempotente. Tira da regra o aviso das ocorrências puladas pela fatura paga (ticket 192):
+    elas não voltam, o casal as lança à mão se precisar."""
+    if not em_transacao(
+        url_do_banco(request), lambda conn: dispensar_o_aviso_da_fatura_paga(conn, id)
+    ):
+        raise HTTPException(status_code=404, detail="recorrência não encontrada")
     return Response(status_code=204)
 
 

@@ -1,0 +1,35 @@
+{
+  "sobre": "O id da parte numa parcela: uuid5(parcela_id, parte_id) (RFC 9562), o que liga a parte da parcela à do parcelamento (ticket 190). backend/app/partes.py, id_na_parcela, e web/src/lancamentos/uuid5.ts (ADR 0018).",
+  "casos": [
+    {
+      "caso": "par 1",
+      "parcela_id": "0f0e0d0c-0b0a-4908-8706-050403020100",
+      "parte_id": "11111111-1111-4111-8111-111111111111",
+      "id": "6db8eeb2-90a7-5f07-88f5-2f14288eb3ac"
+    },
+    {
+      "caso": "par 2",
+      "parcela_id": "0f0e0d0c-0b0a-4908-8706-050403020100",
+      "parte_id": "22222222-2222-4222-8222-222222222222",
+      "id": "a6b34f8d-134f-5f59-b67f-df9648a2b97a"
+    },
+    {
+      "caso": "par 3",
+      "parcela_id": "9a3c1f52-7d4e-4b8a-a1c6-3e5f7d9b2c40",
+      "parte_id": "11111111-1111-4111-8111-111111111111",
+      "id": "bceab540-bdb4-5632-9c19-8b85bc21475c"
+    },
+    {
+      "caso": "par 4",
+      "parcela_id": "00000000-0000-0000-0000-000000000000",
+      "parte_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "id": "9a6ed233-dc4b-5011-9372-8534a2f46a35"
+    },
+    {
+      "caso": "par 5",
+      "parcela_id": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "parte_id": "00000000-0000-4000-8000-000000000001",
+      "id": "5f116ca2-36f1-5f09-aa85-432e85d6231f"
+    }
+  ]
+}

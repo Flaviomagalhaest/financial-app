@@ -17,5 +17,5 @@ A API responde sem compressão, e a lista de 11 mil lançamentos passa do limite
 
 - [x] Teste do backend: resposta grande com `Accept-Encoding: gzip` sai comprimida e em base64 pelo Mangum; sem o cabeçalho, sai como hoje
 - [x] `GZipMiddleware` na `create_app`, com `minimum_size` que não comprima respostas pequenas
-- [ ] Teste de navegador segue verde (o navegador descomprime antes do `response.json()`)
+- [x] Teste de navegador segue verde (o navegador descomprime antes do `response.json()`)
 - [ ] HITL: no `dev`, rodar o `curl` da seção "O que falta conferir" da pesquisa e conferir que o `Accept-Encoding` chega à Lambda e o `content-encoding: gzip` volta ao navegador

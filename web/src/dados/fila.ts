@@ -156,8 +156,8 @@ export function enfileirarConfirmar(mostrado: NovoLancamento, ajustes: Ajustes, 
   return mudar(mostrado.id, (atual, aceito) => {
     base ??= aceito;
     const antes = atual?.lancamento && !atual.conflito ? atual.lancamento : comoNovo(mostrado);
-    // O valor de verdade divide as partes de novo, como o servidor faz ao receber (ADR 0022).
-    const partes = ajustes.valor_centavos && antes.partes?.length ? (redividir(antes.partes, ajustes.valor_centavos) ?? antes.partes) : antes.partes;
+    // O valor de verdade divide as partes de novo, como o servidor faz ao receber (ADR 0022); a compra à vista não: o servidor recusa o ajuste (ticket 156).
+    const partes = ajustes.valor_centavos && antes.partes?.length && ((mostrado as { parcelamento_id?: string | null }).parcelamento_id || (mostrado as { recorrencia_id?: string | null }).recorrencia_id) ? (redividir(antes.partes, ajustes.valor_centavos) ?? antes.partes) : antes.partes;
     const lancamento: NovoLancamento = { ...antes, ...ajustes, partes, situacao: "realizado" };
     return !atual || (atual.acao === "confirmar" && !atual.conflito)
       ? { acao: "confirmar", lancamento, base: atual?.base ?? base }

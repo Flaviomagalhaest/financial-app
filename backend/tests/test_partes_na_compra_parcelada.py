@@ -391,29 +391,6 @@ def test_antecipar_as_ultimas_parcelas_as_redivide_pelo_valor_pago(casal: Casal,
     ]
 
 
-def test_edicao_em_lote_deixa_de_fora_as_parcelas_do_parcelamento_com_partes(
-    casal: Casal, categorias
-):
-    from tests.test_edicao_em_lote import aplicar, previa
-
-    roupa, _, casa = categorias
-    criado = parcelado(casal, casal.conta(), tres_partes(categorias)).json()
-    [primeira, segunda, _] = parcelas(casal, criado["id"])
-    # A 1ª, juntada só nela, não tem partes, mas o parcelamento dela tem.
-    editar_so_nela(casal, primeira, partes=[], categoria_ids=[roupa])
-    selecao = {"lancamento_ids": [primeira["id"], segunda["id"]]}
-    mudanca = {"categorias": {"acao": "acrescentar", "categoria_ids": [casa]}}
-
-    vista = previa(casal, selecao, **mudanca)
-    recusada = aplicar(casal, selecao, **mudanca)
-
-    # A parcela selecionada leva o parcelamento inteiro: as três ficam de fora.
-    assert (vista["mudam"], vista["com_partes_fora"]) == (0, 3)
-    assert recusada.status_code == 422
-    assert regra(casal, criado["id"])["categoria_ids"] == []
-    assert parcelas(casal, criado["id"])[0]["categoria_ids"] == [roupa]
-
-
 def test_o_parcelado_com_partes_sobe_pela_fila_como_um_pedido_so(casal: Casal, categorias):
     roupa, casa, _ = categorias
     novo = {

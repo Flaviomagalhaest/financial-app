@@ -46,7 +46,7 @@ Quem soma despesas trata o crédito com `e_estorno()` (`app/partes.py`): `estorn
 
 ## Adendo (ticket 160)
 
-No parcelamento com partes (ticket 139), o estorno de todas as parcelas é de uma parte dele: `estorno_parcelamento_id` aponta para o parcelamento e `estorno_parte_id` para a linha de `parcelamento_partes`. A parte é obrigatória, como na compra com partes. O estorno herda as categorias, as tags e a escolha de item da parte (`acompanhar_estornos_do_parcelamento` segue a parte). O limite é a soma da parte nas parcelas (cada parcela da regra dividida na proporção das partes, `somas_nas_parcelas`) menos o já estornado nela, no estorno de todas e no de cada parcela, na parte da parcela que veio dela (o id dela é `id_na_parcela(parcela, parte)`). O estorno de uma parcela também respeita esse limite. Na correção do parcelamento, a parte com estorno não sai, as partes não se juntam e a soma dela não fica abaixo do estornado. O estorno de todas anterior à divisão do parcelamento fica com a classificação que tinha, como na compra à vista. O app repete a soma da parte para mostrar o que ainda dá para estornar sem internet (ADR 0018, tabela `tabelas-de-teste/somas-das-partes.json`) e liga a parte da parcela à do parcelamento pela posição; quem decide é o servidor, pelo id.
+No parcelamento com partes (ticket 139), o estorno de todas as parcelas é de uma parte dele: `estorno_parcelamento_id` aponta para o parcelamento e `estorno_parte_id` para a linha de `parcelamento_partes`. A parte é obrigatória, como na compra com partes. O estorno herda as categorias, as tags e a escolha de item da parte (`acompanhar_estornos_do_parcelamento` segue a parte). O limite é a soma da parte nas parcelas (cada parcela da regra dividida na proporção das partes, `somas_nas_parcelas`) menos o já estornado nela, no estorno de todas e no de cada parcela, na parte da parcela que veio dela (o id dela é `id_na_parcela(parcela, parte)`). O estorno de uma parcela também respeita esse limite. Na correção do parcelamento, a parte com estorno não sai, as partes não se juntam e a soma dela não fica abaixo do estornado. O estorno de todas anterior à divisão do parcelamento fica com a classificação que tinha, como na compra à vista. O app repete a soma da parte para mostrar o que ainda dá para estornar sem internet (ADR 0018, tabela `tabelas-de-teste/somas-das-partes.json`) e liga a parte da parcela à do parcelamento pelo mesmo id do servidor (`id_na_parcela`, ticket 190).
 
 ## Adendo (ticket 148)
 
@@ -59,3 +59,33 @@ Decidido com o dono no [ticket 148](../../.scratch/v1-substituir-mobills/issues/
 - **Dado antigo**: o estorno desalinhado da compra (de antes do ticket 133, inclusive em backup restaurado) não ganha migração nem acerto na restauração; ele se acerta quando a compra mudar.
 
 A implementação é o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
+
+## Adendo (ticket 152)
+
+Decidido com o dono no [ticket 152](../../.scratch/v1-substituir-mobills/issues/152-estorno-avulso-pendencias.md); a implementação é o [ticket 189](../../.scratch/v1-substituir-mobills/issues/189-estorno-avulso-item-fatura-e-testes.md):
+
+- **Item do planejamento**: o avulso tem classificação própria, então a tela "Lançar crédito" pergunta o item como na compra, quando as categorias escolhidas têm dois ou mais itens no mês. "A escolher" na Hoje fica para o que chegar sem escolha. O estorno ligado continua sem escolha própria.
+- **Devido negativo**: o servidor recusa (422) o avulso que deixaria o devido da fatura dele (saldo anterior + compras + ajuste, com os créditos) abaixo de zero. A conferência só roda ao salvar o avulso (criação e edição, inclusive a troca de data ou de fatura). Excluir ou mover compra, ajuste negativo e o estorno ligado (que já tem o teto da compra) não ganham trava: o cenário é raro, e a ADR 0021 segue sem saldo anterior negativo. O aparelho não confere: sem internet, o avulso sobe pela fila e a recusa aparece como qualquer recusa da fila.
+- **Mês sem fatura**: "Lançar crédito" aparece em qualquer mês que não esteja pago, com ou sem fatura criada. A data decide a fatura, e ela nasce com as datas padrão (`garantir_fatura`), como na primeira compra.
+
+## Adendo (ticket 161)
+
+Decidido com o dono no [ticket 161](../../.scratch/v1-substituir-mobills/issues/161-limite-do-estorno-de-parte-do-parcelamento.md), sobre as escolhas do adendo do 160:
+
+- **Limite da parte pela regra**: fica. A soma da parte é a das parcelas da regra (`somas_nas_parcelas`), não a das partes gravadas nas parcelas, como no limite do parcelamento inteiro (`valor_total_centavos`). A parcela mudada "só nesta" e a proporção mudada "esta e as próximas" não mexem no limite. O limite barra erro, não fecha a contabilidade. Se um dia passar a contar o gravado, os dois limites mudam juntos.
+- **Item**: fica. O estorno de parte do parcelamento herda só a escolha explícita de item da parte. Sem ela, conta no item do mês pela regra de onde conta, porque cada parcela cai num mês.
+- **Ligação no aparelho**: muda. O app liga a parte da parcela à do parcelamento pelo mesmo `id_na_parcela` (uuid5) do servidor, não pela posição, com tabela compartilhada (ADR 0018). Feito no [ticket 190](../../.scratch/v1-substituir-mobills/issues/190-aparelho-liga-a-parte-da-parcela-pelo-id.md).
+- **Estorno de todas anterior à divisão**: fica com a classificação que tinha, ligado ao parcelamento inteiro, como na compra à vista.
+
+## Adendo (ticket 159)
+
+Decidido com o dono no [ticket 159](../../.scratch/v1-substituir-mobills/issues/159-estorno-de-parte-e-de-parcelas-pendencias.md), sobre o que o 138 deixou provisório:
+
+- **Dividir uma compra (ou um parcelamento) com estorno**: fica como o 138 e o 160 fizeram. O estorno anterior à divisão fica ligado ao todo, guarda a classificação (e a pessoa) que tinha e conta contra o valor do todo. A divisão não pede a parte de cada estorno nem é recusada.
+- **Juntar ou tirar parte com estorno**: continua recusado (a parte com estorno não sai nem encolhe abaixo do estornado, e as partes não se juntam com estorno de parte). Quem corrige é a pessoa, então ela exclui o estorno antes, como no adendo do ticket 148.
+- **Estorno de todas de uma parte do parcelamento**: resolvido pelo adendo do ticket 160.
+- **Item do planejamento do estorno de todas**: segue a escolha de item do parcelamento (ou da parte dele), como a parcela, e não a regra do avulso. Conta inteiro no mês da fatura em que aparece, e onde a categoria escolhida não tem item vale a regra de sempre.
+- **Limite do estorno de todas no parcelamento**: a correção do parcelamento e a exclusão de uma parcela que deixariam a soma das parcelas que ficam (na parte, a soma da parte nelas) abaixo do já estornado são recusadas (422) antes de gravar; as que ficam no limite passam. Junta-se à implementação do adendo do ticket 148.
+- **Pessoa do estorno ligado**: acompanha a da compra, da parte, da parcela ou do parcelamento, como as categorias e as tags: o servidor a copia ao criar o estorno, a acompanha quando ela muda e ignora a que o cliente manda. O estorno avulso guarda a pessoa que o casal deu. O dado antigo se acerta quando a compra mudar, sem migração.
+
+A implementação é o [ticket 191](../../.scratch/v1-substituir-mobills/issues/191-item-e-pessoa-do-estorno-acompanham-a-compra.md) (item e pessoa) e o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md) (limite).

@@ -1360,6 +1360,20 @@ def gravar_correcao(
         _cronograma_pedido(alteracao),
     )
     _conferir_as_divisoes(conn, correcoes)
+    # Antes do aviso e de gravar: a parcela com estorno não sai, como na exclusão (ticket 188).
+    for t in correcoes:
+        if t.acao in ("excluir", "pular"):
+            try:
+                lancamentos.conferir_sem_estorno(conn, [t.id])
+            except HTTPException as recusa:
+                raise recusar(f"a parcela {t.parcela}: {recusa.detail}") from recusa
+    lancamentos.conferir_o_que_fica_do_estorno_de_todas(
+        conn,
+        id,
+        nova.parcelas,
+        nova.valor_total_centavos,
+        lambda n: valor_da_parcela(nova.valor_total_centavos, nova.parcelas, n),
+    )
     realizadas = [
         *tambem_mudam,
         *(
@@ -1807,7 +1821,8 @@ def excluir_parcelamento(
             conn.execute("UPDATE parcelamentos SET geradas = parcelas WHERE id = %s", (id,))
         else:
             # A tabela pede duas parcelas ou mais, e o DSQL não tira a restrição (ADR 0014): com
-            # só a 1ª de fatura paga, fica um 2x com a 2ª excluída uma a uma (ticket 176).
+            # só a 1ª de fatura paga, fica um 2x com a 2ª excluída uma a uma. Decidido com o dono
+            # no ticket 176: o 2x fica, sem tratamento na tela, como o 5x encolhido sem a 4ª.
             parcelas = max(plano.ultima_que_fica, 2)
             conn.execute(
                 "UPDATE parcelamentos SET parcelas = %s, geradas = %s, valor_total_centavos = %s"

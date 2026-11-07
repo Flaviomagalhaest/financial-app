@@ -208,6 +208,7 @@ class _Linhas:
             ("classificacao_pendente", ""),
             ("mudanca_pendente", ""),
             ("mudanca_recusada", None),
+            ("puladas_pela_fatura_paga", None),
             ("corrigido_em", None),
         ):
             if coluna in colunas:

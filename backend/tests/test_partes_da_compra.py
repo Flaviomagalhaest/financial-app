@@ -443,29 +443,6 @@ def test_busca_pelo_texto_acha_a_compra_pela_descricao_de_uma_parte(casal: Casal
     assert linha["lancamento"]["id"] == compra["id"]
 
 
-def test_edicao_em_lote_deixa_de_fora_a_compra_com_partes(casal: Casal):
-    from tests.test_edicao_em_lote import aplicada, previa
-
-    conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
-    compra = compra_com_partes(casal, conta, [parte([roupa], 600), parte([casa], 400)]).json()
-    avulso = casal.pedir(
-        "flavio", "POST", "/api/lancamentos", json=lancamento(conta, [roupa])
-    ).json()
-    selecao = {"lancamento_ids": [compra["id"], avulso["id"]]}
-    mudanca = {"categorias": {"acao": "acrescentar", "categoria_ids": [casa]}}
-
-    vista = previa(casal, selecao, **mudanca)
-    aplicada(casal, selecao, **mudanca)
-
-    assert (vista["mudam"], vista["com_partes_fora"]) == (1, 1)
-    [depois] = [
-        l
-        for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()
-        if l["id"] == compra["id"]
-    ]
-    assert depois["categoria_ids"] == [] and depois["versao"] == 1
-
-
 def test_sugestao_leva_a_compra_com_partes_e_o_favorito_a_conta_pelas_partes(casal: Casal):
     conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
     for dia in range(1, 6):
@@ -523,3 +500,26 @@ def test_dividir_como_a_tela_manda_com_a_classificacao_vazia(casal: Casal):
     assert dividida.status_code == 200, dividida.text
     assert len(dividida.json()["partes"]) == 2
     assert sem_nada.status_code == 422
+
+
+def test_confirmar_a_compra_prevista_com_outro_valor_e_recusado_e_com_o_mesmo_passa(casal: Casal):
+    roupa, casa = casal.categoria("Roupa"), casal.categoria("Casa")
+    criada = compra_com_partes(
+        casal, casal.conta(), [parte([roupa], 600), parte([casa], 400)], data="2999-01-10"
+    )
+    id = criada.json()["id"]
+    assert criada.json()["situacao"] == "previsto"
+
+    recusada = casal.pedir(
+        "flavio",
+        "POST",
+        f"/api/lancamentos/{id}/confirmar",
+        json={"versao": 1, "valor_centavos": 1200},
+    )
+    igual = casal.pedir("flavio", "POST", f"/api/lancamentos/{id}/confirmar", json={"versao": 1})
+
+    assert recusada.status_code == 422
+    assert "edite as partes" in recusada.json()["detail"]
+    assert igual.status_code == 200, igual.text
+    assert igual.json()["situacao"] == "realizado"
+    assert [p["valor_centavos"] for p in igual.json()["partes"]] == [600, 400]

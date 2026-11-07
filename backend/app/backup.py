@@ -18,7 +18,7 @@ import psycopg
 
 from app.faturas import datas_padrao, ler_cartao
 
-VERSAO_FORMATO = 33
+VERSAO_FORMATO = 35
 # O nome e o tipo das colunas de cada tabela, em cada versão do formato: o teste do formato o
 # compara com as migrations, e o importador do Mobills monta o backup por ele, sem banco.
 ESQUEMAS = Path(__file__).parent / "esquemas_do_formato.json"
@@ -673,6 +673,40 @@ def _da_versao_32_para_a_33(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Ta
     return manifesto, tabelas
 
 
+def _da_versao_33_para_a_34(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 34 (ticket 150) guarda, para o desfazer da edição em lote, a classificação de
+    cada parte da compra que o lote mudou. Antes dela o lote não mudava partes."""
+    if "edicao_em_lote_partes" not in tabelas:
+        tabelas["edicao_em_lote_partes"] = (
+            [
+                "lote_id",
+                "parte_id",
+                "dono_id",
+                "categoria_ids_antes",
+                "tag_ids_antes",
+                "item_categoria_id_antes",
+                "item_atual_categoria_id_antes",
+                "categoria_ids_depois",
+                "tag_ids_depois",
+            ],
+            [],
+        )
+        manifesto["tabelas"]["edicao_em_lote_partes"] = {"linhas": 0, "somas": {}}
+    return manifesto, tabelas
+
+
+def _da_versao_34_para_a_35(manifesto: dict, tabelas: Tabelas) -> tuple[dict, Tabelas]:
+    """A versão 35 (ticket 192) guarda na recorrência as ocorrências que a geração pulou porque
+    a fatura estava paga, para o aviso da regra. Antes dela nenhuma ficava gravada."""
+    colunas, linhas = tabelas["recorrencias"]
+    if "puladas_pela_fatura_paga" not in colunas:
+        tabelas["recorrencias"] = (
+            [*colunas, "puladas_pela_fatura_paga"],
+            [[*linha, None] for linha in linhas],
+        )
+    return manifesto, tabelas
+
+
 # Conversor da versão N para a N+1: recebe e devolve o manifesto e as tabelas. O manifesto
 # devolvido traz as contagens e as somas que o banco deve ter depois da restauração.
 CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
@@ -708,6 +742,8 @@ CONVERSORES: dict[int, Callable[[dict, Tabelas], tuple[dict, Tabelas]]] = {
     30: _da_versao_30_para_a_31,
     31: _da_versao_31_para_a_32,
     32: _da_versao_32_para_a_33,
+    33: _da_versao_33_para_a_34,
+    34: _da_versao_34_para_a_35,
 }
 FORA_DO_BACKUP = {"controle_de_migrations"}
 # Sem `real` e `double precision`: a soma de ponto flutuante muda com a ordem das linhas.

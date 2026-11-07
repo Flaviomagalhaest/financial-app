@@ -1,7 +1,7 @@
 # Estorno de parte e de todas as parcelas: decisões em aberto
 
 Type: decision
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono)
 Modelo recomendado: Opus
@@ -22,6 +22,17 @@ O 138 entregou o estorno de uma parte e o de todas as parcelas com estes comport
 
 ## Checklist
 
-- [ ] Decidir cada caso acima
-- [ ] Gravar na ADR 0016 (adendo) e no glossário
-- [ ] Abrir o ticket de implementação, com teste de API
+- [x] Decidir cada caso acima
+- [x] Gravar na ADR 0016 (adendo) e no glossário
+- [x] Abrir o ticket de implementação, com teste de API
+
+## Resolução
+
+Decidido com o dono (adendo do ticket 159 na [ADR 0016](../../../docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md) e verbete **Estorno** do glossário):
+
+- **Dividir uma compra com estorno**: fica como está (o estorno antigo fica no todo, com a classificação e a pessoa que tinha).
+- **Juntar ou tirar parte com estorno**: continua recusado; exclui-se o estorno antes.
+- **Estorno de todas de uma parte do parcelamento**: já resolvido pelo [160](160-estorno-de-todas-de-uma-parte-do-parcelamento.md).
+- **Item do estorno de todas**: segue a escolha de item do parcelamento, como o de uma parte. Implementação no [191](191-item-e-pessoa-do-estorno-acompanham-a-compra.md).
+- **Parcelamento com estorno de todas**: a correção ou a exclusão de parcela que deixaria o total abaixo do já estornado é recusada (422) antes de gravar. Implementação junto do [188](188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
+- **Pessoa do estorno**: acompanha a da compra, da parte ou do parcelamento, como as categorias e tags; o avulso guarda a dada. Implementação no [191](191-item-e-pessoa-do-estorno-acompanham-a-compra.md).
