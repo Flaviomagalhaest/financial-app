@@ -1,7 +1,7 @@
 # Recorrência grava o aviso da ocorrência pulada pela fatura paga
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`, `domain-modeling`
 Modelo recomendado: Opus
