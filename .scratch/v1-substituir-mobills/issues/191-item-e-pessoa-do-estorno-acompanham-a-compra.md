@@ -1,7 +1,7 @@
 # Item e pessoa do estorno acompanham a compra
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
