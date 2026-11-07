@@ -1,7 +1,7 @@
 # Estorno de parte e de todas as parcelas: decisões em aberto
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono)
 Modelo recomendado: Opus
