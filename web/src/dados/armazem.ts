@@ -5,6 +5,7 @@
 import type { components } from "../api/schema";
 import { config } from "../config";
 import { hoje, mesDepois } from "../lancamentos/datas";
+import { recarregarParaAVersaoNova } from "./novaVersao";
 
 export type NovoLancamento = components["schemas"]["NovoLancamento"];
 export type Lancamento = components["schemas"]["Lancamento"];
@@ -177,7 +178,11 @@ function abrir(): Promise<IDBDatabase> {
       }
     };
     abertura.onsuccess = () => resolve(abertura.result);
-    abertura.onerror = () => reject(abertura.error);
+    abertura.onerror = () => {
+      // O banco já está numa versão mais nova: só o código novo o abre (ticket 168).
+      if (abertura.error?.name === "VersionError") recarregarParaAVersaoNova();
+      reject(abertura.error);
+    };
   });
 }
 
