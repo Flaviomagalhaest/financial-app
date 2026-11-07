@@ -19,10 +19,11 @@ Com o ticket 187, a conta mudada em "todas" para outra do mesmo tipo vai para o 
 ## Perguntas ao dono
 
 - **Q1**: no caso 2, as parcelas que ficaram no cartão antigo devem ganhar a marca de conta mudada à mão, ficar como estão (o casal vê a recusa e muda de novo com "todas"), ou o parcelamento deve voltar ao cartão antigo?
+  - **Decidido (2026-11-07)**: ficam como estão, sem marca, e o casal repete "todas". Para a repetição sair limpa, em "todas" a conta pedida que já é a do parcelamento leva as parcelas que estão noutra conta do mesmo tipo a seguir o parcelamento sem a marca de "alterada à mão" (como no ticket 187). O texto da recusa diz que as parcelas que faltavam ficaram no cartão antigo. Voltar o parcelamento ao cartão antigo foi descartado: a volta pode ser recusada por uma fatura paga do cartão antigo.
 
 ## Checklist
 
-- [ ] Q1 decidida pelo dono
+- [x] Q1 decidida pelo dono
 - [ ] Simular a combinação final (cartão novo com a data e o valor novos) antes de gravar, quando o pedido em "todas" muda a conta junto com a data ou o valor
 - [ ] Teste: cartão reemitido e data nova em "todas", com uma fatura paga só no cartão novo; o pedido é recusado antes de gravar
 - [ ] Teste do caso 2, conforme a Q1

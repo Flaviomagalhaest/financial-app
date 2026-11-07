@@ -255,6 +255,30 @@ def _seguir_a_conta_do_parcelamento(
     )
 
 
+def _por_no_cartao_novo(
+    conn,
+    parcelamento_id: UUID,
+    conta_id: UUID,
+    editada: Lancamento,
+    pendente: _PorParcela,
+    falta: list[tuple[Lancamento, dict]],
+) -> None:
+    """Põe o parcelamento e as parcelas que faltam no cartão novo como os lotes da conta as
+    deixariam, sem as regras da fatura paga (já conferidas em `_conferir_antes_de_gravar`): só
+    para a correção simular o refazer sobre elas, num savepoint desfeito em seguida."""
+    conn.execute(
+        "UPDATE parcelamentos SET conta_id = %s WHERE id = %s", (conta_id, parcelamento_id)
+    )
+    _seguir_a_conta_do_parcelamento(conn, editada, pendente.origem, fatura_pedida=False)
+    for outra, valores in falta:
+        if "conta_id" in valores:
+            _, mes = lancamentos.onde_ficaria(conn, outra, valores)
+            conn.execute(
+                "UPDATE lancamentos SET conta_id = %s, mes = %s WHERE id = %s",
+                (valores["conta_id"], mes, outra.id),
+            )
+
+
 def _ha_pendente(conn, parcelamento_id: UUID) -> bool:
     (texto,) = conn.execute(
         "SELECT mudanca_pendente FROM parcelamentos WHERE id = %s", (parcelamento_id,)
@@ -307,13 +331,14 @@ def _mudar_a_parcela(
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     desde = antes.parcela if alteracao.alcance == "esta_e_as_proximas" else 1
     # O cartão reemitido em "todas" vai para o parcelamento; a troca de tipo, que mudaria a regra
-    # das datas, segue à mão em cada parcela (ADR 0023).
-    conta_na_regra = (
+    # das datas, segue à mão em cada parcela (ADR 0023). A conta que já é a do parcelamento leva
+    # a ele, sem a marca, as parcelas que uma recusa no meio deixou no cartão antigo (ticket 196).
+    segue_a_conta = (
         alteracao.alcance == "todas"
         and "conta_id" in mudou
-        and mudou["conta_id"] != regra.conta_id
         and (faturas.ler_cartao(conn, mudou["conta_id"]) is not None) == no_cartao
     )
+    conta_na_regra = segue_a_conta and mudou["conta_id"] != regra.conta_id
 
     # O que vai parcela a parcela: cada outra do alcance, menos nos campos que alguém mudou nela.
     pendente = _PorParcela(
@@ -324,7 +349,7 @@ def _mudar_a_parcela(
         valores={c: v for c, v in mudou.items() if c in _POR_PARCELA[alteracao.alcance]},
         desde=desde,
         usuario=usuario,
-        origem=parcelamentos.origem(regra.descricao) if conta_na_regra else None,
+        origem=parcelamentos.origem(regra.descricao) if segue_a_conta else None,
     )
     quantas = parcelamentos.parcelas_por_lote(conn, regra)
     falta: list[tuple[Lancamento, dict]] = []
@@ -354,17 +379,31 @@ def _mudar_a_parcela(
             mudou["data"] if no_cartao else mais_meses(mudou["data"], 1 - antes.parcela)
         )
     if na_regra:
-        correcao = parcelamentos.gravar_correcao(
-            conn,
-            regra.id,
-            AlteracaoDeParcelamento(
-                **na_regra, confirmar_realizadas=alteracao.confirmar_realizadas
-            ),
-            usuario,
-            desde=desde,
-            editada=id,
-            tambem_mudam=realizadas,
+        correcao_pedida = AlteracaoDeParcelamento(
+            **na_regra, confirmar_realizadas=alteracao.confirmar_realizadas
         )
+
+        def gravar_a_correcao(conferir_os_lotes: bool = True):
+            return parcelamentos.gravar_correcao(
+                conn,
+                regra.id,
+                correcao_pedida,
+                usuario,
+                desde=desde,
+                editada=id,
+                tambem_mudam=realizadas,
+                conferir_os_lotes=conferir_os_lotes,
+            )
+
+        # O cartão reemitido junto com a data ou o valor (ticket 196): o refazer roda com as
+        # parcelas já no cartão novo, e é essa combinação que a correção confere antes de gravar.
+        no_cartao_novo = conta_na_regra and bool(na_regra.keys() - CLASSIFICACAO)
+        if no_cartao_novo:
+            with conn.transaction():
+                _por_no_cartao_novo(conn, regra.id, mudou["conta_id"], editada, pendente, falta)
+                gravar_a_correcao()
+                raise psycopg.Rollback()
+        correcao = gravar_a_correcao(conferir_os_lotes=not no_cartao_novo)
         mudanca.classificacao = correcao.classificacao
         mudanca.mantidas |= correcao.mantidas
     elif realizadas and not alteracao.confirmar_realizadas:
@@ -372,13 +411,14 @@ def _mudar_a_parcela(
             AvisoDeRealizadas(motivo="a mudança muda parcelas já realizadas", parcelas=realizadas)
         )
     mudanca.mantidas.discard(antes.parcela)
-    if conta_na_regra:
-        # Junto com o pedido: se ele cair no meio, a tarefa diária termina as parcelas que faltam.
-        conn.execute(
-            "UPDATE parcelamentos SET conta_id = %s, alterado_por = %s, alterado_em = now()"
-            " WHERE id = %s",
-            (mudou["conta_id"], usuario, regra.id),
-        )
+    if segue_a_conta:
+        if conta_na_regra:
+            # Junto com o pedido: se ele cair no meio, a tarefa diária termina as que faltam.
+            conn.execute(
+                "UPDATE parcelamentos SET conta_id = %s, alterado_por = %s, alterado_em = now()"
+                " WHERE id = %s",
+                (mudou["conta_id"], usuario, regra.id),
+            )
         _seguir_a_conta_do_parcelamento(
             conn, editada, pendente.origem, fatura_pedida="fatura_mes" in mudou
         )
@@ -452,7 +492,13 @@ def _desistir(conn, parcelamento_id: UUID, recusa: HTTPException) -> None:
     ).fetchone()
     pendente = _PorParcela.ler(texto)
     motivo = f"{recusa.detail}."
-    if pendente:
+    if pendente and pendente.origem:
+        # O parcelamento já está no cartão novo; o casal leva as que faltavam com "todas".
+        motivo += (
+            f" Da {pendente.desde}ª parcela em diante, as que faltavam mudar ficaram no cartão"
+            ' antigo: mude a conta de uma delas de novo, em "todas"'
+        )
+    elif pendente:
         motivo += (
             f" Da {pendente.desde}ª parcela em diante, as que faltavam mudar ficaram como estavam"
         )

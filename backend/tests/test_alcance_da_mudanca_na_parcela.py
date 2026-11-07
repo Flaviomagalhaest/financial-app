@@ -767,3 +767,142 @@ def test_a_correcao_antes_de_terminar_o_cartao_reemitido_poe_cada_parcela_na_fat
         (antigo, "2027-01-01"),
         (antigo, "2027-02-01"),
     ]
+
+
+def _cartoes_com_fatura_paga_em_fevereiro(casal: Casal, monkeypatch, paga_no: str):
+    """O cartão antigo e o reemitido, com a geladeira de 20/03 em 3 parcelas no antigo (março a
+    maio) e a fatura de fevereiro paga só no cartão `paga_no` ("antigo" ou "reemitido")."""
+    from tests.test_cartoes import comprar
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    antigo, reemitido = cartao(casal), cartao(casal, nome="Nubank novo")
+    com_a_paga = {"antigo": antigo, "reemitido": reemitido}[paga_no]
+    comprar(casal, com_a_paga, "2026-02-10", valor_centavos=10000)
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        com_a_paga,
+        fatura_mes="2026-02-01",
+        valor_centavos=10000,
+        data="2026-03-05",
+    )
+    assert pago.status_code == 201, pago.text
+    novo = criar_geladeira(casal, antigo, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
+    return antigo, reemitido, novo
+
+
+def test_o_cartao_reemitido_com_a_data_nova_em_todas_recusa_antes_de_gravar_pela_paga_do_novo(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    antigo, reemitido, novo = _cartoes_com_fatura_paga_em_fevereiro(
+        casal, monkeypatch, paga_no="reemitido"
+    )
+    antes = parcelas(casal, novo["id"])
+
+    # No fim, a 1ª ficaria no cartão novo em fevereiro, que está paga; no caminho, nem a troca
+    # de cartão (com a data de antes) nem a da data (no cartão antigo) passam por ela.
+    resposta = mudar_parcela(
+        casal, antes[2], "todas", conta_id=reemitido, data="2026-02-20", confirmar_realizadas=True
+    )
+
+    assert resposta.status_code == 422, resposta.text
+    assert "02/2026" in resposta.json()["detail"]
+    assert parcelamento(casal, novo["id"])["conta_id"] == antigo
+    assert [(l["conta_id"], l["fatura_mes"]) for l in parcelas(casal, novo["id"])] == [
+        (l["conta_id"], l["fatura_mes"]) for l in antes
+    ]
+
+
+def test_o_cartao_reemitido_com_a_data_nova_em_todas_nao_olha_a_paga_do_cartao_antigo(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    _, reemitido, novo = _cartoes_com_fatura_paga_em_fevereiro(casal, monkeypatch, paga_no="antigo")
+
+    # A data nova levaria a 1ª a fevereiro, paga no cartão antigo; mas ela vai para o novo.
+    resposta = mudar_parcela(
+        casal,
+        parcelas(casal, novo["id"])[2],
+        "todas",
+        conta_id=reemitido,
+        data="2026-02-20",
+        confirmar_realizadas=True,
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    assert parcelamento(casal, novo["id"])["conta_id"] == reemitido
+    assert [
+        (l["conta_id"], l["fatura_mes"], l["alterada_a_mao"]) for l in parcelas(casal, novo["id"])
+    ] == [
+        (reemitido, "2026-02-01", False),
+        (reemitido, "2026-03-01", False),
+        (reemitido, "2026-04-01", False),
+    ]
+
+
+def test_o_cartao_reemitido_recusado_no_meio_deixa_as_que_faltavam_no_antigo_e_todas_as_leva(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    import psycopg
+
+    from app.tarefa_diaria import fazer_tarefa_diaria
+    from tests.test_cartoes import comprar
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/06: as parcelas caem de março a maio; o cartão novo tem outra compra em maio.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    antigo, reemitido = cartao(casal), cartao(casal, nome="Nubank novo")
+    comprar(casal, reemitido, "2026-05-10", valor_centavos=10000)
+    novo = criar_geladeira(casal, antigo, data="2026-03-20", parcelas=3, valor_total_centavos=30000)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    with monkeypatch.context() as queda:
+        interromper_depois_do_primeiro_lote(queda)
+        with pytest.raises(RuntimeError):
+            mudar_parcela(casal, primeira, "todas", conta_id=reemitido, confirmar_realizadas=True)
+    # Maio do cartão novo, em que a 3ª entraria, é paga entre o pedido que caiu e a tarefa.
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        reemitido,
+        fatura_mes="2026-05-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago.status_code == 201, pago.text
+
+    assert fazer_tarefa_diaria(casal.client.app.state.url)["mudancas_na_parcela"] == 0
+
+    # A 3ª fica no cartão antigo, sem a marca de mudada à mão, e a recusa diz isso.
+    assert parcelamento(casal, novo["id"])["conta_id"] == reemitido
+    assert [(l["conta_id"], l["alterada_a_mao"]) for l in parcelas(casal, novo["id"])] == [
+        (reemitido, False),
+        (reemitido, False),
+        (antigo, False),
+    ]
+    assert parcelamento(casal, novo["id"])["mudanca_recusada"] == (
+        "a fatura de 05/2026 do Nubank novo está paga: para mudá-la, use a correção da fatura."
+        " Da 3ª parcela em diante, as que faltavam mudar ficaram no cartão antigo:"
+        ' mude a conta de uma delas de novo, em "todas"'
+    )
+
+    # Paga, maio recusa de novo, antes de gravar.
+    terceira = parcelas(casal, novo["id"])[2]
+    de_novo = mudar_parcela(casal, terceira, "todas", conta_id=reemitido)
+    assert de_novo.status_code == 422, de_novo.text
+    assert parcelas(casal, novo["id"])[2]["conta_id"] == antigo
+
+    # Sem o pagamento, maio deixa de estar paga (a API não tira o pagamento da paga: só a
+    # correção da fatura), e a 3ª, mudada de novo em "todas", vai para o cartão do parcelamento
+    # sem a marca.
+    with psycopg.connect(casal.client.app.state.url, autocommit=True) as conn:
+        conn.execute("DELETE FROM transferencias WHERE id = %s", (pago.json()["id"],))
+    resposta = mudar_parcela(casal, terceira, "todas", conta_id=reemitido)
+
+    assert resposta.status_code == 200, resposta.text
+    assert parcelamento(casal, novo["id"])["mudanca_recusada"] is None
+    assert [(l["conta_id"], l["alterada_a_mao"]) for l in parcelas(casal, novo["id"])] == [
+        (reemitido, False)
+    ] * 3
