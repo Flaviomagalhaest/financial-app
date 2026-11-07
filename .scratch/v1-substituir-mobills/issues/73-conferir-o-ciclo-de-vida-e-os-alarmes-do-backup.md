@@ -1,7 +1,7 @@
 # Conferir na AWS o ciclo de vida e os alarmes do backup
 
 Type: task
-Status: claimed
+Status: ready-for-human
 Blocked by: 64
 Skills: `wizard` para guiar os passos do dono; HITL (credencial AWS do dono e dias de espera)
 Modelo recomendado: Sonnet
@@ -16,6 +16,10 @@ A documentação da AWS diz que o ciclo de vida não apaga uma versão travada p
 Um e-mail do alarme `BackupAtrasado` logo depois do primeiro deploy de cada ambiente é esperado: o alarme nasce sem dado nenhum, e sem dado conta como atraso. Ele volta a OK com o primeiro backup (em `prod`, às 03:07 seguintes ao merge).
 
 Os comandos usam a credencial temporária do dono na conta <conta AWS> (sa-east-1). O bucket de cada ambiente é a saída `BucketDoBackup` da pilha `financial-<ambiente>-dados`, e os alarmes ficam na `financial-<ambiente>-app`.
+
+## Como rodar
+
+`scripts/conferir-backup.sh` (wizard) guia todos os itens abaixo e imprime o texto para `## Answer`. Precisa da credencial AWS do dono; o último item só vale 92 dias depois (o wizard guarda a data em `.backup-prod-primeira-data`, ignorado pelo git e rodado de novo depois).
 
 ## Checklist
 
