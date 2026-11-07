@@ -20,7 +20,7 @@ import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, hoje } from "./datas";
 import { comoDigitado, emCentavos, redividir } from "./dinheiro";
-import { EditorDePartes, emEdicao, mesmasPartes, parteNova, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
+import { dividirEmPartes, EditorDePartes, emEdicao, juntarPartes, mesmasPartes, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
 import { SeletorDeTags } from "./SeletorDeTags";
 
@@ -184,12 +184,13 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   /** A regra se divide em duas partes: a primeira com a classificação que ela tinha, a segunda vazia. */
   const dividir = () => {
     setItemTocado(null);
-    setForm({ ...form, partes: [{ ...parteNova(), categoria_ids: form.categoriaIds, tags: form.tags, pessoa: form.pessoa }, parteNova()], partesTocadas: true, categoriaIds: [], tags: [], pessoa: null });
+    setForm({ ...form, partes: dividirEmPartes({ categoria_ids: form.categoriaIds, tags: form.tags, pessoa: form.pessoa }), partesTocadas: true, categoriaIds: [], tags: [], pessoa: null });
   };
   /** Tirar a penúltima parte: a regra volta a ser uma, com a classificação da parte que ficou. */
   const juntar = (fica: ParteEmEdicao) => {
-    setItemTocado(fica.item_categoria_id ?? null);
-    setForm({ ...form, partes: null, partesTocadas: true, categoriaIds: fica.categoria_ids, tags: fica.tags, pessoa: fica.pessoa ?? null, descricao: form.descricao.trim() ? form.descricao : fica.descricao });
+    const junta = juntarPartes(fica, form.descricao);
+    setItemTocado(junta.item);
+    setForm({ ...form, partes: null, partesTocadas: true, categoriaIds: junta.classificacao.categoria_ids, tags: junta.classificacao.tags, pessoa: junta.classificacao.pessoa, descricao: junta.descricao });
   };
   /** As partes com a escolha de item que o aviso de cada uma decidiu. */
   const comEscolha = (f: Formulario): Formulario =>
