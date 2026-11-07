@@ -1,7 +1,7 @@
 # Medir a proteção da fatura paga no DSQL
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `run` (medir contra o DSQL), `diagnosing-bugs` se pesar; HITL (precisa de acesso ao DSQL)
 Modelo recomendado: Sonnet
@@ -15,8 +15,8 @@ Origem: [ticket 127](127-medir-o-custo-da-protecao-da-fatura-paga.md): a medida 
 
 ## Checklist
 
-- [~] Rodar `backend/medir_fatura_paga.py` contra um banco DSQL de teste (ele apaga o schema `public`) e registrar o lançamento, o lote de 50 e a correção do parcelamento longo (ticket 180) aqui
-- [ ] Se pesar: conferir só os titulares tocados pela gravação, ou só as faturas fechadas, mantendo `backend/tests/test_fatura_paga.py`
+- [x] Rodar `backend/medir_fatura_paga.py` contra um banco DSQL de teste (ele apaga o schema `public`) e registrar o lançamento, o lote de 50 e a correção do parcelamento longo (ticket 180) aqui
+- [x] (movido para o [ticket 202](202-decidir-o-custo-da-protecao-no-dsql.md)) Se pesar: conferir só os titulares tocados pela gravação, ou só as faturas fechadas, mantendo `backend/tests/test_fatura_paga.py`
 
 ## Medida no DSQL (sa-east-1, feita pelo dono, 11000 lançamentos de cartão, 190 faturas, 2 titulares)
 
@@ -33,5 +33,4 @@ Para o script rodar no DSQL: `DSQL_TESTE=1` (ele apaga as tabelas em vez do sche
 
 ## Pendências
 
-- [ ] Correção do longo: medir depois do 201
-- [ ] Decidir se 282 ms por lançamento e ~8 s a mais no lote de 50 pesam; se sim, aplicar o segundo item
+Lançamento e lote medidos; a correção do longo e a decisão sobre o custo estão no [ticket 202](202-decidir-o-custo-da-protecao-no-dsql.md), bloqueado pelo [201](201-conferencia-sem-gravar-usa-savepoint-no-dsql.md).
