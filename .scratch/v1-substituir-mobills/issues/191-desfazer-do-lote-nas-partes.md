@@ -1,7 +1,7 @@
 # Desfazer da edição em lote nas partes: pular a compra ou a parte
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Opus
