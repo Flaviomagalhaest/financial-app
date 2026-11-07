@@ -1,7 +1,7 @@
 # O que fazer quando a regra tira uma parcela ou ocorrência que tem estorno
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono)
 Modelo recomendado: Opus
