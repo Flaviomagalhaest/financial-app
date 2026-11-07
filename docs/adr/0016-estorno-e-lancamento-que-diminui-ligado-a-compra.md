@@ -59,3 +59,12 @@ Decidido com o dono no [ticket 148](../../.scratch/v1-substituir-mobills/issues/
 - **Dado antigo**: o estorno desalinhado da compra (de antes do ticket 133, inclusive em backup restaurado) não ganha migração nem acerto na restauração; ele se acerta quando a compra mudar.
 
 A implementação é o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
+
+## Adendo (ticket 161)
+
+Decidido com o dono no [ticket 161](../../.scratch/v1-substituir-mobills/issues/161-limite-do-estorno-de-parte-do-parcelamento.md), sobre as escolhas do adendo do 160:
+
+- **Limite da parte pela regra**: fica. A soma da parte é a das parcelas da regra (`somas_nas_parcelas`), não a das partes gravadas nas parcelas, como no limite do parcelamento inteiro (`valor_total_centavos`). A parcela mudada "só nesta" e a proporção mudada "esta e as próximas" não mexem no limite. O limite barra erro, não fecha a contabilidade. Se um dia passar a contar o gravado, os dois limites mudam juntos.
+- **Item**: fica. O estorno de parte do parcelamento herda só a escolha explícita de item da parte. Sem ela, conta no item do mês pela regra de onde conta, porque cada parcela cai num mês.
+- **Ligação no aparelho**: muda. O app liga a parte da parcela à do parcelamento pelo mesmo `id_na_parcela` (uuid5) do servidor, não pela posição, com tabela compartilhada (ADR 0018). A implementação é o [ticket 190](../../.scratch/v1-substituir-mobills/issues/190-aparelho-liga-a-parte-da-parcela-pelo-id.md). Até ela, vale o que o adendo do 160 descreve.
+- **Estorno de todas anterior à divisão**: fica com a classificação que tinha, ligado ao parcelamento inteiro, como na compra à vista.
