@@ -74,6 +74,8 @@ type ParcelamentoDoEstorno = {
   valor_total_centavos: number;
   parcelas?: number;
   partes?: { id: string; valor_centavos: number; descricao?: string; categoria_ids?: string[] }[];
+  // A proporção que o servidor guarda (ticket 158); a leitura traz as partes divididas pelo total.
+  proporcao_das_partes?: number[];
 };
 
 export type IndiceDeEstornos = ReturnType<typeof indiceDeEstornos>;
@@ -110,7 +112,7 @@ export function somasDasPartes(regra: ParcelamentoDoEstorno): Map<string, number
   const parcelas = regra.parcelas ?? 0;
   if (!partes.length || !parcelas) return new Map();
   const { primeira, outras } = dividirEmParcelas(regra.valor_total_centavos, parcelas);
-  const pesos = partes.map((p) => p.valor_centavos);
+  const pesos = regra.proporcao_das_partes?.length === partes.length ? regra.proporcao_das_partes : partes.map((p) => p.valor_centavos);
   const daPrimeira = dividirNaProporcao(pesos, primeira);
   const dasOutras = dividirNaProporcao(pesos, outras);
   return new Map(partes.map((p, i) => [p.id, daPrimeira[i] + dasOutras[i] * (parcelas - 1)]));
