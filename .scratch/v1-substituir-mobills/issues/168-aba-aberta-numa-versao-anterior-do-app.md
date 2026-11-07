@@ -1,7 +1,7 @@
 # Aba aberta numa versão anterior do app depois de uma versão nova
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: decisão do dono sobre recarregar sozinho ou avisar); depois `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
