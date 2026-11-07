@@ -1,7 +1,7 @@
 # Atrasado da recorrência que a mudança levaria para dentro de uma fatura paga
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: o dono decide entre pular e recusar); apoio: `implement`, `tdd`
 Modelo recomendado: Opus
