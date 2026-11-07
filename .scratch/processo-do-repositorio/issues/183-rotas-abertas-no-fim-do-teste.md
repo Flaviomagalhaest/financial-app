@@ -20,6 +20,6 @@ Arquivos com `rota.fetch()` e sem `unrouteAll` no teste: `cartoes-cadastro`, `co
 - [x] Em cada teste com rota que busca do servidor, `unrouteAll({ behavior: "wait" })` no fim (feito com `soltarRotas` em `web/e2e/rotas.ts`, num `test.afterEach` dos arquivos, menos `resposta-perdida`)
 - [ ] Prova com a injeção do 178 num dos testes trocados: vermelho sem a mudança, verde com ela
 
-Nota: a prova (injeção do 178) não rodou na sessão — sem dependências, Postgres nem navegador no ambiente. Falta rodar no CI/local; por isso o ticket segue `claimed`.
+Nota: a prova rodou numa sessão na nuvem (Postgres 16, Chromium, `CI=1`), 3 execuções por variante, com 20 ms entre `rota.fetch()` e `json()` em `parcelamento.spec.ts` ("recusa parou no meio" e "sem a 1ª parcela"). Com `soltarRotas`: 3 de 3 verdes. Sem ele: também 3 de 3 verdes, então a injeção **não reproduziu** o vermelho aqui (o erro do CI depende de uma leitura extra do service worker chegar depois da asserção; não aconteceu nesta máquina). A prova do vermelho segue pendente, por isso o ticket segue `claimed`.
 
 `resposta-perdida` ficou de fora: as rotas dele prendem o pedido de propósito até a página sair, e o `unrouteAll` com `wait` estourou o tempo do `afterEach` (3 testes, CI do PR #455). Precisa de outro tratamento (`ignoreErrors` ou soltar a rota presa antes).
