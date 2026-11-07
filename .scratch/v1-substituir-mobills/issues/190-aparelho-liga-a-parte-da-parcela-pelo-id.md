@@ -1,7 +1,7 @@
 # Aparelho liga a parte da parcela à do parcelamento pelo id, como o servidor
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -21,8 +21,8 @@ O dono decidiu: o aparelho faz a mesma conta do servidor.
 
 ## Checklist
 
-- [ ] `uuid5` no app, com a tabela compartilhada passando no servidor e no app
-- [ ] `parteDoParcelamento` e `parteDaParcela` pelo id; atualizar o comentário que fala da posição
-- [ ] Teste: parcela com partes próprias com o mesmo número de partes não conta no restante da parte do parcelamento, igual ao servidor
-- [ ] ADR 0016: o adendo do 160 deixa de dizer "pela posição"
-- [ ] Verificações do projeto e PR para `main`
+- [x] `uuid5` no app, com a tabela compartilhada passando no servidor e no app
+- [x] `parteDoParcelamento` e `parteDaParcela` pelo id; atualizar o comentário que fala da posição
+- [x] Teste: parcela com partes próprias com o mesmo número de partes não conta no restante da parte do parcelamento, igual ao servidor
+- [x] ADR 0016: o adendo do 160 deixa de dizer "pela posição"
+- [x] Verificações do projeto e PR para `main`

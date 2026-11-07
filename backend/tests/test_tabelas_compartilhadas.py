@@ -5,7 +5,7 @@ tabelas que `web/e2e/tabelas.spec.ts` roda no código do app."""
 import json
 from datetime import date
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -14,7 +14,7 @@ from app.faturas import Titular, escolher_fatura
 from app.item_em_que_conta import onde_conta
 from app.lancamentos import Parte, somas_nas_parcelas
 from app.parcelamentos import parcelas_puladas, valor_da_parcela
-from app.partes import redividir
+from app.partes import id_na_parcela, redividir
 from app.planejamento import percentual
 from app.recorrencias import NovaRecorrencia, ocorrencias_puladas
 
@@ -115,3 +115,8 @@ def test_parcelas_puladas(caso: dict):
 @pytest.mark.parametrize("caso", casos("somas-das-partes"), ids=lambda c: c["caso"])
 def test_somas_das_partes(caso: dict):
     assert somas_nas_parcelas(caso["total"], caso["parcelas"], caso["pesos"]) == caso["resultado"]
+
+
+@pytest.mark.parametrize("caso", casos("ids-das-partes-nas-parcelas"), ids=lambda c: c["caso"])
+def test_ids_das_partes_nas_parcelas(caso: dict):
+    assert id_na_parcela(UUID(caso["parcela_id"]), UUID(caso["parte_id"])) == UUID(caso["id"])
