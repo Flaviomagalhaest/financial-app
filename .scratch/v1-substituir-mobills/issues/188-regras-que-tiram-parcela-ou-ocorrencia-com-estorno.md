@@ -1,7 +1,7 @@
 # Regras que tiram parcela ou ocorrência com estorno
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
