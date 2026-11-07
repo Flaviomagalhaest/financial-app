@@ -561,6 +561,9 @@ def test_credito_avulso_com_categoria_e_tag_desconta_nelas_e_no_item_e_nao_tem_l
     cartao = novo_cartao(casal)["id"]
     mercado = casal.categoria("Mercado")
     comprar(casal, cartao, "2026-03-28", valor_centavos=1000, categoria_ids=[mercado])
+    comprar(
+        casal, cartao, "2026-03-29", valor_centavos=20000, categoria_ids=[casal.categoria("Lazer")]
+    )
     casal.pedir(
         "flavio",
         "POST",
@@ -588,10 +591,10 @@ def test_credito_avulso_com_categoria_e_tag_desconta_nelas_e_no_item_e_nao_tem_l
         ["loja"],
         "esposa",
     )
-    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == -4000
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 16000
     abril = totais(casal, "2026-04")
-    assert abril["despesas_centavos"] == -4000
-    assert abril["por_categoria"] == [{"categoria_id": mercado, "centavos": -4000}]
+    assert abril["despesas_centavos"] == 16000
+    assert {"categoria_id": mercado, "centavos": -4000} in abril["por_categoria"]
     assert abril["por_tag"] == [{"tag": "loja", "centavos": -5000}]
     [item] = casal.pedir("flavio", "GET", "/api/planejamento/2026-04").json()["itens"]
     assert item["realizado_centavos"] == -4000
@@ -629,6 +632,7 @@ def test_credito_avulso_se_edita_e_exclui_e_a_categoria_pode_sair_mas_nao_vira_r
 ):
     cartao = novo_cartao(casal)["id"]
     mercado = casal.categoria("Mercado")
+    comprar(casal, cartao, "2026-03-27", valor_centavos=5000)
     credito = creditar(
         casal, cartao, "2026-03-28", valor_centavos=250, categoria_ids=[mercado], tags=["loja"]
     ).json()
@@ -657,13 +661,13 @@ def test_credito_avulso_se_edita_e_exclui_e_a_categoria_pode_sair_mas_nao_vira_r
     assert editado.json()["estorno_avulso"] is True
     assert como_receita.status_code == 422
     assert na_conta.status_code == 422
-    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == -900
-    assert totais(casal, "2026-04")["por_categoria"] == []
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 4100
+    assert all(c["centavos"] > 0 for c in totais(casal, "2026-04")["por_categoria"])
 
     excluido = casal.pedir("flavio", "DELETE", f"/api/lancamentos/{credito['id']}")
 
     assert excluido.status_code == 204
-    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 0
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 5000
 
 
 def test_compra_comum_continua_sem_poder_ficar_sem_categoria_na_edicao(casal: Casal):
@@ -682,6 +686,7 @@ def test_compra_comum_continua_sem_poder_ficar_sem_categoria_na_edicao(casal: Ca
 
 def test_credito_avulso_chega_pelo_lote_da_fila_e_o_reenvio_nao_duplica(casal: Casal):
     cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-03-27", valor_centavos=1000)
     novo = lancamento(cartao, [], data="2026-03-28", valor_centavos=300, estorno_avulso=True)
     lote = {"acoes": [{"acao": "criar", "lancamento": novo}]}
 
@@ -690,4 +695,60 @@ def test_credito_avulso_chega_pelo_lote_da_fila_e_o_reenvio_nao_duplica(casal: C
 
     assert primeiro.json()["resultados"][0]["resultado"] == "aceita"
     assert reenvio.json()["resultados"][0]["resultado"] == "aceita"
-    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == -300
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 700
+
+
+# Devido negativo e mês sem fatura (ticket 189, adendo do ticket 152 na ADR 0016).
+def editar_credito(casal: Casal, credito: dict, **campos):
+    return casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{credito['id']}",
+        json={"versao": credito["versao"]} | campos,
+    )
+
+
+def test_credito_avulso_que_deixa_o_devido_negativo_e_recusado_e_o_que_zera_passa(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-03-28", valor_centavos=1000)
+
+    passa_de_um_centavo = creditar(casal, cartao, "2026-03-29", valor_centavos=1001)
+    zera = creditar(casal, cartao, "2026-03-29", valor_centavos=1000)
+
+    assert passa_de_um_centavo.status_code == 422
+    assert "negativo" in passa_de_um_centavo.json()["detail"]
+    assert zera.status_code == 201, zera.text
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 0
+
+
+def test_credito_avulso_na_edicao_recusa_valor_data_e_fatura_que_deixam_o_devido_negativo(
+    casal: Casal,
+):
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-03-28", valor_centavos=1000)
+    comprar(casal, cartao, "2026-04-28", valor_centavos=200)
+    credito = creditar(casal, cartao, "2026-03-29", valor_centavos=500).json()
+
+    valor = editar_credito(casal, credito, valor_centavos=1001)
+    para_maio = editar_credito(casal, credito, data="2026-04-28", valor_centavos=500)
+    para_a_fatura_de_maio = editar_credito(casal, credito, fatura_mes="2026-05-01")
+    baixou = editar_credito(casal, credito, valor_centavos=1000)
+
+    assert valor.status_code == 422
+    assert para_maio.status_code == 422
+    assert para_a_fatura_de_maio.status_code == 422
+    assert baixou.status_code == 200, baixou.text
+    assert fatura(casal, cartao, "2026-04-01")["total_centavos"] == 0
+    assert fatura(casal, cartao, "2026-05-01")["total_centavos"] == 200
+
+
+def test_credito_avulso_num_mes_sem_fatura_e_recusado_sem_deixar_a_fatura_para_tras(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+
+    recusado = creditar(casal, cartao, "2026-07-10", valor_centavos=100)
+
+    assert recusado.status_code == 422
+    meses = {
+        f["mes"] for f in casal.pedir("flavio", "GET", f"/api/cartoes/{cartao}/faturas").json()
+    }
+    assert "2026-08-01" not in meses, "a recusa desfaz a fatura que nasceria"

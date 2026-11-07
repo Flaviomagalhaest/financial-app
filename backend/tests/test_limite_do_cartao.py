@@ -8,6 +8,7 @@ import pytest
 from app import lancamentos
 from tests.conftest import Casal
 from tests.test_cartoes import comprar, novo_cartao
+from tests.test_estorno_e_ajuste import creditar
 
 
 @pytest.fixture(autouse=True)
@@ -235,3 +236,14 @@ def test_fechada_sem_pagamento_antes_de_uma_paga_continua_no_comprometido(casal:
 
     # Março está paga; fevereiro, sem pagamento, ainda deve os 50,00 dela.
     assert (limite["faturas_fechadas_centavos"], limite["disponivel_centavos"]) == (5000, 95000)
+
+
+def test_credito_avulso_diminui_o_comprometido_do_cartao(casal: Casal):
+    cartao = novo_cartao(casal, limite_centavos=100000)["id"]
+    comprar(casal, cartao, "2026-04-02", valor_centavos=10000)
+
+    credito = creditar(casal, cartao, "2026-04-03", valor_centavos=2500)
+
+    assert credito.status_code == 201, credito.text
+    limite = limite_de(casal, cartao)
+    assert (limite["fatura_aberta_centavos"], limite["disponivel_centavos"]) == (7500, 92500)

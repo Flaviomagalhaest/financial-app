@@ -1,7 +1,7 @@
 # Estorno avulso: item na tela, crédito sem fatura, recusa do devido negativo e testes
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -19,9 +19,14 @@ Origem: [ticket 152](152-estorno-avulso-pendencias.md): decisões do dono sobre 
 
 ## Checklist
 
-- [ ] Teste de API: avulso que deixa o devido negativo é recusado na criação e na edição (troca de valor, data e fatura); o que deixa o devido em zero passa
-- [ ] Teste de API: avulso num mês sem fatura cria a fatura com as datas padrão
-- [ ] Tela pergunta o item com duas categorias com item; e2e cobre a escolha
-- [ ] "Lançar crédito" no mês sem fatura; e2e cobre
-- [ ] Sinal de crédito na "A escolher"
-- [ ] Testes do avulso na busca, no histórico, no limite e na projeção; tag e pessoa pela tela
+- [x] Teste de API: avulso que deixa o devido negativo é recusado na criação e na edição (troca de valor, data e fatura); o que deixa o devido em zero passa
+- [x] Teste de API: avulso num mês sem fatura cria a fatura com as datas padrão
+- [x] Tela pergunta o item com duas categorias com item; e2e cobre a escolha
+- [x] "Lançar crédito" no mês sem fatura; e2e cobre
+- [x] Sinal de crédito na "A escolher"
+- [x] Testes do avulso na busca, no histórico, no limite e na projeção; tag e pessoa pela tela
+
+## Observação da implementação
+
+- A recusa do devido negativo vale também para o mês sem fatura: o crédito avulso ali só passa se houver saldo anterior (fatura paga com falta) para cobri-lo; sem isso, a fatura nasce no pedido e a recusa a desfaz (teste `test_credito_avulso_num_mes_sem_fatura_e_recusado_sem_deixar_a_fatura_para_tras`). O botão "Lançar crédito" aparece mesmo assim, como o dono decidiu; se ele preferir escondê-lo quando não há como cobrir, é decisão dele.
+- O caso "fatura nasce" está coberto pelo teste do saldo anterior de maio em `test_fatura_paga.py`.

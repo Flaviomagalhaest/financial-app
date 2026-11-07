@@ -901,6 +901,8 @@ export type LancamentoEmEdicao = Pick<NovoLancamento, "id" | "valor_centavos" | 
   situacao: LancamentoNaTela["situacao"];
   /** As partes da compra, com a escolha de item tocada em cada uma (ADR 0022). */
   partes?: NovoLancamento["partes"];
+  /** O crédito avulso: diminui o item que escolhe em vez de somar (ticket 189). */
+  estorno_avulso?: boolean;
 };
 
 /**
@@ -948,7 +950,7 @@ export function useAvisoDePlanejamento(lancamento: LancamentoEmEdicao, escolhaTo
           ...lancamento,
           item_categoria_id: escolha ?? antes?.item_categoria_id,
           estorno_de: antes?.estorno_de,
-          estorno_avulso: antes?.estorno_avulso,
+          estorno_avulso: antes?.estorno_avulso ?? lancamento.estorno_avulso,
           estorno_parcelamento_id: antes?.estorno_parcelamento_id,
           mes,
         })
