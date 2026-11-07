@@ -1703,14 +1703,8 @@ def test_excluir_o_parcelamento_com_parcela_paga_ou_alterada_a_mao_pede_confirma
 
     assert excluir_parcelamento(casal, novo["id"], confirmar_realizadas=True).status_code == 204
     fazer_tarefa_diaria(database_url)
-    # A que ficou não muda de valor, mesmo com a regra de 2x (ticket 176).
-    assert [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, novo["id"])] == [
-        (1, 25000)
-    ]
-    [regra] = casal.pedir("flavio", "GET", "/api/parcelamentos").json()
-    # Encolhido até a parcela que ficou, com o total dela; a tabela não aceita 1x, então fica um
-    # 2x sem a 2ª (ticket 176).
-    assert (regra["parcelas"], regra["valor_total_centavos"]) == (2, 25000)
+    # Fica a da fatura paga; o encolhido de uma parcela só está em test_fatura_paga.py.
+    assert [l["parcela"] for l in parcelas(casal, novo["id"])] == [1]
 
 
 def test_excluir_o_parcelamento_so_com_previstas_nao_pede_confirmacao(casal: Casal):
