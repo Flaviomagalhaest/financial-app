@@ -2,19 +2,19 @@
 (ticket 112). Gera lançamentos fictícios com `generate_series`, roda cada cenário algumas vezes e
 imprime a mediana. Apaga o schema `public`: use só num banco de teste.
 
-Uso: DATABASE_URL=... uv run python medir_busca.py [lançamentos avulsos] [parcelamentos de 5 parcelas]
+Uso: DATABASE_URL=... (Postgres) ou DSQL_ENDPOINT=... e AWS_REGION=... (Aurora DSQL, ticket 119),
+depois `uv run python medir_busca.py [lançamentos avulsos] [parcelamentos de 5 parcelas]`.
 """
 
-import os
 import statistics
 import sys
 import time
 
-import psycopg
-
 from app import busca
+from app.banco import conectar
 from app.migrations import aplicar_migrations
 
+LOTE = 2_500  # abaixo das 3.000 linhas por transação do DSQL (ADR 0009)
 DESCRICOES = [
     "Mercado", "Padaria", "Farmácia", "Posto de gasolina", "Restaurante", "Pão de Açúcar",
     "Uber", "Netflix", "Aluguel", "Conta de luz", "Salário", "Açougue", "Feira", "Drogaria",
@@ -24,7 +24,7 @@ DESCRICOES = [
 def gerar(conn, avulsos: int, parcelamentos: int) -> None:
     conn.execute("DROP SCHEMA public CASCADE")
     conn.execute("CREATE SCHEMA public")
-    aplicar_migrations(os.environ["DATABASE_URL"])
+    aplicar_migrations()  # DSQL_ENDPOINT, se houver; senão DATABASE_URL
     conn.execute(
         "INSERT INTO contas (id, nome, tipo, criado_por) SELECT gen_random_uuid(), 'Conta ' || n,"
         " 'corrente', 'flavio' FROM generate_series(1, 4) n"
@@ -38,44 +38,56 @@ def gerar(conn, avulsos: int, parcelamentos: int) -> None:
         " FROM generate_series(1, 15) n"
     )
     descricoes = "(ARRAY[" + ",".join(f"'{d}'" for d in DESCRICOES) + "])"
-    conn.execute(
-        f"""INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao, conta_id,
-            criado_por, criado_em, alterado_por, alterado_em, pessoa, mes, fonte)
-        SELECT gen_random_uuid(), 'despesa', CASE WHEN n % 50 = 0 THEN 'previsto' ELSE 'realizado' END,
-            100 + (n * 7919) % 90000, d, {descricoes}[1 + n % {len(DESCRICOES)}] || ' ' || n % 997,
-            (SELECT id FROM contas ORDER BY id OFFSET n % 4 LIMIT 1), 'flavio', d, 'flavio', d,
-            CASE n % 3 WHEN 0 THEN 'flavio' WHEN 1 THEN 'esposa' END, date_trunc('month', d)::date,
-            CASE WHEN n % 20 = 0 THEN NULL ELSE 'mobills' END
-        FROM (SELECT n, date '2019-01-01' + (n * 2047) % 2860 AS d FROM generate_series(1, {avulsos}) n) s"""
-    )
-    conn.execute(
-        """INSERT INTO lancamento_categorias SELECT l.id, c.id FROM
-           (SELECT id, row_number() OVER () n FROM lancamentos) l JOIN
-           (SELECT id, row_number() OVER () n FROM categorias) c ON c.n = 1 + l.n % 40"""
-    )
-    conn.execute(
-        """INSERT INTO lancamento_tags SELECT l.id, t.id FROM
-           (SELECT id, row_number() OVER () n FROM lancamentos) l JOIN
-           (SELECT id, row_number() OVER () n FROM tags) t ON t.n = 1 + l.n % 15 WHERE l.n % 4 = 0"""
-    )
-    conn.execute(
-        f"""INSERT INTO parcelamentos (id, valor_total_centavos, parcelas, data, automatico, descricao,
-            conta_id, criado_por, alterado_por)
-        SELECT gen_random_uuid(), 50000, 5, date '2019-01-01' + (n * 131) % 2700, false,
-            'Compra parcelada ' || n, (SELECT id FROM contas LIMIT 1), 'flavio', 'flavio'
-        FROM generate_series(1, {parcelamentos}) n"""
-    )
-    conn.execute(
-        """INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao, conta_id,
-            criado_por, alterado_por, mes, parcelamento_id, parcela)
-        SELECT gen_random_uuid(), 'despesa', 'realizado', 10000, p.data + 30 * k, p.descricao, p.conta_id,
-            'flavio', 'flavio', date_trunc('month', p.data + 30 * k)::date, p.id, k + 1
-        FROM parcelamentos p, generate_series(0, 4) k"""
-    )
-    conn.execute(
-        """INSERT INTO lancamento_categorias SELECT l.id, (SELECT id FROM categorias LIMIT 1)
-           FROM lancamentos l WHERE l.parcelamento_id IS NOT NULL"""
-    )
+    # Os ids saem de md5 do número, para ligar categorias e tags sem reler os lançamentos.
+    # O DSQL aceita até 3.000 linhas por transação: cada comando insere um lote de LOTE linhas.
+    for de in range(1, avulsos + 1, LOTE):
+        ate = min(de + LOTE - 1, avulsos)
+        conn.execute(
+            f"""INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,
+                conta_id, criado_por, criado_em, alterado_por, alterado_em, pessoa, mes, fonte)
+            SELECT md5('l' || n)::uuid, 'despesa',
+                CASE WHEN n % 50 = 0 THEN 'previsto' ELSE 'realizado' END,
+                100 + (n * 7919) % 90000, d, {descricoes}[1 + n % {len(DESCRICOES)}] || ' ' || n % 997,
+                (SELECT id FROM contas ORDER BY id OFFSET n % 4 LIMIT 1), 'flavio', d, 'flavio', d,
+                CASE n % 3 WHEN 0 THEN 'flavio' WHEN 1 THEN 'esposa' END,
+                date_trunc('month', d)::date, CASE WHEN n % 20 = 0 THEN NULL ELSE 'mobills' END
+            FROM (SELECT n, date '2019-01-01' + (n * 2047) % 2860 AS d
+                  FROM generate_series({de}, {ate}) n) s"""
+        )
+        conn.execute(
+            f"""INSERT INTO lancamento_categorias SELECT md5('l' || n)::uuid, c.id
+            FROM generate_series({de}, {ate}) n JOIN
+              (SELECT id, row_number() OVER (ORDER BY id) r FROM categorias) c ON c.r = 1 + n % 40"""
+        )
+        conn.execute(
+            f"""INSERT INTO lancamento_tags SELECT md5('l' || n)::uuid, t.id
+            FROM generate_series({de}, {ate}) n JOIN
+              (SELECT id, row_number() OVER (ORDER BY id) r FROM tags) t ON t.r = 1 + n % 15
+            WHERE n % 4 = 0"""
+        )
+    for de in range(1, parcelamentos + 1, LOTE // 5):  # 5 parcelas por parcelamento
+        ate = min(de + LOTE // 5 - 1, parcelamentos)
+        conn.execute(
+            f"""INSERT INTO parcelamentos (id, valor_total_centavos, parcelas, data, automatico,
+                descricao, conta_id, criado_por, alterado_por)
+            SELECT md5('p' || n)::uuid, 50000, 5, date '2019-01-01' + (n * 131) % 2700, false,
+                'Compra parcelada ' || n, (SELECT id FROM contas LIMIT 1), 'flavio', 'flavio'
+            FROM generate_series({de}, {ate}) n"""
+        )
+        conn.execute(
+            f"""INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,
+                conta_id, criado_por, alterado_por, mes, parcelamento_id, parcela)
+            SELECT md5('q' || n || '-' || k)::uuid, 'despesa', 'realizado', 10000, p.data + 30 * k,
+                p.descricao, p.conta_id, 'flavio', 'flavio', date_trunc('month', p.data + 30 * k)::date,
+                p.id, k + 1
+            FROM generate_series({de}, {ate}) n, generate_series(0, 4) k,
+                LATERAL (SELECT * FROM parcelamentos WHERE id = md5('p' || n)::uuid) p"""
+        )
+        conn.execute(
+            f"""INSERT INTO lancamento_categorias
+            SELECT md5('q' || n || '-' || k)::uuid, (SELECT id FROM categorias LIMIT 1)
+            FROM generate_series({de}, {ate}) n, generate_series(0, 4) k"""
+        )
     conn.execute("ANALYZE")
 
 
@@ -100,12 +112,17 @@ CENARIOS = {
 def main() -> None:
     avulsos = int(sys.argv[1]) if len(sys.argv) > 1 else 100_000
     parcelamentos = int(sys.argv[2]) if len(sys.argv) > 2 else 4_000
-    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as conn:
+    with conectar(autocommit=True, admin=True) as conn:
         gerar(conn, avulsos, parcelamentos)
         total = conn.execute("SELECT count(*) FROM lancamentos").fetchone()[0]
         print(f"{total} lançamentos ({avulsos} avulsos + {parcelamentos} parcelamentos)")
-        conta = conn.execute("SELECT id FROM categorias LIMIT 1").fetchone()[0]
-        cenarios = {**CENARIOS, "categoria + tag": {"categoria_ids": [conta], "tags": ["tag1"]}}
+        # Uma categoria e uma tag que existem juntas num mesmo lançamento, senão o cenário acha 0.
+        categoria, tag = conn.execute(
+            "SELECT lc.categoria_id, t.nome FROM lancamento_tags lt"
+            " JOIN lancamento_categorias lc ON lc.lancamento_id = lt.lancamento_id"
+            " JOIN tags t ON t.id = lt.tag_id LIMIT 1"
+        ).fetchone()
+        cenarios = {**CENARIOS, "categoria + tag": {"categoria_ids": [categoria], "tags": [tag]}}
         for nome, criterios in cenarios.items():
             criterios = dict(criterios)
             if criterios.get("pagina") == "ultima":
