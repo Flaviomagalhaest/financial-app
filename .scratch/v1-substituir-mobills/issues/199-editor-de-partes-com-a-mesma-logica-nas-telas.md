@@ -1,7 +1,7 @@
 # Editor de partes com a mesma lógica nas telas de lançamento e do parcelamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `codebase-design`, `implement`; apoio: `run`
 Modelo recomendado: Sonnet
