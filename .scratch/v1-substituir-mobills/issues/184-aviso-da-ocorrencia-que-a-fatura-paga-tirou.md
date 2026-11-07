@@ -1,7 +1,7 @@
 # Aviso da ocorrência que a fatura paga tirou da geração da recorrência
 
 Type: grilling
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: o dono decide se o casal é avisado e como); apoio: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -17,5 +17,17 @@ O 179 fez a geração passar, sem virar lançamento, pela ocorrência de antes d
 
 ## Checklist
 
-- [ ] Decidir com o dono: deixar calado (como hoje), avisar na regra (como o parcelamento mostra a recusa travada) ou gravar a ocorrência excluída para o casal ver
-- [ ] Se mudar, implementar com teste em `backend/tests/test_fatura_paga.py` e atualizar a ADR 0021
+- [x] Decidir com o dono: deixar calado (como hoje), avisar na regra (como o parcelamento mostra a recusa travada) ou gravar a ocorrência excluída para o casal ver
+- [x] Implementação nos tickets 192 (servidor) e 193 (tela)
+
+## Answer
+
+Decidido com o dono (grilling): avisar na regra.
+
+1. A ocorrência pulada pela fatura paga deixa um aviso de texto na recorrência, no padrão de `mudanca_recusada` do parcelamento.
+2. O aviso só informa (data, titular e mês da fatura, "lance à mão se precisar"); não refaz a ocorrência nem volta `geradas`.
+3. Fica até o casal dispensar; outra ocorrência pulada antes disso junta a data no mesmo aviso.
+4. Só na tela da regra, fora da aba inicial.
+5. Termo novo no glossário: "ocorrência pulada pela fatura paga", com a ADR 0021 atualizada.
+
+Implementação: [192](192-recorrencia-grava-o-aviso-da-ocorrencia-pulada.md) (servidor, ADR, glossário) e [193](193-tela-da-regra-mostra-o-aviso-da-ocorrencia-pulada.md) (tela).
