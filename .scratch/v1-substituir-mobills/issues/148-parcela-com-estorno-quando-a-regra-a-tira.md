@@ -1,7 +1,7 @@
 # O que fazer quando a regra tira uma parcela ou ocorrência que tem estorno
 
 Type: decision
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono)
 Modelo recomendado: Opus
@@ -22,6 +22,18 @@ Alternativas: a parcela com estorno fica (a regra a pula e avisa), a regra exclu
 
 ## Checklist
 
-- [ ] Decidir o comportamento de cada caso acima
-- [ ] Gravar na ADR 0016 (adendo) e no glossário
-- [ ] Abrir o ticket de implementação, com teste de API
+- [x] Decidir o comportamento de cada caso acima
+- [x] Gravar na ADR 0016 (adendo) e no glossário
+- [x] Abrir o ticket de implementação, com teste de API
+
+## Decisão
+
+Decidido com o dono (gravado no adendo do ticket 148 da [ADR 0016](../../../docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md) e no verbete **Estorno** do glossário). A regra nunca exclui o estorno junto:
+
+- **Parcelamento que diminui ou é corrigido**: recusa (422) antes de gravar a correção, como na fatura paga.
+- **Reajuste de recorrência**: o previsto com estorno fica como está, como o mexido à mão; o reajuste e a tarefa diária seguem.
+- **Exclusão da regra de recorrência**: o previsto com estorno fica, como o realizado e o atrasado.
+- **Correção de fatura**: o servidor exclui os estornos da lista antes das compras; a compra cujo estorno fica segue recusada (tudo ou nada).
+- **Dado antigo**: sem migração; acerta-se quando a compra mudar.
+
+Implementação: [ticket 188](188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
