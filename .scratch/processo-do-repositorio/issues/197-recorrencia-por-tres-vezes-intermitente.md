@@ -1,7 +1,7 @@
 # Teste da recorrência por três vezes falha de vez em quando
 
 Type: task
-Status: needs-info
+Status: wontfix
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`
 Modelo recomendado: Sonnet
@@ -31,7 +31,7 @@ Resta a falha que não deixou mensagem (`SerializationFailure` entre lotes, carg
 ## Checklist
 
 - [x] Reproduzir (não reproduz: ver acima)
-- [ ] Achar a causa e corrigir o teste ou o código, sem desligar o teste — **precisa da mensagem da próxima falha** (`pytest -x --tb=short`, sem `| tail`)
+- [x] ~~Achar a causa e corrigir o teste ou o código, sem desligar o teste — **precisa da mensagem da próxima falha** (`pytest -x --tb=short`, sem `| tail`)~~ — fechado como `wontfix` por decisão do dono (07/11/2026): não reproduz; se voltar a falhar, abrir ticket novo com a mensagem
 - [ ] Verificações do projeto e PR para `main`
 
 Fechar como `wontfix` se não voltar a falhar nas próximas semanas.
