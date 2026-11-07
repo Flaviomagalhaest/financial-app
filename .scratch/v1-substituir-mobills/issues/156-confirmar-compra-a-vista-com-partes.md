@@ -1,7 +1,7 @@
 # Confirmar com outro valor a compra à vista com partes
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: o dono escolhe como as partes se acertam), depois `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
