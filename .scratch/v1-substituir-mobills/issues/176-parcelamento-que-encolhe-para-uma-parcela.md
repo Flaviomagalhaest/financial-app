@@ -1,7 +1,7 @@
 # Parcelamento que encolhe para uma só parcela de fatura paga
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Opus
