@@ -53,7 +53,7 @@ def test_corrigir_para_menos_parcelas_com_estorno_na_que_sairia_recusa_e_nao_gra
     recusada = corrigir(casal, novo, parcelas=2)
 
     assert recusada.status_code == 422
-    assert recusada.json()["detail"] == "a compra tem estorno; exclua o estorno antes"
+    assert recusada.json()["detail"] == "a parcela 3: a compra tem estorno; exclua o estorno antes"
     assert estado(casal, novo) == antes
 
 

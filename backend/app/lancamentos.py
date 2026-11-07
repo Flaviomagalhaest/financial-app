@@ -1795,14 +1795,13 @@ def conferir_o_que_fica_do_estorno_de_todas(
     parcelamento_id: UUID,
     parcelas: int,
     total: int,
-    partes: list[int] | None = None,
     valor_novo: Callable[[int], int] | None = None,
     exceto: UUID | None = None,
 ) -> None:
     """No parcelamento com estorno de todas as parcelas, o que sai (parcela excluída, total menor,
     menos parcelas) não deixa a soma das parcelas que ficam abaixo do já estornado, de todas e de
     cada parcela; na parte, a soma da parte nelas (ticket 188). `exceto` é a parcela que sai;
-    `valor_novo` dá o valor de depois de cada parcela; `partes` é a proporção de depois."""
+    `valor_novo` dá o valor de depois de cada parcela (a correção)."""
     if not conn.execute(
         "SELECT 1 FROM lancamentos WHERE estorno_parcelamento_id = %s AND excluido_em IS NULL"
         " LIMIT 1",
@@ -1839,24 +1838,17 @@ def conferir_o_que_fica_do_estorno_de_todas(
             f"o parcelamento tem {estornado} centavos estornados: as parcelas que ficam não"
             " podem somar menos"
         )
-    ids = [
-        i
-        for (i,) in conn.execute(
-            "SELECT id FROM parcelamento_partes WHERE parcelamento_id = %s ORDER BY ordem",
-            (parcelamento_id,),
-        )
-    ]
-    if not ids:
-        return
-    if partes is None:
-        partes = [
-            v
-            for (v,) in conn.execute(
-                "SELECT valor_centavos FROM parcelamento_partes WHERE parcelamento_id = %s"
-                " ORDER BY ordem",
-                (parcelamento_id,),
-            )
-        ]
+    if valor_novo:
+        return  # a correção confere as partes em `conferir_partes_do_parcelamento_com_estorno`
+    ids = []
+    partes = []
+    for parte_id, valor in conn.execute(
+        "SELECT id, valor_centavos FROM parcelamento_partes WHERE parcelamento_id = %s"
+        " ORDER BY ordem",
+        (parcelamento_id,),
+    ):
+        ids.append(parte_id)
+        partes.append(valor)
     somas = [0] * len(partes)
     for valor in ficam:
         somas = [s + v for s, v in zip(somas, dividir_pela_proporcao(valor, partes))]
