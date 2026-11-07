@@ -1,7 +1,7 @@
 # Exclusão da recorrência criada falha de vez em quando no teste de navegador
 
 Type: task
-Status: ready-for-agent
+Status: ready-for-human
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -34,3 +34,14 @@ O sintoma original voltou no CI do PR #517 (job `verificar`, run 42417245960, 1�
 - [ ] Reproduzir o clique em "Excluir" com o botão saindo da página (trace do artefato acima)
 - [ ] Achar a causa (teste ou tela) e corrigir, sem desligar o teste
 - [ ] Verificações do projeto e PR para `main`
+
+## Diagnóstico da reabertura (sem causa provada)
+
+Laço montado: Postgres local, `npm ci`, e `npx playwright test e2e/recorrencia-mudar.spec.ts -g "talvez já esteja" --repeat-each=N --trace off` com 4 núcleos saturados. Resultado: 25/25 verdes (2 min), nenhum clique em "Excluir" destacado.
+
+Hipótese testada e **falsificada**: um reenvio entre `perder = false` e o clique sobe a recorrência, a região some e o "Excluir" fica destacado para sempre. Alarguei a janela de propósito (espera de 8 s e de 13 s após `perder = false`, acima do ping de 10 s de `/api/saude`): o teste passou nas duas. Lista e chaves (`key={r.id}`) são estáveis, então o redesenho da fila não remonta o `<li>`.
+
+Sem laço vermelho não há correção honesta. Próximo passo, que precisa do dono: baixar o trace do artefato `testes-com-navegador` (id 13592578663, run 42417245960) e ver o que mudou no DOM no instante do clique; só com isso dá para formular outra hipótese.
+
+- [ ] Dono: anexar/ler o trace do artefato e dizer o que a região fazia no instante do clique
+- [ ] Reproduzir com esse dado, corrigir sem desligar o teste, verificações e PR
