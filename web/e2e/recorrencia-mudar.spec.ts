@@ -231,6 +231,17 @@ function regraNoServidor(page: Page, request: APIRequestContext, token: string, 
   };
 }
 
+/**
+ * Os previstos da regra que ainda estão no servidor. A ocorrência de hoje fica como realizado
+ * depois da exclusão (`excluir_regra`), então a ausência dos previstos é o que prova a exclusão: a
+ * linha do Histórico some só enquanto a fila esconde os previstos e volta com a releitura (ticket 198).
+ */
+async function previstosNoServidor(request: APIRequestContext, token: string, descricao: string) {
+  const resposta = await request.get("/api/lancamentos", { headers: { authorization: token } });
+  const lista = (await resposta.json()) as { descricao: string; situacao: string }[];
+  return lista.filter((l) => l.descricao === descricao && l.situacao === "previsto").length;
+}
+
 test("a recorrência criada que talvez já esteja no servidor se exclui em vez de se descartar", async ({ page, context, request }) => {
   const { conta, casa, descricao } = await prepararCasal(page);
   const token = await tokenDaPagina(page);
@@ -260,8 +271,7 @@ test("a recorrência criada que talvez já esteja no servidor se exclui em vez d
   await aba(page, "Hoje");
   await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
   await esperarFilaVazia(page);
-  await aba(page, "Histórico");
-  await expect(linha(page, descricao)).toHaveCount(0);
+  expect(await previstosNoServidor(request, token, descricao)).toBe(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
@@ -288,8 +298,7 @@ test("a recorrência descartada no meio do envio chega ao servidor e sai de lá 
   await aba(page, "Hoje");
   await expect.poll(regraNoServidor(page, request, token, descricao)).toBe(false);
   await esperarFilaVazia(page);
-  await aba(page, "Histórico");
-  await expect(linha(page, descricao)).toHaveCount(0);
+  expect(await previstosNoServidor(request, token, descricao)).toBe(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 

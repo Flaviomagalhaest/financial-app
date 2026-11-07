@@ -595,7 +595,8 @@ test.describe("sem service worker", () => {
       await rota.fulfill({ response: resposta, json: lista.filter((l) => l.parcela !== 1) });
     });
     await aba(page, "Hoje");
-    // Sai de fato da tela antes de voltar: senão a verificação abaixo passa na tela velha, sem nova leitura (ticket 200).
+    // Sem esperar a Hoje, a volta chega antes de a tela do parcelamento sair e ela não lê de novo.
+    await expect(page.getByRole("heading", { name: "Hoje", level: 2 })).toBeVisible();
     await expect(page.getByLabel("Descrição")).toHaveCount(0);
     const lida = page.waitForResponse((r) => r.url().endsWith(`/api/parcelamentos/${id}/lancamentos`));
     await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);

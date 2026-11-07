@@ -97,6 +97,37 @@ export function emEdicaoNaProporcao(modelo: { descricao?: string; valor_centavos
 /** Uma parte vazia, com o id que nasce no aparelho. */
 export const parteNova = (): ParteEmEdicao => ({ id: crypto.randomUUID(), descricao: "", valor: "", categoria_ids: [], tags: [], pessoa: null, item_categoria_id: null });
 
+/** A classificação que viaja junta: a da compra sem partes e a de cada parte. */
+export type Classificacao = { categoria_ids: string[]; tags: string[]; pessoa: string | null };
+
+/** A compra sem partes não tem classificação: é a que as partes carregam. */
+export const semClassificacao: Classificacao = { categoria_ids: [], tags: [], pessoa: null };
+
+/** Dividir: a 1ª parte leva a classificação da compra, e a 2ª nasce vazia, com o resto do valor. */
+export const dividirEmPartes = (c: Classificacao): ParteEmEdicao[] => [{ ...parteNova(), ...c }, parteNova()];
+
+/** Juntar: a compra volta a ser uma, com a classificação, o item e o nome (se não tinha) da parte que ficou. */
+export function juntarPartes(fica: ParteEmEdicao, descricaoAtual: string): { classificacao: Classificacao; descricao: string; item: string | null } {
+  return {
+    classificacao: { categoria_ids: fica.categoria_ids, tags: fica.tags ?? [], pessoa: fica.pessoa ?? null },
+    descricao: descricaoAtual.trim() ? descricaoAtual : (fica.descricao ?? ""),
+    item: fica.item_categoria_id ?? null,
+  };
+}
+
+/** Só a classificação mantém a proporção; valor tocado ou parte posta ou tirada a solta (`null`). */
+export function proporcaoAposMudar(proporcao: number[] | null, antes: ParteEmEdicao[] | null, novas: ParteEmEdicao[]): number[] | null {
+  const tocou = !antes || novas.length !== antes.length || novas.some((x, i) => x.valor !== antes[i].valor);
+  return tocou ? null : proporcao;
+}
+
+/** As partes divididas de novo pela proporção para o total; `null` quando não há o que dividir. */
+export function redividirNaProporcao(partes: ParteEmEdicao[], proporcao: number[] | null, total: number): ParteEmEdicao[] | null {
+  if (!proporcao || total <= 0 || proporcao.length !== partes.length || !proporcao.every((v) => v > 0)) return null;
+  const valores = dividirNaProporcao(proporcao, total).map(comoDigitado);
+  return partes.map((p, i) => ({ ...p, valor: valores[i] }));
+}
+
 /** O valor de cada parte: as que se digitam e, na última, o que falta para o total. */
 export function valoresDasPartes(partes: ParteEmEdicao[], total: number): number[] {
   const digitados = partes.slice(0, -1).map((p) => emCentavos(p.valor) ?? 0);

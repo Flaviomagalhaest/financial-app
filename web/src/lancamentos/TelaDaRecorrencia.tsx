@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   descartarNaoEnviado,
+  dispensarAvisoDaFatura,
   excluirLancamento,
   excluirRecorrencia,
   mudarRecorrencia,
   useAvisoDePlanejamento,
   useCadastro,
   useCartoesComArquivados,
+  useConexao,
   useContasComArquivadas,
   useLancamentosComOsDeFora,
   useMudancasDaRecorrenciaNaoEnviadas,
@@ -20,7 +22,7 @@ import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { nomePorId, tituloDoLancamento, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, hoje } from "./datas";
 import { comoDigitado, emCentavos, redividir } from "./dinheiro";
-import { EditorDePartes, emEdicao, mesmasPartes, parteNova, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
+import { dividirEmPartes, EditorDePartes, emEdicao, juntarPartes, mesmasPartes, partesParaSalvar, problemaDasPartes, type ParteEmEdicao } from "./partes";
 import { oQueMuda, rotuloDaRecorrencia } from "./recorrencia";
 import { SeletorDeTags } from "./SeletorDeTags";
 
@@ -121,6 +123,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   const { cartoes: comArquivados } = useCartoesComArquivados();
   const { pessoas } = usePessoas();
   const opcoesDeTags = useTags();
+  const online = useConexao();
   const lancamento = lancamentos?.find((l) => l.id === id);
   const regra = recorrencias?.find((r) => r.id === lancamento?.recorrencia_id);
   const [form, setForm] = useState<Formulario | null>(null);
@@ -184,12 +187,13 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
   /** A regra se divide em duas partes: a primeira com a classificação que ela tinha, a segunda vazia. */
   const dividir = () => {
     setItemTocado(null);
-    setForm({ ...form, partes: [{ ...parteNova(), categoria_ids: form.categoriaIds, tags: form.tags, pessoa: form.pessoa }, parteNova()], partesTocadas: true, categoriaIds: [], tags: [], pessoa: null });
+    setForm({ ...form, partes: dividirEmPartes({ categoria_ids: form.categoriaIds, tags: form.tags, pessoa: form.pessoa }), partesTocadas: true, categoriaIds: [], tags: [], pessoa: null });
   };
   /** Tirar a penúltima parte: a regra volta a ser uma, com a classificação da parte que ficou. */
   const juntar = (fica: ParteEmEdicao) => {
-    setItemTocado(fica.item_categoria_id ?? null);
-    setForm({ ...form, partes: null, partesTocadas: true, categoriaIds: fica.categoria_ids, tags: fica.tags, pessoa: fica.pessoa ?? null, descricao: form.descricao.trim() ? form.descricao : fica.descricao });
+    const junta = juntarPartes(fica, form.descricao);
+    setItemTocado(junta.item);
+    setForm({ ...form, partes: null, partesTocadas: true, categoriaIds: junta.classificacao.categoria_ids, tags: junta.classificacao.tags, pessoa: junta.classificacao.pessoa, descricao: junta.descricao });
   };
   /** As partes com a escolha de item que o aviso de cada uma decidiu. */
   const comEscolha = (f: Formulario): Formulario =>
@@ -225,6 +229,11 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
     window.location.hash = "#/historico";
   }
 
+  async function dispensarAviso() {
+    const motivo = await dispensarAvisoDaFatura(regra!.id);
+    if (motivo) setErro(`Não foi possível dispensar o aviso: ${motivo}.`);
+  }
+
   async function excluir() {
     if (!window.confirm(`Excluir a recorrência ${titulo}? Os previstos de hoje em diante saem; o atrasado e o realizado ficam.`)) return;
     await excluirRecorrencia(regra!).catch(() => setErro("Não foi possível guardar no aparelho."));
@@ -244,6 +253,15 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
       <p className="vazio">
         Esta vez: {dataPorExtenso(lancamento.data)}, {lancamento.situacao}
       </p>
+      {regra.aviso_da_fatura_paga && (
+        <div className="aviso" role="status">
+          <p>{regra.aviso_da_fatura_paga}</p>
+          <button type="button" className="secundario" disabled={!online} onClick={() => void dispensarAviso()}>
+            Entendi
+          </button>
+          {!online && <p className="vazio">Dispensar precisa de internet.</p>}
+        </div>
+      )}
       {naoEnviadas.length > 0 && (
         <ul className="lista" aria-label="Mudanças não enviadas">
           {naoEnviadas.map((m) => (
