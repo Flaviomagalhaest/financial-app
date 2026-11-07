@@ -26,9 +26,9 @@ import { AvisoDePlanejamento } from "./AvisoDePlanejamento";
 import { SeletorDeTags } from "./SeletorDeTags";
 import { nomePorId, numeroDaParcela, ValorComSinal } from "./apresentacao";
 import { dataPorExtenso, hoje, rotuloDaFatura } from "./datas";
-import { comoDigitado, emCentavos, formatarCentavos } from "./dinheiro";
+import { comoDigitado, dividirNaProporcao, emCentavos, formatarCentavos } from "./dinheiro";
 import { avisoDasMantidas, comoMuda, divisao, type ValorDigitado } from "./parcelamento";
-import { PartesDaCompra, resumoDaParte } from "./partes";
+import { EditorDePartes, emEdicao, mesmasPartes, parteNova, partesParaSalvar, problemaDasPartes, PartesDaCompra, valoresDasPartes, type Parte, type ParteEmEdicao } from "./partes";
 
 const mesmos = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -42,6 +42,12 @@ type Formulario = {
   categoriaIds: string[];
   tags: string[];
   pessoa: string | null;
+  // As partes (ADR 0022, ticket 158), que somam o valor digitado: o total ou o da parcela. Sem
+  // elas, o parcelamento tem a classificação acima.
+  partes: ParteEmEdicao[] | null;
+  // Enquanto a pessoa não mexe no valor de uma parte, as partes acompanham o valor digitado nesta
+  // proporção; mexer a solta.
+  proporcao: number[] | null;
 };
 
 /** O valor que o campo mostra ao abrir ou ao trocar de modo; o da parcela, sem os centavos que sobram na 1ª. */
@@ -57,6 +63,9 @@ function formularioDo(p: Parcelamento): Formulario {
     categoriaIds: p.categoria_ids,
     tags: p.tags,
     pessoa: p.pessoa ?? null,
+    // A leitura traz as partes divididas pelo total, que é o valor com que o formulário abre.
+    partes: p.partes.length ? p.partes.map(emEdicao) : null,
+    proporcao: p.partes.length ? p.partes.map((x) => x.valor_centavos) : null,
   };
 }
 
@@ -67,6 +76,8 @@ function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<
   if (!centavos || !Number.isInteger(parcelas)) return null;
   const mudou: Omit<AlteracaoDeParcelamento, "confirmar_realizadas"> = {};
   if (f.descricao.trim() !== p.descricao) mudou.descricao = f.descricao.trim();
+  const partes = partesDoFormulario(f, p, centavos);
+  if (partes) mudou.partes = partes;
   if (!mesmos(f.categoriaIds, p.categoria_ids)) mudou.categoria_ids = f.categoriaIds;
   if (!mesmos(f.tags, p.tags)) mudou.tags = f.tags;
   if (f.pessoa !== (p.pessoa ?? null)) mudou.pessoa = f.pessoa;
@@ -76,6 +87,25 @@ function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<
   // O valor vai só se a pessoa o mudou: sem ele, o total fica (mesmo com outro número de parcelas).
   if (centavos !== valorDoModo(p, f.valorDigitado)) mudou[f.valorDigitado === "total" ? "valor_total_centavos" : "valor_da_parcela_centavos"] = centavos;
   return mudou;
+}
+
+/** A classificação de uma parte, sem o valor, para saber se só ela mudou. */
+const semValor = (x: Parte): Parte => ({ ...x, valor_centavos: 0 });
+
+/**
+ * As partes que vão ao servidor, só se mudaram: duas ou mais dividem o parcelamento, e uma só, a
+ * que ficou ao juntar com a classificação do formulário, as junta. Com a proporção intocada, vão
+ * os valores que a leitura trouxe, para a mudança só de classificação não mexer na divisão.
+ */
+function partesDoFormulario(f: Formulario, p: Parcelamento, centavos: number): Parte[] | null {
+  if (!f.partes) {
+    if (!p.partes.length) return null;
+    const [fica] = p.partes;
+    return [{ ...fica, categoria_ids: f.categoriaIds, tags: f.tags, pessoa: f.pessoa, item_categoria_id: null, valor_centavos: p.valor_total_centavos }];
+  }
+  const novas = f.proporcao && f.partes.length === p.partes.length ? f.partes.map(({ valor: _, ...x }, i) => ({ ...x, valor_centavos: p.partes[i].valor_centavos })) : partesParaSalvar(f.partes, centavos);
+  if (p.partes.length && mesmasPartes(novas.map(semValor), p.partes.map(semValor)) && (f.proporcao || mesmasPartes(novas, p.partes))) return null;
+  return novas;
 }
 
 /** "1 de fatura paga", "2 realizadas de fatura ainda não paga", "1 alterada à mão": só os tipos que saem. */
@@ -266,16 +296,47 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   const itemEscolhido = planejamento.escolha ?? (parcelamento.item_categoria_id && form.categoriaIds.includes(parcelamento.item_categoria_id) ? parcelamento.item_categoria_id : null);
 
   const mudar = (mudanca: Partial<Formulario>) => {
-    setForm({ ...form, ...mudanca });
+    const novo = { ...form, ...mudanca };
+    // As partes acompanham o valor digitado: sempre ao trocar entre o total e o da parcela, e ao
+    // mudar o valor enquanto ninguém mexeu nelas (ticket 158).
+    const centavos = emCentavos(novo.valor) ?? 0;
+    const trocouOModo = novo.valorDigitado !== form.valorDigitado;
+    const pesos = novo.proporcao ?? (trocouOModo && form.partes ? valoresDasPartes(form.partes, centavosDoForm) : null);
+    if (novo.partes && pesos && centavos > 0 && (trocouOModo || novo.proporcao) && pesos.every((v) => v > 0)) {
+      const valores = dividirNaProporcao(pesos, centavos);
+      novo.partes = novo.partes.map((x, i) => ({ ...x, valor: comoDigitado(valores[i]) }));
+    }
+    setForm(novo);
+    setAviso(null);
+  };
+  /** O editor mudou as partes: só a classificação mantém a proporção; valor tocado ou parte posta ou tirada a solta. */
+  const mudarPartes = (novas: ParteEmEdicao[]) => {
+    const tocou = !form.partes || novas.length !== form.partes.length || novas.some((x, i) => x.valor !== form.partes![i].valor);
+    setForm({ ...form, partes: novas, proporcao: tocou ? null : form.proporcao });
+    setAviso(null);
+  };
+  /** O parcelamento se divide em duas partes: a primeira com a classificação que ele tinha, a segunda vazia, com o resto do valor. */
+  const dividir = () => {
+    setForm({ ...form, partes: [{ ...parteNova(), categoria_ids: form.categoriaIds, tags: form.tags, pessoa: form.pessoa }, parteNova()], proporcao: null, categoriaIds: [], tags: [], pessoa: null });
+    setItemTocado(null);
+    setAviso(null);
+  };
+  /** Tirar a penúltima parte: o parcelamento volta a ser um, com a classificação da parte que ficou. */
+  const juntar = (fica: ParteEmEdicao) => {
+    setForm({ ...form, partes: null, proporcao: null, categoriaIds: fica.categoria_ids, tags: fica.tags ?? [], pessoa: fica.pessoa ?? null, descricao: form.descricao.trim() ? form.descricao : (fica.descricao ?? "") });
+    setItemTocado(fica.item_categoria_id ?? null);
     setAviso(null);
   };
   const alternar = (lista: string[], item: string) => (lista.includes(item) ? lista.filter((i) => i !== item) : [...lista, item]);
   // A compra parcelada com partes (ADR 0022) não tem categoria, tag nem pessoa próprias: as partes
-  // mudam numa parcela, com "Todas" ou "Esta e as próximas".
-  const comPartes = parcelamento.partes.length > 0;
-  // As partes do parcelamento são uma proporção, não um valor: "66,7%".
-  const somaDasPartes = parcelamento.partes.reduce((soma, p) => soma + p.valor_centavos, 0);
-  const percentual = (v: number) => `${((v * 100) / somaDasPartes).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  // mudam aqui (ticket 158) ou numa parcela, com "Todas" ou "Esta e as próximas".
+  const comPartes = !!form.partes;
+  // A menor parcela também se divide pelas partes, e cada uma precisa de um centavo dela.
+  const menorParcela =
+    parcelasDoForm >= 2 && Number.isInteger(parcelasDoForm) && centavosDoForm > 0
+      ? divisao(form.valorDigitado === "total" ? { parcelas: parcelasDoForm, valor_total_centavos: centavosDoForm } : { parcelas: parcelasDoForm, valor_da_parcela_centavos: centavosDoForm }).outras
+      : undefined;
+  const problemaNasPartes = form.partes ? problemaDasPartes(form.partes, centavosDoForm, menorParcela) : "";
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
   async function salvar(confirmarRealizadas: boolean) {
     const alteracao = alteracaoDo(form, parcelamento, itemEscolhido);
@@ -364,21 +425,10 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
       </div>
       <p className="vazio">Valor, parcelas e data refazem as parcelas, menos as que alguém mudou à mão e as de fatura paga.</p>
 
-      {comPartes ? (
+      {form.partes ? (
         <>
-          <h3>Partes</h3>
-          <ul className="lista" aria-label="Partes do parcelamento">
-            {parcelamento.partes.map((p) => (
-              <li key={p.id}>
-                <div>
-                  <span>{p.descricao || "Parte"}</span>
-                  <span>{percentual(p.valor_centavos)}</span>
-                </div>
-                <p className="vazio">{resumoDaParte(p, categorias, nomeDe)}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="vazio">Cada parcela se divide pelas partes nessa proporção. Para mudá-las, mude uma parcela e escolha &ldquo;Todas&rdquo; ou &ldquo;Esta e as próximas&rdquo;.</p>
+          <EditorDePartes partes={form.partes} total={centavosDoForm} menorParcela={menorParcela} categorias={categoriasDeDespesa} pessoas={pessoas} opcoesDeTags={opcoesDeTags} onMudar={mudarPartes} onJuntar={juntar} />
+          <p className="vazio">As partes somam {form.valorDigitado === "total" ? "o total" : "o valor da parcela"}, e cada parcela se divide por elas nessa proporção. Valem para todas as parcelas, também as realizadas, menos as que têm partes próprias.</p>
         </>
       ) : (
         <>
@@ -404,6 +454,11 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
         ))}
       </div>
       <p className="vazio">Descrição, categorias, tags e pessoa valem para todas as parcelas, também as realizadas, menos onde alguém mudou à mão.</p>
+      {centavosDoForm > 0 && (
+        <button type="button" className="secundario" onClick={dividir}>
+          Dividir em partes
+        </button>
+      )}
         </>
       )}
 
@@ -430,7 +485,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
           {erro}
         </p>
       )}
-      <button type="button" disabled={enviando || !online || (!comPartes && form.categoriaIds.length === 0)} onClick={() => void salvar(false)}>
+      <button type="button" disabled={enviando || !online || (comPartes ? !!problemaNasPartes : form.categoriaIds.length === 0)} onClick={() => void salvar(false)}>
         Salvar correção
       </button>
 

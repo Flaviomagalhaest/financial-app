@@ -253,6 +253,20 @@ def realiza_em(conn, conta_id: UUID, parcela: int, mes: date, data: date) -> dat
     return fechamento or data
 
 
+def para_a_leitura(regra: Parcelamento) -> Parcelamento:
+    """O parcelamento como a API o mostra (ticket 158): as partes divididas pelo total, somando
+    o valor dele (os centavos na maior parte, a primeira no empate). O banco e as contas daqui
+    guardam a proporção, que pode vir do valor de uma parcela; dividir as parcelas pelo total já
+    arredondado mudaria os centavos delas."""
+    if not regra.partes:
+        return regra
+    valores = dividir_pela_proporcao(
+        regra.valor_total_centavos, [p.valor_centavos for p in regra.partes]
+    )
+    partes = [p.model_copy(update={"valor_centavos": v}) for p, v in zip(regra.partes, valores)]
+    return regra.model_copy(update={"partes": partes})
+
+
 def ler_um(conn, id: UUID) -> Parcelamento | None:
     lidos = _ler(conn, "id = %s", (id,))
     return lidos[0] if lidos else None
@@ -871,7 +885,7 @@ def criar(url: str | None, novo: NovoParcelamento, usuario: str) -> tuple[Parcel
     # outra sessão no meio, fica o que foi gravado.
     with conectar(url) as conn:
         lidos = _ler(conn, "id = %s", (novo.id,))
-    return (lidos[0] if lidos else criado), gravado
+    return para_a_leitura(lidos[0] if lidos else criado), gravado
 
 
 @router.post(
@@ -895,7 +909,7 @@ def criar_parcelamento(
 )
 def listar_parcelamentos(usuario: UsuarioLogado, request: Request) -> list[Parcelamento]:
     with conectar(url_do_banco(request)) as conn:
-        return _ler(conn)
+        return [para_a_leitura(p) for p in _ler(conn)]
 
 
 def _tags_do_parcelamento(conn, id: UUID) -> list[UUID]:
@@ -1647,7 +1661,7 @@ def alterar_parcelamento(
             # Excluído por outra sessão no meio do refazer: as parcelas saíram com ele.
             raise HTTPException(status_code=404, detail="parcelamento não encontrado")
         return ParcelamentoCorrigido(
-            **lidos[0].model_dump(), parcelas_mantidas=len(mudanca.mantidas)
+            **para_a_leitura(lidos[0]).model_dump(), parcelas_mantidas=len(mudanca.mantidas)
         )
 
 

@@ -18,5 +18,15 @@ No 139, a tela `#/parcelamento/<id>` mostra as partes do parcelamento em percent
 
 ## Checklist
 
-- [ ] Dono decide
+- [x] Dono decide
 - [ ] Implementar na tela e, se for o caso, na leitura; teste de API e de navegador; verificações do projeto e PR para `main`
+
+## Decisões do dono
+
+- **Q1**: a tela do parcelamento divide, muda e junta as partes, com o mesmo editor da tela de lançamento; no parcelamento sem partes, "Dividir em partes" ao lado das categorias.
+- **Q2**: as partes se digitam em valor, somando o total ou o da parcela, pela escolha "O total / O da parcela" que a tela já tem; o app guarda a proporção.
+- **Q3**: a mudança vale para todas as parcelas, inclusive as realizadas, sem confirmação só por causa das partes; a parcela com partes próprias fica, e o aviso diz quantas ficaram.
+- **Q4**: a leitura do parcelamento traz as partes divididas pelo total (os centavos na maior parte, a primeira no empate), somando o valor dele; a proporção fica só no banco.
+- **Q5**: ao trocar entre o total e o da parcela, as partes se convertem na proporção; ao mudar o valor, acompanham enquanto ninguém mexeu nelas.
+- **Q6**: um "Salvar correção" só, num `PATCH` único, com o aviso de realizadas de sempre.
+- **Q7**: o caminho pela parcela ("Todas", "Esta e as próximas") continua.

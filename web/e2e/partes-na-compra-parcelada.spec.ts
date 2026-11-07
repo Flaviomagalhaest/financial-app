@@ -128,12 +128,11 @@ test("a parcela que muda de valor se redivide na proporção, e mudar as partes 
     [5000, 5000],
   ]);
 
-  // A tela do parcelamento mostra as partes no lugar das categorias.
+  // A tela do parcelamento mostra as partes no lugar das categorias, divididas pelo total (ticket 158).
   await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
-  const daRegra = page.getByRole("list", { name: "Partes do parcelamento" });
-  await expect(daRegra.getByRole("listitem")).toHaveCount(2);
-  await expect(daRegra.getByRole("listitem").nth(0)).toContainText("Camisa");
-  await expect(daRegra.getByRole("listitem").nth(0)).toContainText("50%");
+  await expect(parte(page, 1).getByLabel("Descrição da parte")).toHaveValue("Camisa");
+  await expect(parte(page, 1).getByLabel("Valor da parte")).toHaveValue("150,00");
+  await expect(parte(page, 2).getByLabel("Valor de Toalha")).toContainText("R$ 150,00");
   await expect(page.getByRole("heading", { name: "Categorias" })).toHaveCount(0);
 });
 
