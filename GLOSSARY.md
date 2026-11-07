@@ -202,7 +202,7 @@ Busca que o casal guarda com nome: os critérios (texto e filtros), a ordenaçã
 _Avoid_: busca salva, visão
 
 **Edição em lote**:
-Mudança de categorias e tags de vários lançamentos de uma vez, a partir do resultado de uma busca; mostra uma prévia, aplica tudo ou nada e pode ser desfeita por 30 dias. Uma compra parcelada conta como uma só. Na compra com partes, a mudança vale em cada **Parte da compra** ou, na busca com filtro de categoria, tag ou pessoa, só nas partes que ela achou ([ADR 0022](docs/adr/0022-partes-da-compra.md)).
+Mudança de categorias e tags de vários lançamentos de uma vez, a partir do resultado de uma busca; mostra uma prévia, aplica tudo ou nada e pode ser desfeita por 30 dias. Uma compra parcelada conta como uma só. Na compra com partes, a mudança vale em cada **Parte da compra** ou, na busca com filtro de categoria, tag ou pessoa, só nas partes que ela achou, e o desfazer pula só a parte cuja classificação mudou depois ([ADR 0022](docs/adr/0022-partes-da-compra.md)).
 _Avoid_: edição em massa, ação em massa
 
 **Evolução**:
