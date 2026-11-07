@@ -1,7 +1,7 @@
 # Cópia local da pessoa e do item do estorno ligado
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
