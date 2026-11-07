@@ -606,3 +606,136 @@ def test_a_parcela_que_faria_nascer_uma_fatura_tirando_o_saldo_da_seguinte_recus
     assert resposta.status_code == 422, resposta.text
     assert resposta.json()["detail"] == "o pagamento passa do valor da fatura"
     assert [l["conta_id"] for l in parcelas(casal, novo["id"])] == [nubank, conta, nubank, nubank]
+
+
+def test_o_cartao_reemitido_em_todas_vai_para_o_parcelamento_e_a_parcela_nova_nasce_nele(
+    casal: Casal,
+):
+    antigo, reemitido = cartao(casal), cartao(casal, nome="Nubank novo")
+    novo = criar_geladeira(casal, antigo, data="2026-11-10", parcelas=3)
+    [_, segunda, _] = parcelas(casal, novo["id"])
+
+    resposta = mudar_parcela(casal, segunda, "todas", conta_id=reemitido)
+
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["parcelas_mantidas"] == 0
+    assert parcelamento(casal, novo["id"])["conta_id"] == reemitido
+    # A correção seguinte cresce o parcelamento: a parcela nova nasce no cartão novo, e as de
+    # antes não aparecem como mudadas à mão.
+    corrigido = casal.pedir(
+        "flavio", "PATCH", f"/api/parcelamentos/{novo['id']}", json={"parcelas": 4}
+    )
+    assert corrigido.status_code == 200, corrigido.text
+    depois = parcelas(casal, novo["id"])
+    assert [(l["conta_id"], l["alterada_a_mao"]) for l in depois] == [(reemitido, False)] * 4
+    assert [l["fatura_mes"] for l in depois] == [
+        "2026-11-01",
+        "2026-12-01",
+        "2027-01-01",
+        "2027-02-01",
+    ]
+
+
+def test_a_troca_de_cartao_para_conta_em_todas_segue_a_mao_em_cada_parcela(casal: Casal):
+    nubank, conta = cartao(casal), casal.conta()
+    novo = criar_geladeira(casal, nubank, data="2026-11-10", parcelas=3)
+    [_, segunda, _] = parcelas(casal, novo["id"])
+
+    resposta = mudar_parcela(casal, segunda, "todas", conta_id=conta)
+
+    assert resposta.status_code == 200, resposta.text
+    # O parcelamento fica no cartão, que manda as datas; as parcelas vão para a conta à mão.
+    assert parcelamento(casal, novo["id"])["conta_id"] == nubank
+    depois = parcelas(casal, novo["id"])
+    assert [(l["conta_id"], l["alterada_a_mao"]) for l in depois] == [(conta, True)] * 3
+    assert [l["fatura_mes"] for l in depois] == [None] * 3
+
+
+def test_esta_e_as_proximas_leva_o_cartao_novo_a_mao_sem_mudar_o_parcelamento(casal: Casal):
+    antigo, reemitido = cartao(casal), cartao(casal, nome="Nubank novo")
+    novo = criar_geladeira(casal, antigo, data="2026-11-10", parcelas=3)
+    [_, segunda, _] = parcelas(casal, novo["id"])
+
+    resposta = mudar_parcela(casal, segunda, "esta_e_as_proximas", conta_id=reemitido)
+
+    assert resposta.status_code == 200, resposta.text
+    assert parcelamento(casal, novo["id"])["conta_id"] == antigo
+    assert [(l["conta_id"], l["alterada_a_mao"]) for l in parcelas(casal, novo["id"])] == [
+        (antigo, False),
+        (reemitido, True),
+        (reemitido, True),
+    ]
+
+
+def test_o_cartao_reemitido_em_todas_mantem_a_parcela_de_fatura_paga_e_a_de_conta_mudada_a_mao(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    # Hoje é 10/06: as parcelas caem de março a junho; maio foi paga, e a 2ª foi para o Itaú.
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 6, 10))
+    um_lote_por_parcela(monkeypatch)
+    antigo, reemitido, itau = (
+        cartao(casal),
+        cartao(casal, nome="Nubank novo"),
+        cartao(casal, nome="Itaú"),
+    )
+    novo = criar_geladeira(casal, antigo, data="2026-03-20", parcelas=4, valor_total_centavos=40000)
+    pago = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        antigo,
+        fatura_mes="2026-05-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago.status_code == 201, pago.text
+    editar_so_nela(casal, parcelas(casal, novo["id"])[1], conta_id=itau)
+
+    resposta = mudar_parcela(
+        casal,
+        parcelas(casal, novo["id"])[3],
+        "todas",
+        conta_id=reemitido,
+        confirmar_realizadas=True,
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["parcelas_mantidas"] == 2
+    assert parcelamento(casal, novo["id"])["conta_id"] == reemitido
+    assert [(l["conta_id"], l["alterada_a_mao"]) for l in parcelas(casal, novo["id"])] == [
+        (reemitido, False),
+        (itau, True),
+        (antigo, False),
+        (reemitido, False),
+    ]
+
+
+def test_a_tarefa_diaria_termina_o_cartao_reemitido_que_parou_no_meio_sem_marcar_as_parcelas(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from app.tarefa_diaria import fazer_tarefa_diaria
+
+    um_lote_por_parcela(monkeypatch)
+    antigo, reemitido = cartao(casal), cartao(casal, nome="Nubank novo")
+    novo = criar_geladeira(casal, antigo, data="2026-11-10", parcelas=4)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    with monkeypatch.context() as queda:
+        interromper_depois_do_primeiro_lote(queda)
+        with pytest.raises(RuntimeError):
+            mudar_parcela(casal, primeira, "todas", conta_id=reemitido)
+    # A conta do parcelamento mudou junto com a parcela mudada e o primeiro lote.
+    assert parcelamento(casal, novo["id"])["conta_id"] == reemitido
+    assert [l["conta_id"] for l in parcelas(casal, novo["id"])] == [
+        reemitido,
+        reemitido,
+        antigo,
+        antigo,
+    ]
+
+    assert fazer_tarefa_diaria(casal.client.app.state.url)["mudancas_na_parcela"] == 1
+
+    assert [(l["conta_id"], l["alterada_a_mao"]) for l in parcelas(casal, novo["id"])] == [
+        (reemitido, False)
+    ] * 4

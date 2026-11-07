@@ -6,8 +6,10 @@ dois mudam o parcelamento e precisam de internet, como a correção dele (ADR 00
 as categorias, as tags, a pessoa e o item vão para o parcelamento, a partir da parcela mudada ou
 desde a 1ª, e em "todas" o valor e a data viram a correção do valor da parcela e da data. O que o
 parcelamento não sabe guardar (o valor e a data só daqui para frente, a conta e a fatura) vai
-parcela a parcela, como mudança à mão em cada uma. As parcelas que uma pessoa mudou só nelas
-ficam como estão nesses campos, e a resposta diz quantas ficaram assim."""
+parcela a parcela, como mudança à mão em cada uma. A exceção é a conta em "todas" para outra do
+mesmo tipo (o cartão reemitido): ela vai para o parcelamento, e as parcelas mudam sem a marca
+(ticket 187). As parcelas que uma pessoa mudou só nelas ficam como estão nesses campos, e a
+resposta diz quantas ficaram assim."""
 
 import json
 from collections import Counter
@@ -109,6 +111,9 @@ class _PorParcela:
     # A parcela a partir da qual ainda falta mudar; anda a cada lote.
     desde: int
     usuario: str
+    # Quando a conta foi para o parcelamento (ticket 187), a origem dele: as parcelas mudam de
+    # conta como o parcelamento manda, sem a marca de "alterada à mão".
+    origem: str | None = None
 
     def gravar(self) -> str:
         return json.dumps(
@@ -120,6 +125,7 @@ class _PorParcela:
                 "valores": {c: str(v) for c, v in self.valores.items()},
                 "desde": self.desde,
                 "usuario": self.usuario,
+                "origem": self.origem,
             },
             sort_keys=True,
         )
@@ -137,6 +143,7 @@ class _PorParcela:
             valores={c: _TIPOS[c](v) for c, v in lido["valores"].items()},
             desde=lido["desde"],
             usuario=lido["usuario"],
+            origem=lido.get("origem"),
         )
 
 
@@ -234,6 +241,27 @@ def _conferir_antes_de_gravar(conn, falta: list[tuple[Lancamento, dict]], quanta
     cartoes.conferir_sem_gravar(conn, passos)
 
 
+def _do_mesmo_tipo(conn, conta_id: UUID, outra_id: UUID) -> bool:
+    """Se as duas são cartões, ou as duas são contas."""
+    return (faturas.ler_cartao(conn, conta_id) is None) == (
+        faturas.ler_cartao(conn, outra_id) is None
+    )
+
+
+def _seguir_a_conta_do_parcelamento(
+    conn, lancamento: Lancamento, origem: str, fatura_pedida: bool
+) -> None:
+    """Tira a marca de "alterada à mão" da conta que a parcela acabou de mudar, e da fatura que
+    mudou com ela (a não ser que a fatura tenha sido pedida): a parcela segue a conta do
+    parcelamento, como se ele a tivesse posto."""
+    campos = ["conta_id"] if fatura_pedida else ["conta_id", "fatura_mes"]
+    conn.execute(
+        "UPDATE lancamento_campos SET origem = %s WHERE lancamento_id = %s AND origem IS NULL"
+        " AND versao = %s AND campo = ANY(%s)",
+        (origem, lancamento.id, lancamento.versao, campos),
+    )
+
+
 def _ha_pendente(conn, parcelamento_id: UUID) -> bool:
     (texto,) = conn.execute(
         "SELECT mudanca_pendente FROM parcelamentos WHERE id = %s", (parcelamento_id,)
@@ -267,7 +295,7 @@ def _mudar_a_parcela(
     # As partes só divididas pelo valor novo não mudam a proporção: não vão para o parcelamento.
     lancamentos.so_redivide_as_partes(conn, antes, mudou)
     # A parcela mudada primeiro, com a edição de sempre: conflito, recusas e fatura paga.
-    editar(conn, id, so_nela, usuario)
+    editada = editar(conn, id, so_nela, usuario)
     mudanca = _Mudanca(antes.parcelamento_id)
     if alteracao.alcance == "so_esta":
         return mudanca
@@ -285,6 +313,14 @@ def _mudar_a_parcela(
         parcelamentos.tirar_a_recusa(conn, regra.id)
     no_cartao = faturas.ler_cartao(conn, regra.conta_id) is not None
     desde = antes.parcela if alteracao.alcance == "esta_e_as_proximas" else 1
+    # O cartão reemitido em "todas" vai para o parcelamento; a troca de tipo, que mudaria a regra
+    # das datas, segue à mão em cada parcela (ADR 0023).
+    conta_na_regra = (
+        alteracao.alcance == "todas"
+        and "conta_id" in mudou
+        and mudou["conta_id"] != regra.conta_id
+        and _do_mesmo_tipo(conn, regra.conta_id, mudou["conta_id"])
+    )
 
     # O que vai parcela a parcela: cada outra do alcance, menos nos campos que alguém mudou nela.
     pendente = _PorParcela(
@@ -295,6 +331,7 @@ def _mudar_a_parcela(
         valores={c: v for c, v in mudou.items() if c in _POR_PARCELA[alteracao.alcance]},
         desde=desde,
         usuario=usuario,
+        origem=parcelamentos.origem(regra.descricao) if conta_na_regra else None,
     )
     quantas = parcelamentos.parcelas_por_lote(conn, regra)
     falta: list[tuple[Lancamento, dict]] = []
@@ -342,6 +379,16 @@ def _mudar_a_parcela(
             AvisoDeRealizadas(motivo="a mudança muda parcelas já realizadas", parcelas=realizadas)
         )
     mudanca.mantidas.discard(antes.parcela)
+    if conta_na_regra:
+        # Junto com o pedido: se ele cair no meio, a tarefa diária termina as parcelas que faltam.
+        conn.execute(
+            "UPDATE parcelamentos SET conta_id = %s, alterado_por = %s, alterado_em = now()"
+            " WHERE id = %s",
+            (mudou["conta_id"], usuario, regra.id),
+        )
+        _seguir_a_conta_do_parcelamento(
+            conn, editada, pendente.origem, fatura_pedida="fatura_mes" in mudou
+        )
     mudanca.falta_por_parcela = _mudar_o_lote(conn, regra.id, pendente, falta, quantas)
     return mudanca
 
@@ -358,12 +405,16 @@ def _mudar_o_lote(
     parcelamento o que sobra (ou tira o pendente `gravado`, se acabou). Devolve se sobrou."""
     lote = falta[:quantas]
     for outra, valores in lote:
-        editar(
+        mudada = editar(
             conn,
             outra.id,
             AlteracaoDeLancamento(versao=outra.versao, **valores),
             usuario=pendente.usuario,
         )
+        if pendente.origem and "conta_id" in valores:
+            _seguir_a_conta_do_parcelamento(
+                conn, mudada, pendente.origem, fatura_pedida="fatura_mes" in valores
+            )
     sobra = len(falta) > quantas
     if sobra:
         pendente.desde = lote[-1][0].parcela + 1
