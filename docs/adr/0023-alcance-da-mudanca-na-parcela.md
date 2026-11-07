@@ -10,6 +10,8 @@ Ao mudar uma parcela, a pessoa escolhe "Só esta", "Esta e as próximas" ou "Tod
 
 - **"Esta e as próximas" e "todas" pela fila, como a mudança da recorrência ([ADR 0020](0020-mudanca-da-recorrencia-vai-pela-fila.md))**: o aparelho teria de mostrar as parcelas mudadas sem repetir as regras do parcelamento, e o pedido levaria o aviso das realizadas para depois do envio. Ficou com a internet, como a correção do parcelamento (ticket 98); "só esta" já cobre a mudança feita na hora de pagar.
 - **Gravar no parcelamento um trecho (valor e data a partir da parcela N)**: o valor e a data "daqui para frente" seguiriam a regra, e a parcela nova de um crescer viria com eles. Muda o cálculo de todas as correções e da geração; fica para o dono decidir (ticket 144).
+- **A classificação do alcance valendo também nas parcelas alteradas à mão** (Q7 do ticket 99): a exceção que uma pessoa fez numa parcela só voltaria a cada mudança, e ela teria de refazê-la. O dono manteve a preservação (ticket 146): o aviso diz quantas ficaram como estavam, e "só esta" muda uma delas.
+- **Mudar o número de parcelas ou o total pela edição da parcela, no alcance "todas"** (Q7 do ticket 99): seriam dois caminhos para a mesma correção. O dono manteve a correção do parcelamento, na tela dele, como o único (ticket 146).
 - **Mudar as outras parcelas sem marca e sem mudar o parcelamento**: a tarefa diária, que põe as parcelas como o parcelamento manda, desfaria o valor e a data no dia seguinte.
 
 ## Consequences
