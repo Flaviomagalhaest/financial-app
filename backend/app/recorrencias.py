@@ -122,6 +122,9 @@ class Recorrencia(NovaRecorrencia):
     # viriam) a regra não está ativa: o aviso de arquivar conta, cartão ou categoria não a conta
     # (ticket 97).
     proximo_previsto: ProximoPrevisto | None = None
+    # O aviso das ocorrências de antes de hoje que a geração passou sem lançar porque a fatura
+    # do cartão foi paga no meio dela (ticket 192); fica até o casal dispensar.
+    aviso_da_fatura_paga: str | None = None
 
 
 class CamposDaRecorrencia(BaseModel):
@@ -234,12 +237,49 @@ _GRAVADAS = (
     " dia_do_lancamento"
 )
 # Recorrência de antes do ticket 45 não tem a ocorrência do início: é a 1ª.
-_COLUNAS = f"{_GRAVADAS}, COALESCE(ocorrencia_do_inicio, 1)"
+_COLUNAS = f"{_GRAVADAS}, COALESCE(ocorrencia_do_inicio, 1), puladas_pela_fatura_paga"
 # A coluna `item_id` (migration 0039, ticket 45) guarda a categoria do item escolhido.
 _NOMES_DAS_COLUNAS = [
     *_GRAVADAS.replace(" ", "").replace("item_id", "item_categoria_id").split(","),
     "ocorrencia_do_inicio",
 ]
+
+
+def _aviso_da_fatura_paga(puladas: str | None) -> str | None:
+    """O aviso das ocorrências puladas pela fatura paga, uma por linha na coluna."""
+    if not puladas:
+        return None
+    linhas = puladas.splitlines()
+    return (
+        f"{'Ocorrências' if len(linhas) > 1 else 'Ocorrência'} não"
+        f" {'lançadas' if len(linhas) > 1 else 'lançada'} porque a fatura estava paga:"
+        f" {'; '.join(linhas)}. Lance à mão se precisar."
+    )
+
+
+def _avisar_da_pulada(conn, id: UUID, dia: date, cartao_id: UUID, mes: date) -> None:
+    """Junta ao aviso da regra a ocorrência de `dia`, pulada pela fatura paga do cartão
+    `cartao_id` no `mes` (ticket 192). Só informa: a ocorrência não volta. A mesma ocorrência
+    não entra duas vezes, se a geração voltar a passar por ela."""
+    (nome,) = conn.execute("SELECT nome FROM cartoes WHERE id = %s", (cartao_id,)).fetchone()
+    linha = f"{dia:%d/%m/%Y}, na fatura de {mes:%m/%Y} do {nome}"
+    conn.execute(
+        "UPDATE recorrencias SET puladas_pela_fatura_paga = CASE"
+        " WHEN puladas_pela_fatura_paga IS NULL OR puladas_pela_fatura_paga = '' THEN %s"
+        " WHEN %s = ANY(string_to_array(puladas_pela_fatura_paga, E'\\n'))"
+        " THEN puladas_pela_fatura_paga"
+        " ELSE puladas_pela_fatura_paga || E'\\n' || %s END WHERE id = %s",
+        (linha, linha, linha, id),
+    )
+
+
+def dispensar_o_aviso(conn, id: UUID) -> bool:
+    """Tira da regra o aviso das ocorrências puladas pela fatura paga; devolve se ela existe."""
+    return bool(
+        conn.execute(
+            "UPDATE recorrencias SET puladas_pela_fatura_paga = NULL WHERE id = %s", (id,)
+        ).rowcount
+    )
 
 
 def mais_meses(dia: date, meses: int) -> date:
@@ -392,6 +432,7 @@ def _ler(
     return [
         Recorrencia(
             **dict(zip(_NOMES_DAS_COLUNAS, linha)),
+            aviso_da_fatura_paga=_aviso_da_fatura_paga(linha[-1]),
             categoria_ids=categorias.get(linha[0], []),
             tags=tags.get(linha[0], []),
             partes=partes.get(linha[0], []),
@@ -412,7 +453,8 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
     ocorrência desse dia nasce realizada (o casal está registrando o que aconteceu), salvo a de
     valor fixo que não é automática: essa o casal confirma no pagamento (ticket 129); fora dela,
     só a automática que chegou. A de antes de hoje que cairia numa fatura paga também passa: a
-    criação confere as pagas, mas o pagamento pode chegar entre os lotes (ticket 179)."""
+    criação confere as pagas, mas o pagamento pode chegar entre os lotes (ticket 179); ela deixa o
+    aviso na regra (ticket 192)."""
     [regra] = _ler(conn, "id = %s", (id,))
     (geradas,) = conn.execute("SELECT geradas FROM recorrencias WHERE id = %s", (id,)).fetchone()
     categorias = regra.categoria_ids
@@ -439,7 +481,9 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         ultima = n
         # ADR 0021: a fatura paga depois da conferência não recebe a de antes de hoje.
         na_paga = dia < dia_de_hoje and em_que_paga(regra.conta_id, dia, None)
-        if dia >= desde and not na_paga:
+        if dia >= desde and na_paga:
+            _avisar_da_pulada(conn, id, dia, *na_paga)
+        elif dia >= desde:
             proximas.append((n, dia))
     if ultima == geradas:
         return False
@@ -1057,6 +1101,19 @@ def excluir_recorrencia(id: UUID, usuario: UsuarioLogado, request: Request) -> R
     """Idempotente. Tira a regra e os previstos de hoje em diante; o realizado e o atrasado
     ficam, como lançamentos que a regra gerou."""
     excluir_regra(url_do_banco(request), id, usuario)
+    return Response(status_code=204)
+
+
+@router.delete(
+    "/recorrencias/{id}/aviso-da-fatura-paga",
+    status_code=204,
+    operation_id="dispensar_aviso_da_fatura_paga",
+)
+def dispensar_aviso_da_fatura_paga(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
+    """Idempotente. Tira da regra o aviso das ocorrências puladas pela fatura paga (ticket 192):
+    elas não voltam, o casal as lança à mão se precisar."""
+    if not em_transacao(url_do_banco(request), lambda conn: dispensar_o_aviso(conn, id)):
+        raise HTTPException(status_code=404, detail="recorrência não encontrada")
     return Response(status_code=204)
 
 

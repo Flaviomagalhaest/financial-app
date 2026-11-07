@@ -983,6 +983,78 @@ def test_pagamento_entre_os_lotes_nao_leva_o_resto_do_passado_para_a_fatura_paga
     assert numeros(faturas(casal, cartao)["2026-04-01"]) == (100000, 0, 60000, 0, "paga")
 
 
+def a_regra(casal: Casal, id: str) -> dict:
+    [regra] = [r for r in casal.pedir("esposa", "GET", "/api/recorrencias").json() if r["id"] == id]
+    return regra
+
+
+def test_a_ocorrencia_pulada_pela_fatura_paga_deixa_o_aviso_na_regra_ate_a_dispensa(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    # Hoje é 10/07. A luz lançada em 20/02 grava uma ocorrência por lote, e cada envio para
+    # depois de um lote. Março é paga antes do segundo lote e maio antes do terceiro: as duas
+    # ocorrências passam sem virar lançamento e juntam as datas no mesmo aviso (ticket 192).
+    monkeypatch.setattr(lancamentos, "hoje", lambda: date(2026, 7, 10))
+    monkeypatch.setattr(recorrencias, "LINHAS_POR_LOTE", 2)
+    conta = nova_conta(casal)["id"]
+    cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-03-10", valor_centavos=100000)
+    comprar(casal, cartao, "2026-05-10", valor_centavos=100000)
+    nova = recorrencia_no_cartao(cartao, [casal.categoria()], "2026-02-20", vezes=6)
+    um_lote = recorrencias._gerar_um_lote
+
+    def reenviar() -> dict:
+        return casal.pedir(
+            "flavio",
+            "POST",
+            "/api/lancamentos/lote",
+            json={"acoes": [{"acao": "criar_recorrencia", "recorrencia": nova}]},
+        ).json()["resultados"][0]
+
+    with monkeypatch.context() as queda:
+        queda.setattr(recorrencias, "_gerar_um_lote", lambda conn, id: um_lote(conn, id) and False)
+        criada = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
+        assert criada.status_code == 201, criada.text
+        assert a_regra(casal, nova["id"])["aviso_da_fatura_paga"] is None
+        pago = pagar(casal, conta, cartao, fatura_mes="2026-03-01", valor_centavos=100000)
+        assert pago.status_code == 201, pago.text
+        assert reenviar()["resultado"] == "aceita"
+        assert a_regra(casal, nova["id"])["aviso_da_fatura_paga"] == (
+            "Ocorrência não lançada porque a fatura estava paga: 20/03/2026, na fatura de"
+            " 03/2026 do Nubank. Lance à mão se precisar."
+        )
+        pago = pagar(casal, conta, cartao, fatura_mes="2026-05-01", valor_centavos=100000)
+        assert pago.status_code == 201, pago.text
+        assert reenviar()["resultado"] == "aceita"
+    assert reenviar()["resultado"] == "aceita"
+
+    assert [l["data"] for l in gerados(casal, nova["id"])] == [
+        "2026-02-20",
+        "2026-04-20",
+        "2026-06-20",
+        "2026-07-20",
+    ]
+    assert a_regra(casal, nova["id"])["aviso_da_fatura_paga"] == (
+        "Ocorrências não lançadas porque a fatura estava paga: 20/03/2026, na fatura de"
+        " 03/2026 do Nubank; 20/05/2026, na fatura de 05/2026 do Nubank. Lance à mão se"
+        " precisar."
+    )
+
+    dispensa = casal.pedir(
+        "esposa", "DELETE", f"/api/recorrencias/{nova['id']}/aviso-da-fatura-paga"
+    )
+
+    assert dispensa.status_code == 204, dispensa.text
+    assert a_regra(casal, nova["id"])["aviso_da_fatura_paga"] is None
+    assert [l["data"] for l in gerados(casal, nova["id"])][-1] == "2026-07-20"
+
+
+def test_dispensar_o_aviso_de_uma_regra_que_nao_existe_e_404(casal: Casal):
+    assert (
+        casal.pedir("esposa", "DELETE", f"/api/recorrencias/{uuid4()}/aviso-da-fatura-paga")
+    ).status_code == 404
+
+
 def test_a_fatura_paga_no_meio_do_refazer_da_correcao_nao_recebe_a_parcela(
     casal: Casal, monkeypatch: pytest.MonkeyPatch
 ):

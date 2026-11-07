@@ -776,6 +776,27 @@ export interface paths {
         patch: operations["alterar_recorrencia"];
         trace?: never;
     };
+    "/api/recorrencias/{id}/aviso-da-fatura-paga": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dispensar Aviso Da Fatura Paga
+         * @description Idempotente. Tira da regra o aviso das ocorrências puladas pela fatura paga (ticket 192):
+         *     elas não voltam, o casal as lança à mão se precisar.
+         */
+        delete: operations["dispensar_aviso_da_fatura_paga"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/parcelamentos": {
         parameters: {
             query?: never;
@@ -3690,6 +3711,8 @@ export interface components {
              */
             alterado_em: string;
             proximo_previsto?: components["schemas"]["ProximoPrevisto"] | null;
+            /** Aviso Da Fatura Paga */
+            aviso_da_fatura_paga?: string | null;
         };
         /**
          * Resultado
@@ -5666,6 +5689,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Recorrencia"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispensar_aviso_da_fatura_paga: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

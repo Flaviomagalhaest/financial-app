@@ -323,6 +323,7 @@ def test_reenviar_a_mesma_recorrencia_devolve_a_gravada_sem_gerar_de_novo(casal:
         "criado_em": None,
         "alterado_em": None,
         "proximo_previsto": {"id": novembro["id"], "data": "2026-11-10"},
+        "aviso_da_fatura_paga": None,
     }
     assert casal.pedir("esposa", "GET", "/api/recorrencias").json() == [primeira.json()]
     previstos = gerados(casal, nova["id"])
@@ -362,6 +363,7 @@ def test_sem_internet_a_recorrencia_sobe_no_lote_como_um_pedido_so(casal: Casal)
         "criado_em": None,
         "alterado_em": None,
         "proximo_previsto": {"id": gerados(casal, nova["id"])[0]["id"], "data": "2026-11-10"},
+        "aviso_da_fatura_paga": None,
     }
     assert (recusada["resultado"], recusada["motivo"]) == ("recusada", "conta não encontrada")
     assert [r["resultado"] for r in segundo.json()["resultados"]] == ["aceita", "recusada"]
