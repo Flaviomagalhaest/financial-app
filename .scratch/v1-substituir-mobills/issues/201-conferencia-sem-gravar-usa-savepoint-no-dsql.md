@@ -1,7 +1,7 @@
 # Conferência sem gravar usa SAVEPOINT, que o DSQL não suporta
 
 Type: bug
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`, `implement`
 Modelo recomendado: Sonnet
@@ -15,7 +15,7 @@ Origem: [ticket 130](130-medir-a-protecao-da-fatura-paga-no-dsql.md): ao medir n
 
 ## Checklist
 
-- [ ] Teste que reproduz sem depender de DSQL (ex.: conexão que recusa `SAVEPOINT`)
-- [ ] Conferir sem savepoint (por ex. calcular em memória, ou transação própria numa conexão que dá `ROLLBACK`)
-- [ ] Revisar os outros `conn.transaction()` aninhados (`backup.py`, `exportacao.py`, `restauracao.py`) quanto ao DSQL
-- [ ] Rodar `medir_fatura_paga.py` com `DSQL_TESTE=1` e completar o ticket 130
+- [x] Teste que reproduz sem depender de DSQL (ex.: conexão que recusa `SAVEPOINT`)
+- [x] Conferir sem savepoint: a simulação usa faturas virtuais (`faturas_a_mais` em `faturas_do_titular`), nada é gravado
+- [x] (lido; pendência no [ticket 203](203-simulacao-da-correcao-usa-savepoint-no-dsql.md)) Revisar os outros `conn.transaction()` aninhados (`backup.py`, `exportacao.py`, `restauracao.py`) quanto ao DSQL
+- [ ] (precisa do DSQL e do dono) Rodar `medir_fatura_paga.py` com `DSQL_TESTE=1` e completar o ticket 130

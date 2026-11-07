@@ -8,7 +8,6 @@ from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
-import psycopg
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 
@@ -220,11 +219,16 @@ def titulares(conn) -> list[UUID]:
 
 
 def faturas_do_titular(
-    conn, titular_id: UUID, mes: date | None = None, compras_a_mais: dict[date, int] | None = None
+    conn,
+    titular_id: UUID,
+    mes: date | None = None,
+    compras_a_mais: dict[date, int] | None = None,
+    faturas_a_mais: dict[date, tuple[date | None, date | None]] | None = None,
 ) -> list[Fatura]:
     """As faturas do titular, com os números. O saldo anterior de cada uma vem da anterior
     paga, por isso a conta corre desde a mais antiga, mesmo quando se pede um mês só. As
-    `compras_a_mais` (com sinal, por mês) simulam compras que ainda não foram gravadas."""
+    `compras_a_mais` (com sinal, por mês) simulam compras que ainda não foram gravadas, e as
+    `faturas_a_mais` (mês: fechamento e vencimento) as faturas que elas fariam nascer."""
     dia = lancamentos.hoje()
     compras = Counter(compras_a_mais or {})
     compras.update(
@@ -250,11 +254,20 @@ def faturas_do_titular(
     }
     resultado = []
     saldo_anterior = 0
-    for cartao_id, mes_da_fatura, fechamento, vencimento, ajuste in conn.execute(
+    gravadas = conn.execute(
         "SELECT cartao_id, mes, fechamento, vencimento, COALESCE(ajuste_centavos, 0)"
         " FROM faturas WHERE cartao_id = %s ORDER BY mes",
         (titular_id,),
-    ).fetchall():
+    ).fetchall()
+    existentes = {linha[1] for linha in gravadas}
+    simuladas = [
+        (titular_id, m, fechamento, vencimento, 0)
+        for m, (fechamento, vencimento) in (faturas_a_mais or {}).items()
+        if m not in existentes
+    ]
+    for cartao_id, mes_da_fatura, fechamento, vencimento, ajuste in sorted(
+        gravadas + simuladas, key=lambda linha: linha[1]
+    ):
         compras_da_fatura = compras.get(mes_da_fatura, 0)
         pago, pagamentos = pagos.get(mes_da_fatura, (0, 0))
         total = compras_da_fatura + ajuste
@@ -330,7 +343,11 @@ def _passa_adiante(f: Fatura) -> int:
     return max(f.saldo_anterior_centavos + f.total_centavos - f.pago_centavos, 0)
 
 
-def _garantir_a_seguinte(conn, todas: dict[tuple[UUID, date], Fatura]) -> bool:
+def _garantir_a_seguinte(
+    conn,
+    todas: dict[tuple[UUID, date], Fatura],
+    nascem: dict[UUID, dict[date, tuple[date | None, date | None]]] | None = None,
+) -> bool:
     """O saldo anterior precisa de uma fatura seguinte: se a última fatura de um titular é paga e
     passa algo adiante, a do mês seguinte nasce aqui. Havendo uma mais adiante, o saldo pula os
     meses sem fatura até ela. Devolve se alguma nasceu."""
@@ -341,7 +358,13 @@ def _garantir_a_seguinte(conn, todas: dict[tuple[UUID, date], Fatura]) -> bool:
     for titular_id, ultima in ultimas.items():
         if _passa_adiante(ultima):
             titular = faturas.ler_cartao(conn, titular_id).titular
-            faturas.garantir_fatura(conn, titular, faturas.somar_meses(ultima.mes, 1))
+            seguinte = faturas.somar_meses(ultima.mes, 1)
+            if nascem is None:
+                faturas.garantir_fatura(conn, titular, seguinte)
+            else:
+                nascem.setdefault(titular_id, {})[seguinte] = faturas.datas_padrao(
+                    titular, seguinte
+                )
             nasceu = True
     return nasceu
 
@@ -403,15 +426,14 @@ def conferir_sem_gravar(conn, passos: list[dict[tuple[UUID, date], int]]) -> Non
     """As regras de `protegida` em passos ainda não gravados, cada um uma transação: as compras
     que mudam (com sinal) em cada fatura, por titular e mês. Recusa o que um dos passos
     recusaria ao gravar, antes de gravar o primeiro. As faturas que os passos fariam nascer (a do
-    mês ainda sem fatura que recebe a compra e a seguinte de `_garantir_a_seguinte`) nascem num
-    savepoint desfeito no fim."""
-    with conn.transaction():
-        _conferir_os_passos(conn, passos)
-        raise psycopg.Rollback()
+    mês ainda sem fatura que recebe a compra e a seguinte de `_garantir_a_seguinte`) só existem
+    na simulação: nada é gravado, porque o DSQL não aceita SAVEPOINT para desfazer (ticket 201)."""
+    _conferir_os_passos(conn, passos)
 
 
 def _conferir_os_passos(conn, passos: list[dict[tuple[UUID, date], int]]) -> None:
     a_mais: dict[UUID, Counter] = {}
+    nascem: dict[UUID, dict[date, tuple[date | None, date | None]]] = {}
     antes = {
         t: _por_chave(faturas_do_titular(conn, t))
         for t in {titular for passo in passos for titular, _ in passo}
@@ -420,13 +442,13 @@ def _conferir_os_passos(conn, passos: list[dict[tuple[UUID, date], int]]) -> Non
     for passo in passos:
         for (titular, mes), valor in passo.items():
             # A compra que cai num mês sem fatura a faz nascer, como ao gravar.
-            faturas.garantir_fatura(conn, donos[titular], mes)
+            nascem.setdefault(titular, {})[mes] = faturas.datas_padrao(donos[titular], mes)
             a_mais.setdefault(titular, Counter())[mes] += valor
         mudados = {t for t, _ in passo}
-        depois = _simuladas(conn, mudados, a_mais)
-        if _garantir_a_seguinte(conn, depois):
+        depois = _simuladas(conn, mudados, a_mais, nascem)
+        if _garantir_a_seguinte(conn, depois, nascem):
             # A seguinte que nasceu recebe o saldo anterior: as faturas mudam.
-            depois = _simuladas(conn, mudados, a_mais)
+            depois = _simuladas(conn, mudados, a_mais, nascem)
         for titular in mudados:
             do_titular = {k: f for k, f in depois.items() if k[0] == titular}
             _conferir_o_que_mudou(conn, antes[titular], do_titular, None)
@@ -434,12 +456,17 @@ def _conferir_os_passos(conn, passos: list[dict[tuple[UUID, date], int]]) -> Non
 
 
 def _simuladas(
-    conn, titulares: set[UUID], a_mais: dict[UUID, Counter]
+    conn,
+    titulares: set[UUID],
+    a_mais: dict[UUID, Counter],
+    nascem: dict[UUID, dict[date, tuple[date | None, date | None]]],
 ) -> dict[tuple[UUID, date], Fatura]:
     return {
         k: f
         for t in titulares
-        for k, f in _por_chave(faturas_do_titular(conn, t, compras_a_mais=a_mais[t])).items()
+        for k, f in _por_chave(
+            faturas_do_titular(conn, t, compras_a_mais=a_mais[t], faturas_a_mais=nascem.get(t))
+        ).items()
     }
 
 
