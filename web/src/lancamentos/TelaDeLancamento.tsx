@@ -813,6 +813,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           sugestoes={sugestoes}
           tags={tags}
           tagsTravadas={estornando}
+          pessoaTravada={estornando}
           opcoesDeTags={opcoesDeTags}
           onTags={setTags}
           pessoas={pessoas}

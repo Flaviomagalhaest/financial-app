@@ -253,6 +253,10 @@ _Avoid_: cartão dependente, segunda via
 Fatura fechada que recebeu um pagamento, de qualquer valor. O que faltou pagar passa para a fatura seguinte como saldo anterior. Daí em diante ela não recebe mais pagamento, compra, troca de fatura nem estorno; só muda pela correção de fatura ([ADR 0021](docs/adr/0021-o-pagamento-quita-a-fatura.md)).
 _Avoid_: fatura quitada, paga em parte
 
+**Ocorrência pulada pela fatura paga**:
+Ocorrência de recorrência no cartão, de antes de hoje, que não virou lançamento porque a fatura em que cairia foi paga depois da criação da regra, no meio da geração. Não volta, nem se a fatura for corrigida: a regra mostra um aviso com a data, o cartão e o mês da fatura, que junta as datas das puladas seguintes até o casal dispensá-lo, e o casal a lança à mão se precisar ([ADR 0021](docs/adr/0021-o-pagamento-quita-a-fatura.md)).
+_Avoid_: ocorrência perdida, ocorrência excluída, mês pulado
+
 **Correção de fatura**:
 Edição de uma fatura paga para consertar um erro (pagamentos, compras, datas, ajuste), que vale toda de uma vez ao salvar; a fatura continua paga e o saldo anterior que passou para a seguinte é refeito.
 _Avoid_: reabrir a fatura, fatura reaberta
