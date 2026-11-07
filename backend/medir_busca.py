@@ -10,6 +10,8 @@ import statistics
 import sys
 import time
 
+import psycopg
+
 from app import busca
 from app.banco import conectar
 from app.migrations import aplicar_migrations
@@ -157,8 +159,22 @@ def _cronometrar(conn, sql: str, parametros=()) -> float:
     return (time.perf_counter() - inicio) * 1000
 
 
+_COMANDOS: list[tuple[float, str]] = []
+
+
+class _Cronometrado(psycopg.Cursor):
+    """Cursor que anota o tempo e o começo de cada comando, para ver qual da busca é lento."""
+
+    def execute(self, query, params=None, **kwargs):
+        inicio = time.perf_counter()
+        resultado = super().execute(query, params, **kwargs)
+        texto = query if isinstance(query, str) else str(query)
+        _COMANDOS.append(((time.perf_counter() - inicio) * 1000, " ".join(texto.split())[:110]))
+        return resultado
+
+
 def explicar_as_lentas(conn) -> None:
-    """Separa o custo de ler a tabela do custo da consulta da busca e mostra o plano das lentas
+    """Separa o custo de ler a tabela do custo da consulta da busca; mostra o tempo de cada comando e o plano da página das lentas
     (`--explicar`, ticket 119): o plano diz onde o DSQL gasta os segundos."""
     print("\n== linhas base ==")
     for nome, sql in {
@@ -167,11 +183,34 @@ def explicar_as_lentas(conn) -> None:
         "ida e volta (SELECT 1)": "SELECT 1",
     }.items():
         print(f"{nome:36} {statistics.median(_cronometrar(conn, sql) for _ in range(3)):7.0f} ms")
-    for nome in ("sem filtro, 1ª página", "período 2024", "texto 'mercado'"):
-        linhas, parametros = busca._linhas(busca.PedidoDeBusca(**CENARIOS[nome]))
-        print(f"\n== plano dos totais: {nome} ==")
-        for (linha,) in conn.execute(f"EXPLAIN ANALYZE SELECT count(*) FROM {linhas}", parametros):
+    conn.cursor_factory = _Cronometrado
+    for nome in ("período 2024", "sem filtro, última página", "categoria + tag"):
+        criterios = dict(CENARIOS.get(nome, {}))
+        if criterios.get("pagina") == "ultima":
+            quantidade = busca.buscar(conn, busca.PedidoDeBusca()).totais.quantidade
+            criterios["pagina"] = (quantidade - 1) // busca.POR_PAGINA
+        if nome == "categoria + tag":
+            categoria, tag = conn.execute(
+                "SELECT lc.categoria_id, t.nome FROM lancamento_tags lt"
+                " JOIN lancamento_categorias lc ON lc.lancamento_id = lt.lancamento_id"
+                " JOIN tags t ON t.id = lt.tag_id LIMIT 1"
+            ).fetchone()
+            criterios = {"categoria_ids": [categoria], "tags": [tag]}
+        _COMANDOS.clear()
+        busca.buscar(conn, busca.PedidoDeBusca(**criterios))
+        print(f"\n== comandos da busca: {nome} ==")
+        for ms, texto in _COMANDOS:
+            print(f"{ms:7.0f} ms  {texto}")
+        pedido = busca.PedidoDeBusca(**criterios)
+        linhas, parametros = busca._linhas(pedido)
+        print(f"-- plano da página: {nome}")
+        for (linha,) in conn.execute(
+            f"EXPLAIN ANALYZE SELECT chave, parcelado, transferencia FROM {linhas}"
+            f" ORDER BY {busca._ORDENS[pedido.ordem]} LIMIT %s OFFSET %s",
+            [*parametros, busca.POR_PAGINA + 1, pedido.pagina * busca.POR_PAGINA],
+        ):
             print(linha)
+    conn.cursor_factory = psycopg.Cursor
 
 
 if __name__ == "__main__":
