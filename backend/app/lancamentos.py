@@ -123,6 +123,7 @@ class Parte(BaseModel):
         return self
 
 
+AJUSTE_DE_VALOR_COM_PARTES = "a compra com partes não confirma com outro valor: edite as partes"
 SEM_CENTAVO_POR_PARTE = "a parcela não chega a um centavo por parte"
 SEM_CLASSIFICACAO_PROPRIA = "a compra com partes não tem categoria, tag nem pessoa próprias"
 DUAS_PARTES_OU_MAIS = "a compra tem duas partes ou mais"
@@ -2096,6 +2097,13 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
     if so_redivide:
         # A parcela com partes confirmada com outro valor se divide de novo na mesma proporção.
         conferir_divisao(ajustes["valor_centavos"], proporcao_das_partes(conn, [id])[id])
+    if (
+        atual.partes
+        and "valor_centavos" in ajustes
+        and not (atual.parcelamento_id or atual.recorrencia_id)
+    ):
+        # Na compra à vista as partes são valores: outro valor pede editar as partes (ticket 156).
+        raise recusar(AJUSTE_DE_VALOR_COM_PARTES)
     mes, a_mao = _fatura_depois(conn, atual, _com_mudancas(atual, ajustes), ajustes)
     if mes != atual.mes:
         guardar_item_atual_do_lancamento(conn, id)  # no mês novo, fica no item em que estava
@@ -2118,7 +2126,7 @@ def confirmar(conn, id: UUID, confirmacao: Confirmacao, usuario: str) -> Lancame
         ),
     )
     # O valor de verdade (a conta de luz que veio maior) divide as partes da ocorrência de novo
-    # (ADR 0022); a compra à vista com partes é do ticket 156.
+    # (ADR 0022); a compra à vista com partes recusa o ajuste lá em cima (ticket 156).
     if "valor_centavos" in ajustes and atual.partes and atual.recorrencia_id:
         gravar_partes(conn, id, redivididas(atual.partes, ajustes["valor_centavos"]), usuario)
         ajustes["partes"] = True
