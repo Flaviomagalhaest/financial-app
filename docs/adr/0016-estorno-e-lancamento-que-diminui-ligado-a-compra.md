@@ -67,3 +67,12 @@ Decidido com o dono no [ticket 152](../../.scratch/v1-substituir-mobills/issues/
 - **Item do planejamento**: o avulso tem classificação própria, então a tela "Lançar crédito" pergunta o item como na compra, quando as categorias escolhidas têm dois ou mais itens no mês. "A escolher" na Hoje fica para o que chegar sem escolha. O estorno ligado continua sem escolha própria.
 - **Devido negativo**: o servidor recusa (422) o avulso que deixaria o devido da fatura dele (saldo anterior + compras + ajuste, com os créditos) abaixo de zero. A conferência só roda ao salvar o avulso (criação e edição, inclusive a troca de data ou de fatura). Excluir ou mover compra, ajuste negativo e o estorno ligado (que já tem o teto da compra) não ganham trava: o cenário é raro, e a ADR 0021 segue sem saldo anterior negativo. O aparelho não confere: sem internet, o avulso sobe pela fila e a recusa aparece como qualquer recusa da fila.
 - **Mês sem fatura**: "Lançar crédito" aparece em qualquer mês que não esteja pago, com ou sem fatura criada. A data decide a fatura, e ela nasce com as datas padrão (`garantir_fatura`), como na primeira compra.
+
+## Adendo (ticket 161)
+
+Decidido com o dono no [ticket 161](../../.scratch/v1-substituir-mobills/issues/161-limite-do-estorno-de-parte-do-parcelamento.md), sobre as escolhas do adendo do 160:
+
+- **Limite da parte pela regra**: fica. A soma da parte é a das parcelas da regra (`somas_nas_parcelas`), não a das partes gravadas nas parcelas, como no limite do parcelamento inteiro (`valor_total_centavos`). A parcela mudada "só nesta" e a proporção mudada "esta e as próximas" não mexem no limite. O limite barra erro, não fecha a contabilidade. Se um dia passar a contar o gravado, os dois limites mudam juntos.
+- **Item**: fica. O estorno de parte do parcelamento herda só a escolha explícita de item da parte. Sem ela, conta no item do mês pela regra de onde conta, porque cada parcela cai num mês.
+- **Ligação no aparelho**: muda. O app liga a parte da parcela à do parcelamento pelo mesmo `id_na_parcela` (uuid5) do servidor, não pela posição, com tabela compartilhada (ADR 0018). A implementação é o [ticket 190](../../.scratch/v1-substituir-mobills/issues/190-aparelho-liga-a-parte-da-parcela-pelo-id.md). Até ela, vale o que o adendo do 160 descreve.
+- **Estorno de todas anterior à divisão**: fica com a classificação que tinha, ligado ao parcelamento inteiro, como na compra à vista.
