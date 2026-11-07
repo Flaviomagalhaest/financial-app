@@ -1,7 +1,7 @@
 # Estorno avulso: item do planejamento na tela, fatura negativa e testes no aparelho
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Opus
