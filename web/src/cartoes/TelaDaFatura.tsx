@@ -207,7 +207,7 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
           Ajustar fatura
         </button>
       )}
-      {fatura && !paga && (
+      {faturas && !paga && (
         <a className="botao secundario" href={`#/credito/${cartaoId}`}>
           Lançar crédito
         </a>

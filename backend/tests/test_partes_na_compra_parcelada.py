@@ -247,7 +247,8 @@ def test_so_esta_da_partes_proprias_a_parcela_e_as_outras_mudancas_a_preservam(
     depois = parcelas(casal, criado["id"])
     assert [divisao(l) for l in depois] == [[16668, 8333, 8333], [16667, 16666], [23333, 10000]]
     assert [p["categoria_ids"] for p in depois[1]["partes"]] == [[eletronico], [roupa]]
-    assert [p["valor_centavos"] for p in regra(casal, criado["id"])["partes"]] == [16667, 16666]
+    # A leitura traz as partes divididas pelo total (ticket 158).
+    assert [p["valor_centavos"] for p in regra(casal, criado["id"])["partes"]] == [50002, 49998]
 
     # A correção do valor redivide cada parcela: as que seguem o parcelamento pela proporção dele, a
     # que tem partes próprias pela dela, e a 1ª, de antes de "esta e as próximas", pela que tinha.
@@ -325,7 +326,7 @@ def test_correcao_do_parcelamento_redivide_as_parcelas_pelas_partes(casal: Casal
         (10000, [5000, 2500, 2500])
     ] * 4
     # A parcela nova também nasce dividida.
-    assert [p["valor_centavos"] for p in corrigido.json()["partes"]] == [50000, 25000, 25000]
+    assert [p["valor_centavos"] for p in corrigido.json()["partes"]] == [20000, 10000, 10000]
 
 
 def test_correcao_recusa_categoria_propria_no_parcelamento_com_partes(casal: Casal, categorias):

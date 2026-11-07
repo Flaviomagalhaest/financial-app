@@ -1423,6 +1423,17 @@ def estornado_nas_partes_do_parcelamento(
     return {p: v for p, v in estornado.items() if v}
 
 
+def _conferir_devido_do_avulso(conn, cartao_id: UUID, mes: date) -> None:
+    """Recusa (422) o crédito avulso que deixa o devido da fatura abaixo de zero (ticket 189,
+    ADR 0016). Roda depois de gravar, dentro da transação do pedido, que a recusa desfaz."""
+    from app import cartoes  # cartoes importa este módulo
+
+    cartao = faturas.ler_cartao(conn, cartao_id)
+    for f in cartoes.faturas_do_titular(conn, cartao.titular.id, mes):
+        if f.saldo_anterior_centavos + f.total_centavos < 0:
+            raise recusar(f"o crédito deixaria a fatura de {mes:%m/%Y} com valor devido negativo")
+
+
 def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
     """Reenviar o mesmo id (a fila repete) devolve o que já está gravado, sem criar de novo."""
     # Reenvio de um lançamento já gravado não falha porque a categoria foi arquivada depois.
@@ -1485,6 +1496,8 @@ def criar(conn, novo: NovoLancamento, usuario: str) -> tuple[Lancamento, bool]:
             novo.estorno_parcelamento_id,
         ),
     ).rowcount
+    if gravados and novo.estorno_avulso:
+        _conferir_devido_do_avulso(conn, novo.conta_id, mes)
     if gravados and novo.estorno_de:
         guardar_item_atual_do_lancamento(conn, novo.estorno_de)
         acompanhar_estornos(conn, novo.estorno_de)
@@ -1616,6 +1629,11 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
     if so_redivide:
         redividir_partes(conn, id, editado.valor_centavos)
     acompanhar_estornos(conn, id)
+    if (
+        atual.estorno_avulso
+        and {"valor_centavos", "data", "conta_id", "fatura_mes"} & mudancas.keys()
+    ):
+        _conferir_devido_do_avulso(conn, editado.conta_id, mes)
     return _um(conn, id)
 
 
