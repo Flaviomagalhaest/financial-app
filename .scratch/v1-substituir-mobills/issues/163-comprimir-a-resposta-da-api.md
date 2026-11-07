@@ -1,7 +1,7 @@
 # Comprimir a resposta da API
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`; HITL só na conferência com `curl` no `dev`
 Modelo recomendado: Sonnet
@@ -18,4 +18,4 @@ A API responde sem compressão, e a lista de 11 mil lançamentos passa do limite
 - [x] Teste do backend: resposta grande com `Accept-Encoding: gzip` sai comprimida e em base64 pelo Mangum; sem o cabeçalho, sai como hoje
 - [x] `GZipMiddleware` na `create_app`, com `minimum_size` que não comprima respostas pequenas
 - [x] Teste de navegador segue verde (o navegador descomprime antes do `response.json()`)
-- [ ] HITL: no `dev`, rodar o `curl` da seção "O que falta conferir" da pesquisa e conferir que o `Accept-Encoding` chega à Lambda e o `content-encoding: gzip` volta ao navegador
+- [x] HITL: no `dev`, rodar o `curl` da seção "O que falta conferir" da pesquisa e conferir que o `Accept-Encoding` chega à Lambda e o `content-encoding: gzip` volta ao navegador
