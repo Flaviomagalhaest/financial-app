@@ -1,7 +1,7 @@
 # Cartão reemitido em "todas" junto com a data ou o valor, e a recusa no meio
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: a Q1 é do dono); depois `implement`, `tdd`
 Modelo recomendado: Opus
