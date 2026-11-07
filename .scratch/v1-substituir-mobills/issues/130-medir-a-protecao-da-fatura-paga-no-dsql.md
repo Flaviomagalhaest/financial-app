@@ -15,9 +15,23 @@ Origem: [ticket 127](127-medir-o-custo-da-protecao-da-fatura-paga.md): a medida 
 
 ## Checklist
 
-- [ ] Rodar `backend/medir_fatura_paga.py` contra um banco DSQL de teste (ele apaga o schema `public`) e registrar o lançamento, o lote de 50 e a correção do parcelamento longo (ticket 180) aqui
+- [~] Rodar `backend/medir_fatura_paga.py` contra um banco DSQL de teste (ele apaga o schema `public`) e registrar o lançamento, o lote de 50 e a correção do parcelamento longo (ticket 180) aqui
 - [ ] Se pesar: conferir só os titulares tocados pela gravação, ou só as faturas fechadas, mantendo `backend/tests/test_fatura_paga.py`
 
-## Tentativa em sessão na nuvem
+## Medida no DSQL (sa-east-1, feita pelo dono, 11000 lançamentos de cartão, 190 faturas, 2 titulares)
 
-Sem `DATABASE_URL`/endpoint de DSQL de teste, sem região e sem `aws` na sessão; as únicas credenciais AWS soltas não devem ser usadas com um script que apaga `public`. Nada foi medido. O dono roda `DATABASE_URL=... uv run python medir_fatura_paga.py` num DSQL de teste (token do `aws dsql generate-db-connect-admin-auth-token` como senha) e cola os tempos aqui.
+| operação | com proteção | sem | custo |
+|---|---|---|---|
+| leitura de todas as faturas | 146 ms | — | — |
+| lançamento | 444 ms | 162 ms | 282 ms |
+| lote de 50 ações | 17456 ms | 9595 ms | 7861 ms (~157 ms por ação) |
+| correção do parcelamento longo | não medida | | |
+
+A correção do longo falhou: `SAVEPOINT` não suportado no DSQL, bug do app aberto no [ticket 201](201-conferencia-sem-gravar-usa-savepoint-no-dsql.md). Para medir, rodar de novo depois do 201.
+
+Para o script rodar no DSQL: `DSQL_TESTE=1` (ele apaga as tabelas em vez do schema `public`).
+
+## Pendências
+
+- [ ] Correção do longo: medir depois do 201
+- [ ] Decidir se 282 ms por lançamento e ~8 s a mais no lote de 50 pesam; se sim, aplicar o segundo item
