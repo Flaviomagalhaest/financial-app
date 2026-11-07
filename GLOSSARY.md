@@ -262,7 +262,7 @@ O que faltou pagar de uma fatura paga (o total menos o pago), que passa para a f
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
 
 **Estorno**:
-Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original (ou à parte dela) e com as categorias e tags dela, que acompanham as da compra quando ela muda. Na compra parcelada, é de uma parcela ou de todas, num estorno só. A compra, parcela ou ocorrência com estorno não sai por regra nenhuma: a correção do parcelamento que a tiraria é recusada, e a recorrência que a tiraria a deixa como está. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
+Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original (ou à parte dela) e com as categorias, as tags, a escolha de item e a pessoa dela, que acompanham as da compra quando ela muda (o estorno anterior à divisão da compra fica com as que tinha). Na compra parcelada, é de uma parcela ou de todas, num estorno só; o de todas não deixa o parcelamento ficar abaixo do já estornado. A compra, parcela ou ocorrência com estorno não sai por regra nenhuma: a correção do parcelamento que a tiraria é recusada, e a recorrência que a tiraria a deixa como está. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
 _Avoid_: reembolso, devolução
 
 **Estorno avulso**:

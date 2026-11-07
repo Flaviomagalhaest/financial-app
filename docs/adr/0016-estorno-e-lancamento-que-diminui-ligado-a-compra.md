@@ -59,3 +59,16 @@ Decidido com o dono no [ticket 148](../../.scratch/v1-substituir-mobills/issues/
 - **Dado antigo**: o estorno desalinhado da compra (de antes do ticket 133, inclusive em backup restaurado) não ganha migração nem acerto na restauração; ele se acerta quando a compra mudar.
 
 A implementação é o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
+
+## Adendo (ticket 159)
+
+Decidido com o dono no [ticket 159](../../.scratch/v1-substituir-mobills/issues/159-estorno-de-parte-e-de-parcelas-pendencias.md), sobre o que o 138 deixou provisório:
+
+- **Dividir uma compra (ou um parcelamento) com estorno**: fica como o 138 e o 160 fizeram. O estorno anterior à divisão fica ligado ao todo, guarda a classificação (e a pessoa) que tinha e conta contra o valor do todo. A divisão não pede a parte de cada estorno nem é recusada.
+- **Juntar ou tirar parte com estorno**: continua recusado (a parte com estorno não sai nem encolhe abaixo do estornado, e as partes não se juntam com estorno de parte). Quem corrige é a pessoa, então ela exclui o estorno antes, como no adendo do ticket 148.
+- **Estorno de todas de uma parte do parcelamento**: resolvido pelo adendo do ticket 160.
+- **Item do planejamento do estorno de todas**: segue a escolha de item do parcelamento (ou da parte dele), como a parcela, e não a regra do avulso. Conta inteiro no mês da fatura em que aparece, e onde a categoria escolhida não tem item vale a regra de sempre.
+- **Limite do estorno de todas no parcelamento**: a correção do parcelamento e a exclusão de uma parcela que deixariam a soma das parcelas que ficam (na parte, a soma da parte nelas) abaixo do já estornado são recusadas (422) antes de gravar; as que ficam no limite passam. Junta-se à implementação do adendo do ticket 148.
+- **Pessoa do estorno ligado**: acompanha a da compra, da parte, da parcela ou do parcelamento, como as categorias e as tags: o servidor a copia ao criar o estorno, a acompanha quando ela muda e ignora a que o cliente manda. O estorno avulso guarda a pessoa que o casal deu. O dado antigo se acerta quando a compra mudar, sem migração.
+
+A implementação é o [ticket 189](../../.scratch/v1-substituir-mobills/issues/189-item-e-pessoa-do-estorno-acompanham-a-compra.md) (item e pessoa) e o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md) (limite).
