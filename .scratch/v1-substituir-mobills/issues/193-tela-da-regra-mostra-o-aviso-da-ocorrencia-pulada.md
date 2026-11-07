@@ -1,7 +1,7 @@
 # Tela da regra mostra e dispensa o aviso da ocorrência pulada
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 192
 Skills: `implement`, `tdd`, `run`
 Modelo recomendado: Sonnet
