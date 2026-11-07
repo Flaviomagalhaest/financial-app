@@ -1,7 +1,7 @@
 # Busca: cartão titular e compras do adicional (open banking)
 
 Type: task
-Status: needs-triage
+Status: claimed
 Blocked by: nenhum
 Skills: `triage`; depois `grilling` e `implement`, `tdd` quando houver integração open banking
 Modelo recomendado: Sonnet
