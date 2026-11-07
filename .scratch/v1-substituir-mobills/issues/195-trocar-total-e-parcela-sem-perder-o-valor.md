@@ -1,7 +1,7 @@
 # Trocar entre o total e o da parcela sem perder o valor digitado
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -17,5 +17,5 @@ Na tela do parcelamento, o botão "O total / O da parcela" põe no campo o valor
 
 ## Checklist
 
-- [ ] Dono decide
-- [ ] Implementar, com teste de navegador; verificações do projeto e PR para `main`
+- [x] Dono decide: converter o digitado
+- [x] Implementar, com teste de navegador (escrito, não rodado na sessão: sem backend); verificações do projeto e PR para `main`

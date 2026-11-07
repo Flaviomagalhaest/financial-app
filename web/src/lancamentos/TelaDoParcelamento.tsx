@@ -50,6 +50,19 @@ type Formulario = {
   proporcao: number[] | null;
 };
 
+/**
+ * O valor do campo ao trocar de modo (ticket 195): o digitado se converte com o número de parcelas do
+ * formulário (o total vira o da parcela, sem os centavos que sobram, e o contrário). Sem valor ou
+ * parcelas válidos, ou com o valor ainda igual ao gravado, vale o gravado naquele modo (sem perder centavos).
+ */
+const valorAoTrocarDeModo = (p: Parcelamento, f: Formulario, novo: ValorDigitado): string => {
+  const centavos = emCentavos(f.valor);
+  const n = Number(f.parcelas);
+  if (novo === f.valorDigitado || !centavos || !Number.isInteger(n) || n < 1) return comoDigitado(valorDoModo(p, novo));
+  if (n === p.parcelas && centavos === valorDoModo(p, f.valorDigitado)) return comoDigitado(valorDoModo(p, novo));
+  return comoDigitado(novo === "parcela" ? Math.floor(centavos / n) : centavos * n);
+};
+
 /** O valor que o campo mostra ao abrir ou ao trocar de modo; o da parcela, sem os centavos que sobram na 1ª. */
 const valorDoModo = (p: Parcelamento, modo: ValorDigitado) => (modo === "total" ? p.valor_total_centavos : Math.floor(p.valor_total_centavos / p.parcelas));
 
@@ -407,7 +420,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
             key={v}
             className={form.valorDigitado === v ? "" : "secundario"}
             aria-pressed={form.valorDigitado === v}
-            onClick={() => mudar({ valorDigitado: v, valor: comoDigitado(valorDoModo(parcelamento, v)) })}
+            onClick={() => mudar({ valorDigitado: v, valor: valorAoTrocarDeModo(parcelamento, form, v) })}
           >
             {nome}
           </button>
