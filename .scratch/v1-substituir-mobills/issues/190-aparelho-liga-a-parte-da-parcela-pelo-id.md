@@ -1,7 +1,7 @@
 # Aparelho liga a parte da parcela à do parcelamento pelo id, como o servidor
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
