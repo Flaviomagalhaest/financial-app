@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -1244,3 +1244,29 @@ def test_credito_avulso_no_mes_seguinte_usa_o_saldo_anterior_da_paga_e_nao_passa
     assert cabe.status_code == 201, cabe.text
     maio = numeros(faturas(casal, abril_paga.cartao)["2026-05-01"])
     assert maio[0] == -40000
+
+
+def test_conferir_sem_gravar_nao_usa_savepoint_nem_deixa_fatura_nascida(
+    casal: Casal, abril_paga, monkeypatch: pytest.MonkeyPatch
+):
+    # O DSQL recusa SAVEPOINT (ticket 201): a conferência não pode abrir transação aninhada.
+    from fastapi import HTTPException
+
+    from app import cartoes
+
+    def sem_savepoint(*_a, **_k):
+        raise psycopg.errors.FeatureNotSupported("unsupported transaction statement: SAVEPOINT")
+
+    monkeypatch.setattr(psycopg.Connection, "transaction", sem_savepoint)
+    with psycopg.connect(casal.client.app.state.url, autocommit=True) as conn:
+        titular = UUID(abril_paga.cartao)
+        antes = conn.execute("SELECT count(*) FROM faturas").fetchone()[0]
+
+        # Compra em abril paga: recusada, como ao gravar.
+        with pytest.raises(HTTPException) as erro:
+            cartoes.conferir_sem_gravar(conn, [{(titular, date(2026, 4, 1)): 5000}])
+        assert erro.value.detail == RECUSA
+
+        # Compra num mês sem fatura: confere e a fatura simulada não fica gravada.
+        cartoes.conferir_sem_gravar(conn, [{(titular, date(2026, 9, 1)): 5000}])
+        assert conn.execute("SELECT count(*) FROM faturas").fetchone()[0] == antes
