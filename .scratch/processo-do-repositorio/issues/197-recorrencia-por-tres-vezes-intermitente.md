@@ -1,7 +1,7 @@
 # Teste da recorrência por três vezes falha de vez em quando
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`
 Modelo recomendado: Sonnet
