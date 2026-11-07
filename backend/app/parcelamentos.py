@@ -1341,6 +1341,18 @@ def gravar_correcao(
         _cronograma_pedido(alteracao),
     )
     _conferir_as_divisoes(conn, correcoes)
+    # Antes do aviso e de gravar: a parcela com estorno não sai, como na exclusão (ticket 188).
+    lancamentos.conferir_sem_estorno(
+        conn, [t.id for t in correcoes if t.acao in ("excluir", "pular")]
+    )
+    lancamentos.conferir_o_que_fica_do_estorno_de_todas(
+        conn,
+        id,
+        nova.parcelas,
+        nova.valor_total_centavos,
+        [p.valor_centavos for p in nova.partes] or None,
+        lambda n: valor_da_parcela(nova.valor_total_centavos, nova.parcelas, n),
+    )
     realizadas = [
         *tambem_mudam,
         *(

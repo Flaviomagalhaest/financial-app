@@ -115,7 +115,16 @@ def corrigir_fatura(
             **correcao.model_dump(include=set(cartoes.AlteracaoDeFatura.model_fields))
         )
         cartoes.alterar_fatura(conn, titular, mes, datas_e_ajuste, usuario)
-        for excluida in correcao.compras_excluidas:
+        # O estorno da lista sai antes da compra dele, qualquer que seja a ordem do cliente
+        # (ticket 188); a compra cujo estorno não está na lista segue recusada.
+        sao_estornos = {
+            i
+            for (i,) in conn.execute(
+                "SELECT id FROM lancamentos WHERE id = ANY(%s) AND estorno_de IS NOT NULL",
+                ([e.id for e in correcao.compras_excluidas],),
+            )
+        }
+        for excluida in sorted(correcao.compras_excluidas, key=lambda e: e.id not in sao_estornos):
             lancamentos.excluir(conn, excluida.id, excluida.versao, usuario)
         for editada in correcao.compras_editadas:
             alteracao = lancamentos.AlteracaoDeLancamento(**editada.model_dump(exclude={"id"}))
