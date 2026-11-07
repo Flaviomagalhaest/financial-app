@@ -1,6 +1,6 @@
 """Mede a busca (`app.busca.buscar`) num banco com o volume do histórico do Mobills desde 2019
 (ticket 112). Gera lançamentos fictícios com `generate_series`, roda cada cenário algumas vezes e
-imprime a mediana. Apaga o schema `public`: use só num banco de teste.
+imprime a mediana. Apaga as tabelas do schema `public`: use só num banco de teste.
 
 Uso: DATABASE_URL=... (Postgres) ou DSQL_ENDPOINT=... e AWS_REGION=... (Aurora DSQL, ticket 119),
 depois `uv run python medir_busca.py [lançamentos avulsos] [parcelamentos de 5 parcelas]`.
@@ -22,8 +22,11 @@ DESCRICOES = [
 
 
 def gerar(conn, avulsos: int, parcelamentos: int) -> None:
-    conn.execute("DROP SCHEMA public CASCADE")
-    conn.execute("CREATE SCHEMA public")
+    # O schema `public` pertence ao sistema no DSQL (nem o admin o apaga): esvazia as tabelas.
+    for (tabela,) in conn.execute(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+    ).fetchall():
+        conn.execute(f'DROP TABLE IF EXISTS public."{tabela}" CASCADE')
     aplicar_migrations()  # DSQL_ENDPOINT, se houver; senão DATABASE_URL
     conn.execute(
         "INSERT INTO contas (id, nome, tipo, criado_por) SELECT gen_random_uuid(), 'Conta ' || n,"
