@@ -1,7 +1,7 @@
 # Confirmar transferência prevista sem internet
 
 Type: task
-Status: ready-for-human
+Status: wontfix
 Blocked by: —
 Skills: `grilling` para o dono decidir se vale; depois `implement`, `tdd`; HITL na decisão
 Modelo recomendado: Sonnet
@@ -15,5 +15,13 @@ Hoje "Confirmar" e "Ajustar" da transferência nas contas da semana ficam desabi
 
 ## Checklist
 
-- [ ] O dono decide se vale (resposta em `## Answer`)
-- [ ] Se valer: confirmação da transferência pela fila, com testes de navegador sem internet
+- [x] O dono decide se vale (resposta em `## Answer`)
+- [x] Se valer: confirmação da transferência pela fila, com testes de navegador sem internet (não vale: `wontfix`)
+
+## Answer
+
+O dono decidiu (grilling): **não vale**. Fecha como `wontfix`.
+
+- Transferência prevista quase sempre se confirma com o app aberto e com sinal; esperar a internet voltar basta.
+- O custo é alto: reabrir o [ADR 0011](../../../docs/adr/0011-sem-internet-so-lancamentos-e-conflito-decidido-a-mao.md) (o aparelho não guarda transferências), uma ação nova em `POST /api/lancamentos/lote`, um item novo na fila e um 409 novo na tela de conflito.
+- Fica como está: "Confirmar" e "Ajustar" da transferência ficam desabilitados sem internet, com o aviso no bloco `ContasDaSemana`.
