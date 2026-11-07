@@ -1,7 +1,7 @@
 # Confirmar com outro valor a compra à vista com partes
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `grilling` (HITL: o dono escolhe como as partes se acertam), depois `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -15,6 +15,10 @@ A compra à vista com partes que ainda é prevista (data futura) pode ser confir
 
 ## Checklist
 
-- [ ] O dono escolhe: a diferença vai na última parte (como a correção de fatura e a tela de lançar), divide na proporção (como a recorrência e a parcela) ou recusa o ajuste de valor (422) e manda editar as partes
-- [ ] `confirmar` acerta as partes da compra à vista; o aparelho mostra igual enquanto a confirmação não sobe (`enfileirarConfirmar` em `web/src/dados/fila.ts`)
-- [ ] Testes de API e de navegador; verificações do projeto e PR para `main`
+- [x] O dono escolhe: a diferença vai na última parte (como a correção de fatura e a tela de lançar), divide na proporção (como a recorrência e a parcela) ou recusa o ajuste de valor (422) e manda editar as partes
+- [x] `confirmar` acerta as partes da compra à vista; o aparelho mostra igual enquanto a confirmação não sobe (`enfileirarConfirmar` em `web/src/dados/fila.ts`)
+- [x] Testes de API e de navegador; verificações do projeto e PR para `main`
+
+## Decisão (dono)
+
+Recusar o ajuste de valor (422, "a compra com partes não confirma com outro valor: edite as partes") e mandar editar as partes. Vale só para a compra à vista com partes; a parcela e a ocorrência seguem redividindo na proporção. Na tela "Contas da semana" o botão "Confirmar com ajuste" fica desligado com outro valor, e a fila não redivide mais as partes da compra à vista.
