@@ -465,6 +465,15 @@ class _Muda:
     partes: list[Parte] = field(default_factory=list)
     nas_partes: set[UUID] = field(default_factory=set)
 
+    @property
+    def partes_sem_categoria(self) -> int:
+        return _partes_sem_categoria(self.partes, self.nas_partes)
+
+
+def _partes_sem_categoria(partes: list[Parte], nas_partes: set[UUID]) -> int:
+    """Das partes que o lote muda, as que ficariam sem categoria."""
+    return sum(not p.categoria_ids for p in partes if p.id in nas_partes)
+
 
 @dataclass
 class _Plano:
@@ -513,9 +522,7 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
             continue
         mudam.append(muda)
         if l.partes:
-            partes_sem_categoria += sum(
-                not p.categoria_ids for p in muda.partes if p.id in muda.nas_partes
-            )
+            partes_sem_categoria += muda.partes_sem_categoria
         else:
             sem_categoria += not muda.categorias
     return _Plano(
@@ -800,13 +807,15 @@ def _mudar_as_partes_do_parcelamento(
     momento: datetime,
 ) -> bool:
     """No parcelamento com partes, que não tem classificação própria, o lote muda as partes dele,
-    com que as parcelas nascem; devolve se ele tem partes."""
+    com que as parcelas nascem (nada, se nenhuma muda); devolve se ele tem partes."""
     regra = ler_um(conn, id)
     if not regra or not regra.partes:
         return False
     partes, nas_partes, _ = mudancas.partes_depois(tipo, regra.partes, achadas)
-    if any(not p.categoria_ids for p in partes if p.id in nas_partes):
-        raise LoteRecusado(_sem_categoria(0, 1))
+    if not nas_partes:
+        return True
+    if sem_categoria := _partes_sem_categoria(partes, nas_partes):
+        raise LoteRecusado(_sem_categoria(0, sem_categoria))
     _mudar_partes(conn, lote_id, id, "parcelamento", regra.partes, partes, nas_partes, usuario)
     acompanhar_estornos_do_parcelamento(conn, id)
     conn.execute(
@@ -887,7 +896,7 @@ def _mudar_parcelamento(
     )
 
 
-def _aplicar_parte(
+def _aplicar_bloco(
     conn,
     lote_id: UUID,
     ids: list[UUID],
@@ -896,7 +905,7 @@ def _aplicar_parte(
     momento: datetime,
     achadas: dict[UUID, set[UUID]],
 ) -> int:
-    """Aplica o lote numa parte dos lançamentos, numa transação, sobre o que eles têm agora, e
+    """Aplica o lote num bloco de lançamentos, numa transação, sobre o que eles têm agora, e
     guarda o de antes para o desfazer. Devolve quantos mudaram."""
     mudancas = _Mudancas(conn, pedido)
     guardar_item_atual(conn, "l.id = ANY(%s)", (ids,))
@@ -911,8 +920,7 @@ def _aplicar_parte(
             parcelamentos.add((l.parcelamento_id, l.tipo))
         mudaram += 1
         if l.partes:
-            sem_categoria = sum(not p.categoria_ids for p in muda.partes if p.id in muda.nas_partes)
-            if sem_categoria:
+            if sem_categoria := muda.partes_sem_categoria:
                 raise LoteRecusado(_sem_categoria(0, sem_categoria))
             versao = _regravar_partes(conn, lote_id, l, muda, usuario, momento)
             conn.execute(
@@ -1093,8 +1101,8 @@ def _desfazer_parcelamento(conn, lote_id: UUID, registro: tuple) -> str:
     return "desfeito"
 
 
-def _desfazer_parte(conn, lote_id: UUID, usuario: str, momento: datetime) -> int:
-    """Desfaz, numa transação, a próxima parte do que o lote gravou: os lançamentos e, depois
+def _desfazer_bloco(conn, lote_id: UUID, usuario: str, momento: datetime) -> int:
+    """Desfaz, numa transação, o próximo bloco do que o lote gravou: os lançamentos e, depois
     deles, os parcelamentos. Devolve quantos viu."""
     vistos = 0
     for antes in conn.execute(
@@ -1129,12 +1137,12 @@ def _desfazer_parte(conn, lote_id: UUID, usuario: str, momento: datetime) -> int
 
 
 def _voltar(url: str | None, lote_id: UUID, usuario: str) -> None:
-    """Desfaz, em partes, tudo o que o lote gravou e ainda não foi desfeito; parado no meio,
+    """Desfaz, em blocos, tudo o que o lote gravou e ainda não foi desfeito; parado no meio,
     chamar de novo continua de onde parou."""
     momento = datetime.now(UTC)
     while (
         em_transacao(
-            url, partial(_desfazer_parte, lote_id=lote_id, usuario=usuario, momento=momento)
+            url, partial(_desfazer_bloco, lote_id=lote_id, usuario=usuario, momento=momento)
         )
         == POR_TRANSACAO
     ):
@@ -1276,19 +1284,19 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
         return gravado.edicao, False
     momento, mudaram = datetime.now(UTC), 0
 
-    def aplicar_parte(parte: list[UUID]) -> int:
+    def aplicar_bloco(bloco: list[UUID]) -> int:
         return em_transacao(
             url,
-            lambda conn: _aplicar_parte(
-                conn, nova.id, parte, nova, usuario, momento, gravacao.achadas
+            lambda conn: _aplicar_bloco(
+                conn, nova.id, bloco, nova, usuario, momento, gravacao.achadas
             ),
         )
 
     try:
         for bloco in gravacao.blocos:
-            mudaram += aplicar_parte(bloco)
+            mudaram += aplicar_bloco(bloco)
     except Exception as erro:
-        # Uma parte recusada (o lançamento mudou no meio) desfaz as que já foram gravadas.
+        # Um bloco recusado (o lançamento mudou no meio) desfaz os que já foram gravados.
         motivo = (
             erro.motivo
             if isinstance(erro, LoteRecusado)

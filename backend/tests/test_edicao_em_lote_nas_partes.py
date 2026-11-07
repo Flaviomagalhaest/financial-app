@@ -1,6 +1,9 @@
 """A edição em lote na compra com partes (ticket 150, ADR 0022): a mudança vale em cada parte; na
 busca com filtro de categoria, tag ou pessoa, só nas partes que ela achou."""
 
+import pytest
+
+from app import lancamentos
 from tests.conftest import Casal
 from tests.test_alcance_da_mudanca_na_parcela import editar_so_nela
 from tests.test_edicao_em_lote import aplicada, aplicar, desfazer, marcados, previa, todos
@@ -198,3 +201,29 @@ def test_na_busca_com_filtro_o_parcelamento_muda_so_as_partes_achadas(casal: Cas
     assert [
         [set(p["categoria_ids"]) for p in l["partes"]] for l in parcelas(casal, criado["id"])
     ] == [[{roupa}, {casa, obra}]] * 3
+
+
+def test_na_ocorrencia_da_recorrencia_muda_as_partes_como_so_este(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.test_partes_na_recorrencia import HOJE, combo, criada
+    from tests.test_recorrencias import gerados, mudar
+
+    monkeypatch.setattr(lancamentos, "hoje", lambda: HOJE)
+
+    celular, internet = casal.categoria("Celular"), casal.categoria("Internet")
+    nova = combo(casal, [parte([celular], 6000), parte([internet], 4000)], vezes=3)
+    [novembro, dezembro, _] = criada(casal, nova)
+
+    aplicada(casal, marcados(dezembro), tags={"acao": "acrescentar", "tags": ["combo"]})
+    # Daqui para frente, desde a 1ª: o lote fez de dezembro um "só este", que a mudança não alcança.
+    trocadas = [
+        parte([internet], 6000, descricao="Internet"),
+        parte([celular], 4000, descricao="Celular"),
+    ]
+    assert mudar(casal, nova["id"], 1, partes=trocadas).status_code == 200
+
+    agora = {l["id"]: l for l in gerados(casal, nova["id"])}
+    assert [p["tags"] for p in agora[dezembro["id"]]["partes"]] == [["combo"], ["combo"]]
+    assert [p["categoria_ids"] for p in agora[dezembro["id"]]["partes"]] == [[celular], [internet]]
+    assert [p["categoria_ids"] for p in agora[novembro["id"]]["partes"]] == [[internet], [celular]]
