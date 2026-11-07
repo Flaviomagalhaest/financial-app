@@ -1,7 +1,7 @@
 # Conferir na AWS o ciclo de vida e os alarmes do backup
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: 64
 Skills: `wizard` para guiar os passos do dono; HITL (credencial AWS do dono e dias de espera)
 Modelo recomendado: Sonnet
