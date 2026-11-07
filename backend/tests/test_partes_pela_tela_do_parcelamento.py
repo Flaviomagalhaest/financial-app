@@ -102,3 +102,30 @@ def test_dividir_pela_tela_o_parcelamento_sem_partes(casal: Casal, categorias):
     assert dividida.status_code == 200, dividida.text
     assert divisao(regra(casal, id)) == [18000, 12000]
     assert [divisao(l) for l in parcelas(casal, id)] == [[6000, 4000]] * 3
+
+
+def test_a_leitura_traz_a_proporcao_para_a_mudanca_so_de_classificacao(casal: Casal, categorias):
+    roupa, eletronico, casa = categorias
+    # A proporção vem de uma parcela de 100,00 (66,67 + 33,33) e não é a do total em 7 parcelas.
+    criado = parcelado(
+        casal,
+        casal.conta(),
+        [parte([roupa], 6667), parte([eletronico], 3333)],
+        valor_total_centavos=None,
+        valor_da_parcela_centavos=10000,
+        parcelas=7,
+    ).json()
+    antes = [divisao(l) for l in parcelas(casal, criado["id"])]
+    lido = regra(casal, criado["id"])
+    assert lido["proporcao_das_partes"] == [6667, 3333]
+
+    # Só a categoria da 2ª parte muda; vai a proporção da leitura, como a tela manda.
+    partes = [
+        p | {"valor_centavos": v} for p, v in zip(lido["partes"], lido["proporcao_das_partes"])
+    ]
+    partes[1]["categoria_ids"] = [casa]
+    mudada = mudar_partes(casal, criado["id"], partes)
+
+    assert mudada.status_code == 200, mudada.text
+    assert mudada.json()["proporcao_das_partes"] == [6667, 3333]
+    assert [divisao(l) for l in parcelas(casal, criado["id"])] == antes

@@ -76,7 +76,7 @@ function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<
   if (!centavos || !Number.isInteger(parcelas)) return null;
   const mudou: Omit<AlteracaoDeParcelamento, "confirmar_realizadas"> = {};
   if (f.descricao.trim() !== p.descricao) mudou.descricao = f.descricao.trim();
-  const partes = partesDoFormulario(f, p, centavos);
+  const partes = partesDoFormulario(f, p, centavos, item);
   if (partes) mudou.partes = partes;
   if (!mesmos(f.categoriaIds, p.categoria_ids)) mudou.categoria_ids = f.categoriaIds;
   if (!mesmos(f.tags, p.tags)) mudou.tags = f.tags;
@@ -89,23 +89,29 @@ function alteracaoDo(f: Formulario, p: Parcelamento, item: string | null): Omit<
   return mudou;
 }
 
-/** A classificação de uma parte, sem o valor, para saber se só ela mudou. */
-const semValor = (x: Parte): Parte => ({ ...x, valor_centavos: 0 });
+/** A parte sem o valor (zerado), para saber se só a classificação dela mudou. */
+const soAClassificacao = (x: Parte): Parte => ({ ...x, valor_centavos: 0 });
+
+/** A proporção que o banco guarda, na ordem das partes; sem ela (leitura antiga), a dos valores. */
+const proporcaoGuardada = (p: Parcelamento): number[] => (p.proporcao_das_partes?.length === p.partes.length ? p.proporcao_das_partes : p.partes.map((x) => x.valor_centavos));
 
 /**
  * As partes que vão ao servidor, só se mudaram: duas ou mais dividem o parcelamento, e uma só, a
- * que ficou ao juntar com a classificação do formulário, as junta. Com a proporção intocada, vão
- * os valores que a leitura trouxe, para a mudança só de classificação não mexer na divisão.
+ * que ficou ao juntar com a classificação e o item do formulário, as junta. Com a proporção
+ * intocada, vai a que o banco guarda, para a mudança só de classificação não mexer na divisão.
  */
-function partesDoFormulario(f: Formulario, p: Parcelamento, centavos: number): Parte[] | null {
+function partesDoFormulario(f: Formulario, p: Parcelamento, centavos: number, item: string | null): Parte[] | null {
   if (!f.partes) {
     if (!p.partes.length) return null;
-    const [fica] = p.partes;
-    return [{ ...fica, categoria_ids: f.categoriaIds, tags: f.tags, pessoa: f.pessoa, item_categoria_id: null, valor_centavos: p.valor_total_centavos }];
+    return [{ ...p.partes[0], categoria_ids: f.categoriaIds, tags: f.tags, pessoa: f.pessoa, item_categoria_id: item, valor_centavos: p.valor_total_centavos }];
   }
-  const novas = f.proporcao && f.partes.length === p.partes.length ? f.partes.map(({ valor: _, ...x }, i) => ({ ...x, valor_centavos: p.partes[i].valor_centavos })) : partesParaSalvar(f.partes, centavos);
-  if (p.partes.length && mesmasPartes(novas.map(semValor), p.partes.map(semValor)) && (f.proporcao || mesmasPartes(novas, p.partes))) return null;
-  return novas;
+  const intocada = !!f.proporcao && f.partes.length === p.partes.length;
+  const guardada = proporcaoGuardada(p);
+  const novas = intocada ? f.partes.map(({ valor: _, ...x }, i) => ({ ...x, valor_centavos: guardada[i] })) : partesParaSalvar(f.partes, centavos);
+  if (!p.partes.length) return novas;
+  const mesmaClassificacao = mesmasPartes(novas.map(soAClassificacao), p.partes.map(soAClassificacao));
+  const mesmosValores = intocada || mesmasPartes(novas, p.partes);
+  return mesmaClassificacao && mesmosValores ? null : novas;
 }
 
 /** "1 de fatura paga", "2 realizadas de fatura ainda não paga", "1 alterada à mão": só os tipos que saem. */
@@ -275,10 +281,12 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   // O aviso mostra a 1ª parcela com o que o formulário tem; sem ela no aparelho, fica sem aviso.
   const centavosDoForm = emCentavos(form.valor) ?? 0;
   const parcelasDoForm = Number(form.parcelas);
-  const valorDaPrimeira =
+  // As parcelas com o que o formulário tem; sem valor ou número de parcelas válidos, nenhuma.
+  const divisaoDoForm =
     parcelasDoForm >= 2 && Number.isInteger(parcelasDoForm) && centavosDoForm > 0
-      ? divisao(form.valorDigitado === "total" ? { parcelas: parcelasDoForm, valor_total_centavos: centavosDoForm } : { parcelas: parcelasDoForm, valor_da_parcela_centavos: centavosDoForm }).primeira
-      : (primeira?.valor_centavos ?? 0);
+      ? divisao(form.valorDigitado === "total" ? { parcelas: parcelasDoForm, valor_total_centavos: centavosDoForm } : { parcelas: parcelasDoForm, valor_da_parcela_centavos: centavosDoForm })
+      : null;
+  const valorDaPrimeira = divisaoDoForm?.primeira ?? primeira?.valor_centavos ?? 0;
   const planejamento = useAvisoDePlanejamento(
     {
       id: primeira?.id ?? id,
@@ -332,10 +340,7 @@ function Correcao({ parcelamento }: { parcelamento: Parcelamento }) {
   // mudam aqui (ticket 158) ou numa parcela, com "Todas" ou "Esta e as próximas".
   const comPartes = !!form.partes;
   // A menor parcela também se divide pelas partes, e cada uma precisa de um centavo dela.
-  const menorParcela =
-    parcelasDoForm >= 2 && Number.isInteger(parcelasDoForm) && centavosDoForm > 0
-      ? divisao(form.valorDigitado === "total" ? { parcelas: parcelasDoForm, valor_total_centavos: centavosDoForm } : { parcelas: parcelasDoForm, valor_da_parcela_centavos: centavosDoForm }).outras
-      : undefined;
+  const menorParcela = divisaoDoForm?.outras;
   const problemaNasPartes = form.partes ? problemaDasPartes(form.partes, centavosDoForm, menorParcela) : "";
   const categoriasDeDespesa = categorias.filter((c) => c.tipo === "despesa" && (!c.arquivada || form.categoriaIds.includes(c.id)));
   async function salvar(confirmarRealizadas: boolean) {

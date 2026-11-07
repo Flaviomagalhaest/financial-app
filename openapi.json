@@ -8912,6 +8912,14 @@
               }
             ],
             "title": "Mudanca Recusada"
+          },
+          "proporcao_das_partes": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Proporcao Das Partes",
+            "default": []
           }
         },
         "type": "object",
@@ -9064,6 +9072,14 @@
               }
             ],
             "title": "Mudanca Recusada"
+          },
+          "proporcao_das_partes": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Proporcao Das Partes",
+            "default": []
           },
           "parcelas_mantidas": {
             "type": "integer",

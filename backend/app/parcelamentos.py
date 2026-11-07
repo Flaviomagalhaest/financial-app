@@ -148,6 +148,10 @@ class Parcelamento(DadosDoParcelamento):
     # A recusa que parou a parte parcela a parcela de uma mudança com alcance depois do pedido
     # (ticket 149): as parcelas que faltavam ficaram como estavam até a próxima mudança.
     mudanca_recusada: str | None = None
+    # Na leitura, com as partes divididas pelo total (ticket 158), a proporção guardada delas, na
+    # mesma ordem: a tela a manda de volta quando só a classificação muda, e o estorno de todas as
+    # parcelas faz a conta por ela, como o servidor.
+    proporcao_das_partes: list[int] = []
 
 
 class AlteracaoDeParcelamento(BaseModel):
@@ -264,7 +268,8 @@ def para_a_leitura(regra: Parcelamento) -> Parcelamento:
         regra.valor_total_centavos, [p.valor_centavos for p in regra.partes]
     )
     partes = [p.model_copy(update={"valor_centavos": v}) for p, v in zip(regra.partes, valores)]
-    return regra.model_copy(update={"partes": partes})
+    proporcao = [p.valor_centavos for p in regra.partes]
+    return regra.model_copy(update={"partes": partes, "proporcao_das_partes": proporcao})
 
 
 def ler_um(conn, id: UUID) -> Parcelamento | None:

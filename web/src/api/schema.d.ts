@@ -3198,6 +3198,11 @@ export interface components {
             parcelas_anteriores: number;
             /** Mudanca Recusada */
             mudanca_recusada?: string | null;
+            /**
+             * Proporcao Das Partes
+             * @default []
+             */
+            proporcao_das_partes: number[];
         };
         /** ParcelamentoCorrigido */
         ParcelamentoCorrigido: {
@@ -3275,6 +3280,11 @@ export interface components {
             parcelas_anteriores: number;
             /** Mudanca Recusada */
             mudanca_recusada?: string | null;
+            /**
+             * Proporcao Das Partes
+             * @default []
+             */
+            proporcao_das_partes: number[];
             /** Parcelas Mantidas */
             parcelas_mantidas: number;
         };
