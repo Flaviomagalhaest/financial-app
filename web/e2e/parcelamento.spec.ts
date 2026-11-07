@@ -595,7 +595,11 @@ test.describe("sem service worker", () => {
       await rota.fulfill({ response: resposta, json: lista.filter((l) => l.parcela !== 1) });
     });
     await aba(page, "Hoje");
+    // Sai de fato da tela antes de voltar: senão a verificação abaixo passa na tela velha, sem nova leitura (ticket 200).
+    await expect(page.getByLabel("Descrição")).toHaveCount(0);
+    const lida = page.waitForResponse((r) => r.url().endsWith(`/api/parcelamentos/${id}/lancamentos`));
     await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+    await lida;
     await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
     await expect(page.getByRole("button", { name: /^Parcela 2|2\/6/ }).or(page.getByText("02/06")).first()).toBeVisible();
     await expect(page.getByRole("region", { name: "Aviso de planejamento" })).toHaveCount(0);
