@@ -848,7 +848,7 @@ def apagar_partes(conn, ids: list[UUID], so_as_ligacoes: bool = False) -> None:
 
 def acompanhar_estornos(conn, compra_id: UUID) -> None:
     """Os estornos de uma compra valem o que ela tem agora: categorias, tags (mesmo arquivadas) e o
-    item do planejamento. O estorno não guarda classificação própria (ticket 133, ADR 0016): esta
+    item do planejamento e a pessoa (ticket 191). O estorno não guarda classificação própria (ticket 133, ADR 0016): esta
     cópia roda onde a compra muda, e a leitura segue igual para quem soma. O estorno de uma parte
     segue a parte (ticket 138). O que foi estornado antes de a compra ser dividida fica com o que
     tinha: não há parte a seguir."""
@@ -882,7 +882,7 @@ def _copiar_da_compra(conn, estornos: list[UUID], compra_id: UUID) -> None:
         # contava sozinha): ele diminui o mesmo item e não fica "a escolher" em outro mês.
         "UPDATE lancamentos e SET"
         " item_categoria_id = COALESCE(c.item_categoria_id, c.item_atual_categoria_id),"
-        " item_atual_categoria_id = c.item_atual_categoria_id"
+        " item_atual_categoria_id = c.item_atual_categoria_id, pessoa = c.pessoa"
         " FROM lancamentos c WHERE c.id = %s AND e.id = ANY(%s)",
         (compra_id, estornos),
     )
@@ -899,7 +899,7 @@ def _copiar_da_parte(conn, estornos: list[UUID], parte_id: UUID) -> None:
     conn.execute(
         "UPDATE lancamentos e SET"
         " item_categoria_id = COALESCE(p.item_categoria_id, p.item_atual_categoria_id),"
-        " item_atual_categoria_id = p.item_atual_categoria_id"
+        " item_atual_categoria_id = p.item_atual_categoria_id, pessoa = p.pessoa"
         " FROM lancamento_partes p WHERE p.id = %s AND e.id = ANY(%s)",
         (parte_id, estornos),
     )
@@ -907,8 +907,8 @@ def _copiar_da_parte(conn, estornos: list[UUID], parte_id: UUID) -> None:
 
 def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
     """O estorno de todas as parcelas vale as categorias e as tags que o parcelamento tem agora
-    (ticket 138). Não tem escolha de item: conta no item do mês, como o crédito avulso. O de uma
-    parte segue a parte, com a escolha de item dela (ticket 160); o de antes da divisão do
+    (ticket 138), a escolha de item e a pessoa dele (ticket 191). O de uma parte segue a parte,
+    com a escolha de item e a pessoa dela (tickets 160 e 191); o de antes da divisão do
     parcelamento fica com o que tinha: não há parte a seguir."""
     estornos = conn.execute(
         "SELECT id, estorno_parte_id FROM lancamentos WHERE estorno_parcelamento_id = %s"
@@ -929,6 +929,11 @@ def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
             "SELECT tag_id FROM parcelamento_tags WHERE parcelamento_id = %s",
             parcelamento_id,
         )
+        conn.execute(
+            "UPDATE lancamentos e SET item_categoria_id = p.item_categoria_id, pessoa = p.pessoa"
+            " FROM parcelamentos p WHERE p.id = %s AND e.id = ANY(%s)",
+            (parcelamento_id, [e for e, _ in estornos]),
+        )
         return
     for parte_id in {p for _, p in estornos if p}:
         da_parte = [e for e, p in estornos if p == parte_id]
@@ -940,7 +945,7 @@ def acompanhar_estornos_do_parcelamento(conn, parcelamento_id: UUID) -> None:
             parte_id,
         )
         conn.execute(
-            "UPDATE lancamentos e SET item_categoria_id = p.item_categoria_id"
+            "UPDATE lancamentos e SET item_categoria_id = p.item_categoria_id, pessoa = p.pessoa"
             " FROM parcelamento_partes p WHERE p.id = %s AND e.id = ANY(%s)",
             (parte_id, da_parte),
         )
@@ -1562,6 +1567,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
             raise recusar("estorno leva as mesmas categorias e tags da compra")
         if "item_categoria_id" in mudancas:
             raise recusar("estorno conta no item do planejamento em que a compra conta")
+        if "pessoa" in mudancas:
+            raise recusar("estorno leva a pessoa da compra")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             if atual.estorno_de:
                 _conferir_estorno(conn, id, editado, atual.estorno_de)

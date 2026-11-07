@@ -20,6 +20,8 @@ type Props = {
   opcoesDeTags: string[];
   /** No estorno, as tags são as da compra e não mudam. */
   tagsTravadas?: boolean;
+  /** No estorno ligado, a pessoa é a da compra (da parte, do parcelamento) e não muda (ticket 191). */
+  pessoaTravada?: boolean;
   onTags: (tags: string[]) => void;
   pessoas: Pessoa[];
   pessoa: string | null;
@@ -117,7 +119,7 @@ export function FolhaDeDetalhes(props: Props) {
           <h4>Pessoa</h4>
           <div className={`alternancia${props.pessoas.length === 2 ? " tres" : ""}`} role="group" aria-label="Pessoa">
             {[{ id: null, nome: "Conjunto" }, ...props.pessoas].map((pessoa) => (
-              <button type="button" key={pessoa.id ?? "conjunto"} className={props.pessoa === pessoa.id ? "" : "secundario"} aria-pressed={props.pessoa === pessoa.id} onClick={() => props.onPessoa(pessoa.id)}>
+              <button type="button" key={pessoa.id ?? "conjunto"} className={props.pessoa === pessoa.id ? "" : "secundario"} aria-pressed={props.pessoa === pessoa.id} disabled={props.pessoaTravada && props.pessoa !== pessoa.id} onClick={() => props.onPessoa(pessoa.id)}>
                 {pessoa.nome}
               </button>
             ))}
