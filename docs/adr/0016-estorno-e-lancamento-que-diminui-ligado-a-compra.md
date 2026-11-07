@@ -29,7 +29,7 @@ Revisto com o dono no [ticket 94](../../.scratch/v1-substituir-mobills/issues/94
 
 ## Adendo (ticket 133)
 
-O estorno não tem categorias, tags nem item do planejamento próprios, mas as linhas continuam gravadas nele: `acompanhar_estornos` (`app/lancamentos.py`) as copia da compra ao criar o estorno e toda vez que a compra muda (edição, correção de parcelamento, reajuste de recorrência; a edição em lote já leva o estorno junto). Assim as somas (fatura, mês, categoria, tag, item, busca, planilha) seguem lendo as mesmas tabelas, sem juntar o estorno à compra em cada consulta. Quem criar um caminho novo que mude a classificação de uma compra chama `acompanhar_estornos`. O servidor ignora a classificação que o cliente manda no estorno novo. A compra com estorno não se exclui (422), por qualquer caminho; as regras que tiram parcela ou ocorrência com estorno esperam o [ticket 148](../../.scratch/v1-substituir-mobills/issues/148-parcela-com-estorno-quando-a-regra-a-tira.md).
+O estorno não tem categorias, tags nem item do planejamento próprios, mas as linhas continuam gravadas nele: `acompanhar_estornos` (`app/lancamentos.py`) as copia da compra ao criar o estorno e toda vez que a compra muda (edição, correção de parcelamento, reajuste de recorrência; a edição em lote já leva o estorno junto). Assim as somas (fatura, mês, categoria, tag, item, busca, planilha) seguem lendo as mesmas tabelas, sem juntar o estorno à compra em cada consulta. Quem criar um caminho novo que mude a classificação de uma compra chama `acompanhar_estornos`. O servidor ignora a classificação que o cliente manda no estorno novo. A compra com estorno não se exclui (422), por qualquer caminho; as regras que tiram parcela ou ocorrência com estorno seguem o adendo do ticket 148.
 
 ## Adendo (ticket 135)
 
@@ -47,6 +47,18 @@ Quem soma despesas trata o crédito com `e_estorno()` (`app/partes.py`): `estorn
 ## Adendo (ticket 160)
 
 No parcelamento com partes (ticket 139), o estorno de todas as parcelas é de uma parte dele: `estorno_parcelamento_id` aponta para o parcelamento e `estorno_parte_id` para a linha de `parcelamento_partes`. A parte é obrigatória, como na compra com partes. O estorno herda as categorias, as tags e a escolha de item da parte (`acompanhar_estornos_do_parcelamento` segue a parte). O limite é a soma da parte nas parcelas (cada parcela da regra dividida na proporção das partes, `somas_nas_parcelas`) menos o já estornado nela, no estorno de todas e no de cada parcela, na parte da parcela que veio dela (o id dela é `id_na_parcela(parcela, parte)`). O estorno de uma parcela também respeita esse limite. Na correção do parcelamento, a parte com estorno não sai, as partes não se juntam e a soma dela não fica abaixo do estornado. O estorno de todas anterior à divisão do parcelamento fica com a classificação que tinha, como na compra à vista. O app repete a soma da parte para mostrar o que ainda dá para estornar sem internet (ADR 0018, tabela `tabelas-de-teste/somas-das-partes.json`) e liga a parte da parcela à do parcelamento pela posição; quem decide é o servidor, pelo id.
+
+## Adendo (ticket 148)
+
+Decidido com o dono no [ticket 148](../../.scratch/v1-substituir-mobills/issues/148-parcela-com-estorno-quando-a-regra-a-tira.md): a regra nunca exclui o estorno junto (ele é um crédito que veio da fatura real), e o que acontece depende de quem pediu.
+
+- **Correção do parcelamento** que tiraria uma parcela com estorno (menos parcelas, parcela que sai ou é pulada): recusa o pedido (422) antes de gravar, como a que encolhe abaixo da fatura paga. É a pessoa que corrige, então ela exclui o estorno e repete. Deixar a parcela ficaria além do total de parcelas.
+- **Reajuste da recorrência**: o previsto com estorno fica como está por inteiro, como o mexido à mão, e o reajuste segue com os outros. Ele roda em lotes e pela tarefa diária, sem ninguém para ler uma recusa.
+- **Exclusão da regra de recorrência**: o previsto com estorno fica, como o realizado e o atrasado; a exclusão nunca é recusada por ele.
+- **Correção de fatura** que exclui a compra e o estorno dela: o servidor exclui os estornos antes das compras, qualquer que seja a ordem do pedido. A compra cujo estorno fica continua recusada, e a correção inteira volta (tudo ou nada).
+- **Dado antigo**: o estorno desalinhado da compra (de antes do ticket 133, inclusive em backup restaurado) não ganha migração nem acerto na restauração; ele se acerta quando a compra mudar.
+
+A implementação é o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
 
 ## Adendo (ticket 152)
 
