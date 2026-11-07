@@ -1,7 +1,7 @@
 # Partes na recorrência
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: 137
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas; agora HITL: o dono confirma a mudança de escopo abaixo
 Modelo recomendado: Opus
