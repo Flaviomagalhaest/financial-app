@@ -1,7 +1,7 @@
 # Busca: cartão titular e compras do adicional (open banking)
 
 Type: task
-Status: claimed
+Status: needs-triage
 Blocked by: nenhum
 Skills: `triage`; depois `grilling` e `implement`, `tdd` quando houver integração open banking
 Modelo recomendado: Sonnet
@@ -17,3 +17,8 @@ Quando a integração open banking for planejada, decidir se o filtro "Conta ou 
 
 - [ ] Reavaliar quando existir ticket de integração open banking
 - [ ] Se mudar a regra: teste em `backend/tests/test_busca.py`, ajuste em `backend/app/busca.py` e `web/src/dados/busca.ts`, README (seção Busca)
+
+## Triagem (2026-11-07)
+
+- Redundância: `backend/app/busca.py` e `web/src/dados/busca.ts` não têm regra de cartão adicional, e não existe ticket, ADR nem glossário de open banking. Nada a implementar agora.
+- Recomendação: categoria `enhancement`, estado `needs-triage` (adiado). Reavaliar quando o primeiro ticket de integração open banking for criado; até lá o ticket fica parado.
