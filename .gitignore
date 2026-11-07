@@ -36,3 +36,4 @@ data/
 # Playwright
 playwright-report/
 test-results/
+.backup-prod-primeira-data

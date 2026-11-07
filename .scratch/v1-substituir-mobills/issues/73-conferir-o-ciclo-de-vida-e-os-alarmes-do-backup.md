@@ -17,10 +17,28 @@ Um e-mail do alarme `BackupAtrasado` logo depois do primeiro deploy de cada ambi
 
 Os comandos usam a credencial temporária do dono na conta <conta AWS> (sa-east-1). O bucket de cada ambiente é a saída `BucketDoBackup` da pilha `financial-<ambiente>-dados`, e os alarmes ficam na `financial-<ambiente>-app`.
 
+## Como rodar
+
+`scripts/conferir-backup.sh` (wizard) guia todos os itens abaixo e imprime o texto para `## Answer`. Precisa da credencial AWS do dono; o último item só vale 92 dias depois (o wizard guarda a data em `.backup-prod-primeira-data`, ignorado pelo git e rodado de novo depois).
+
 ## Checklist
 
-- [ ] `dev`, a partir de 2026-11-01 (quatro dias depois do primeiro backup, de 2026-10-28): `aws s3api list-object-versions --bucket <bucket do dev> --prefix diario/` não mostra versões criadas há mais de 3 dias. Se mostrar, a regra não expira versões travadas depois do prazo: abrir ticket para trocar a regra (ou apagar por script) antes que o `prod` acumule
-- [ ] `prod`, no dia seguinte ao merge do ticket 64: existe `diario/<data>.zip` e `aws s3api get-object-retention` dá `COMPLIANCE` com prazo de 90 dias; baixar o zip e abrir os CSVs e o `manifesto.json`
-- [ ] Alarmes: a inscrição do tópico `Avisos` já confirmada (ticket 29); `aws cloudwatch set-alarm-state --alarm-name <alarme BackupAtrasado> --state-value ALARM --state-reason teste` entrega o e-mail (o mesmo para o `BackupFalhou`)
+- [x] `dev`, a partir de 2026-11-01 (quatro dias depois do primeiro backup, de 2026-10-28): `aws s3api list-object-versions --bucket <bucket do dev> --prefix diario/` não mostra versões criadas há mais de 3 dias. Se mostrar, a regra não expira versões travadas depois do prazo: abrir ticket para trocar a regra (ou apagar por script) antes que o `prod` acumule
+- [x] `prod`, no dia seguinte ao merge do ticket 64: existe `diario/<data>.zip` e `aws s3api get-object-retention` dá `COMPLIANCE` com prazo de 90 dias; baixar o zip e abrir os CSVs e o `manifesto.json`
+- [x] Alarmes: a inscrição do tópico `Avisos` já confirmada (ticket 29); `aws cloudwatch set-alarm-state --alarm-name <alarme BackupAtrasado> --state-value ALARM --state-reason teste` entrega o e-mail (o mesmo para o `BackupFalhou`)
 - [ ] `prod`, 92 dias depois do primeiro backup de `prod` (anote a data no item do dia seguinte ao merge): as versões dos primeiros dias sumiram, inclusive as sobrescritas no mesmo dia (versão antiga travada por 90 dias)
 - [ ] Resultado em `## Answer`
+
+## Answer
+
+Resultado da execução de `scripts/conferir-backup.sh` em 2026-11-07:
+
+- dev: nenhuma versão com mais de 3 dias; a regra expira versões depois da trava
+- prod: `diario/2026-11-07.zip` existe, `COMPLIANCE` por 90 dias
+- prod: zip baixado, CSVs e `manifesto.json` conferidos
+- alarmes `BackupAtrasado` e `BackupFalhou`, em dev e prod: na primeira rodada nenhum entregou e-mail, porque os tópicos `Avisos` estavam sem nenhuma inscrição (a pendente não confirmada em 3 dias é apagada pelo SNS, e o CloudFormation não a recria). O dono inscreveu o e-mail à mão nos dois tópicos (`aws sns subscribe`), confirmou e os e-mails dos alarmes chegaram
+
+Pendente, por isso o ticket continua `ready-for-human`:
+
+- A inscrição foi feita fora do CDK: se a pilha `financial-<ambiente>-app` for apagada e recriada, inscrever de novo.
+- prod, 92 dias depois de 2026-11-07 (2027-02-07): rodar o wizard de novo e conferir que as versões dos primeiros dias sumiram.
