@@ -1012,6 +1012,7 @@ def test_a_ocorrencia_pulada_pela_fatura_paga_deixa_o_aviso_na_regra_ate_a_dispe
         ).json()["resultados"][0]
 
     with monkeypatch.context() as queda:
+        # Cada pedido grava um lote e para, como se a conexão caísse depois dele.
         queda.setattr(recorrencias, "_gerar_um_lote", lambda conn, id: um_lote(conn, id) and False)
         criada = casal.pedir("flavio", "POST", "/api/recorrencias", json=nova)
         assert criada.status_code == 201, criada.text

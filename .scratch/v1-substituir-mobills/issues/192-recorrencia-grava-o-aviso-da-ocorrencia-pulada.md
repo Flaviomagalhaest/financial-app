@@ -1,7 +1,7 @@
 # Recorrência grava o aviso da ocorrência pulada pela fatura paga
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`, `domain-modeling`
 Modelo recomendado: Opus
@@ -20,9 +20,16 @@ Quando `_gerar_um_lote` (`backend/app/recorrencias.py`) passa, sem lançar, pela
 
 ## Checklist
 
-- [ ] Teste primeiro em `backend/tests/test_fatura_paga.py`: pagamento entre os lotes grava o aviso; segunda ocorrência acumula; dispensa limpa
-- [ ] Migration da coluna na recorrência
-- [ ] Gravar o aviso em `_gerar_um_lote`
-- [ ] Endpoint de dispensa e campo na leitura da regra (atualizar `esquemas_do_formato.json`/exportação se a coluna entrar no formato)
-- [ ] ADR 0021: a ocorrência pulada deixa aviso na regra
-- [ ] `GLOSSARY.md`: termo "ocorrência pulada pela fatura paga"
+- [x] Teste primeiro em `backend/tests/test_fatura_paga.py`: pagamento entre os lotes grava o aviso; segunda ocorrência acumula; dispensa limpa
+- [x] Migration da coluna na recorrência
+- [x] Gravar o aviso em `_gerar_um_lote`
+- [x] Endpoint de dispensa e campo na leitura da regra (atualizar `esquemas_do_formato.json`/exportação se a coluna entrar no formato)
+- [x] ADR 0021: a ocorrência pulada deixa aviso na regra
+- [x] `GLOSSARY.md`: termo "ocorrência pulada pela fatura paga"
+
+## Notes
+
+- A coluna `recorrencias.puladas_pela_fatura_paga` guarda uma ocorrência por linha (data, titular e mês); a leitura monta o aviso em `aviso_da_fatura_paga`. A mesma data não entra duas vezes. Formato do backup na versão 35.
+- Dispensa: `DELETE /api/recorrencias/{id}/aviso-da-fatura-paga` (204; 404 sem a regra).
+- Se a geração voltar a passar por uma ocorrência já dispensada (o `geradas` recua por um fim que tirou um atrasado e depois foi estendido, caso raro), o aviso volta com ela: é a mesma informação, e o casal o dispensa de novo.
+- Fica para o [ticket 193](193-tela-da-regra-mostra-o-aviso-da-ocorrencia-pulada.md): a tela da regra mostra o aviso e chama a dispensa.

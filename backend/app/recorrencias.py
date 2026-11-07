@@ -250,30 +250,27 @@ def _aviso_da_fatura_paga(puladas: str | None) -> str | None:
     if not puladas:
         return None
     linhas = puladas.splitlines()
-    return (
-        f"{'Ocorrências' if len(linhas) > 1 else 'Ocorrência'} não"
-        f" {'lançadas' if len(linhas) > 1 else 'lançada'} porque a fatura estava paga:"
-        f" {'; '.join(linhas)}. Lance à mão se precisar."
-    )
+    quais = "Ocorrências não lançadas" if len(linhas) > 1 else "Ocorrência não lançada"
+    return f"{quais} porque a fatura estava paga: {'; '.join(linhas)}. Lance à mão se precisar."
 
 
 def _avisar_da_pulada(conn, id: UUID, dia: date, cartao_id: UUID, mes: date) -> None:
     """Junta ao aviso da regra a ocorrência de `dia`, pulada pela fatura paga do cartão
-    `cartao_id` no `mes` (ticket 192). Só informa: a ocorrência não volta. A mesma ocorrência
-    não entra duas vezes, se a geração voltar a passar por ela."""
-    (nome,) = conn.execute("SELECT nome FROM cartoes WHERE id = %s", (cartao_id,)).fetchone()
-    linha = f"{dia:%d/%m/%Y}, na fatura de {mes:%m/%Y} do {nome}"
+    `cartao_id` no `mes` (ticket 192). Só informa: a ocorrência não volta. A mesma data não
+    entra duas vezes, se a geração voltar a passar por ela (mesmo com o cartão renomeado)."""
+    data = f"{dia:%d/%m/%Y}"
+    linha = f"{data}, na {cartoes.a_fatura(conn, cartao_id, mes)}"
     conn.execute(
         "UPDATE recorrencias SET puladas_pela_fatura_paga = CASE"
         " WHEN puladas_pela_fatura_paga IS NULL OR puladas_pela_fatura_paga = '' THEN %s"
-        " WHEN %s = ANY(string_to_array(puladas_pela_fatura_paga, E'\\n'))"
-        " THEN puladas_pela_fatura_paga"
+        " WHEN EXISTS (SELECT 1 FROM unnest(string_to_array(puladas_pela_fatura_paga, E'\\n'))"
+        " AS pulada WHERE pulada LIKE %s) THEN puladas_pela_fatura_paga"
         " ELSE puladas_pela_fatura_paga || E'\\n' || %s END WHERE id = %s",
-        (linha, linha, linha, id),
+        (linha, f"{data},%", linha, id),
     )
 
 
-def dispensar_o_aviso(conn, id: UUID) -> bool:
+def dispensar_o_aviso_da_fatura_paga(conn, id: UUID) -> bool:
     """Tira da regra o aviso das ocorrências puladas pela fatura paga; devolve se ela existe."""
     return bool(
         conn.execute(
@@ -429,17 +426,21 @@ def _ler(
         tags.setdefault(recorrencia_id, []).append(nome)
     partes = partes_da_regra.ler(conn, ids)
     proximos = _proximos_previstos(conn, ids) if com_proximo else {}
-    return [
-        Recorrencia(
-            **dict(zip(_NOMES_DAS_COLUNAS, linha)),
-            aviso_da_fatura_paga=_aviso_da_fatura_paga(linha[-1]),
-            categoria_ids=categorias.get(linha[0], []),
-            tags=tags.get(linha[0], []),
-            partes=partes.get(linha[0], []),
-            proximo_previsto=proximos.get(linha[0]),
+    regras = []
+    for linha in linhas:
+        campos = dict(zip([*_NOMES_DAS_COLUNAS, "puladas_pela_fatura_paga"], linha))
+        puladas = campos.pop("puladas_pela_fatura_paga")
+        regras.append(
+            Recorrencia(
+                **campos,
+                aviso_da_fatura_paga=_aviso_da_fatura_paga(puladas),
+                categoria_ids=categorias.get(linha[0], []),
+                tags=tags.get(linha[0], []),
+                partes=partes.get(linha[0], []),
+                proximo_previsto=proximos.get(linha[0]),
+            )
         )
-        for linha in linhas
-    ]
+    return regras
 
 
 def _gerar_um_lote(conn, id: UUID) -> bool:
@@ -481,10 +482,11 @@ def _gerar_um_lote(conn, id: UUID) -> bool:
         ultima = n
         # ADR 0021: a fatura paga depois da conferência não recebe a de antes de hoje.
         na_paga = dia < dia_de_hoje and em_que_paga(regra.conta_id, dia, None)
-        if dia >= desde and na_paga:
-            _avisar_da_pulada(conn, id, dia, *na_paga)
-        elif dia >= desde:
-            proximas.append((n, dia))
+        if dia >= desde:
+            if na_paga:
+                _avisar_da_pulada(conn, id, dia, *na_paga)
+            else:
+                proximas.append((n, dia))
     if ultima == geradas:
         return False
     # Volta, com a regra de hoje, o que o fim ou o horizonte excluiu, nunca o mês que uma pessoa
@@ -1112,7 +1114,9 @@ def excluir_recorrencia(id: UUID, usuario: UsuarioLogado, request: Request) -> R
 def dispensar_aviso_da_fatura_paga(id: UUID, usuario: UsuarioLogado, request: Request) -> Response:
     """Idempotente. Tira da regra o aviso das ocorrências puladas pela fatura paga (ticket 192):
     elas não voltam, o casal as lança à mão se precisar."""
-    if not em_transacao(url_do_banco(request), lambda conn: dispensar_o_aviso(conn, id)):
+    if not em_transacao(
+        url_do_banco(request), lambda conn: dispensar_o_aviso_da_fatura_paga(conn, id)
+    ):
         raise HTTPException(status_code=404, detail="recorrência não encontrada")
     return Response(status_code=204)
 
