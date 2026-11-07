@@ -1,7 +1,7 @@
 # Estorno avulso: item na tela, crédito sem fatura, recusa do devido negativo e testes
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run` para ver funcionando
 Modelo recomendado: Sonnet
@@ -19,9 +19,9 @@ Origem: [ticket 152](152-estorno-avulso-pendencias.md): decisões do dono sobre 
 
 ## Checklist
 
-- [ ] Teste de API: avulso que deixa o devido negativo é recusado na criação e na edição (troca de valor, data e fatura); o que deixa o devido em zero passa
-- [ ] Teste de API: avulso num mês sem fatura cria a fatura com as datas padrão
-- [ ] Tela pergunta o item com duas categorias com item; e2e cobre a escolha
-- [ ] "Lançar crédito" no mês sem fatura; e2e cobre
-- [ ] Sinal de crédito na "A escolher"
-- [ ] Testes do avulso na busca, no histórico, no limite e na projeção; tag e pessoa pela tela
+- [x] Teste de API: avulso que deixa o devido negativo é recusado na criação e na edição (troca de valor, data e fatura); o que deixa o devido em zero passa
+- [x] Teste de API: avulso num mês sem fatura cria a fatura com as datas padrão
+- [x] Tela pergunta o item com duas categorias com item; e2e cobre a escolha
+- [x] "Lançar crédito" no mês sem fatura; e2e cobre
+- [x] Sinal de crédito na "A escolher"
+- [x] Testes do avulso na busca, no histórico, no limite e na projeção; tag e pessoa pela tela

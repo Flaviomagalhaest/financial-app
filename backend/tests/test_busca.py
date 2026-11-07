@@ -10,7 +10,7 @@ from app import busca, lancamentos
 from tests.conftest import Casal
 from tests.test_cartoes import comprar, novo_cartao
 from tests.test_contas import transferencia
-from tests.test_estorno_e_ajuste import estornar
+from tests.test_estorno_e_ajuste import creditar, estornar
 from tests.test_lancamentos import lancamento
 from tests.test_pagamento_de_fatura import pagamento
 
@@ -282,3 +282,25 @@ def test_curinga_no_texto_e_literal_e_o_excluido_nao_aparece(casal: Casal):
         "Farmácia",
         "Desconto de 50% na farmácia",
     ]
+
+
+def test_credito_avulso_aparece_na_busca_e_diminui_os_totais_e_o_filtro_de_categoria(casal: Casal):
+    mercado = casal.categoria("Mercado")
+    nubank = novo_cartao(casal)["id"]
+    comprar(casal, nubank, "2026-10-05", valor_centavos=2000, categoria_ids=[mercado])
+    credito = creditar(
+        casal, nubank, "2026-10-06", valor_centavos=500, categoria_ids=[mercado], descricao="Troco"
+    )
+    assert credito.status_code == 201, credito.text
+
+    tudo = buscar(casal)
+    do_mercado = buscar(casal, categoria_ids=[mercado])
+
+    assert tudo["totais"]["despesas"]["realizado_centavos"] == 1500
+    assert do_mercado["totais"]["despesas"]["realizado_centavos"] == 1500
+    [linha] = [
+        l["lancamento"]
+        for l in tudo["linhas"]
+        if l["lancamento"] and l["lancamento"]["descricao"] == "Troco"
+    ]
+    assert linha["estorno_avulso"] is True

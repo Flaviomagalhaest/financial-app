@@ -116,3 +116,109 @@ test("o crédito com categoria entra na fila sem internet e sobe quando a rede v
   const fatura = (await api.ler(`/api/cartoes/${cartao.id}/faturas`)).find((f: { mes: string }) => f.mes === compra.mes);
   expect(fatura).toMatchObject({ total_centavos: 7500 });
 });
+
+/**
+ * Entra e prepara pela API um cartão que fecha no dia 28, duas categorias com item no planejamento do mês e uma compra
+ * de R$ 100,00 no dia 1 (a fatura do mês, que a fatura fecha depois): o crédito avulso tem devido de onde sair (ticket 189).
+ */
+async function prepararPlanejamento(page: Page) {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const mes = dia(0).slice(0, 7);
+  await page.goto("/#/historico");
+  await entrar(page);
+  await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();
+  const api = await apiDaPagina(page);
+  const cartao = await api.criar("/api/cartoes", { nome: `Visa ${s}`, dia_fechamento: 28, dia_vencimento: 5 });
+  const mercado = await api.criar("/api/categorias", { nome: `Mercado ${s}`, tipo: "despesa" });
+  const lazer = await api.criar("/api/categorias", { nome: `Lazer ${s}`, tipo: "despesa" });
+  for (const c of [mercado, lazer]) await api.criar(`/api/planejamento/${mes}/itens`, { id: randomUUID(), categoria_id: c.id, valor_centavos: 100000 });
+  await api.criar("/api/lancamentos", {
+    id: randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 10000,
+    data: `${mes}-01`,
+    descricao: `Compra ${s}`,
+    conta_id: cartao.id,
+    categoria_ids: [mercado.id],
+  });
+  return { s, mes, api, cartao, mercado, lazer };
+}
+
+test("o crédito com duas categorias com item pergunta o item, e a escolha vai para o servidor", async ({ page }) => {
+  const { s, mes, api, cartao, mercado, lazer } = await prepararPlanejamento(page);
+  const nome = `Crédito ${s}`;
+
+  await page.goto(`/#/cartoes/${cartao.id}/${mes}-01`);
+  await page.getByRole("link", { name: "Lançar crédito" }).click();
+  await digitar(page, "2", "0", "0", "0");
+  await page.getByRole("button", { name: mercado.nome, exact: true }).click();
+  await page.getByRole("button", { name: lazer.nome, exact: true }).click();
+  const aviso = page.getByRole("region", { name: "Aviso de planejamento" });
+  await expect(aviso.getByRole("heading", { name: "Conta no planejamento em:" })).toBeVisible();
+  await aviso.getByRole("button", { name: lazer.nome, exact: true }).click();
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(nome);
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  const credito = page.getByRole("listitem").filter({ hasText: nome });
+  await expect(credito).toContainText("+ R$ 20,00");
+  await expect(credito).not.toContainText("não enviado");
+  const gravados = (await api.ler("/api/lancamentos")) as { descricao: string; item_categoria_id: string | null; estorno_avulso: boolean }[];
+  expect(gravados.find((l) => l.descricao === nome)).toMatchObject({ estorno_avulso: true, item_categoria_id: lazer.id });
+  const planejamento = await api.ler(`/api/planejamento/${mes}`);
+  expect(planejamento.itens.find((i: { categoria_id: string }) => i.categoria_id === lazer.id)).toMatchObject({ realizado_centavos: -2000 });
+});
+
+test("o crédito sem escolha de item aparece em \"A escolher\" da Hoje com o sinal de crédito", async ({ page }) => {
+  const { s, mes, api, cartao, mercado, lazer } = await prepararPlanejamento(page);
+  await api.criar("/api/lancamentos", {
+    id: randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 3000,
+    data: `${mes}-01`,
+    descricao: `Crédito ${s}`,
+    conta_id: cartao.id,
+    categoria_ids: [mercado.id, lazer.id],
+    estorno_avulso: true,
+  });
+
+  await page.goto("/#/hoje");
+  await page.reload();
+
+  const aEscolher = page.getByRole("region", { name: "A escolher" });
+  await expect(aEscolher.getByRole("listitem").filter({ hasText: new RegExp(`Crédito ${s}|${mercado.nome}`) })).toContainText("+ R$ 30,00");
+});
+
+test("o crédito leva a tag e a pessoa escolhidas na tela", async ({ page }) => {
+  const { s, api, cartao, mes } = await prepararPlanejamento(page);
+  const nome = `Crédito ${s}`;
+  const tag = `loja${s}`;
+
+  await page.goto(`/#/cartoes/${cartao.id}/${mes}-01`);
+  await page.getByRole("link", { name: "Lançar crédito" }).click();
+  await digitar(page, "5", "0", "0");
+  await page.getByRole("button", { name: /^Detalhes/ }).click();
+  await page.getByLabel("Descrição").fill(nome);
+  await page.getByPlaceholder("Nova tag").fill(tag);
+  await page.getByRole("button", { name: "Criar tag" }).click();
+  await page.getByRole("group", { name: "Pessoa" }).getByRole("button", { name: "Fulana" }).click();
+  await page.getByRole("button", { name: "Pronto" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  const credito = page.getByRole("listitem").filter({ hasText: nome });
+  await expect(credito).toContainText(`#${tag}`);
+  await expect(credito).not.toContainText("não enviado");
+  const gravados = (await api.ler("/api/lancamentos")) as { descricao: string; tags: string[]; pessoa: string | null; estorno_avulso: boolean }[];
+  expect(gravados.find((l) => l.descricao === nome)).toMatchObject({ estorno_avulso: true, tags: [tag], pessoa: expect.any(String) });
+  expect(gravados.find((l) => l.descricao === nome)?.pessoa).not.toBeNull();
+});
+
+test("\"Lançar crédito\" aparece no mês sem fatura criada", async ({ page }) => {
+  const { cartao } = await prepararPlanejamento(page);
+
+  await page.goto(`/#/cartoes/${cartao.id}/2031-01-01`);
+
+  await expect(page.getByRole("link", { name: "Lançar crédito" })).toBeVisible();
+  await expect(page.getByLabel("Resumo da fatura")).toHaveCount(0);
+});

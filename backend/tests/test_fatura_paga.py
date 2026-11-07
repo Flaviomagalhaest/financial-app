@@ -1150,3 +1150,24 @@ def test_a_tentativa_diaria_nao_troca_a_recusa_de_uma_mudanca_com_alcance(
     fazer_tarefa_diaria(casal.client.app.state.url)
 
     assert o_lido(casal, id)["mudanca_recusada"] == outra
+
+
+def test_credito_avulso_no_mes_seguinte_usa_o_saldo_anterior_da_paga_e_nao_passa_dele(
+    casal: Casal, abril_paga
+):
+    # Abril ficou devendo 400,00, que viram o saldo anterior de maio (ticket 189).
+    cria = lambda centavos: casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(abril_paga.cartao, [], data="2026-05-10", valor_centavos=centavos)
+        | {"estorno_avulso": True},
+    )
+
+    demais = cria(40001)
+    cabe = cria(40000)
+
+    assert demais.status_code == 422
+    assert cabe.status_code == 201, cabe.text
+    maio = numeros(faturas(casal, abril_paga.cartao)["2026-05-01"])
+    assert maio[0] == -40000

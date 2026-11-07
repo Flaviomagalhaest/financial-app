@@ -462,6 +462,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
       fatura_mes: noCartao && !parcelamento ? faturaMes : null,
       situacao,
       partes: partesDoAviso && parcelas ? divididasPor(partesDoAviso, divisao(parcelas).primeira) : partesDoAviso,
+      estorno_avulso: avulso,
     },
     itemTocado,
   );
@@ -495,8 +496,9 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   const partesASalvar = () =>
     partes ? partesParaSalvar(partes, centavos).map((p) => ({ ...p, item_categoria_id: planejamento.partesComEscolha?.find((x) => x.id === p.id)?.item_categoria_id ?? p.item_categoria_id ?? null })) : [];
   // Sem duas categorias com item, a escolha que o lançamento já tem fica, se a categoria dela ficou.
-  // O estorno diminui o item em que a compra conta (o servidor o escolhe): a tela não pergunta nem troca.
-  const itemEscolhido = estornando || avulso
+  // O estorno ligado diminui o item em que a compra conta (o servidor o escolhe): a tela não pergunta nem troca.
+  // O avulso tem classificação própria e pergunta o item como a compra (ticket 189).
+  const itemEscolhido = estornando
     ? (existente?.item_categoria_id ?? null)
     : (planejamento.escolha ?? (existente?.item_categoria_id && categoriaIds.includes(existente.item_categoria_id) ? existente.item_categoria_id : null));
 
@@ -780,7 +782,7 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
           </p>
         )}
       </div>
-      {categoriaIds.length > 0 && !estornando && !avulso && (
+      {categoriaIds.length > 0 && !estornando && (
         <AvisoDePlanejamento
           {...planejamento}
           tipo={tipo}

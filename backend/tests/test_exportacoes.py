@@ -400,6 +400,7 @@ def test_planilha_traz_o_estorno_avulso_como_credito_mesmo_sem_categoria(
     database_url: str, emissor: Emissor, casal: Casal
 ):
     cartao = novo_cartao(casal)["id"]
+    comprar(casal, cartao, "2026-03-27", valor_centavos=1000)
     credito = lancamento(
         cartao, [], valor_centavos=37, data="2026-03-28", descricao="Centavos", estorno_avulso=True
     )
@@ -411,10 +412,7 @@ def test_planilha_traz_o_estorno_avulso_como_credito_mesmo_sem_categoria(
     )
 
     linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")
-    assert linhas[1:] == [
-        "2026-03-28;Centavos;0,37;Nubank;2026-04;;;;efetivado;Flávio;Flávio",
-        "",
-    ]
+    assert "2026-03-28;Centavos;0,37;Nubank;2026-04;;;;efetivado;Flávio;Flávio" in linhas
 
 
 def test_planilha_traz_uma_linha_por_parte_da_compra(
