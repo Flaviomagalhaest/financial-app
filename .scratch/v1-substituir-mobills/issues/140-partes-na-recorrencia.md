@@ -1,9 +1,9 @@
 # Partes na recorrência
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: 137
-Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas; agora HITL: o dono confirma a mudança de escopo abaixo
+Skills: `implement`, `tdd`; apoio: `run` para ver funcionando, `artifact-design` nas telas
 Modelo recomendado: Opus
 Effort recomendado: high
 Issue: #328
@@ -17,7 +17,7 @@ A despesa recorrente pode ter partes (ex.: um combo de celular e internet numa c
 
 - [x] Cada ocorrência se divide pelas partes na proporção; centavos para a maior parte; o valor estimado do mês se redivide
 - [x] Mudar as partes: "só este" (editar o previsto) ou "daqui para frente", que não sobrescreve o previsto editado; a mudança vai pela fila (ADR 0020)
-- [ ] O estorno é de uma parte de uma ocorrência: passou para o [138](138-estorno-de-parte-e-de-todas-as-parcelas.md), que faz o estorno de uma parte para toda compra com partes; a ocorrência tem as partes dela, como a compra à vista, e a trava do 137 vale até lá (falta o dono confirmar a mudança de escopo)
+- [x] O estorno é de uma parte de uma ocorrência: passou para o [138](138-estorno-de-parte-e-de-todas-as-parcelas.md), que faz o estorno de uma parte para toda compra com partes; a ocorrência tem as partes dela, como a compra à vista (mudança de escopo confirmada pelo dono; entregue no 138)
 - [x] Testes de API e de navegador; verificações do projeto e PR para `main`
 
 ## Notas
@@ -27,6 +27,8 @@ A despesa recorrente pode ter partes (ex.: um combo de celular e internet numa c
 ## O que decidir
 
 O que o checklist pedia está feito, menos o estorno de uma parte de uma ocorrência. Confirmar que ele fica no [138](138-estorno-de-parte-e-de-todas-as-parcelas.md), que faz o estorno de uma parte para toda compra com partes: a ocorrência da recorrência tem as partes dela, como a compra à vista, e o mesmo mecanismo serve às duas. Com o sim, este ticket vai para `resolved`; com o não, ele volta para `ready-for-agent`, bloqueado pelo 138.
+
+**Decisão do dono (2026-11-07)**: sim. O estorno de uma parte da ocorrência fica no 138, que já o entregou (`test_o_estorno_de_uma_ocorrencia_com_partes_e_de_uma_parte_dela`, em `backend/tests/test_partes_na_recorrencia.py`). O ticket vai para `resolved`.
 
 ## Answer
 
