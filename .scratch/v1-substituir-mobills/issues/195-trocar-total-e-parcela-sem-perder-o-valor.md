@@ -1,7 +1,7 @@
 # Trocar entre o total e o da parcela sem perder o valor digitado
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Sonnet
