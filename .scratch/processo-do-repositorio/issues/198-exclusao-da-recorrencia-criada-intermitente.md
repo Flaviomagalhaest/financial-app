@@ -1,7 +1,7 @@
 # Exclusão da recorrência criada falha de vez em quando no teste de navegador
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -15,6 +15,14 @@ Origem: [ticket 187](../../v1-substituir-mobills/issues/187-conta-em-todas-vai-p
 
 ## Checklist
 
-- [ ] Reproduzir (o teste repetido, ou com a CPU saturada como no ticket 109)
-- [ ] Achar a causa (teste ou tela) e corrigir, sem desligar o teste
-- [ ] Verificações do projeto e PR para `main`
+- [x] Reproduzir (o teste repetido, ou com a CPU saturada como no ticket 109)
+- [x] Achar a causa (teste ou tela) e corrigir, sem desligar o teste
+- [x] Verificações do projeto e PR para `main`
+
+## Resultado
+
+Com 4 núcleos saturados e `--repeat-each`, o teste falhou em 1 de cada 2 a 3 execuções, mas na última linha (`linha(page, descricao)` com contagem 0 no Histórico), não no clique em "Excluir". **Causa (teste):** a exclusão da regra deixa a ocorrência de hoje como realizada (`excluir_regra`; a de valor estimado já nasce realizada), então o Histórico a mostra depois da releitura. A asserção só passava na janela em que a fila já esvaziou e a lista ainda escondia os previstos de hoje em diante. **Correção:** os dois testes (`talvez já esteja` e `descartada no meio do envio`) conferem agora, pela API, que não sobra previsto da regra (`previstosNoServidor`). Ver pendência abaixo.
+
+## Pendência
+
+O sintoma original (clique em "Excluir" estourando 90 s, botão "detached") não apareceu em ~45 execuções sob carga; a suspeita da lista redesenhada sem parar segue sem prova. Se voltar, o trace do artefato `testes-com-navegador` é o ponto de partida; reabrir este ticket.
