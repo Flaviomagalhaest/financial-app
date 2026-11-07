@@ -57,8 +57,8 @@ PRAZO_EM_DIAS: int = valores_iniciais()["desfazerEdicaoEmLoteDias"]
 TAMANHO_DA_AMOSTRA: int = valores_iniciais()["amostraDaEdicaoEmLote"]
 # Os campos que o lote muda (na compra com partes, as partes): mudou um deles depois, o desfazer
 # pula o lançamento. Nas partes, o desfazer olha cada uma (`_voltar_partes`).
-CAMPOS_DO_LOTE = ["categoria_ids", "tags", "item_categoria_id", "partes"]
-CAMPOS_DA_COMPRA = CAMPOS_DO_LOTE[:3]
+CAMPOS_DA_COMPRA = ["categoria_ids", "tags", "item_categoria_id"]
+CAMPOS_DO_LOTE = [*CAMPOS_DA_COMPRA, "partes"]
 
 Acao = Literal["acrescentar", "remover", "trocar", "substituir"]
 
@@ -1010,7 +1010,7 @@ def _partes_do_lote(conn, lote_id: UUID, dono_id: UUID) -> list[_ParteDoLote]:
 
 def _voltar_parte(conn, de: str, parte: _ParteDoLote) -> str:
     """Volta a classificação de uma parte que o lote mudou, se ela ainda tem a que o lote deu.
-    A descrição, o valor, a pessoa e a ordem dela não contam (ticket 191)."""
+    A descrição, o valor, a pessoa e a ordem dela não contam (tickets 191 e 201)."""
     categorias_das_partes, tags_das_partes, tabela = _TABELAS_DAS_PARTES[de]
     id = parte.parte_id
     linha = conn.execute(f"SELECT item_categoria_id FROM {tabela} WHERE id = %s", (id,)).fetchone()
