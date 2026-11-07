@@ -1,7 +1,7 @@
 # Atrasado da recorrência que a mudança levaria para dentro de uma fatura paga
 
 Type: grilling
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: o dono decide entre pular e recusar); apoio: `implement`, `tdd`
 Modelo recomendado: Opus
@@ -19,5 +19,9 @@ A alternativa é a da correção do parcelamento: **recusar o pedido inteiro ant
 
 ## Checklist
 
-- [ ] Decidir com o dono: pular (como hoje) ou recusar com 422
-- [ ] Se for recusar, implementar com teste em `backend/tests/test_fatura_paga.py` e atualizar `GLOSSARY.md` e ADR 0021
+- [x] Decidir com o dono: pular (como hoje) ou recusar com 422
+- [x] (não se aplica) Se for recusar, implementar com teste em `backend/tests/test_fatura_paga.py` e atualizar `GLOSSARY.md` e ADR 0021
+
+## Decisão (dono, 2026-11-07)
+
+**Pular**, como o 172 já faz: o atrasado que a data nova levaria para dentro de uma fatura paga fica inteiro como está, igual ao atrasado de fatura paga (126), e o resto é refeito. Cada ocorrência da recorrência é independente, diferente das parcelas, então não se recusa o pedido. Sem aviso na tela, igual ao de fatura paga. O provisório do 172 passa a ser definitivo; código, teste, `GLOSSARY.md` e ADR 0021 já refletem isso.
