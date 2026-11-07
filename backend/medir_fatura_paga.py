@@ -23,12 +23,21 @@ from app.lancamentos import NovoLancamento
 from app.migrations import aplicar_migrations
 
 URL = os.environ["DATABASE_URL"]
+# DSQL_TESTE=1: o banco é um DSQL de teste, ligado por DATABASE_URL (token como senha).
+EM_DSQL = os.environ.get("DSQL_TESTE") == "1"
+LOTE_DE_LINHAS = 1_000  # o DSQL limita a transação a ~3000 linhas
 
 
 def gerar(conn, por_cartao: int) -> tuple[list, str]:
-    conn.execute("DROP SCHEMA public CASCADE")
-    conn.execute("CREATE SCHEMA public")
-    aplicar_migrations(URL)
+    if EM_DSQL:  # `public` é do sistema no DSQL: apaga as tabelas, uma por vez
+        for (tabela,) in conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+        ).fetchall():
+            conn.execute(f'DROP TABLE IF EXISTS "{tabela}" CASCADE')
+    else:
+        conn.execute("DROP SCHEMA public CASCADE")
+        conn.execute("CREATE SCHEMA public")
+    aplicar_migrations(URL, em_dsql=EM_DSQL)
     conn.execute(
         "INSERT INTO contas (id, nome, tipo, criado_por) VALUES (gen_random_uuid(), 'Corrente',"
         " 'corrente', 'flavio')"
@@ -53,19 +62,21 @@ def gerar(conn, por_cartao: int) -> tuple[list, str]:
             " FROM generate_series(date '2019-01-01', date '2026-11-01', interval '1 month') m",
             (id,),
         )
-        conn.execute(
-            "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao, conta_id,"
-            " criado_por, alterado_por, mes) SELECT gen_random_uuid(), 'despesa', 'realizado',"
-            " 100 + (n * 7919) %% 90000, d, 'Compra ' || n, %s, 'flavio', 'flavio',"
-            " date_trunc('month', d)::date FROM (SELECT n, date '2019-01-01' + (n * 7) %% 2800 AS d"
-            " FROM generate_series(1, %s) n) s",
-            (id, por_cartao),
-        )
-        conn.execute(
-            "INSERT INTO lancamento_categorias SELECT l.id, %s FROM lancamentos l"
-            " WHERE l.conta_id = %s",
-            (categoria, id),
-        )
+        for de in range(1, por_cartao + 1, LOTE_DE_LINHAS):
+            ate = min(de + LOTE_DE_LINHAS - 1, por_cartao)
+            conn.execute(
+                "INSERT INTO lancamentos (id, tipo, situacao, valor_centavos, data, descricao,"
+                " conta_id, criado_por, alterado_por, mes) SELECT md5(%s::text || n)::uuid,"
+                " 'despesa', 'realizado', 100 + (n * 7919) %% 90000, d, 'Compra ' || n, %s,"
+                " 'flavio', 'flavio', date_trunc('month', d)::date FROM (SELECT n,"
+                " date '2019-01-01' + (n * 7) %% 2800 AS d FROM generate_series(%s::int, %s::int) n) s",
+                (id, id, de, ate),
+            )
+            conn.execute(
+                "INSERT INTO lancamento_categorias SELECT md5(%s::text || n)::uuid, %s"
+                " FROM generate_series(%s::int, %s::int) n",
+                (id, categoria, de, ate),
+            )
     conta = conn.execute("SELECT id FROM contas").fetchone()[0]
     # O pagamento de cada fatura passada, de qualquer valor, a deixa paga (ADR 0021).
     conn.execute(
@@ -75,7 +86,10 @@ def gerar(conn, por_cartao: int) -> tuple[list, str]:
         " f.mes, 'flavio', 'flavio' FROM faturas f WHERE f.mes <= date '2026-09-01'",
         (conta,),
     )
-    conn.execute("ANALYZE")
+    try:
+        conn.execute("ANALYZE")
+    except psycopg.Error:
+        pass
     return ids, categoria
 
 

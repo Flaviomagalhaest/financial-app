@@ -8,13 +8,14 @@ from app.banco import PAPEL_DA_API, PAPEL_DO_BACKUP, conectar
 PASTA = Path(__file__).resolve().parents[1] / "migrations"
 
 
-def aplicar_migrations(url: str | None = None) -> None:
+def aplicar_migrations(url: str | None = None, em_dsql: bool | None = None) -> None:
     """Aplica em ordem os arquivos NNNN_*.sql ainda não registrados, um DDL por arquivo.
 
     O DSQL só cria índice com `CREATE INDEX ASYNC`, que o Postgres local e o do CI não
     conhecem: fora do DSQL, o índice é criado na hora.
     """
-    em_dsql = url is None and bool(os.environ.get("DSQL_ENDPOINT"))
+    if em_dsql is None:
+        em_dsql = url is None and bool(os.environ.get("DSQL_ENDPOINT"))
     with conectar(url, autocommit=True, admin=True) as conn:
         ja_aplicadas: set[str] = set()
         if conn.execute("SELECT to_regclass('controle_de_migrations') IS NOT NULL").fetchone()[0]:
