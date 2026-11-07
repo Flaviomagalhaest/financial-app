@@ -338,6 +338,19 @@ test("exclui o parcelamento inteiro pela tela; sem internet, corrigir e excluir 
   await expect(page.getByRole("listitem").filter({ hasText: descricao })).toHaveCount(0);
 });
 
+test("trocar entre o total e o da parcela converte o valor digitado (ticket 195)", async ({ page }) => {
+  const { id } = await prepararParcelamento(page, 10000);
+  await page.reload();
+  await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
+  const modo = page.getByRole("group", { name: "O valor é" });
+  await page.getByLabel("Valor total").fill("120,00");
+  await modo.getByRole("button", { name: "O da parcela" }).click();
+  await expect(page.getByLabel("Valor da parcela")).toHaveValue("20,00");
+  await page.getByLabel("Valor da parcela").fill("30,00");
+  await modo.getByRole("button", { name: "O total" }).click();
+  await expect(page.getByLabel("Valor total")).toHaveValue("180,00");
+});
+
 test("no modo do valor da parcela, corrigir só a descrição não mexe no total", async ({ page }) => {
   // R$ 100,00 em 6 não divide por igual: a 1ª leva R$ 16,70 e as outras R$ 16,66.
   const { api, id, descricao } = await prepararParcelamento(page, 10000);
