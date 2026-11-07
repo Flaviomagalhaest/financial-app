@@ -1,7 +1,7 @@
 # Aviso da ocorrência que a fatura paga tirou da geração da recorrência
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` e `domain-modeling` (HITL: o dono decide se o casal é avisado e como); apoio: `implement`, `tdd`
 Modelo recomendado: Opus
