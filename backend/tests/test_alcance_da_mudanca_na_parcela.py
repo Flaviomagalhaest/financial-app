@@ -739,3 +739,31 @@ def test_a_tarefa_diaria_termina_o_cartao_reemitido_que_parou_no_meio_sem_marcar
     assert [(l["conta_id"], l["alterada_a_mao"]) for l in parcelas(casal, novo["id"])] == [
         (reemitido, False)
     ] * 4
+
+
+def test_a_correcao_antes_de_terminar_o_cartao_reemitido_poe_cada_parcela_na_fatura_do_cartao_dela(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    um_lote_por_parcela(monkeypatch)
+    # O antigo fecha dia 25; o novo, dia 5: a compra de 20/11 cai em novembro num e dezembro no
+    # outro.
+    antigo = cartao(casal)
+    reemitido = cartao(casal, nome="Nubank novo", dia_fechamento=5, dia_vencimento=15)
+    novo = criar_geladeira(casal, antigo, data="2026-11-10", parcelas=4)
+    [primeira, *_] = parcelas(casal, novo["id"])
+    with monkeypatch.context() as queda:
+        interromper_depois_do_primeiro_lote(queda)
+        with pytest.raises(RuntimeError):
+            mudar_parcela(casal, primeira, "todas", conta_id=reemitido)
+        # A 3ª e a 4ª ainda estão no cartão antigo quando a correção muda a data.
+        corrigido = casal.pedir(
+            "flavio", "PATCH", f"/api/parcelamentos/{novo['id']}", json={"data": "2026-11-20"}
+        )
+    assert corrigido.status_code == 200, corrigido.text
+
+    assert [(l["conta_id"], l["fatura_mes"]) for l in parcelas(casal, novo["id"])] == [
+        (reemitido, "2026-12-01"),
+        (reemitido, "2027-01-01"),
+        (antigo, "2027-01-01"),
+        (antigo, "2027-02-01"),
+    ]

@@ -8,7 +8,7 @@ desde a 1ª, e em "todas" o valor e a data viram a correção do valor da parcel
 parcelamento não sabe guardar (o valor e a data só daqui para frente, a conta e a fatura) vai
 parcela a parcela, como mudança à mão em cada uma. A exceção é a conta em "todas" para outra do
 mesmo tipo (o cartão reemitido): ela vai para o parcelamento, e as parcelas mudam sem a marca
-(ticket 187). As parcelas que uma pessoa mudou só nelas ficam como estão nesses campos, e a
+(tickets 144 e 187). As parcelas que uma pessoa mudou só nelas ficam como estão nesses campos, e a
 resposta diz quantas ficaram assim."""
 
 import json
@@ -241,13 +241,6 @@ def _conferir_antes_de_gravar(conn, falta: list[tuple[Lancamento, dict]], quanta
     cartoes.conferir_sem_gravar(conn, passos)
 
 
-def _do_mesmo_tipo(conn, conta_id: UUID, outra_id: UUID) -> bool:
-    """Se as duas são cartões, ou as duas são contas."""
-    return (faturas.ler_cartao(conn, conta_id) is None) == (
-        faturas.ler_cartao(conn, outra_id) is None
-    )
-
-
 def _seguir_a_conta_do_parcelamento(
     conn, lancamento: Lancamento, origem: str, fatura_pedida: bool
 ) -> None:
@@ -319,7 +312,7 @@ def _mudar_a_parcela(
         alteracao.alcance == "todas"
         and "conta_id" in mudou
         and mudou["conta_id"] != regra.conta_id
-        and _do_mesmo_tipo(conn, regra.conta_id, mudou["conta_id"])
+        and (faturas.ler_cartao(conn, mudou["conta_id"]) is not None) == no_cartao
     )
 
     # O que vai parcela a parcela: cada outra do alcance, menos nos campos que alguém mudou nela.
@@ -411,6 +404,7 @@ def _mudar_o_lote(
             AlteracaoDeLancamento(versao=outra.versao, **valores),
             usuario=pendente.usuario,
         )
+        # Com a origem, a conta foi para o parcelamento: a parcela a segue, sem a marca.
         if pendente.origem and "conta_id" in valores:
             _seguir_a_conta_do_parcelamento(
                 conn, mudada, pendente.origem, fatura_pedida="fatura_mes" in valores

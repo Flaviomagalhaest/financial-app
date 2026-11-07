@@ -1167,7 +1167,9 @@ def _correcoes(
             elif no_dia != dia_antes and "data" in cronograma_pedido:
                 mantidas.add(n)
             if (dia != dia_antes or acao == "reviver") and not maos & {"fatura_mes", "conta_id"}:
-                mes = lancamentos.mes_em_que_conta(conn, regra.conta_id, dia, n)
+                # Pelo cartão em que a parcela está: o reemitido em "todas" pode ainda não ter
+                # chegado a ela (ticket 187).
+                mes = lancamentos.mes_em_que_conta(conn, conta_da_parcela, dia, n)
             if valor != valor_antes:
                 mudou.append("valor_centavos")
             if dia != dia_antes:
