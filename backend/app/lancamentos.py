@@ -1567,6 +1567,8 @@ def editar(conn, id: UUID, alteracao: AlteracaoDeLancamento, usuario: str) -> La
             raise recusar("estorno leva as mesmas categorias e tags da compra")
         if "item_categoria_id" in mudancas:
             raise recusar("estorno conta no item do planejamento em que a compra conta")
+        if "pessoa" in mudancas:
+            raise recusar("estorno leva a pessoa da compra")
         if {"valor_centavos", "conta_id"} & mudancas.keys():
             if atual.estorno_de:
                 _conferir_estorno(conn, id, editado, atual.estorno_de)

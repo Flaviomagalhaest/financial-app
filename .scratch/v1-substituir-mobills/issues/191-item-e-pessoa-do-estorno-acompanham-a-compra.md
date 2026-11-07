@@ -22,4 +22,4 @@ Origem: [ticket 159](159-estorno-de-parte-e-de-parcelas-pendencias.md): decisão
 - [x] Teste de API: o estorno de compra, de parte, de parcela e de todas nasce com a pessoa da compra/parte/parcelamento, ignora a do cliente e acompanha a mudança dela
 - [x] Teste de API: o estorno avulso guarda a pessoa dada; o anterior à divisão fica com a que tinha
 - [x] Implementar no servidor
-- [x] App: pessoa só leitura no estorno ligado, com a cópia local
+- [x] App: pessoa só leitura no estorno ligado (a cópia local ficou para o [ticket 194](194-copia-local-da-pessoa-e-do-item-do-estorno-ligado.md))

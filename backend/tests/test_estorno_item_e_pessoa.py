@@ -11,6 +11,7 @@ from tests.test_estorno_de_parte_e_de_parcelas import (
 from tests.test_estorno_e_ajuste import estornar
 from tests.test_lancamentos import lancamento
 from tests.test_parcelamentos import parcelamento
+from tests.test_partes_da_compra import parte
 
 
 def lido(casal: Casal, id: str) -> dict:
@@ -117,3 +118,47 @@ def test_estorno_de_compra_sem_partes_leva_a_pessoa_da_compra_e_o_avulso_guarda_
     assert ligado.json()["pessoa"] == "flavio"
     assert avulso.status_code == 201, avulso.text
     assert avulso.json()["pessoa"] == "esposa"
+
+
+def test_estorno_ligado_nao_muda_de_pessoa_pela_edicao(casal: Casal):
+    _, _, novo = parcelado_com_item(casal, pessoa="flavio")
+    estorno = estorno_de_todas(casal, novo, 1000).json()
+
+    editado = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{estorno['id']}",
+        json={"versao": estorno["versao"], "pessoa": "esposa"},
+    )
+
+    assert editado.status_code == 422, editado.text
+    assert lido(casal, estorno["id"])["pessoa"] == "flavio"
+
+
+def test_estorno_anterior_a_divisao_da_compra_fica_com_a_pessoa_que_tinha(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    roupa, casa = casal.categoria("Roupa"), casal.categoria("Casa")
+    compra = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos",
+        json=lancamento(cartao, [roupa], data="2026-03-28", valor_centavos=10000, pessoa="flavio"),
+    ).json()
+    estorno = estornar(casal, compra, "2026-04-02", valor_centavos=1000).json()
+    assert estorno["pessoa"] == "flavio"
+
+    dividida = casal.pedir(
+        "flavio",
+        "PATCH",
+        f"/api/lancamentos/{compra['id']}",
+        json={
+            "versao": compra["versao"],
+            "partes": [
+                parte([roupa], 6000, descricao="A", pessoa="esposa"),
+                parte([casa], 4000, descricao="B", pessoa="esposa"),
+            ],
+        },
+    )
+
+    assert dividida.status_code == 200, dividida.text
+    assert lido(casal, estorno["id"])["pessoa"] == "flavio"
