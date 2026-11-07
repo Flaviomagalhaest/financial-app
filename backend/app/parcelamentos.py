@@ -1263,13 +1263,15 @@ def gravar_correcao(
     desde: int = 1,
     editada: UUID | None = None,
     tambem_mudam: Sequence[ParcelaQueMuda] = (),
+    conferir_os_lotes: bool = True,
 ) -> CorrecaoGravada:
     """Valida e grava o parcelamento corrigido (recusa antes de gravar, e avisa se uma realizada
     mudaria sem `confirmar_realizadas`); as parcelas são refeitas depois, em lotes. A
     classificação vale a partir da parcela `desde`. Na mudança de uma parcela com alcance (ticket
     136), a `editada` segue o parcelamento nos campos pedidos mesmo que alguém a tenha mudado à
     mão, não entra no aviso nem na contagem, e o aviso leva também as realizadas
-    `tambem_mudam`."""
+    `tambem_mudam`. Sem `conferir_os_lotes`, quem chama já conferiu as regras da fatura paga
+    no refazer (o cartão reemitido junto com a data ou o valor, ticket 196)."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         raise HTTPException(status_code=404, detail="parcelamento não encontrado")
     [atual] = lidos
@@ -1394,7 +1396,8 @@ def gravar_correcao(
         ).fetchone()
         mantidas.discard(numero)
     # Antes do aviso: o pedido que vai ser recusado não pede para confirmar as realizadas.
-    _conferir_os_lotes(conn, nova, correcoes, geradas_depois)
+    if conferir_os_lotes:
+        _conferir_os_lotes(conn, nova, correcoes, geradas_depois)
     if realizadas and not alteracao.confirmar_realizadas:
         raise RealizadasMudam(
             AvisoDeRealizadas(

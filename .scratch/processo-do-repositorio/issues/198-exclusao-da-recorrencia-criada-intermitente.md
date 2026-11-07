@@ -1,7 +1,7 @@
 # Exclusão da recorrência criada falha de vez em quando no teste de navegador
 
 Type: task
-Status: resolved
+Status: ready-for-agent
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -26,3 +26,11 @@ Com 4 núcleos saturados e `--repeat-each`, o teste falhou em 1 de cada 2 a 3 ex
 ## Pendência
 
 O sintoma original (clique em "Excluir" estourando 90 s, botão "detached") não apareceu em ~45 execuções sob carga; a suspeita da lista redesenhada sem parar segue sem prova. Se voltar, o trace do artefato `testes-com-navegador` é o ponto de partida; reabrir este ticket.
+
+## Reaberto (ticket 196)
+
+O sintoma original voltou no CI do PR #517 (job `verificar`, run 42417245960, 1ª execução). O PR só mudou o backend do parcelamento. `web/e2e/recorrencia-mudar.spec.ts:245` estourou os 90 s em `criadas.getByRole("button", { name: `Excluir ${descricao}` }).click()`: o botão estava "visible, enabled and stable" e foi "detached from the DOM", a cada nova tentativa. O vídeo e o trace estão no artefato `testes-com-navegador` dessa execução (id 13592578663).
+
+- [ ] Reproduzir o clique em "Excluir" com o botão saindo da página (trace do artefato acima)
+- [ ] Achar a causa (teste ou tela) e corrigir, sem desligar o teste
+- [ ] Verificações do projeto e PR para `main`
