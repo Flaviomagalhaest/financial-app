@@ -1,7 +1,7 @@
 # Medir a proteção da fatura paga no DSQL
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `run` (medir contra o DSQL), `diagnosing-bugs` se pesar; HITL (precisa de acesso ao DSQL)
 Modelo recomendado: Sonnet
