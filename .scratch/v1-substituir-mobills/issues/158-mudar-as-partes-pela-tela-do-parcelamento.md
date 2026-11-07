@@ -1,7 +1,7 @@
 # Mudar as partes pela tela do parcelamento
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: decisão do dono); depois `implement`, `tdd`, `artifact-design`
 Modelo recomendado: Opus
