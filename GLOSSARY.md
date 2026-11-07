@@ -119,7 +119,7 @@ _Avoid_: prestação
 O "alterado à mão" da parcela: o campo que uma pessoa mudou só nela, realizada ou não (a API a marca com `alterada_a_mao`). A correção do parcelamento e a mudança de "esta e as próximas" ou de "todas" a preservam nesses campos, com o aviso de quantas ficaram como estavam.
 
 **Alcance da mudança na parcela**:
-A escolha, ao mudar qualquer campo de uma parcela, entre "Só esta", "Esta e as próximas" e "Todas (inclusive as já realizadas)"; "só esta" deixa a parcela alterada à mão naquele campo e vale sem internet. Os outros dois mudam o parcelamento e precisam de internet: a classificação vai para ele, e o que ele não guarda (o valor e a data daqui para frente, a conta, a fatura) vai à mão em cada parcela. Em "todas", a conta nova do mesmo tipo (o cartão reemitido) passa a ser a do parcelamento ([ADR 0023](docs/adr/0023-alcance-da-mudanca-na-parcela.md)).
+A escolha, ao mudar qualquer campo de uma parcela, entre "Só esta", "Esta e as próximas" e "Todas (inclusive as já realizadas)"; "só esta" deixa a parcela alterada à mão naquele campo e vale sem internet. Os outros dois mudam o parcelamento e precisam de internet: a classificação vai para ele, e o que ele não guarda (o valor e a data daqui para frente, a conta, a fatura) vai à mão em cada parcela. Em "todas", a conta nova do mesmo tipo (o cartão reemitido) passa a ser a do parcelamento ([ADR 0023](docs/adr/0023-alcance-da-mudanca-na-parcela.md)). O número de parcelas e o total não mudam pelo alcance, só pela correção do parcelamento.
 _Avoid_: escopo da edição, aplicar em lote
 
 **Correção do parcelamento**:
@@ -262,7 +262,7 @@ O que faltou pagar de uma fatura paga (o total menos o pago), que passa para a f
 _Avoid_: rotativo (o rotativo é o crédito que gera juros sobre o saldo anterior)
 
 **Estorno**:
-Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original (ou à parte dela) e com as categorias e tags dela, que acompanham as da compra quando ela muda. Na compra parcelada, é de uma parcela ou de todas, num estorno só. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
+Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à compra original (ou à parte dela) e com as categorias e tags dela, que acompanham as da compra quando ela muda. Na compra parcelada, é de uma parcela ou de todas, num estorno só. A compra, parcela ou ocorrência com estorno não sai por regra nenhuma: a correção do parcelamento que a tiraria é recusada, e a recorrência que a tiraria a deixa como está. Diminui o total da fatura, do mês, da categoria, da tag e do item do planejamento em que aparece ([ADR 0016](docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md)).
 _Avoid_: reembolso, devolução
 
 **Estorno avulso**:
