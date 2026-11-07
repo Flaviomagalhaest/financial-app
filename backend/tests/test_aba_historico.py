@@ -10,7 +10,7 @@ from app import lancamentos
 from tests.conftest import Casal
 from tests.test_aba_mes import lancar
 from tests.test_cartoes import comprar, novo_cartao
-from tests.test_estorno_e_ajuste import ajustar, estornar
+from tests.test_estorno_e_ajuste import ajustar, creditar, estornar
 
 
 @pytest.fixture(autouse=True)
@@ -218,3 +218,15 @@ def test_ano_corrente_projeta_o_previsto_do_resto_do_ano_sem_mexer_no_realizado(
     assert corrente["previsto_centavos"] == 2500
     # Os 12 meses seguem só com o realizado.
     assert historico["total_centavos"] == 7000
+
+
+def test_credito_avulso_diminui_as_despesas_do_mes_da_fatura_no_historico(casal: Casal):
+    cartao = novo_cartao(casal)["id"]
+    mercado = casal.categoria("Mercado")
+    comprar(casal, cartao, "2026-03-28", valor_centavos=12000, categoria_ids=[mercado])
+    credito = creditar(casal, cartao, "2026-04-02", valor_centavos=2000, categoria_ids=[mercado])
+    assert credito.status_code == 201, credito.text
+
+    valores = por_mes(ler_historico(casal, metrica="despesas"))
+
+    assert valores["2026-04"] == (10000, 0)

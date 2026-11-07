@@ -9,6 +9,7 @@ import pytest
 from app import lancamentos
 from tests.conftest import Casal
 from tests.test_cartoes import novo_cartao
+from tests.test_estorno_e_ajuste import creditar
 from tests.test_lancamentos import lancamento
 
 
@@ -322,3 +323,16 @@ def test_mes_sem_planejamento_usa_o_modelo_padrao_e_desconta_o_que_ja_foi_lancad
     assert a_lancar["2026-05-01"] == 20000
     assert a_lancar["2026-06-01"] == 50000
     assert a_lancar["2026-07-01"] == 90000
+
+
+def test_credito_avulso_diminui_a_fatura_do_mes_dela_na_projecao(casal: Casal):
+    conta = casal.conta()
+    cartao = novo_cartao(casal)["id"]
+    lancar(casal, conta, "2026-04-01", 100000, tipo="receita")
+    lancar(casal, cartao, "2026-03-28", 10000)  # fatura de abril, aberta
+    credito = creditar(casal, cartao, "2026-03-29", valor_centavos=2500)
+    assert credito.status_code == 201, credito.text
+
+    projecao = futuro(casal)
+
+    assert linha(projecao, "faturas_centavos")["2026-04-01"] == 7500

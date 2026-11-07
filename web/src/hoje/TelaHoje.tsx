@@ -3,7 +3,7 @@ import { atualizadoAs, salvarLancamento, useCadastro, useContasDaSemana, useFila
 import { GradeDeFavoritos } from "./GradeDeFavoritos";
 import { AvisoDaFila } from "../lancamentos/AvisoDaFila";
 import { ContasDaSemana } from "../lancamentos/ContasDaSemana";
-import { nomePorId, plural, tituloDoLancamento } from "../lancamentos/apresentacao";
+import { eEstorno, nomePorId, plural, tituloDoLancamento } from "../lancamentos/apresentacao";
 import { dataPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
 
@@ -47,7 +47,10 @@ function AEscolher({ hoje }: { hoje: LeituraDaHoje }) {
             <li key={`${a.lancamento_id}/${a.parte_id ?? ""}`}>
               <div>
                 <strong>{titulo}</strong>
-                <span>{formatarCentavos(parte?.valor_centavos ?? lancamento.valor_centavos)}</span>
+                <span className={eEstorno(lancamento) ? "receita" : undefined}>
+                  {eEstorno(lancamento) ? "+ " : ""}
+                  {formatarCentavos(parte?.valor_centavos ?? lancamento.valor_centavos)}
+                </span>
               </div>
               <p className="vazio">{dataPorExtenso(lancamento.data)}</p>
               <div className="fileira" role="group" aria-label={`Item de ${titulo}`}>
