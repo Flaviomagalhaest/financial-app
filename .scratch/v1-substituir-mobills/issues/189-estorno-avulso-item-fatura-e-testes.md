@@ -25,3 +25,8 @@ Origem: [ticket 152](152-estorno-avulso-pendencias.md): decisões do dono sobre 
 - [x] "Lançar crédito" no mês sem fatura; e2e cobre
 - [x] Sinal de crédito na "A escolher"
 - [x] Testes do avulso na busca, no histórico, no limite e na projeção; tag e pessoa pela tela
+
+## Observação da implementação
+
+- A recusa do devido negativo vale também para o mês sem fatura: o crédito avulso ali só passa se houver saldo anterior (fatura paga com falta) para cobri-lo; sem isso, a fatura nasce no pedido e a recusa a desfaz (teste `test_credito_avulso_num_mes_sem_fatura_e_recusado_sem_deixar_a_fatura_para_tras`). O botão "Lançar crédito" aparece mesmo assim, como o dono decidiu; se ele preferir escondê-lo quando não há como cobrir, é decisão dele.
+- O caso "fatura nasce" está coberto pelo teste do saldo anterior de maio em `test_fatura_paga.py`.

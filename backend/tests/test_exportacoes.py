@@ -412,7 +412,11 @@ def test_planilha_traz_o_estorno_avulso_como_credito_mesmo_sem_categoria(
     )
 
     linhas = s3.enviados[0]["Body"].decode("utf-8-sig").split("\r\n")
-    assert "2026-03-28;Centavos;0,37;Nubank;2026-04;;;;efetivado;Flávio;Flávio" in linhas
+    assert linhas[1:] == [
+        "2026-03-27;Mercado;-10,00;Nubank;2026-04;Alimentação;;;efetivado;Flávio;Flávio",
+        "2026-03-28;Centavos;0,37;Nubank;2026-04;;;;efetivado;Flávio;Flávio",
+        "",
+    ]
 
 
 def test_planilha_traz_uma_linha_por_parte_da_compra(
