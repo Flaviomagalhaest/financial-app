@@ -1,7 +1,7 @@
 # Limite do estorno de uma parte do parcelamento: regra ou parcelas reais
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono); apoio: `implement`, `tdd` se a decisão mudar o código
 Modelo recomendado: Opus
