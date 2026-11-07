@@ -1584,6 +1584,11 @@ export interface components {
             categoria_ids: string[];
             /** Tags */
             tags: string[];
+            /**
+             * Partes
+             * @default []
+             */
+            partes: components["schemas"]["Parte"][];
         };
         /**
          * AvisoDeExclusao
@@ -3514,11 +3519,8 @@ export interface components {
             trocam_de_item: number;
             /** Estornos Fora */
             estornos_fora: number;
-            /**
-             * Com Partes Fora
-             * @default 0
-             */
-            com_partes_fora: number;
+            /** Partes Que Mudam */
+            partes_que_mudam: number;
             /** Amostra */
             amostra: components["schemas"]["AntesEDepois"][];
             /** Recusa */

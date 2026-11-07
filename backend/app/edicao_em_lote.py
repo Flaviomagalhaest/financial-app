@@ -9,7 +9,7 @@ restauração (ADR 0012)."""
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
 from typing import Literal, NamedTuple
@@ -20,11 +20,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.backup import LINHAS_POR_LOTE
 from app.banco import conectar, em_transacao
-from app.busca import CriteriosDaBusca, lancamentos_do_resultado
+from app.busca import CriteriosDaBusca, lancamentos_do_resultado, partes_achadas_no_resultado
 from app.config import valores_iniciais
 from app.item_em_que_conta import guardar_item_atual, onde_conta
 from app.lancamentos import (
     Lancamento,
+    Parte,
+    acompanhar_estornos,
     acompanhar_estornos_do_parcelamento,
     gravar_categorias,
     ids_das_tags,
@@ -37,7 +39,8 @@ from app.lancamentos import (
     url_do_banco,
 )
 from app.login import UsuarioLogado
-from app.parcelamentos import origem
+from app.parcelamentos import ler_um, origem
+from app.partes import id_na_parcela
 
 router = APIRouter(prefix="/api")
 _log = logging.getLogger(__name__)
@@ -52,8 +55,9 @@ POR_TRANSACAO = max(1, LINHAS_POR_LOTE // LINHAS_POR_LANCAMENTO)
 PARADO_HA = timedelta(minutes=5)
 PRAZO_EM_DIAS: int = valores_iniciais()["desfazerEdicaoEmLoteDias"]
 TAMANHO_DA_AMOSTRA: int = valores_iniciais()["amostraDaEdicaoEmLote"]
-# Os campos que o lote muda: mudou um deles depois, o desfazer pula o lançamento.
-CAMPOS_DO_LOTE = ["categoria_ids", "tags", "item_categoria_id"]
+# Os campos que o lote muda (na compra com partes, as partes): mudou um deles depois, o desfazer
+# pula o lançamento.
+CAMPOS_DO_LOTE = ["categoria_ids", "tags", "item_categoria_id", "partes"]
 
 Acao = Literal["acrescentar", "remover", "trocar", "substituir"]
 
@@ -132,6 +136,8 @@ class AntesEDepois(BaseModel):
     # Como fica.
     categoria_ids: list[UUID]
     tags: list[str]
+    # Na compra com partes, que não tem categorias nem tags próprias: as partes como ficam.
+    partes: list[Parte] = []
 
 
 class PreviaDaEdicaoEmLote(BaseModel):
@@ -142,12 +148,15 @@ class PreviaDaEdicaoEmLote(BaseModel):
     ja_estao_como_pedido: int
     # A categoria pedida é de outro tipo (de despesa numa receita): as categorias dele ficam.
     de_outro_tipo: int
-    # Passam a contar em outro item do planejamento, ou em nenhum (ADR 0006); não impede.
+    # Lançamentos e partes que passam a contar em outro item do planejamento, ou em nenhum
+    # (ADR 0006); não impede.
     trocam_de_item: int
     # Estornos marcados sem a compra: o estorno segue a compra (ADR 0016) e fica de fora.
     estornos_fora: int
-    # Compras com partes: a classificação é de cada parte (ADR 0022), e o lote ainda não as muda.
-    com_partes_fora: int = 0
+    # Das compras com partes que mudam (contadas em `mudam`), as partes que mudam: a mudança vale
+    # em cada parte (ADR 0022) ou, na busca com filtro de categoria, tag ou pessoa, nas que ela
+    # achou.
+    partes_que_mudam: int
     # Os primeiros que mudam, na ordem da busca.
     amostra: list[AntesEDepois]
     # Por que aplicar recusaria o lote inteiro; sem ela, aplica.
@@ -189,8 +198,13 @@ class LoteRecusado(Exception):
         self.motivo = motivo
 
 
-def _sem_categoria(quantos: int) -> str:
-    return f"o lote deixaria {quantos} lançamento{'s' * (quantos != 1)} sem categoria"
+def _sem_categoria(lancamentos: int, partes: int = 0) -> str:
+    ficariam = [
+        f"{n} {nome}{'s' * (n != 1)}"
+        for n, nome in ((lancamentos, "lançamento"), (partes, "parte"))
+        if n
+    ]
+    return f"o lote deixaria {' e '.join(ficariam)} sem categoria"
 
 
 class _Mudancas:
@@ -255,6 +269,32 @@ class _Mudancas:
             tags = _aplicar(t.acao, tags, pedidas, por, str.casefold)
         return categorias, tags, outro_tipo
 
+    def partes_depois(
+        self, tipo: str, partes: list[Parte], achadas: set[UUID] | None
+    ) -> tuple[list[Parte], set[UUID], bool]:
+        """As partes depois do lote, as que mudam e se a categoria pedida é de outro tipo. A
+        mudança vale em cada parte ou, com `achadas` (a busca com filtro de classificação), só
+        nelas; a escolha do item sai com a categoria dela, como no lançamento."""
+        depois, mudam, outro_tipo = [], set(), False
+        for p in partes:
+            if achadas is not None and p.id not in achadas:
+                depois.append(p)
+                continue
+            categorias, tags, outro = self.depois(tipo, p.categoria_ids, p.tags)
+            outro_tipo |= outro
+            if any(_mudou(p, categorias, tags)):
+                mudam.add(p.id)
+                escolhida = p.item_categoria_id if p.item_categoria_id in categorias else None
+                p = p.model_copy(
+                    update={
+                        "categoria_ids": categorias,
+                        "tags": tags,
+                        "item_categoria_id": escolhida,
+                    }
+                )
+            depois.append(p)
+        return depois, mudam, outro_tipo
+
     def resumo(self) -> str:
         partes = []
         if c := self.categorias:
@@ -311,16 +351,22 @@ def _frase(acao: Acao, nomes: list[str], por: str | None) -> str:
             return f"substituir por {', '.join(nomes)}" if nomes else "tirar todas"
 
 
-def _mudou(l: Lancamento, categorias: list[UUID], tags: list[str]) -> tuple[bool, bool]:
+def _mudou(l: Lancamento | Parte, categorias: list[UUID], tags: list[str]) -> tuple[bool, bool]:
     return (
         set(categorias) != set(l.categoria_ids),
         {t.casefold() for t in tags} != {t.casefold() for t in l.tags},
     )
 
 
-def _selecionados(conn, selecao: SelecaoDoLote) -> tuple[list[Lancamento], int]:
-    """Os lançamentos do lote e quantos estornos marcados ficaram de fora sem a compra."""
+def _selecionados(
+    conn, selecao: SelecaoDoLote
+) -> tuple[list[Lancamento], int, dict[UUID, set[UUID]]]:
+    """Os lançamentos do lote, quantos estornos marcados ficaram de fora sem a compra e, das
+    compras com partes e dos parcelamentos com partes que a busca trouxe, as partes que ela achou
+    (`_partes_achadas`)."""
     ids, parcelamentos = list(selecao.lancamento_ids), list(selecao.parcelamento_ids)
+    avulsos: list[UUID] = []
+    achados: list[UUID] = []
     if selecao.busca:
         avulsos, achados = lancamentos_do_resultado(conn, selecao.busca)
         ids, parcelamentos = ids + avulsos, parcelamentos + achados
@@ -342,7 +388,41 @@ def _selecionados(conn, selecao: SelecaoDoLote) -> tuple[list[Lancamento], int]:
         ).fetchall()
     )
     fora = {id for id, compra in estornos.items() if compra and compra not in marcados}
-    return ler_por_ids(conn, list(({*marcados} | estornos.keys()) - fora)), len(fora)
+    lidos = ler_por_ids(conn, list(({*marcados} | estornos.keys()) - fora))
+    achadas = (
+        _partes_achadas(conn, selecao.busca, lidos, {*avulsos}, {*achados}) if selecao.busca else {}
+    )
+    return lidos, len(fora), achadas
+
+
+def _partes_achadas(
+    conn,
+    busca: CriteriosDaBusca,
+    lidos: list[Lancamento],
+    avulsos: set[UUID],
+    parcelamentos: set[UUID],
+) -> dict[UUID, set[UUID]]:
+    """Na busca com filtro de categoria, tag ou pessoa, o lote muda só as partes que ela achou
+    (ticket 150): as de cada compra que veio dela e, no parcelamento, as dele cuja parte numa
+    parcela ela achou. A linha também marcada à mão segue a busca. Sem o filtro, nenhuma: a
+    mudança vale em todas as partes."""
+    da_busca = [
+        l.id for l in lidos if l.partes and (l.id in avulsos or l.parcelamento_id in parcelamentos)
+    ]
+    achadas = partes_achadas_no_resultado(conn, busca, da_busca)
+    if achadas is None:
+        return {}
+    for parcelamento_id in parcelamentos:
+        regra = ler_um(conn, parcelamento_id)
+        if not regra or not regra.partes:
+            continue
+        parcelas = [l.id for l in lidos if l.parcelamento_id == parcelamento_id and l.id in achadas]
+        achadas[parcelamento_id] = {
+            p.id
+            for p in regra.partes
+            if any(id_na_parcela(parcela, p.id) in achadas[parcela] for parcela in parcelas)
+        }
+    return achadas
 
 
 def _itens_por_mes(conn, meses: set[date]) -> dict[date, set[UUID]]:
@@ -375,70 +455,123 @@ def _item_depois(
 
 
 @dataclass
+class _Muda:
+    """Um lançamento que o lote muda, com as categorias e as tags de depois. A compra com partes
+    não tem as próprias (ADR 0022): muda nas partes, que vêm como ficam, com as que mudam."""
+
+    lancamento: Lancamento
+    categorias: list[UUID]
+    tags: list[str]
+    partes: list[Parte] = field(default_factory=list)
+    nas_partes: set[UUID] = field(default_factory=set)
+
+
+@dataclass
 class _Plano:
     mudancas: _Mudancas
     lancamentos: list[Lancamento]
     estornos_fora: int
-    com_partes_fora: int
-    # Os que mudam, com as categorias e as tags de depois.
-    mudam: list[tuple[Lancamento, list[UUID], list[str]]]
+    mudam: list[_Muda]
     ja_estao_como_pedido: int
     de_outro_tipo: int
     sem_categoria: int
+    partes_sem_categoria: int
+    # As partes que a busca achou, por compra e por parcelamento (`_partes_achadas`).
+    achadas: dict[UUID, set[UUID]]
 
     @property
     def recusa(self) -> str | None:
-        return _sem_categoria(self.sem_categoria) if self.sem_categoria else None
+        if self.sem_categoria or self.partes_sem_categoria:
+            return _sem_categoria(self.sem_categoria, self.partes_sem_categoria)
+        return None
+
+
+def _o_que_muda(
+    mudancas: _Mudancas, l: Lancamento, achadas: dict[UUID, set[UUID]]
+) -> tuple[_Muda | None, bool]:
+    """O que o lote muda num lançamento (nada, se ele já está como pedido) e se a categoria pedida
+    é de outro tipo."""
+    if l.partes:
+        partes, nas_partes, outro_tipo = mudancas.partes_depois(l.tipo, l.partes, achadas.get(l.id))
+        return (_Muda(l, [], [], partes, nas_partes) if nas_partes else None), outro_tipo
+    categorias, tags, outro_tipo = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
+    return (_Muda(l, categorias, tags) if any(_mudou(l, categorias, tags)) else None), outro_tipo
 
 
 def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
     mudancas = _Mudancas(conn, pedido)
-    lancamentos, estornos_fora = _selecionados(conn, pedido.selecao)
-    # A parcela de um parcelamento com partes também fica de fora, mesmo a que uma pessoa juntou
-    # só nela: o lote levaria a categoria ao parcelamento, que não tem classificação própria.
-    parcelamentos_com_partes = {
-        id
-        for (id,) in conn.execute(
-            "SELECT DISTINCT parcelamento_id FROM parcelamento_partes WHERE parcelamento_id = ANY(%s)",
-            ([l.parcelamento_id for l in lancamentos if l.parcelamento_id],),
-        )
-    }
-    com_partes = [
-        l for l in lancamentos if l.partes or l.parcelamento_id in parcelamentos_com_partes
-    ]
-    fora = {l.id for l in com_partes}
-    lancamentos = [l for l in lancamentos if l.id not in fora]
-    mudam, ja_estao, de_outro_tipo, sem_categoria = [], 0, 0, 0
+    lancamentos, estornos_fora, achadas = _selecionados(conn, pedido.selecao)
+    # O estorno da compra com partes segue a parte estornada (ticket 138): muda com ela.
+    com_partes = {l.id for l in lancamentos if l.partes}
+    lancamentos = [l for l in lancamentos if l.estorno_de not in com_partes]
+    mudam, ja_estao, de_outro_tipo, sem_categoria, partes_sem_categoria = [], 0, 0, 0, 0
     for l in lancamentos:
-        categorias, tags, outro_tipo = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
+        muda, outro_tipo = _o_que_muda(mudancas, l, achadas)
         de_outro_tipo += outro_tipo
-        if any(_mudou(l, categorias, tags)):
-            mudam.append((l, categorias, tags))
-            sem_categoria += not categorias
-        else:
+        if not muda:
             ja_estao += not outro_tipo
+            continue
+        mudam.append(muda)
+        if l.partes:
+            partes_sem_categoria += sum(
+                not p.categoria_ids for p in muda.partes if p.id in muda.nas_partes
+            )
+        else:
+            sem_categoria += not muda.categorias
     return _Plano(
         mudancas,
         lancamentos,
         estornos_fora,
-        len(com_partes),
         mudam,
         ja_estao,
         de_outro_tipo,
         sem_categoria,
+        partes_sem_categoria,
+        achadas,
     )
 
 
+def _troca_de_item(
+    com_item: set[UUID],
+    antes: list[UUID],
+    escolhida: UUID | None,
+    atual: UUID | None,
+    depois: list[UUID],
+) -> bool:
+    """Se um lançamento ou uma parte passa a contar em outro item (ou em nenhum) quando as
+    categorias vão de `antes` para `depois`; a escolha sai com a categoria dela."""
+    conta_antes, _ = onde_conta(com_item & {*antes}, escolhida, atual)
+    escolhida_depois = escolhida if escolhida in depois else None
+    conta_depois, _ = onde_conta(com_item & {*depois}, escolhida_depois, conta_antes)
+    return conta_antes != conta_depois
+
+
 def _trocam_de_item(conn, plano: _Plano) -> int:
-    itens = _itens_por_mes(conn, {l.mes for l, _, _ in plano.mudam})
-    atuais = _itens_atuais(conn, [l.id for l, _, _ in plano.mudam])
+    itens = _itens_por_mes(conn, {m.lancamento.mes for m in plano.mudam})
+    atuais = _itens_atuais(conn, [m.lancamento.id for m in plano.mudam])
+    atuais_das_partes = dict(
+        conn.execute(
+            "SELECT id, item_atual_categoria_id FROM lancamento_partes WHERE id = ANY(%s)",
+            ([id for m in plano.mudam for id in m.nas_partes],),
+        ).fetchall()
+    )
     trocam = 0
-    for l, categorias, _ in plano.mudam:
-        com_item = itens.get(l.mes, set())
-        antes, _ = onde_conta(com_item & {*l.categoria_ids}, l.item_categoria_id, atuais[l.id])
-        escolhida, _ = _item_depois(l, categorias, None)
-        depois, _ = onde_conta(com_item & {*categorias}, escolhida, antes)
-        trocam += antes != depois
+    for m in plano.mudam:
+        l, com_item = m.lancamento, itens.get(m.lancamento.mes, set())
+        if not l.partes:
+            trocam += _troca_de_item(
+                com_item, l.categoria_ids, l.item_categoria_id, atuais[l.id], m.categorias
+            )
+            continue
+        for antes, depois in zip(l.partes, m.partes):
+            if antes.id in m.nas_partes:
+                trocam += _troca_de_item(
+                    com_item,
+                    antes.categoria_ids,
+                    antes.item_categoria_id,
+                    atuais_das_partes.get(antes.id),
+                    depois.categoria_ids,
+                )
     return trocam
 
 
@@ -448,14 +581,16 @@ def previa(conn, pedido: PedidoDeEdicaoEmLote) -> PreviaDaEdicaoEmLote:
         compras=len({l.parcelamento_id or l.id for l in plano.lancamentos}),
         lancamentos=len(plano.lancamentos),
         mudam=len(plano.mudam),
+        partes_que_mudam=sum(len(m.nas_partes) for m in plano.mudam),
         ja_estao_como_pedido=plano.ja_estao_como_pedido,
         de_outro_tipo=plano.de_outro_tipo,
         trocam_de_item=_trocam_de_item(conn, plano),
         estornos_fora=plano.estornos_fora,
-        com_partes_fora=plano.com_partes_fora,
         amostra=[
-            AntesEDepois(lancamento=l, categoria_ids=categorias, tags=tags)
-            for l, categorias, tags in plano.mudam[:TAMANHO_DA_AMOSTRA]
+            AntesEDepois(
+                lancamento=m.lancamento, categoria_ids=m.categorias, tags=m.tags, partes=m.partes
+            )
+            for m in plano.mudam[:TAMANHO_DA_AMOSTRA]
         ],
         recusa=plano.recusa,
     )
@@ -539,12 +674,161 @@ def _regravar(
     return versao
 
 
+# As tabelas das partes da compra e das do parcelamento: categorias, tags e as partes.
+_TABELAS_DAS_PARTES = {
+    "lancamento": ("parte_categorias", "parte_tags", "lancamento_partes"),
+    "parcelamento": (
+        "parcelamento_parte_categorias",
+        "parcelamento_parte_tags",
+        "parcelamento_partes",
+    ),
+}
+
+
+def _mudar_partes(
+    conn,
+    lote_id: UUID,
+    dono_id: UUID,
+    de: str,
+    antes: list[Parte],
+    depois: list[Parte],
+    nas_partes: set[UUID],
+    usuario: str,
+) -> None:
+    """Grava a classificação das partes que o lote muda (de uma compra ou de um parcelamento) e
+    guarda a de antes e a de depois para o desfazer. A parte da compra segue no item em que
+    contava, se a categoria dele continua nela, como no lançamento."""
+    categorias_das_partes, tags_das_partes, tabela = _TABELAS_DAS_PARTES[de]
+    for parte, nova in zip(antes, depois):
+        if parte.id not in nas_partes:
+            continue
+        tags_antes = [
+            t
+            for (t,) in conn.execute(
+                f"SELECT tag_id FROM {tags_das_partes} WHERE parte_id = %s", (parte.id,)
+            )
+        ]
+        tag_ids = ids_das_tags(conn, nova.tags, usuario, set(tags_antes))
+        _religar(
+            conn, categorias_das_partes, "parte_id", "categoria_id", parte.id, nova.categoria_ids
+        )
+        _religar(conn, tags_das_partes, "parte_id", "tag_id", parte.id, tag_ids)
+        item_atual = None
+        if de == "lancamento":
+            (item_atual,) = conn.execute(
+                "SELECT item_atual_categoria_id FROM lancamento_partes WHERE id = %s", (parte.id,)
+            ).fetchone()
+            conn.execute(
+                "UPDATE lancamento_partes SET item_categoria_id = %s, item_atual_categoria_id = %s"
+                " WHERE id = %s",
+                (
+                    nova.item_categoria_id,
+                    item_atual if item_atual in nova.categoria_ids else None,
+                    parte.id,
+                ),
+            )
+        else:
+            conn.execute(
+                f"UPDATE {tabela} SET item_categoria_id = %s WHERE id = %s",
+                (nova.item_categoria_id, parte.id),
+            )
+        conn.execute(
+            "INSERT INTO edicao_em_lote_partes (lote_id, parte_id, dono_id, categoria_ids_antes,"
+            " tag_ids_antes, item_categoria_id_antes, item_atual_categoria_id_antes,"
+            " categoria_ids_depois, tag_ids_depois) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                lote_id,
+                parte.id,
+                dono_id,
+                _json(parte.categoria_ids),
+                _json(tags_antes),
+                parte.item_categoria_id,
+                item_atual,
+                _json(nova.categoria_ids),
+                _json(tag_ids),
+            ),
+        )
+
+
+def _origem_das_partes(conn, lancamento: Lancamento) -> str | None:
+    """A origem da mudança nas partes: a do parcelamento, como `_origem_da_parcela`, menos na
+    parcela com partes próprias ("só esta", ADR 0023), que segue alterada à mão nelas e não volta
+    a receber as do parcelamento."""
+    if (
+        lancamento.parcelamento_id
+        and conn.execute(
+            "SELECT 1 FROM lancamento_campos WHERE lancamento_id = %s AND campo = 'partes'"
+            " AND origem IS NULL",
+            (lancamento.id,),
+        ).fetchone()
+    ):
+        return None
+    return _origem_da_parcela(conn, lancamento)
+
+
+def _regravar_partes(
+    conn,
+    lote_id: UUID,
+    atual: Lancamento,
+    muda: _Muda,
+    usuario: str,
+    momento: datetime,
+) -> int:
+    """Grava as partes que o lote muda numa compra, sobe a versão dela com as partes como o campo
+    que mudou e leva a mudança aos estornos das partes. Devolve a versão nova."""
+    versao = subir_versao(
+        conn, atual.id, atual.versao, "alterado_por = %s, alterado_em = %s", (usuario, momento)
+    )
+    registrar_mudancas(
+        conn, atual.id, ["partes"], versao, usuario, momento, origem=_origem_das_partes(conn, atual)
+    )
+    _mudar_partes(
+        conn, lote_id, atual.id, "lancamento", atual.partes, muda.partes, muda.nas_partes, usuario
+    )
+    acompanhar_estornos(conn, atual.id)
+    return versao
+
+
+def _mudar_as_partes_do_parcelamento(
+    conn,
+    lote_id: UUID,
+    id: UUID,
+    tipo: str,
+    mudancas: _Mudancas,
+    achadas: set[UUID] | None,
+    usuario: str,
+    momento: datetime,
+) -> bool:
+    """No parcelamento com partes, que não tem classificação própria, o lote muda as partes dele,
+    com que as parcelas nascem; devolve se ele tem partes."""
+    regra = ler_um(conn, id)
+    if not regra or not regra.partes:
+        return False
+    partes, nas_partes, _ = mudancas.partes_depois(tipo, regra.partes, achadas)
+    if any(not p.categoria_ids for p in partes if p.id in nas_partes):
+        raise LoteRecusado(_sem_categoria(0, 1))
+    _mudar_partes(conn, lote_id, id, "parcelamento", regra.partes, partes, nas_partes, usuario)
+    acompanhar_estornos_do_parcelamento(conn, id)
+    conn.execute(
+        "UPDATE parcelamentos SET alterado_por = %s, alterado_em = %s WHERE id = %s",
+        (usuario, momento, id),
+    )
+    conn.execute(
+        "INSERT INTO edicao_em_lote_parcelamentos (lote_id, parcelamento_id,"
+        " categoria_ids_antes, tag_ids_antes, item_categoria_id_antes, categoria_ids_depois,"
+        " tag_ids_depois) VALUES (%s, %s, '[]', '[]', NULL, '[]', '[]')",
+        (lote_id, id),
+    )
+    return True
+
+
 def _mudar_parcelamento(
     conn,
     lote_id: UUID,
     id: UUID,
     tipo: str,
     mudancas: _Mudancas,
+    achadas: dict[UUID, set[UUID]],
     usuario: str,
     momento: datetime,
 ) -> None:
@@ -554,6 +838,10 @@ def _mudar_parcelamento(
         "SELECT 1 FROM edicao_em_lote_parcelamentos WHERE lote_id = %s AND parcelamento_id = %s",
         (lote_id, id),
     ).fetchone():
+        return
+    if _mudar_as_partes_do_parcelamento(
+        conn, lote_id, id, tipo, mudancas, achadas.get(id), usuario, momento
+    ):
         return
     categorias = [
         c
@@ -606,6 +894,7 @@ def _aplicar_parte(
     pedido: PedidoDeEdicaoEmLote,
     usuario: str,
     momento: datetime,
+    achadas: dict[UUID, set[UUID]],
 ) -> int:
     """Aplica o lote numa parte dos lançamentos, numa transação, sobre o que eles têm agora, e
     guarda o de antes para o desfazer. Devolve quantos mudaram."""
@@ -615,10 +904,25 @@ def _aplicar_parte(
     parcelamentos: set[tuple[UUID, str]] = set()
     mudaram = 0
     for l in ler_por_ids(conn, ids):
-        categorias, tags, _ = mudancas.depois(l.tipo, l.categoria_ids, l.tags)
-        muda_categorias, muda_tags = _mudou(l, categorias, tags)
-        if not (muda_categorias or muda_tags):
+        muda, _ = _o_que_muda(mudancas, l, achadas)
+        if not muda:
             continue
+        if l.parcelamento_id:
+            parcelamentos.add((l.parcelamento_id, l.tipo))
+        mudaram += 1
+        if l.partes:
+            sem_categoria = sum(not p.categoria_ids for p in muda.partes if p.id in muda.nas_partes)
+            if sem_categoria:
+                raise LoteRecusado(_sem_categoria(0, sem_categoria))
+            versao = _regravar_partes(conn, lote_id, l, muda, usuario, momento)
+            conn.execute(
+                "INSERT INTO edicao_em_lote_lancamentos (lote_id, lancamento_id, versao,"
+                " categoria_ids_antes, tag_ids_antes) VALUES (%s, %s, %s, '[]', '[]')",
+                (lote_id, l.id, versao),
+            )
+            continue
+        categorias, tags = muda.categorias, muda.tags
+        muda_categorias, muda_tags = _mudou(l, categorias, tags)
         if not categorias:
             raise LoteRecusado(_sem_categoria(1))
         versao = _regravar(
@@ -644,11 +948,10 @@ def _aplicar_parte(
                 atuais[l.id],
             ),
         )
-        if l.parcelamento_id:
-            parcelamentos.add((l.parcelamento_id, l.tipo))
-        mudaram += 1
     for parcelamento_id, tipo in parcelamentos:
-        _mudar_parcelamento(conn, lote_id, parcelamento_id, tipo, mudancas, usuario, momento)
+        _mudar_parcelamento(
+            conn, lote_id, parcelamento_id, tipo, mudancas, achadas, usuario, momento
+        )
     return mudaram
 
 
@@ -663,7 +966,61 @@ class _AntesDoLote(NamedTuple):
     item_atual_categoria_id: UUID | None
 
 
-def _desfazer_lancamento(conn, antes: _AntesDoLote, usuario: str, momento: datetime) -> str:
+def _partes_do_lote(conn, lote_id: UUID, dono_id: UUID) -> list[tuple]:
+    return conn.execute(
+        "SELECT parte_id, categoria_ids_antes, tag_ids_antes, item_categoria_id_antes,"
+        " item_atual_categoria_id_antes, categoria_ids_depois, tag_ids_depois"
+        " FROM edicao_em_lote_partes WHERE lote_id = %s AND dono_id = %s",
+        (lote_id, dono_id),
+    ).fetchall()
+
+
+def _voltar_partes(conn, de: str, registros: list[tuple]) -> str:
+    """Volta a classificação das partes que o lote mudou, se todas ainda existem com a que o lote
+    deu; a compra (ou o parcelamento) volta inteira ou fica como está."""
+    categorias_das_partes, tags_das_partes, tabela = _TABELAS_DAS_PARTES[de]
+    for parte_id, *_, categorias_depois, tags_depois in registros:
+        if not conn.execute(f"SELECT 1 FROM {tabela} WHERE id = %s", (parte_id,)).fetchone():
+            return "mudou_depois"
+        categorias = {
+            c
+            for (c,) in conn.execute(
+                f"SELECT categoria_id FROM {categorias_das_partes} WHERE parte_id = %s",
+                (parte_id,),
+            )
+        }
+        tags = {
+            t
+            for (t,) in conn.execute(
+                f"SELECT tag_id FROM {tags_das_partes} WHERE parte_id = %s", (parte_id,)
+            )
+        }
+        if categorias != {*_ids(categorias_depois)} or tags != {*_ids(tags_depois)}:
+            return "mudou_depois"
+    antes = [(r[0], _ids(r[1]), _ids(r[2]), r[3], r[4]) for r in registros]
+    if not _existem(
+        conn, list({c for a in antes for c in a[1]}), list({t for a in antes for t in a[2]})
+    ):
+        return "saiu"
+    for parte_id, categorias, tags, escolhida, item_atual in antes:
+        _religar(conn, categorias_das_partes, "parte_id", "categoria_id", parte_id, categorias)
+        _religar(conn, tags_das_partes, "parte_id", "tag_id", parte_id, tags)
+        if de == "lancamento":
+            conn.execute(
+                "UPDATE lancamento_partes SET item_categoria_id = %s, item_atual_categoria_id = %s"
+                " WHERE id = %s",
+                (escolhida, item_atual, parte_id),
+            )
+        else:
+            conn.execute(
+                f"UPDATE {tabela} SET item_categoria_id = %s WHERE id = %s", (escolhida, parte_id)
+            )
+    return "desfeito"
+
+
+def _desfazer_lancamento(
+    conn, lote_id: UUID, antes: _AntesDoLote, usuario: str, momento: datetime
+) -> str:
     """Volta um lançamento ao que era antes do lote, se ninguém mudou depois o que o lote mudou."""
     id = antes.lancamento_id
     excluido = conn.execute("SELECT excluido_em FROM lancamentos WHERE id = %s", (id,)).fetchone()
@@ -675,6 +1032,18 @@ def _desfazer_lancamento(conn, antes: _AntesDoLote, usuario: str, momento: datet
         (id, CAMPOS_DO_LOTE, antes.versao),
     ).fetchone():
         return "mudou_depois"
+    if partes := _partes_do_lote(conn, lote_id, id):
+        (atual,) = ler_por_ids(conn, [id])
+        if (resultado := _voltar_partes(conn, "lancamento", partes)) != "desfeito":
+            return resultado
+        versao = subir_versao(
+            conn, id, atual.versao, "alterado_por = %s, alterado_em = %s", (usuario, momento)
+        )
+        registrar_mudancas(
+            conn, id, ["partes"], versao, usuario, momento, origem=_origem_das_partes(conn, atual)
+        )
+        acompanhar_estornos(conn, id)
+        return "desfeito"
     categorias, tags = _ids(antes.categoria_ids), _ids(antes.tag_ids)
     if not _existem(conn, categorias, tags):
         return "saiu"
@@ -691,9 +1060,15 @@ def _desfazer_lancamento(conn, antes: _AntesDoLote, usuario: str, momento: datet
     return "desfeito"
 
 
-def _desfazer_parcelamento(conn, registro: tuple) -> str:
-    """Volta a classificação do parcelamento, se ninguém a mudou depois do lote."""
+def _desfazer_parcelamento(conn, lote_id: UUID, registro: tuple) -> str:
+    """Volta a classificação do parcelamento (ou das partes dele), se ninguém a mudou depois do
+    lote."""
     id, categorias_antes, tags_antes, escolhida, categorias_depois, tags_depois = registro
+    if partes := _partes_do_lote(conn, lote_id, id):
+        resultado = _voltar_partes(conn, "parcelamento", partes)
+        if resultado == "desfeito":
+            acompanhar_estornos_do_parcelamento(conn, id)
+        return resultado
     categorias = {
         c
         for (c,) in conn.execute(
@@ -732,7 +1107,7 @@ def _desfazer_parte(conn, lote_id: UUID, usuario: str, momento: datetime) -> int
             "UPDATE edicao_em_lote_lancamentos SET resultado_do_desfazer = %s"
             " WHERE lote_id = %s AND lancamento_id = %s",
             (
-                _desfazer_lancamento(conn, _AntesDoLote(*antes), usuario, momento),
+                _desfazer_lancamento(conn, lote_id, _AntesDoLote(*antes), usuario, momento),
                 lote_id,
                 antes[0],
             ),
@@ -747,7 +1122,7 @@ def _desfazer_parte(conn, lote_id: UUID, usuario: str, momento: datetime) -> int
         conn.execute(
             "UPDATE edicao_em_lote_parcelamentos SET resultado_do_desfazer = %s"
             " WHERE lote_id = %s AND parcelamento_id = %s",
-            (_desfazer_parcelamento(conn, registro), lote_id, registro[0]),
+            (_desfazer_parcelamento(conn, lote_id, registro), lote_id, registro[0]),
         )
         vistos += 1
     return vistos
@@ -851,10 +1226,31 @@ def cancelar_parados(url: str | None = None) -> int:
     return cancelados
 
 
+class _Gravacao(NamedTuple):
+    # Os lançamentos que mudam, um bloco por transação.
+    blocos: list[list[UUID]]
+    achadas: dict[UUID, set[UUID]]
+
+
+def _blocos(mudam: list[_Muda]) -> list[list[UUID]]:
+    """Os lançamentos em blocos de uma transação: cada parte de uma compra pesa como um
+    lançamento, porque grava as ligações e o registro do desfazer dela."""
+    blocos: list[list[UUID]] = []
+    peso = 0
+    for m in mudam:
+        do_lancamento = 1 + len(m.lancamento.partes)
+        if not blocos or peso + do_lancamento > POR_TRANSACAO:
+            blocos.append([])
+            peso = 0
+        blocos[-1].append(m.lancamento.id)
+        peso += do_lancamento
+    return blocos
+
+
 def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[EdicaoEmLote, bool]:
     """Aplica o lote inteiro ou nada. Devolve o lote e se ele foi gravado agora."""
 
-    def preparar(conn) -> tuple[_LoteGravado, list[UUID] | None]:
+    def preparar(conn) -> tuple[_LoteGravado, _Gravacao | None]:
         if gravado := _ler(conn, nova.id):
             return gravado, None
         plano = _planejar(conn, nova)
@@ -867,10 +1263,10 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
             " VALUES (%s, %s, 'aplicando', %s)",
             (nova.id, plano.mudancas.resumo(), usuario),
         )
-        return _ler(conn, nova.id), [l.id for l, _, _ in plano.mudam]
+        return _ler(conn, nova.id), _Gravacao(_blocos(plano.mudam), plano.achadas)
 
-    gravado, ids = em_transacao(url, preparar)
-    if ids is None:
+    gravado, gravacao = em_transacao(url, preparar)
+    if gravacao is None:
         if gravado.situacao == "cancelada":
             raise recusar(gravado.recusa)
         if gravado.situacao == "aplicando" and gravado.criado_em < datetime.now(UTC) - PARADO_HA:
@@ -882,12 +1278,15 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
 
     def aplicar_parte(parte: list[UUID]) -> int:
         return em_transacao(
-            url, lambda conn: _aplicar_parte(conn, nova.id, parte, nova, usuario, momento)
+            url,
+            lambda conn: _aplicar_parte(
+                conn, nova.id, parte, nova, usuario, momento, gravacao.achadas
+            ),
         )
 
     try:
-        for inicio in range(0, len(ids), POR_TRANSACAO):
-            mudaram += aplicar_parte(ids[inicio : inicio + POR_TRANSACAO])
+        for bloco in gravacao.blocos:
+            mudaram += aplicar_parte(bloco)
     except Exception as erro:
         # Uma parte recusada (o lançamento mudou no meio) desfaz as que já foram gravadas.
         motivo = (
@@ -918,12 +1317,13 @@ def _pulados(conn, lote_id: UUID, usuario: str) -> list[PuladoNoDesfazer]:
     ):
         por, em = excluido_por, excluido_em
         if motivo == "mudou_depois":
+            # A parte refeita pelo parcelamento não sobe a versão de um campo da parcela.
             por, em = conn.execute(
                 "SELECT alterado_por, alterado_em FROM lancamento_campos"
                 " WHERE lancamento_id = %s AND campo = ANY(%s) AND versao > %s"
                 " ORDER BY versao DESC LIMIT 1",
                 (id, CAMPOS_DO_LOTE, versao),
-            ).fetchone()
+            ).fetchone() or (None, None)
         elif motivo == "saiu":
             por, em = None, None
         pulados.append(

@@ -192,6 +192,7 @@ def test_backup_da_versao_1_de_antes_das_tabelas_do_dominio_restaura_convertido(
             "contas": 0,
             "edicao_em_lote_lancamentos": 0,
             "edicao_em_lote_parcelamentos": 0,
+            "edicao_em_lote_partes": 0,
             "edicoes_em_lote": 0,
             "exportacoes": 0,
             "faturas": 0,
@@ -1103,6 +1104,7 @@ def test_backup_da_versao_20_sem_edicoes_em_lote_restaura_sem_nenhuma(database_u
                 del manifesto["tabelas"]["edicoes_em_lote"]
                 del manifesto["tabelas"]["edicao_em_lote_lancamentos"]
                 del manifesto["tabelas"]["edicao_em_lote_parcelamentos"]
+                del manifesto["tabelas"]["edicao_em_lote_partes"]
                 conteudo = json.dumps(manifesto).encode()
             destino.writestr(nome, conteudo)
 
@@ -1429,3 +1431,28 @@ def test_as_partes_do_parcelamento_voltam_do_backup_com_as_categorias_e_as_tags(
             " JOIN parcelamento_parte_categorias pc ON pc.parte_id = p.id"
             " JOIN parcelamento_parte_tags pt ON pt.parte_id = p.id"
         ).fetchall() == [("Fone", 25000, "flavio", categoria, tag)]
+
+
+def test_backup_da_versao_33_sem_partes_no_desfazer_do_lote_restaura_sem_nenhuma(database_url):
+    # O formato 33, anterior ao ticket 150: a edição em lote não mudava partes.
+    aplicar_migrations(database_url)
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        atual = gerar_backup(conn)
+    antigo = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(atual)) as origem, zipfile.ZipFile(antigo, "w") as destino:
+        for nome in origem.namelist():
+            if nome.removesuffix(".csv") == "edicao_em_lote_partes":
+                continue
+            conteudo = origem.read(nome)
+            if nome == "manifesto.json":
+                manifesto = json.loads(conteudo)
+                manifesto["versao_formato"] = 33
+                del manifesto["tabelas"]["edicao_em_lote_partes"]
+                conteudo = json.dumps(manifesto).encode()
+            destino.writestr(nome, conteudo)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        manifesto = restaurar_backup(conn, antigo.getvalue())
+
+        assert manifesto["versao_formato"] == formato.VERSAO_FORMATO
+        assert conn.execute("SELECT count(*) FROM edicao_em_lote_partes").fetchone() == (0,)

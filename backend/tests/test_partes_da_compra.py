@@ -443,29 +443,6 @@ def test_busca_pelo_texto_acha_a_compra_pela_descricao_de_uma_parte(casal: Casal
     assert linha["lancamento"]["id"] == compra["id"]
 
 
-def test_edicao_em_lote_deixa_de_fora_a_compra_com_partes(casal: Casal):
-    from tests.test_edicao_em_lote import aplicada, previa
-
-    conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
-    compra = compra_com_partes(casal, conta, [parte([roupa], 600), parte([casa], 400)]).json()
-    avulso = casal.pedir(
-        "flavio", "POST", "/api/lancamentos", json=lancamento(conta, [roupa])
-    ).json()
-    selecao = {"lancamento_ids": [compra["id"], avulso["id"]]}
-    mudanca = {"categorias": {"acao": "acrescentar", "categoria_ids": [casa]}}
-
-    vista = previa(casal, selecao, **mudanca)
-    aplicada(casal, selecao, **mudanca)
-
-    assert (vista["mudam"], vista["com_partes_fora"]) == (1, 1)
-    [depois] = [
-        l
-        for l in casal.pedir("flavio", "GET", "/api/lancamentos").json()
-        if l["id"] == compra["id"]
-    ]
-    assert depois["categoria_ids"] == [] and depois["versao"] == 1
-
-
 def test_sugestao_leva_a_compra_com_partes_e_o_favorito_a_conta_pelas_partes(casal: Casal):
     conta, roupa, casa = casal.conta(), casal.categoria("Roupa"), casal.categoria("Casa")
     for dia in range(1, 6):

@@ -402,6 +402,19 @@ def lancamentos_do_resultado(conn, criterios: CriteriosDaBusca) -> tuple[list[UU
     return avulsos, parcelamentos
 
 
+def partes_achadas_no_resultado(
+    conn, criterios: CriteriosDaBusca, ids: list[UUID]
+) -> dict[UUID, set[UUID]] | None:
+    """Das compras com partes entre `ids`, as partes que batem com os filtros de categoria, tag e
+    pessoa (a edição em lote só muda essas, ticket 150); vazio para a que não tem nenhuma. Sem
+    esses filtros, `None`: valem todas as partes."""
+    do_lancamento = _do_lancamento(criterios)
+    if do_lancamento.de == "lancamentos":
+        return None
+    achadas = _partes_achadas(conn, do_lancamento, ids)
+    return {id: set(achadas.get(id, [])) for id in ids}
+
+
 def buscar(conn, criterios: PedidoDeBusca) -> ResultadoDaBusca:
     do_lancamento = _do_lancamento(criterios)
     linhas, parametros_das_linhas = _linhas(criterios)
