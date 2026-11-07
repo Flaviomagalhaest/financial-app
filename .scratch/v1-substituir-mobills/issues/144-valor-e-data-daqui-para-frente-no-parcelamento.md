@@ -1,7 +1,7 @@
 # Valor e data "daqui para frente" e conta no parcelamento
 
 Type: grilling
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Opus
