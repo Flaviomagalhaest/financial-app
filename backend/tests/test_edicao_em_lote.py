@@ -355,7 +355,7 @@ def test_tudo_ou_nada_desfaz_as_partes_ja_gravadas_quando_uma_falha(
     conta, mercado, casa = casal.conta(), casal.categoria("Mercado"), casal.categoria("Casa")
     lancados = [lancar(casal, conta, [mercado], data=f"2026-10-0{d}") for d in range(1, 5)]
     monkeypatch.setattr(edicao_em_lote, "POR_TRANSACAO", 1)
-    original = edicao_em_lote._aplicar_parte
+    original = edicao_em_lote._aplicar_bloco
     partes = [0]
 
     def falhar_na_terceira(conn, *args):
@@ -364,7 +364,7 @@ def test_tudo_ou_nada_desfaz_as_partes_ja_gravadas_quando_uma_falha(
             raise edicao_em_lote.LoteRecusado("o lançamento mudou no meio")
         return original(conn, *args)
 
-    monkeypatch.setattr(edicao_em_lote, "_aplicar_parte", falhar_na_terceira)
+    monkeypatch.setattr(edicao_em_lote, "_aplicar_bloco", falhar_na_terceira)
 
     resposta = aplicar(
         casal, marcados(*lancados), categorias={"acao": "acrescentar", "categoria_ids": [casa]}
@@ -501,7 +501,7 @@ def test_lote_recusado_no_meio_reenviado_e_recusado_de_novo(
         raise edicao_em_lote.LoteRecusado("o lote deixaria 1 lançamento sem categoria")
 
     with monkeypatch.context() as so_agora:
-        so_agora.setattr(edicao_em_lote, "_aplicar_parte", recusar)
+        so_agora.setattr(edicao_em_lote, "_aplicar_bloco", recusar)
         aplicar(casal, marcados(feira), id=id, **mudanca)
     reenvio = aplicar(casal, marcados(feira), id=id, **mudanca)
 

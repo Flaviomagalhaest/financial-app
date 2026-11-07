@@ -93,3 +93,45 @@ test("todos do resultado: a prévia recusa o lote que deixaria lançamento sem c
   await expect(folha.getByRole("alert")).toHaveText("o lote deixaria 1 lançamento sem categoria");
   await expect(folha.getByRole("button", { name: /Aplicar/ })).toHaveCount(0);
 });
+
+test("a compra com partes muda nas partes, e a prévia mostra cada parte que muda", async ({ page }) => {
+  const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/#/busca");
+  await entrar(page);
+  const api = await apiDaPagina(page);
+  const { conta, mercado, casa } = await preparar(api, s);
+  const parte = (descricao: string, valor_centavos: number, categoria_ids: string[]) => ({ id: randomUUID(), descricao, valor_centavos, categoria_ids, tags: [] });
+  await api.criar("/api/lancamentos", {
+    id: randomUUID(),
+    tipo: "despesa",
+    valor_centavos: 10000,
+    data: "2026-03-02",
+    descricao: `Loja ${s}`,
+    conta_id: conta.id,
+    categoria_ids: [],
+    tags: [],
+    partes: [parte("Vassoura", 6000, [casa.id]), parte("Arroz", 4000, [mercado.id])],
+  });
+
+  await buscar(page, s);
+  await page.getByRole("button", { name: "Selecionar para editar em lote" }).click();
+  await page.getByLabel(`Marcar Loja ${s}`).check();
+  await page.getByRole("button", { name: "Editar em lote" }).click();
+  const folha = page.getByRole("dialog", { name: "Editar em lote" });
+  await folha.getByRole("group", { name: "Categorias de despesa" }).getByRole("button", { name: `Casa ${s}` }).click();
+  await folha.getByRole("button", { name: "Ver prévia" }).click();
+
+  const previa = folha.getByRole("region", { name: "Prévia" });
+  await expect(previa).toContainText("1 muda, 0 já estão como pedido.");
+  await expect(previa).toContainText("Nas compras com partes, 1 parte muda.");
+  const antesEDepois = previa.getByRole("list", { name: "Antes e depois" });
+  // A vassoura já está na Casa: só o arroz aparece.
+  await expect(antesEDepois.getByLabel("Arroz")).toContainText(`Arroz: Mercado ${s} → Mercado ${s}, Casa ${s}`);
+  await expect(antesEDepois.getByLabel("Vassoura")).toHaveCount(0);
+  await folha.getByRole("button", { name: "Aplicar em 1 lançamento" }).click();
+
+  await expect(folha).toBeHidden();
+  await expect(page.getByRole("status")).toContainText(`Edição aplicada em 1 lançamento: Categorias: acrescentar Casa ${s}.`);
+  const [compra] = (await api.ler("/api/lancamentos")).filter((l: { descricao: string }) => l.descricao === `Loja ${s}`);
+  expect(compra.partes.map((p: { categoria_ids: string[] }) => p.categoria_ids.sort())).toEqual([[casa.id], [mercado.id, casa.id].sort()]);
+});

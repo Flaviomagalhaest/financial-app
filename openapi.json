@@ -4742,6 +4742,14 @@
             },
             "type": "array",
             "title": "Tags"
+          },
+          "partes": {
+            "items": {
+              "$ref": "#/components/schemas/Parte"
+            },
+            "type": "array",
+            "title": "Partes",
+            "default": []
           }
         },
         "type": "object",
@@ -9604,10 +9612,9 @@
             "type": "integer",
             "title": "Estornos Fora"
           },
-          "com_partes_fora": {
+          "partes_que_mudam": {
             "type": "integer",
-            "title": "Com Partes Fora",
-            "default": 0
+            "title": "Partes Que Mudam"
           },
           "amostra": {
             "items": {
@@ -9637,6 +9644,7 @@
           "de_outro_tipo",
           "trocam_de_item",
           "estornos_fora",
+          "partes_que_mudam",
           "amostra",
           "recusa"
         ],

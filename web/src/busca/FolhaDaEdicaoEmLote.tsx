@@ -213,15 +213,33 @@ export function FolhaDaEdicaoEmLote({
             {contagem(previa.mudam, "muda", "mudam")}, {previa.ja_estao_como_pedido} já {previa.ja_estao_como_pedido === 1 ? "está" : "estão"} como pedido.
           </p>
           {previa.de_outro_tipo > 0 && <p className="vazio">{contagem(previa.de_outro_tipo, "fica com as categorias que tem", "ficam com as categorias que têm")}: a categoria pedida é de outro tipo.</p>}
-          {previa.trocam_de_item > 0 && <p className="vazio">{contagem(previa.trocam_de_item, "lançamento troca", "lançamentos trocam")} de item do planejamento.</p>}
+          {previa.partes_que_mudam > 0 && <p className="vazio">Nas compras com partes, {contagem(previa.partes_que_mudam, "parte muda", "partes mudam")}.</p>}
+          {previa.trocam_de_item > 0 && <p className="vazio">{contagem(previa.trocam_de_item, "lançamento ou parte troca", "lançamentos ou partes trocam")} de item do planejamento.</p>}
           {previa.estornos_fora > 0 && <p className="vazio">{contagem(previa.estornos_fora, "estorno fica", "estornos ficam")} de fora: o estorno muda junto com a compra.</p>}
           {previa.amostra.length > 0 && (
             <ul className="lista" aria-label="Antes e depois">
-              {previa.amostra.map(({ lancamento, categoria_ids, tags }) => (
+              {previa.amostra.map(({ lancamento, categoria_ids, tags, partes }) => (
                 <li key={lancamento.id}>
                   <strong>{tituloDoLancamento(lancamento, categorias)}</strong>
-                  <p className="vazio">Antes: {classificacao(lancamento.categoria_ids, lancamento.tags)}</p>
-                  <p>Depois: {classificacao(categoria_ids, tags) || "sem categoria"}</p>
+                  {lancamento.partes.length > 0 ? (
+                    // A compra com partes muda nas partes: só as que mudam aparecem.
+                    lancamento.partes.map((antes, i) => {
+                      const depois = partes[i];
+                      const de = classificacao(antes.categoria_ids, antes.tags);
+                      const para = classificacao(depois.categoria_ids, depois.tags);
+                      if (de === para) return null;
+                      return (
+                        <p key={antes.id} aria-label={antes.descricao || `Parte ${i + 1}`}>
+                          {antes.descricao || `Parte ${i + 1}`}: <span className="vazio">{de}</span> → {para || "sem categoria"}
+                        </p>
+                      );
+                    })
+                  ) : (
+                    <>
+                      <p className="vazio">Antes: {classificacao(lancamento.categoria_ids, lancamento.tags)}</p>
+                      <p>Depois: {classificacao(categoria_ids, tags) || "sem categoria"}</p>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
