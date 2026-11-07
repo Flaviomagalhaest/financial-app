@@ -802,6 +802,34 @@ def test_excluir_o_parcelamento_deixa_as_parcelas_de_fatura_paga_e_o_encolhe_ate
     assert depois["2026-04-01"][0] == 0
 
 
+def test_so_a_primeira_de_fatura_paga_fica_um_2x_sem_a_segunda_que_nao_volta_na_correcao(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch, database_url: str
+):
+    # Hoje é 10/03: só janeiro está paga; fevereiro fechou sem pagamento. O encolhido seria um
+    # 1x, que a tabela recusa: fica um 2x com a 2ª excluída uma a uma (decisão do ticket 176).
+    _, id = parcelamento_de_janeiro(casal, monkeypatch, ["2026-01-01"], "2026-03-10")
+
+    assert excluir_parcelamento(casal, id, confirmar_realizadas=True).status_code == 204
+    fazer_tarefa_diaria(database_url)
+
+    # A que ficou não muda de valor, mesmo com a regra de 2x.
+    assert [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, id)] == [(1, 10000)]
+    regra = o_parcelamento(casal, id)
+    assert (regra["parcelas"], regra["valor_total_centavos"]) == (2, 10000)
+
+    # A correção parte de 2, como a de qualquer encolhido: não vai a 1x, e a 3x gera a 3ª sem
+    # trazer de volta a 2ª nem mexer na da fatura paga.
+    um = corrigir_parcelamento(casal, id, parcelas=1, confirmar_realizadas=True)
+    tres = corrigir_parcelamento(casal, id, parcelas=3, confirmar_realizadas=True)
+    fazer_tarefa_diaria(database_url)
+
+    assert um.status_code == 422
+    assert tres.status_code == 200, tres.text
+    numeros_e_valores = [(l["parcela"], l["valor_centavos"]) for l in parcelas(casal, id)]
+    assert [n for n, _ in numeros_e_valores] == [1, 3]
+    assert numeros_e_valores[0] == (1, 10000)
+
+
 def test_a_parcela_antes_da_ultima_de_fatura_paga_sai_e_o_aviso_diz_quantas_ficam(
     casal: Casal, monkeypatch: pytest.MonkeyPatch, database_url: str
 ):
