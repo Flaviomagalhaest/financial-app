@@ -595,6 +595,8 @@ test.describe("sem service worker", () => {
       await rota.fulfill({ response: resposta, json: lista.filter((l) => l.parcela !== 1) });
     });
     await aba(page, "Hoje");
+    // Sem esperar a Hoje, a volta chega antes de a tela do parcelamento sair e ela não lê de novo.
+    await expect(page.getByRole("heading", { name: "Hoje", level: 2 })).toBeVisible();
     await page.evaluate((destino) => (window.location.hash = destino), `#/parcelamento/${id}`);
     await expect(page.getByLabel("Descrição")).toHaveValue(descricao);
     await expect(page.getByRole("button", { name: /^Parcela 2|2\/6/ }).or(page.getByText("02/06")).first()).toBeVisible();
