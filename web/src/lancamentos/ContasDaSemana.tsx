@@ -77,6 +77,11 @@ function ContaDeTransferencia({ t, onConfirmada }: { t: Transferencia; onConfirm
   );
 }
 
+/** A compra à vista com partes não confirma com outro valor: as partes são valores (ticket 156). */
+function soTemValorPelasPartes(l: LancamentoNaTela): boolean {
+  return !!l.partes?.length && !l.parcelamento_id && !l.recorrencia_id;
+}
+
 /**
  * Previstos a confirmar (atrasados e os dos próximos 7 dias), com "Confirmar" em um toque ou
  * "Ajustar". A confirmação vai pela fila: sem internet, o previsto sai daqui e fica realizado ⏳.
@@ -159,6 +164,9 @@ export function ContasDaSemana({ lancamentos, transferencias }: Props) {
                     {formatarCentavos(ajuste.valor_centavos)}
                   </p>
                   <Teclado centavos={ajuste.valor_centavos} onMudar={(valor_centavos) => setAjustando({ ...ajuste, valor_centavos })} />
+                  {soTemValorPelasPartes(l) && ajuste.valor_centavos !== l.valor_centavos && (
+                    <p className="erro">O valor da compra com partes muda editando as partes.</p>
+                  )}
                   <label htmlFor={`data-${l.id}`}>Data</label>
                   <input id={`data-${l.id}`} type="date" value={ajuste.data} required onChange={(e) => setAjustando({ ...ajuste, data: e.target.value })} />
                   <div className="fileira" role="group" aria-label="Conta">
@@ -171,7 +179,7 @@ export function ContasDaSemana({ lancamentos, transferencias }: Props) {
                   <div className="acoes">
                     <button
                       type="button"
-                      disabled={enviando || ajuste.valor_centavos === 0 || !ajuste.data}
+                      disabled={enviando || ajuste.valor_centavos === 0 || !ajuste.data || (soTemValorPelasPartes(l) && ajuste.valor_centavos !== l.valor_centavos)}
                       onClick={() => {
                         const { id: _, ...ajustes } = ajuste;
                         void confirmar(l, ajustes);

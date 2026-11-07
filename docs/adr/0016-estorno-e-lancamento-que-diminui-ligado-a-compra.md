@@ -60,6 +60,14 @@ Decidido com o dono no [ticket 148](../../.scratch/v1-substituir-mobills/issues/
 
 A implementação é o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md).
 
+## Adendo (ticket 152)
+
+Decidido com o dono no [ticket 152](../../.scratch/v1-substituir-mobills/issues/152-estorno-avulso-pendencias.md); a implementação é o [ticket 189](../../.scratch/v1-substituir-mobills/issues/189-estorno-avulso-item-fatura-e-testes.md):
+
+- **Item do planejamento**: o avulso tem classificação própria, então a tela "Lançar crédito" pergunta o item como na compra, quando as categorias escolhidas têm dois ou mais itens no mês. "A escolher" na Hoje fica para o que chegar sem escolha. O estorno ligado continua sem escolha própria.
+- **Devido negativo**: o servidor recusa (422) o avulso que deixaria o devido da fatura dele (saldo anterior + compras + ajuste, com os créditos) abaixo de zero. A conferência só roda ao salvar o avulso (criação e edição, inclusive a troca de data ou de fatura). Excluir ou mover compra, ajuste negativo e o estorno ligado (que já tem o teto da compra) não ganham trava: o cenário é raro, e a ADR 0021 segue sem saldo anterior negativo. O aparelho não confere: sem internet, o avulso sobe pela fila e a recusa aparece como qualquer recusa da fila.
+- **Mês sem fatura**: "Lançar crédito" aparece em qualquer mês que não esteja pago, com ou sem fatura criada. A data decide a fatura, e ela nasce com as datas padrão (`garantir_fatura`), como na primeira compra.
+
 ## Adendo (ticket 159)
 
 Decidido com o dono no [ticket 159](../../.scratch/v1-substituir-mobills/issues/159-estorno-de-parte-e-de-parcelas-pendencias.md), sobre o que o 138 deixou provisório:
@@ -71,4 +79,4 @@ Decidido com o dono no [ticket 159](../../.scratch/v1-substituir-mobills/issues/
 - **Limite do estorno de todas no parcelamento**: a correção do parcelamento e a exclusão de uma parcela que deixariam a soma das parcelas que ficam (na parte, a soma da parte nelas) abaixo do já estornado são recusadas (422) antes de gravar; as que ficam no limite passam. Junta-se à implementação do adendo do ticket 148.
 - **Pessoa do estorno ligado**: acompanha a da compra, da parte, da parcela ou do parcelamento, como as categorias e as tags: o servidor a copia ao criar o estorno, a acompanha quando ela muda e ignora a que o cliente manda. O estorno avulso guarda a pessoa que o casal deu. O dado antigo se acerta quando a compra mudar, sem migração.
 
-A implementação é o [ticket 189](../../.scratch/v1-substituir-mobills/issues/189-item-e-pessoa-do-estorno-acompanham-a-compra.md) (item e pessoa) e o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md) (limite).
+A implementação é o [ticket 190](../../.scratch/v1-substituir-mobills/issues/190-item-e-pessoa-do-estorno-acompanham-a-compra.md) (item e pessoa) e o [ticket 188](../../.scratch/v1-substituir-mobills/issues/188-regras-que-tiram-parcela-ou-ocorrencia-com-estorno.md) (limite).

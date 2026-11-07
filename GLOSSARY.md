@@ -172,7 +172,7 @@ Uma linha do planejamento do mês, de uma única categoria e com um valor (ex.: 
 _Avoid_: teto, limite, meta
 
 **Escolha do item**:
-A categoria, entre as do lançamento, cujo item do planejamento o casal escolheu para ele contar quando duas ou mais têm item no mês. Vale em qualquer mês em que essa categoria tem item, nunca muda sozinha e sai quando a categoria sai do lançamento; a recorrência e o parcelamento a guardam, e seus lançamentos já nascem com ela. O estorno não tem escolha própria: conta no item em que a compra conta.
+A categoria, entre as do lançamento, cujo item do planejamento o casal escolheu para ele contar quando duas ou mais têm item no mês. Vale em qualquer mês em que essa categoria tem item, nunca muda sozinha e sai quando a categoria sai do lançamento; a recorrência e o parcelamento a guardam, e seus lançamentos já nascem com ela. O estorno ligado a uma compra não tem escolha própria: conta no item em que a compra conta. O estorno avulso tem a dele, como a compra.
 _Avoid_: item principal, categoria principal
 
 **A escolher**:
@@ -266,7 +266,7 @@ Crédito de uma compra devolvida, que aparece numa fatura posterior ligado à co
 _Avoid_: reembolso, devolução
 
 **Estorno avulso**:
-Crédito que aparece como linha própria na fatura sem uma compra identificável (uma correção de centavos, um crédito de loja), lançado um por um quando aparece; diminui o total da fatura e do mês, como o estorno, mas não está ligado a compra nem tem o limite do valor dela; a categoria, as tags e a pessoa são opcionais.
+Crédito que aparece como linha própria na fatura sem uma compra identificável (uma correção de centavos, um crédito de loja), lançado um por um quando aparece; diminui o total da fatura e do mês, como o estorno, mas não está ligado a compra nem tem o limite do valor dela, mas não pode deixar a fatura devendo menos que zero; a categoria, as tags e a pessoa são opcionais, e o item do planejamento é escolhido nele como na compra.
 _Avoid_: crédito avulso, reembolso
 
 **Parte da compra**:

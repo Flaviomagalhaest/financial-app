@@ -1,7 +1,7 @@
 # Estorno avulso: item do planejamento na tela, fatura negativa e testes no aparelho
 
 Type: decision
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling`, `domain-modeling` (HITL: decisão do dono); depois `implement`, `tdd`
 Modelo recomendado: Opus
@@ -19,6 +19,15 @@ Origem: [ticket 135](135-estorno-avulso.md): pendências da revisão (Spec) do e
 
 ## Checklist
 
-- [ ] Decidir os três primeiros pontos e gravar no adendo da ADR 0016
-- [ ] Abrir o ticket de implementação, com teste de API e de navegador
-- [ ] Cobrir os testes que faltam
+- [x] Decidir os três primeiros pontos e gravar no adendo da ADR 0016
+- [x] Abrir o ticket de implementação, com teste de API e de navegador ([ticket 189](189-estorno-avulso-item-fatura-e-testes.md))
+- [x] Cobrir os testes que faltam: passaram para o [ticket 189](189-estorno-avulso-item-fatura-e-testes.md), com o sinal de crédito da "A escolher"
+
+## Answer
+
+Decidido com o dono (grilling):
+
+- **Item do planejamento**: a tela "Lançar crédito" pergunta o item como na compra; "A escolher" fica para o que chegar sem escolha.
+- **Fatura com total negativo**: o servidor recusa o avulso que deixaria o devido da fatura abaixo de zero, só ao salvar o avulso (criação e edição). Os outros caminhos não ganham trava e o aparelho não confere: o cenário é raro, e a ADR 0021 segue sem saldo anterior negativo.
+- **Mês sem fatura**: "Lançar crédito" aparece em qualquer mês não pago; a data decide a fatura, que nasce com as datas padrão.
+- Tudo vai num ticket de implementação só, o [189](189-estorno-avulso-item-fatura-e-testes.md). Adendo do ticket 152 na [ADR 0016](../../../docs/adr/0016-estorno-e-lancamento-que-diminui-ligado-a-compra.md); verbete "Estorno avulso" do `GLOSSARY.md` atualizado.
