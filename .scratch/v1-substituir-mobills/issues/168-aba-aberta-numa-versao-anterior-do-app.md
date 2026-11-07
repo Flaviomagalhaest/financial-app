@@ -26,7 +26,9 @@ O ticket 164 subiu o banco do aparelho (`financial-app-dados`) para a versão 2.
 - **A aba recarrega sempre, sozinha**, quando o service worker de uma versão nova assume (`controllerchange`), mesmo com uma tela de lançamento aberta: o que estiver sendo digitado se perde. Sem aviso "Nova versão".
 - **O `VersionError` do banco do aparelho recarrega do mesmo jeito**: ele prova que o código da aba é mais antigo que o banco.
 - **A primeira instalação não recarrega**: o `controllerchange` de uma página que não tinha controlador não conta.
-- **No máximo uma recarga sozinha a cada 10 s** (marca em `sessionStorage`): um banco mais novo que o código servido (deploy que volta atrás) não vira laço; a aba segue com o erro, sem aviso novo.
+- **No máximo uma recarga pelo `VersionError` a cada 10 s** (marca em `sessionStorage`): um banco mais novo que o código servido (deploy que volta atrás) não vira laço; a aba segue com o erro, sem aviso novo. A recarga pelo `controllerchange` não passa pela marca: cada troca de controlador acontece uma vez, e a marca engoliria a troca que viesse logo depois de uma recarga pelo banco (revisão Spec).
+
+As abas que já rodam o código anterior a este ticket não têm o ouvinte: a primeira publicação dele não as recarrega, e a recarga sozinha vale a partir da publicação seguinte.
 
 Implementado em `web/src/dados/novaVersao.ts` (ligado em `web/src/main.tsx` e na abertura do banco em `web/src/dados/armazem.ts`; dentro do service worker, nada recarrega). Testes em `web/e2e/nova-versao.spec.ts`: a versão nova do service worker é simulada trocando um caractere da versão no `dist/service-worker.js` servido, e o código novo do banco, pedindo a versão 3 em vez da 2 nas abas carregadas depois de publicado.
 

@@ -7,12 +7,13 @@ import { esperarFilaVazia } from "./fila";
 import { cadastrar, lancar } from "./lancar";
 
 /** Marca a página carregada; a marca some quando a aba recarrega. */
-const marcar = (page: Page) => page.evaluate(() => void ((window as unknown as { __marca: boolean }).__marca = true));
-const marcada = (page: Page) => page.evaluate(() => (window as unknown as { __marca?: boolean }).__marca === true);
+const marcar = (page: Page) => page.evaluate(() => void ((window as unknown as { __semRecarga: boolean }).__semRecarga = true));
+const semRecarga = (page: Page) => page.evaluate(() => (window as unknown as { __semRecarga?: boolean }).__semRecarga === true);
 
 /**
  * Publica uma versão nova do app enquanto `passo` roda: o service worker servido muda um caractere
- * da versão, sem mudar de tamanho (o `vite preview` guarda o tamanho dos arquivos ao subir).
+ * da versão, sem mudar de tamanho (o `vite preview` guarda o tamanho dos arquivos ao subir). Mexe no
+ * `dist/` que todos os testes servem: só vale com um teste por vez (`workers: 1`).
  */
 async function comVersaoNova(passo: () => Promise<void>) {
   const arquivo = new URL("../dist/service-worker.js", import.meta.url);
@@ -37,6 +38,9 @@ test("a aba aberta recarrega quando o service worker de uma versão nova assume"
   await entrar(page);
   await instalarCasca(page);
 
+  // Com um lançamento sendo digitado: ele se perde (decisão do dono).
+  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("button", { name: "7", exact: true }).click();
   await marcar(page);
   await comVersaoNova(async () => {
     const recarga = page.waitForEvent("load");
@@ -44,18 +48,20 @@ test("a aba aberta recarrega quando o service worker de uma versão nova assume"
     await recarga;
   });
 
-  expect(await marcada(page)).toBe(false);
+  expect(await semRecarga(page)).toBe(false);
   await expect(page.getByText("Entrou como flavio@teste.com")).toBeVisible();
 });
 
 test("a primeira instalação do service worker não recarrega a aba", async ({ page }) => {
+  let cargas = 0;
+  page.on("load", () => cargas++);
   await page.goto("/");
-  await marcar(page);
   await entrar(page);
+  // Sem o reload de `instalarCasca`: o `clients.claim` põe a página sob o service worker.
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 
-  expect(await marcada(page)).toBe(true);
+  expect(cargas).toBe(1);
 });
 
 const BANCO = "financial-app-dados";
@@ -115,7 +121,7 @@ test("a aba anterior recarrega quando outra aba sobe o banco do aparelho e volta
   await nova.close();
   await aba(page, "Hoje");
   await recarga;
-  expect(await marcada(page)).toBe(false);
+  expect(await semRecarga(page)).toBe(false);
 
   await aba(page, "Histórico");
   await expect(page.getByRole("listitem").filter({ hasText: `Feira ${s}` })).toContainText("− R$ 12,00");
