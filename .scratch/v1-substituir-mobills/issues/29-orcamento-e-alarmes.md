@@ -17,7 +17,7 @@ O dono é avisado por e-mail quando o custo ou os erros fogem do esperado, sem q
 
 - [x] Orçamento sem créditos com alertas em US$ 1 (real), US$ 5 (previsão) e US$ 5 (real), no mesmo código do CDK
 - [x] Alarme de erros 5xx da API acima de um limite por dia, por e-mail
-- [ ] Confirmado pela entrega de um alerta de teste no e-mail do dono
+- [x] Confirmado pela entrega de um alerta de teste no e-mail do dono (tópicos `Avisos` de dev e prod, em 2026-11-07, pelos alarmes de backup do [ticket 73](73-conferir-o-ciclo-de-vida-e-os-alarmes-do-backup.md); a inscrição do CDK tinha expirado sem confirmação e foi refeita à mão com `aws sns subscribe`). Falta só o e-mail do orçamento (`financial-orcamento`)
 - [ ] Dono confirma os valores provisórios: limite de 5 respostas 5xx por dia (`infra/lib/pilha-app.ts`) e teto de US$ 5 do orçamento (`infra/lib/pilha-orcamento.ts`)
 - [x] Verificações do projeto rodando e PR aberto para `main`
 
