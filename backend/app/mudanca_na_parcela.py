@@ -78,6 +78,9 @@ class _Mudanca:
     # A classificação que a correção gravou no parcelamento, para refazer nas parcelas.
     classificacao: dict[str, int] | None = None
     mantidas: set[int] = field(default_factory=set)
+    # Se as outras parcelas mudam de conta seguindo o parcelamento: a recusa no meio diz onde as
+    # que faltavam ficaram, e como levá-las.
+    no_cartao_se_segue_a_conta: bool | None = None
 
 
 # O que vai parcela a parcela, conforme o alcance.
@@ -264,18 +267,31 @@ def _por_no_cartao_novo(
     falta: list[tuple[Lancamento, dict]],
 ) -> None:
     """Põe o parcelamento e as parcelas que faltam no cartão novo como os lotes da conta as
-    deixariam, sem as regras da fatura paga (já conferidas em `_conferir_antes_de_gravar`): só
-    para a correção simular o refazer sobre elas, num savepoint desfeito em seguida."""
+    deixariam (a conta sem a marca, a fatura pedida com ela), sem as regras da fatura paga, já
+    conferidas em `_conferir_antes_de_gravar`: só para a correção simular o refazer sobre elas,
+    num savepoint desfeito em seguida. Uma linha por parcela, e não a edição inteira, para caber
+    numa transação mesmo no parcelamento longo (`parcelas_por_lote`)."""
     conn.execute(
         "UPDATE parcelamentos SET conta_id = %s WHERE id = %s", (conta_id, parcelamento_id)
     )
-    _seguir_a_conta_do_parcelamento(conn, editada, pendente.origem, fatura_pedida=False)
+    _seguir_a_conta_do_parcelamento(
+        conn, editada, pendente.origem, fatura_pedida="fatura_mes" in pendente.valores
+    )
     for outra, valores in falta:
-        if "conta_id" in valores:
-            _, mes = lancamentos.onde_ficaria(conn, outra, valores)
+        if "conta_id" not in valores:
+            continue
+        _, mes = lancamentos.onde_ficaria(conn, outra, valores)
+        conn.execute(
+            "UPDATE lancamentos SET conta_id = %s, mes = %s WHERE id = %s",
+            (valores["conta_id"], mes, outra.id),
+        )
+        if "fatura_mes" in valores:
             conn.execute(
-                "UPDATE lancamentos SET conta_id = %s, mes = %s WHERE id = %s",
-                (valores["conta_id"], mes, outra.id),
+                "INSERT INTO lancamento_campos"
+                " (lancamento_id, campo, versao, alterado_por, alterado_em)"
+                " VALUES (%s, 'fatura_mes', %s, %s, now())"
+                " ON CONFLICT (lancamento_id, campo) DO UPDATE SET origem = NULL",
+                (outra.id, outra.versao, pendente.usuario),
             )
 
 
@@ -383,7 +399,7 @@ def _mudar_a_parcela(
             **na_regra, confirmar_realizadas=alteracao.confirmar_realizadas
         )
 
-        def gravar_a_correcao(conferir_os_lotes: bool = True):
+        def gravar_a_correcao(conferir_os_lotes: bool):
             return parcelamentos.gravar_correcao(
                 conn,
                 regra.id,
@@ -395,15 +411,22 @@ def _mudar_a_parcela(
                 conferir_os_lotes=conferir_os_lotes,
             )
 
-        # O cartão reemitido junto com a data ou o valor (ticket 196): o refazer roda com as
-        # parcelas já no cartão novo, e é essa combinação que a correção confere antes de gravar.
-        no_cartao_novo = conta_na_regra and bool(na_regra.keys() - CLASSIFICACAO)
-        if no_cartao_novo:
+        # O cartão reemitido junto com a data ou o valor (ticket 196), também o pedido de novo
+        # para as parcelas que uma recusa deixou no antigo: o refazer roda com elas já no cartão
+        # novo, e é essa combinação que a correção confere antes de gravar.
+        simular_no_cartao_novo = (
+            bool(na_regra.keys() - CLASSIFICACAO)
+            and segue_a_conta
+            and (conta_na_regra or any("conta_id" in valores for _, valores in falta))
+        )
+        if simular_no_cartao_novo:
             with conn.transaction():
                 _por_no_cartao_novo(conn, regra.id, mudou["conta_id"], editada, pendente, falta)
-                gravar_a_correcao()
+                gravar_a_correcao(conferir_os_lotes=True)
                 raise psycopg.Rollback()
-        correcao = gravar_a_correcao(conferir_os_lotes=not no_cartao_novo)
+            correcao = gravar_a_correcao(conferir_os_lotes=False)
+        else:
+            correcao = gravar_a_correcao(conferir_os_lotes=True)
         mudanca.classificacao = correcao.classificacao
         mudanca.mantidas |= correcao.mantidas
     elif realizadas and not alteracao.confirmar_realizadas:
@@ -412,6 +435,7 @@ def _mudar_a_parcela(
         )
     mudanca.mantidas.discard(antes.parcela)
     if segue_a_conta:
+        mudanca.no_cartao_se_segue_a_conta = no_cartao
         if conta_na_regra:
             # Junto com o pedido: se ele cair no meio, a tarefa diária termina as que faltam.
             conn.execute(
@@ -484,6 +508,13 @@ def _mudar_um_lote(conn, parcelamento_id: UUID) -> bool:
     )
 
 
+def _ficaram_na_antiga(no_cartao: bool) -> str:
+    """Onde ficaram as parcelas que faltavam quando a conta foi para o parcelamento e a mudança
+    parou, e como levá-las (ticket 196)."""
+    onde = "no cartão antigo" if no_cartao else "na conta antiga"
+    return f'ficaram {onde}: mude a conta de uma delas de novo, em "todas"'
+
+
 def _desistir(conn, parcelamento_id: UUID, recusa: HTTPException) -> None:
     """Tira o pendente e grava no parcelamento a recusa, com a parcela em que a mudança parou,
     para o casal ver na tela do parcelamento (ticket 149)."""
@@ -493,10 +524,10 @@ def _desistir(conn, parcelamento_id: UUID, recusa: HTTPException) -> None:
     pendente = _PorParcela.ler(texto)
     motivo = f"{recusa.detail}."
     if pendente and pendente.origem:
-        # O parcelamento já está no cartão novo; o casal leva as que faltavam com "todas".
+        # O parcelamento já está na conta nova; o casal leva as que faltavam com "todas".
         motivo += (
-            f" Da {pendente.desde}ª parcela em diante, as que faltavam mudar ficaram no cartão"
-            ' antigo: mude a conta de uma delas de novo, em "todas"'
+            f" Da {pendente.desde}ª parcela em diante, as que faltavam mudar"
+            f" {_ficaram_na_antiga(pendente.no_cartao)}"
         )
     elif pendente:
         motivo += (
@@ -640,9 +671,14 @@ def mudar_parcela(
                     " as demais ficaram como estavam"
                 ) from e
     if recusa:
+        ficaram = (
+            "ficaram como estavam"
+            if mudanca.no_cartao_se_segue_a_conta is None
+            else _ficaram_na_antiga(mudanca.no_cartao_se_segue_a_conta)
+        )
         raise recusar(
             f"{recusa.detail}. A parcela, a classificação e as primeiras das outras parcelas"
-            " mudaram; as demais ficaram como estavam"
+            f" mudaram; as demais {ficaram}"
         ) from recusa
     with conectar(url) as conn:
         [parcela] = lancamentos.ler_por_ids(conn, [id]) or [None]
