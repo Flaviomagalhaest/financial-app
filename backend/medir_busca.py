@@ -3,7 +3,7 @@
 imprime a mediana. Apaga as tabelas do schema `public`: use só num banco de teste.
 
 Uso: DATABASE_URL=... (Postgres) ou DSQL_ENDPOINT=... e AWS_REGION=... (Aurora DSQL, ticket 119),
-depois `uv run python medir_busca.py [lançamentos avulsos] [parcelamentos de 5 parcelas]`.
+depois `uv run python medir_busca.py [lançamentos avulsos] [parcelamentos de 5 parcelas] [--explicar]`.
 """
 
 import statistics
@@ -117,8 +117,10 @@ CENARIOS = {
 
 
 def main() -> None:
-    avulsos = int(sys.argv[1]) if len(sys.argv) > 1 else 100_000
-    parcelamentos = int(sys.argv[2]) if len(sys.argv) > 2 else 4_000
+    numeros = [a for a in sys.argv[1:] if not a.startswith("--")]
+    avulsos = int(numeros[0]) if numeros else 100_000
+    parcelamentos = int(numeros[1]) if len(numeros) > 1 else 4_000
+    explicar = "--explicar" in sys.argv
     with conectar(autocommit=True, admin=True) as conn:
         gerar(conn, avulsos, parcelamentos)
         total = conn.execute("SELECT count(*) FROM lancamentos").fetchone()[0]
@@ -145,6 +147,31 @@ def main() -> None:
                 f"{nome:36} {statistics.median(tempos):7.0f} ms"
                 f"  ({resultado.totais.quantidade} linhas achadas)"
             )
+        if explicar:
+            explicar_as_lentas(conn)
+
+
+def _cronometrar(conn, sql: str, parametros=()) -> float:
+    inicio = time.perf_counter()
+    conn.execute(sql, parametros).fetchall()
+    return (time.perf_counter() - inicio) * 1000
+
+
+def explicar_as_lentas(conn) -> None:
+    """Separa o custo de ler a tabela do custo da consulta da busca e mostra o plano das lentas
+    (`--explicar`, ticket 119): o plano diz onde o DSQL gasta os segundos."""
+    print("\n== linhas base ==")
+    for nome, sql in {
+        "count(*) em lancamentos": "SELECT count(*) FROM lancamentos",
+        "group by id (sem filtro)": "SELECT count(*) FROM (SELECT id FROM lancamentos GROUP BY 1) g",
+        "ida e volta (SELECT 1)": "SELECT 1",
+    }.items():
+        print(f"{nome:36} {statistics.median(_cronometrar(conn, sql) for _ in range(3)):7.0f} ms")
+    for nome in ("sem filtro, 1ª página", "período 2024", "texto 'mercado'"):
+        linhas, parametros = busca._linhas(busca.PedidoDeBusca(**CENARIOS[nome]))
+        print(f"\n== plano dos totais: {nome} ==")
+        for (linha,) in conn.execute(f"EXPLAIN ANALYZE SELECT count(*) FROM {linhas}", parametros):
+            print(linha)
 
 
 if __name__ == "__main__":
