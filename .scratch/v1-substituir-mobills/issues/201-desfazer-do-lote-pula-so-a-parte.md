@@ -1,7 +1,7 @@
 # Desfazer da edição em lote pula só a parte cuja classificação mudou
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
@@ -23,10 +23,16 @@ Hoje o desfazer de uma edição em lote volta a compra com partes inteira ou a p
 
 ## Checklist
 
-- [ ] Teste de API: parte reclassificada depois do lote é pulada e as outras partes da mesma compra voltam
-- [ ] Teste de API: descrição, valor, pessoa ou ordem das partes mudados depois do lote não impedem o desfazer
-- [ ] Teste de API: parte apagada (`excluido`), parte com categoria de antes juntada ou excluída (`saiu`), parte criada depois (fica de fora) e compra que perdeu todas as partes (pulada inteira)
-- [ ] Teste de API: a mesma regra no parcelamento com partes e na parcela com partes próprias
-- [ ] Teste de API: `desfeitos` conta a compra com pelo menos uma parte de volta; o pulado traz `parte_id`, `parte_descricao`, quem e quando
-- [ ] Implementar no servidor e regenerar o `openapi.json` e o schema do app
-- [ ] Tela: a parte pulada aparece com o nome da compra e da parte, com spec
+- [x] Teste de API: parte reclassificada depois do lote é pulada e as outras partes da mesma compra voltam
+- [x] Teste de API: descrição, valor, pessoa ou ordem das partes mudados depois do lote não impedem o desfazer
+- [x] Teste de API: parte apagada (`excluido`), parte com categoria de antes juntada ou excluída (`saiu`), parte criada depois (fica de fora) e compra que perdeu todas as partes (pulada inteira)
+- [x] Teste de API: a mesma regra no parcelamento com partes e na parcela com partes próprias
+- [x] Teste de API: `desfeitos` conta a compra com pelo menos uma parte de volta; o pulado traz `parte_id`, `parte_descricao`, quem e quando
+- [x] Implementar no servidor e regenerar o `openapi.json` e o schema do app
+- [x] Tela: a parte pulada aparece com o nome da compra e da parte, com spec
+
+## Answer
+
+Feito em 07/11. O desfazer olha cada parte (`_voltar_parte`): `saiu` primeiro (juntar a tag de antes muda a parte sem ninguém tê-la mudado), depois `mudou_depois` (categorias, tags ou item diferentes do que o lote deu), senão volta. A compra conta em `desfeitos` se uma parte voltou; a que ficou sem partes é pulada inteira.
+
+Cada parte do lote guarda o resultado, quem a mudou e quando (migrations 0082 a 0084, formato do backup na versão 36): o registro dos campos guarda só a última versão, e o próprio desfazer sobrescreve a de `partes`. O cancelamento do lote parado conta também a compra (ou o parcelamento) que voltou só em parte. Nenhuma pendência nova; os débitos de contagem seguem no [ticket 202](202-contas-da-edicao-em-lote-com-partes.md).

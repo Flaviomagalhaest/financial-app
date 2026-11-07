@@ -1274,23 +1274,18 @@ def _cancelar(url: str | None, id: UUID, usuario: str, motivo: str) -> str:
     with conectar(url) as conn:
         ficaram = sum(
             conn.execute(
-                f"SELECT count(*) FROM {tabela}"
-                " WHERE lote_id = %s AND resultado_do_desfazer <> 'desfeito'",
+                f"SELECT count(*) FROM {tabela} e WHERE lote_id = %s"
+                " AND (resultado_do_desfazer <> 'desfeito'"
+                # A compra (ou o parcelamento) que voltou só em parte também ficou com a mudança.
+                " OR EXISTS (SELECT FROM edicao_em_lote_partes r WHERE r.lote_id = e.lote_id"
+                f" AND r.dono_id = e.{dono} AND r.resultado_do_desfazer <> 'desfeito'))",
                 (id,),
             ).fetchone()[0]
-            for tabela in ("edicao_em_lote_lancamentos", "edicao_em_lote_parcelamentos")
+            for tabela, dono in (
+                ("edicao_em_lote_lancamentos", "lancamento_id"),
+                ("edicao_em_lote_parcelamentos", "parcelamento_id"),
+            )
         )
-    with conectar(url) as conn:
-        # A compra que voltou só em parte também ficou com a mudança do lote.
-        (em_parte,) = conn.execute(
-            "SELECT count(DISTINCT r.dono_id) FROM edicao_em_lote_partes r"
-            " JOIN edicao_em_lote_lancamentos e ON e.lote_id = r.lote_id"
-            " AND e.lancamento_id = r.dono_id"
-            " WHERE r.lote_id = %s AND r.resultado_do_desfazer <> 'desfeito'"
-            " AND e.resultado_do_desfazer = 'desfeito'",
-            (id,),
-        ).fetchone()
-    ficaram += em_parte
     if ficaram:
         motivo += (
             f"; {ficaram} lançamento{'s' if ficaram > 1 else ''} mudado depois "

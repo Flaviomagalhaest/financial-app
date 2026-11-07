@@ -392,7 +392,13 @@ def test_no_parcelamento_pula_so_a_parte_reclassificada_e_volta_as_outras(casal:
     desfeito = desfazer(casal, lote).json()
 
     assert desfeito["desfeitos"] == 3
-    assert [p["motivo"] for p in desfeito["pulados"]] == ["mudou_depois"] * 3
+    # Um pulado por parcela: a blusa dela, refeita pelo parcelamento.
+    blusas = {l["id"]: l["partes"][0]["id"] for l in parcelas(casal, criado["id"])}
+    assert {p["lancamento_id"]: p["parte_id"] for p in desfeito["pulados"]} == blusas
+    assert {(p["motivo"], p["alterado_por"]) for p in desfeito["pulados"]} == {
+        ("mudou_depois", "flavio")
+    }
+    assert all(p["alterado_em"] for p in desfeito["pulados"])
     assert [(p["categoria_ids"], p["tags"]) for p in regra(casal, criado["id"])["partes"]] == [
         ([eletronico], ["loja"]),
         ([casa], []),
@@ -430,4 +436,23 @@ def test_na_parcela_com_partes_proprias_pula_so_a_parte_reclassificada(casal: Ca
         [([roupa], []), ([casa], [])],
         [([eletronico], ["loja"]), ([casa], [])],
         [([roupa], []), ([casa], [])],
+    ]
+
+
+def test_a_parte_com_categoria_de_antes_excluida_depois_sai(casal: Casal):
+    compra, roupa, _, presente = _tres_partes(casal)
+    lote = aplicada(
+        casal,
+        marcados(compra),
+        categorias={"acao": "trocar", "categoria_ids": [roupa], "por": presente},
+    )
+    excluida = casal.pedir("flavio", "DELETE", f"/api/categorias/{roupa}")
+    assert excluida.status_code in (200, 204), excluida.text
+
+    desfeito = desfazer(casal, lote).json()
+
+    assert desfeito["desfeitos"] == 0
+    assert [(p["parte_descricao"], p["motivo"]) for p in desfeito["pulados"]] == [
+        ("Vestido", "saiu"),
+        ("Fone", "saiu"),
     ]
