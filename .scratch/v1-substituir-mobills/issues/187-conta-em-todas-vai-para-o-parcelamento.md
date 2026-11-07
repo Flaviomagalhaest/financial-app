@@ -1,7 +1,7 @@
 # A conta mudada em "todas" vai para o parcelamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Opus
