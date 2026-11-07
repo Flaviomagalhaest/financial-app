@@ -1,7 +1,7 @@
 # Cópia local da pessoa e do item do estorno ligado
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -17,6 +17,6 @@ Origem: [ticket 191](191-item-e-pessoa-do-estorno-acompanham-a-compra.md), revis
 
 ## Checklist
 
-- [ ] Teste: a mudança de pessoa da compra aparece no estorno ligado sem internet
-- [ ] Teste: o estorno de todas sem partes mostra o item do parcelamento sem internet
-- [ ] Implementar na cópia local
+- [x] Teste: a mudança de pessoa da compra aparece no estorno ligado sem internet
+- [x] Teste: o estorno de todas sem partes mostra o item do parcelamento sem internet
+- [x] Implementar na cópia local

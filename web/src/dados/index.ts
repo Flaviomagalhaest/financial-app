@@ -390,7 +390,31 @@ function naTela(servidor: Lancamento[], fila: ItemDaFila[]): LancamentoNaTela[] 
   }
   // Os não enviados novos vêm antes dos do servidor na mesma data, como os mais recentes.
   const sai = saemPelaFila(fila);
-  return [...novos, ...porId.values()].filter((l) => !sai(l)).sort((a, b) => b.data.localeCompare(a.data));
+  const lista = [...novos, ...porId.values()];
+  return acompanhamEstornos(lista, fila)
+    .filter((l) => !sai(l))
+    .sort((a, b) => b.data.localeCompare(a.data));
+}
+
+/**
+ * O estorno ligado a uma compra, parte ou parcela guarda a pessoa dela, não a que o cliente mandou
+ * (ticket 191, `acompanhar_estornos`): onde a compra muda na fila, ou o estorno nasce nela, o aparelho
+ * repete o que o servidor fará. O estorno de antes da divisão da compra fica com a pessoa que tinha. A
+ * pessoa do estorno de todas as parcelas é a do parcelamento, que muda só com internet e que a tela
+ * já preenche (ticket 194).
+ */
+function acompanhamEstornos(lista: LancamentoNaTela[], fila: ItemDaFila[]): LancamentoNaTela[] {
+  const mexidos = new Set(fila.filter((i) => deLancamento(i) && i.acao !== "excluir" && !i.conflito).map((i) => i.id));
+  if (!mexidos.size) return lista;
+  const porId = new Map(lista.map((l) => [l.id, l]));
+  return lista.map((e) => {
+    const compra = e.estorno_de ? porId.get(e.estorno_de) : undefined;
+    if (!compra || !(mexidos.has(compra.id) || mexidos.has(e.id))) return e;
+    const parte = compra.partes?.length ? compra.partes.find((p) => p.id === e.estorno_parte_id) : undefined;
+    if (compra.partes?.length && !parte) return e;
+    const pessoa = (parte ?? compra).pessoa ?? null;
+    return (e.pessoa ?? null) === pessoa ? e : { ...e, pessoa };
+  });
 }
 
 /** Lançamentos do servidor (ou os guardados) com a fila por cima. */

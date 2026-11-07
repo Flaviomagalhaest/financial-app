@@ -498,8 +498,10 @@ export function TelaDeLancamento({ id, favoritoId, estornoDe, creditoNoCartao, t
   // Sem duas categorias com item, a escolha que o lançamento já tem fica, se a categoria dela ficou.
   // O estorno ligado diminui o item em que a compra conta (o servidor o escolhe): a tela não pergunta nem troca.
   // O avulso tem classificação própria e pergunta o item como a compra (ticket 189).
+  // Só o de todas as parcelas sem partes leva a escolha de item do parcelamento, como o servidor (ticket 194).
+  const itemDoEstorno = eTodas && !parcelamentoDoEstorno?.partes?.length ? (parcelamentoDoEstorno?.item_categoria_id ?? null) : (existente?.item_categoria_id ?? null);
   const itemEscolhido = estornando
-    ? (existente?.item_categoria_id ?? null)
+    ? itemDoEstorno
     : (planejamento.escolha ?? (existente?.item_categoria_id && categoriaIds.includes(existente.item_categoria_id) ? existente.item_categoria_id : null));
 
   /** Outro cartão ou uma conta desfaz a fatura escolhida à mão, como no servidor. */
