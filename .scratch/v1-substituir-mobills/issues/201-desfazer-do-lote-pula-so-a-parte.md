@@ -1,7 +1,7 @@
 # Desfazer da edição em lote pula só a parte cuja classificação mudou
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Opus
