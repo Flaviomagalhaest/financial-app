@@ -222,6 +222,8 @@ def test_grupo_igual_com_tags_diferentes_no_geral_casa_na_ordem_e_vai_para_a_rev
             "Linha no arquivo": 2,
             "Tags no geral": "praia",
             "Situação no geral": "Paga",
+            "Resultado": "par",
+            "Decisão (descartar ou manter)": None,
         },
         {
             "Pasta do cartão": "Cartao A",
@@ -234,8 +236,77 @@ def test_grupo_igual_com_tags_diferentes_no_geral_casa_na_ordem_e_vai_para_a_rev
             "Linha no arquivo": 3,
             "Tags no geral": None,
             "Situação no geral": "Pendente",
+            "Resultado": "par",
+            "Decisão (descartar ou manter)": None,
         },
     ]
+
+
+def test_no_grupo_ambiguo_a_fatura_casa_com_a_paga_e_a_pendente_duplicada_e_descartada(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            # A previsão de recorrência do Mobills vem antes da paga no export.
+            linha("30/09/2024", "Youtube", -24.90, "Assinaturas", situacao="Pendente"),
+            linha("27/09/2024", "Youtube", -24.90, "Assinaturas"),
+            # A fatura repete a compra na mesma data: uma compra só.
+            linha("30/09/2024", "Remédio", -138.74, "Saúde"),
+            linha("30/09/2024", "Remédio", -138.74, "Saúde", situacao="Pendente"),
+        ],
+    )
+    escrever_fatura(
+        faturas,
+        "Cartao A",
+        "202409",
+        [
+            ("01/09/2024", "Youtube", "Assinaturas", 24.90),
+            ("26/08/2024", "Remédio", "Saúde", 138.74),
+            ("26/08/2024", "Remédio", "Saúde", 138.74),
+        ],
+    )
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert sorted(
+        ((x.descricao, x.cartao, x.situacao, x.data) for x in importacao.lancamentos), key=repr
+    ) == [
+        ("Remédio", "Cartao A", "realizado", date(2024, 8, 26)),
+        ("Youtube", "Cartao A", "realizado", date(2024, 9, 1)),
+    ]
+    assert [
+        (x["Descrição"], x["Data da compra"], x["Situação no geral"], x["Resultado"])
+        for x in ler_aba(revisao, "Grupos ambíguos")
+    ] == [
+        ("Remédio", "26/08/2024", "Paga", "par"),
+        ("Remédio", "26/08/2024", "Pendente", "descartada"),
+        ("Youtube", "01/09/2024", "Paga", "par"),
+        ("Youtube", None, "Pendente", "descartada"),
+    ]
+
+    # Duas compras de verdade: o dono manda manter, e a decisão fica na rodada seguinte.
+    editar_aba(
+        revisao,
+        "Grupos ambíguos",
+        "Descrição",
+        "Remédio",
+        "Decisão (descartar ou manter)",
+        "manter",
+    )
+    importar(geral, faturas, revisao)
+    importacao = importar(geral, faturas, revisao)
+
+    remedios = [x for x in importacao.lancamentos if x.descricao == "Remédio"]
+    assert sorted((x.cartao, x.situacao) for x in remedios) == [
+        ("Cartao A", "previsto"),
+        ("Cartao A", "realizado"),
+    ]
+    assert [
+        (x["Situação no geral"], x["Resultado"], x["Decisão (descartar ou manter)"])
+        for x in ler_aba(revisao, "Grupos ambíguos")
+        if x["Descrição"] == "Remédio"
+    ] == [("Paga", "par", "manter"), ("Pendente", "par", "manter")]
 
 
 def test_cadastro_da_conta_e_dos_cartoes_nasce_proposto_e_o_dono_liga_cada_pasta(pastas):
@@ -437,6 +508,7 @@ def test_parcelas_viram_parcelamentos_e_a_sequencia_quebrada_vai_para_a_revisao(
             "Último mês": "2019-03",
             "Cartão": "Cartao A",
             "Motivo": "falta a parcela 2 depois de 2019-03",
+            "Decisão (avulsas, parcelamento ou descartar duplicada)": None,
         },
         {
             "Descrição": "Curso",
@@ -446,6 +518,7 @@ def test_parcelas_viram_parcelamentos_e_a_sequencia_quebrada_vai_para_a_revisao(
             "Último mês": "2019-05",
             "Cartão": None,
             "Motivo": "falta a parcela 2 antes de 2019-05",
+            "Decisão (avulsas, parcelamento ou descartar duplicada)": None,
         },
     ]
     sem_cartao = ler_aba(revisao, "Parcelamentos sem cartão")
@@ -786,4 +859,180 @@ def test_reajuste_so_do_geral_espera_o_dono_escolher_o_cartao_da_fatura(pastas):
     assert (
         "Ajustes sem cartão: o de 0,03 em 2026-05 tem o cartão 'Outro', que não está na aba"
         " Cartões" in importar(geral, faturas, revisao).impedimentos
+    )
+
+
+def test_cartao_arquivado_ignora_as_faturas_depois_da_ultima_que_o_dono_marcou(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("30/04/2026", "Spotify", -21.90, "Assinaturas"),
+            # A previsão que o Mobills deixou no cartão cancelado, e a cobrança de verdade no B.
+            linha("09/05/2026", "Spotify", -21.90, "Assinaturas", situacao="Pendente"),
+            linha("30/05/2026", "Spotify", -23.90, "Assinaturas"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202604", [("17/04/2026", "Spotify", "Assinaturas", 21.9)])
+    escrever_fatura(faturas, "Cartao A", "202605", [("17/05/2026", "Spotify", "Assinaturas", 21.9)])
+    escrever_fatura(faturas, "Cartao B", "202605", [("17/05/2026", "Spotify", "Assinaturas", 23.9)])
+
+    primeira = importar(geral, faturas, revisao)
+
+    assert sorted((x.cartao, x.mes) for x in primeira.lancamentos) == [
+        ("Cartao A", "2026-04"),
+        ("Cartao A", "2026-05"),
+        ("Cartao B", "2026-05"),
+    ]
+    assert ler_aba(revisao, "Cartões")[0]["Última fatura"] == "2026-05"
+
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao A", "Última fatura", "2026-04")
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao A", "Arquivado (sim ou não)", "sim")
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao B", "Dia do fechamento", 27)
+    editar_aba(revisao, "Cartões", "Pasta", "Cartao B", "Dia do vencimento", 3)
+    importar(geral, faturas, revisao)
+    segunda = importar(geral, faturas, revisao)
+
+    assert segunda.impedimentos == []
+    assert sorted((x.cartao, x.mes, x.situacao) for x in segunda.lancamentos) == [
+        ("Cartao A", "2026-04", "realizado"),
+        ("Cartao B", "2026-05", "realizado"),
+    ]
+    assert segunda.meses_das_faturas["Cartao A"] == ["2026-04"]
+    assert ler_aba(revisao, "Cartões")[0]["Última fatura"] == "2026-04"
+    assert [(x["Cartão"], x["Mês"]) for x in ler_aba(revisao, "Faturas")] == [
+        ("Cartao A", "2026-04"),
+        ("Cartao B", "2026-05"),
+    ]
+
+
+def test_dono_decide_a_sequencia_quebrada_parcelamento_ou_duplicada_e_a_decisao_fica(pastas):
+    geral, faturas, revisao = pastas
+    coluna = "Decisão (avulsas, parcelamento ou descartar duplicada)"
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Mercado", -10.00, "Alimentação"),
+            # Lançada a partir da 2ª e sem a 3ª: quebrada nos dois lados.
+            linha("30/04/2019", "Curso (2/3)", -100.00, "Educação"),
+            # A 1ª veio duas vezes.
+            linha("31/03/2019", "Fone (1/2)", -50.00, "Eletrônicos"),
+            linha("31/03/2019", "Fone (1/2)", -50.00, "Eletrônicos"),
+            linha("30/04/2019", "Fone (2/2)", -50.00, "Eletrônicos"),
+            linha("30/06/2019", "Mercado", -10.00, "Alimentação"),
+        ],
+    )
+    faturas.mkdir()
+
+    primeira = importar(geral, faturas, revisao)
+
+    assert not any(p.do_app for p in primeira.parcelamentos if p.descricao in ("Curso", "Fone"))
+    assert [
+        (x["Descrição"], x["Parcelas"], x[coluna]) for x in ler_aba(revisao, "Parcelas quebradas")
+    ] == [
+        ("Curso", "2 de 3", None),
+        ("Fone", "1 a 2 de 2", None),
+        ("Fone", "1 de 2", None),
+    ]
+
+    editar_aba(revisao, "Parcelas quebradas", "Descrição", "Curso", coluna, "parcelamento")
+    editar_aba(revisao, "Parcelas quebradas", "Parcelas", "1 de 2", coluna, "descartar duplicada")
+    importar(geral, faturas, revisao)
+    segunda = importar(geral, faturas, revisao)
+
+    curso = next(p for p in segunda.parcelamentos if p.descricao == "Curso")
+    assert curso.do_app
+    assert curso.anteriores == 1
+    assert [(x.parcela, x.mes, x.situacao) for x in curso.lancamentos] == [
+        ((2, 3), "2019-04", "realizado"),
+        ((3, 3), "2019-05", "previsto"),
+    ]
+    fone = [p for p in segunda.parcelamentos if p.descricao == "Fone"]
+    assert [(p.do_app, [x.parcela for x in p.lancamentos]) for p in fone] == [
+        (True, [(1, 2), (2, 2)])
+    ]
+    assert sum(1 for x in segunda.lancamentos if x.descricao == "Fone") == 2
+    # A aba continua mostrando as sequências da forma como o export as traz, com a decisão.
+    assert [
+        (x["Descrição"], x["Parcelas"], x[coluna]) for x in ler_aba(revisao, "Parcelas quebradas")
+    ] == [
+        ("Curso", "2 de 3", "parcelamento"),
+        ("Fone", "1 a 2 de 2", "descartar duplicada"),
+        ("Fone", "1 de 2", "descartar duplicada"),
+    ]
+
+
+def test_os_dois_pedacos_aceitos_da_mesma_compra_nao_geram_parcela_em_dobro(pastas):
+    geral, faturas, revisao = pastas
+    coluna = "Decisão (avulsas, parcelamento ou descartar duplicada)"
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Curso (1/5)", -100.00, "Educação"),
+            linha("30/04/2019", "Curso (2/5)", -100.00, "Educação"),
+            linha("30/06/2019", "Curso (4/5)", -100.00, "Educação"),
+            linha("31/07/2019", "Curso (5/5)", -100.00, "Educação"),
+            linha("30/09/2019", "Mercado", -10.00, "Alimentação"),
+        ],
+    )
+    faturas.mkdir()
+    importar(geral, faturas, revisao)
+    editar_aba(revisao, "Parcelas quebradas", "Parcelas", "1 a 2 de 5", coluna, "parcelamento")
+    editar_aba(revisao, "Parcelas quebradas", "Parcelas", "4 a 5 de 5", coluna, "parcelamento")
+
+    importacao = importar(geral, faturas, revisao)
+
+    curso = sorted(x.parcela for x in importacao.lancamentos if x.descricao == "Curso")
+    assert curso == [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5)]
+
+
+def test_decisao_digitada_errado_nas_abas_de_revisao_impede_gravar(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("30/09/2024", "Youtube", -24.90, "Assinaturas", situacao="Pendente"),
+            linha("27/09/2024", "Youtube", -24.90, "Assinaturas"),
+            linha("30/09/2024", "Curso (2/3)", -100.00, "Educação"),
+            linha("31/12/2024", "Mercado", -10.00, "Alimentação"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202409", [("01/09/2024", "Youtube", "Assinaturas", 24.9)])
+    importar(geral, faturas, revisao)
+    editar_aba(
+        revisao,
+        "Grupos ambíguos",
+        "Descrição",
+        "Youtube",
+        "Decisão (descartar ou manter)",
+        "manetr",
+    )
+    editar_aba(
+        revisao,
+        "Parcelas quebradas",
+        "Descrição",
+        "Curso",
+        "Decisão (avulsas, parcelamento ou descartar duplicada)",
+        "parcelado",
+    )
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert [x for x in importacao.impedimentos if "decisão" in x] == [
+        "Grupos ambíguos: 'Youtube' de 2024-09 tem a decisão 'manetr', fora de descartar ou manter",
+        (
+            "Parcelas quebradas: 'Curso' tem a decisão 'parcelado',"
+            " fora de avulsas, parcelamento ou descartar duplicada"
+        ),
+    ]
+    # A decisão errada continua na planilha para o dono corrigir.
+    assert (
+        ler_aba(revisao, "Parcelas quebradas")[0][
+            "Decisão (avulsas, parcelamento ou descartar duplicada)"
+        ]
+        == "parcelado"
     )

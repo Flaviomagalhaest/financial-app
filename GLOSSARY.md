@@ -355,6 +355,18 @@ _Avoid_: recorrência importada
 Uma linha de fatura e uma do geral que sobraram do cruzamento no mesmo mês e são as únicas com aquele valor; viram uma compra só quando o dono as junta na planilha de revisão, e até lá cada uma entra sozinha.
 _Avoid_: par duvidoso, casamento parcial
 
+**Grupo ambíguo**:
+Linhas de fatura e do geral com a mesma chave no mesmo mês em que as do geral diferem nas tags ou na situação, de modo que outra ordem de casamento daria outro resultado. Quando a diferença é a situação, a fatura casa primeiro com a paga e a pendente que sobra é a **pendente duplicada**: a previsão que o Mobills deixou junto da compra paga, que fica fora da importação (com a linha de fatura que repete a data e o cartão de uma já casada), a não ser que o dono mande manter na planilha de revisão.
+_Avoid_: duplicado (no app, "Parece repetido" é outra coisa)
+
+**Sequência quebrada**:
+Parcelas `(n/total)` de uma compra em que falta uma parcela dentro do período do export, ou em que a mesma parcela aparece duas vezes no mês. Entra como lançamentos avulsos, a não ser que o dono a aceite como parcelamento ou descarte a parcela duplicada na planilha de revisão.
+_Avoid_: parcelamento incompleto
+
+**Cartão encerrado no Mobills**:
+Cartão arquivado na planilha de revisão cuja `Última fatura` o dono marcou: as faturas que o Mobills exportou depois dela (previsões presas ao cartão cancelado) ficam fora da importação.
+_Avoid_: corte
+
 ### Telas
 
 **Faixa**:

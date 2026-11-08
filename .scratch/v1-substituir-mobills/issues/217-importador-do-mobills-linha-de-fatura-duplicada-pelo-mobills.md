@@ -23,3 +23,7 @@ A decidir (`grilling`): a linha sem par que repete data, valor e cartão de uma 
 - [ ] O importador reconhece a linha de fatura sem par que repete data, valor e cartão de uma casada
 - [ ] Teste: a fatura do cenário fecha sem a linha duplicada; duas compras iguais de verdade não somem sem decisão
 - [ ] Rodar de novo nos exports reais: a fatura do Personnalite de 2023-11 dá 7.824,93 e a Conferência de 2023-11 dá diferença 0
+
+## Comments
+
+- Do [ticket 216](216-importador-do-mobills-decisao-para-grupos-ambiguos-e-parcelas-quebradas.md): nos grupos ambíguos, a pendente duplicada (e a linha de fatura que repete a data e o cartão de uma casada) agora fica de fora da importação, mas não aparece na Conferência nem na aba Faturas. Se o total do Mobills a inclui, a diferença do mês fica sem explicação. Ao resolver este ticket, mostrar o que foi descartado lá também.
