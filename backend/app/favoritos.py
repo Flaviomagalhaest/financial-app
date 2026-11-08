@@ -148,12 +148,19 @@ def _grupos(conn) -> dict[str, _Grupo]:
         tags.setdefault(lancamento_id, []).append(nome)
     partes = _partes_dos_lancamentos(conn)
     grupos: dict[str, _Grupo] = {}
-    for id, descricao, tipo, conta_id, pessoa, valor in conn.execute(
-        "SELECT id, descricao, tipo, conta_id, pessoa, valor_centavos FROM lancamentos"
+    # Uma compra parcelada é um lançamento só para quem lança: as parcelas de um parcelamento
+    # contam um uso, o da mais recente (ticket 206).
+    parcelamentos_vistos: set[UUID] = set()
+    for id, descricao, tipo, conta_id, pessoa, valor, parcelamento_id in conn.execute(
+        "SELECT id, descricao, tipo, conta_id, pessoa, valor_centavos, parcelamento_id FROM lancamentos"
         " WHERE excluido_em IS NULL AND data <= %s AND valor_centavos > 0"
         " ORDER BY data DESC, criado_em DESC, id",
         (hoje(),),
     ):
+        if parcelamento_id is not None:
+            if parcelamento_id in parcelamentos_vistos:
+                continue
+            parcelamentos_vistos.add(parcelamento_id)
         if id in partes:
             # A compra com partes não tem classificação própria: vale a das partes. A que não
             # fecha (dado antigo, parte sem categoria) fica de fora em vez de derrubar a lista.
