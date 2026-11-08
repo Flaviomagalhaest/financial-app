@@ -1,7 +1,7 @@
 # Histórico abre com lançamentos previstos de dois anos à frente
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`; apoio: `implement`, `tdd`. HITL: a ordem e o recorte da lista são decisão do dono.
 Modelo recomendado: Sonnet
