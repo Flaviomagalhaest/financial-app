@@ -50,7 +50,8 @@ class Decisoes:
     """O que o dono editou na planilha da rodada anterior."""
 
     provaveis: dict[tuple, str] = field(default_factory=dict)
-    # Por `chave_do_grupo`: 'manter' desfaz o descarte da pendente duplicada.
+    # Por `chave_do_grupo`: 'manter' desfaz o descarte da pendente duplicada. As decisões vêm
+    # como o dono digitou; a que não é uma das válidas vira impedimento e fica na planilha.
     grupos: dict[tuple, str] = field(default_factory=dict)
     # Por `chave_do_parcelamento`, o que fazer com a sequência quebrada.
     quebras: dict[tuple, str] = field(default_factory=dict)
@@ -100,24 +101,22 @@ def ler_decisoes(caminho: Path) -> Decisoes:
             texto(linha.get(COLUNA_DO_PAPEL)).casefold(),
             texto(linha.get("Nome no app")),
         )
-    for linha in _linhas(livro, "Parcelamentos sem cartão"):
-        chave = (
+
+    def chave_do_parcelamento_na_linha(linha: dict) -> tuple:
+        """A `chave_do_parcelamento` lida das colunas que a aba mostra."""
+        return (
             texto(linha.get("Descrição")),
             valor(linha, "Valor"),
             texto(linha.get("Parcelas")).split(" ")[0],
             texto(linha.get("Primeiro mês")),
         )
+
+    for linha in _linhas(livro, "Parcelamentos sem cartão"):
+        chave = chave_do_parcelamento_na_linha(linha)
         decisoes.cartao_dos_parcelamentos[chave] = texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
     for linha in _linhas(livro, "Parcelas quebradas"):
-        decisao = texto(linha.get(COLUNA_DA_DECISAO_DA_QUEBRA)).casefold()
-        if decisao in DECISOES_DA_QUEBRA:
-            chave = (
-                texto(linha.get("Descrição")),
-                valor(linha, "Valor"),
-                texto(linha.get("Parcelas")).split(" ")[0],
-                texto(linha.get("Primeiro mês")),
-            )
-            decisoes.quebras[chave] = decisao
+        if decisao := texto(linha.get(COLUNA_DA_DECISAO_DA_QUEBRA)):
+            decisoes.quebras[chave_do_parcelamento_na_linha(linha)] = decisao
     for linha in _linhas(livro, "Ajustes sem cartão"):
         chave = (texto(linha.get("Mês")), valor(linha, "Valor"))
         decisoes.cartao_dos_ajustes[chave] = texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
@@ -129,11 +128,10 @@ def ler_decisoes(caminho: Path) -> Decisoes:
             chave = (texto(linha.get("Cartão")), texto(linha.get("Mês")))
             decisoes.mobills_por_fatura[chave] = do_mobills
     for linha in _linhas(livro, "Grupos ambíguos"):
-        decisao = texto(linha.get(COLUNA_DA_DECISAO_DO_GRUPO)).casefold()
-        if decisao in DECISOES_DO_GRUPO:
+        if decisao := texto(linha.get(COLUNA_DA_DECISAO_DO_GRUPO)):
             chave = (texto(linha.get("Mês")), texto(linha.get("Descrição")), valor(linha, "Valor"))
             # Uma linha com 'manter' vale para o grupo inteiro.
-            if decisoes.grupos.get(chave) != "manter":
+            if texto(decisoes.grupos.get(chave)).casefold() != "manter":
                 decisoes.grupos[chave] = decisao
     for linha in _linhas(livro, "Pares prováveis"):
         decisao = texto(linha.get(COLUNA_DA_DECISAO)).casefold()

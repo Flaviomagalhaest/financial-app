@@ -3,7 +3,7 @@
 Type: task
 Status: ready-for-agent
 Blocked by: —
-Skills: `tdd`, `implement`; `run` para rodar de novo nos exports reais (HITL só para rodar: os exports ficam na máquina do dono, em `data/historic/`)
+Skills: `tdd`, `implement`; `grilling` curto para a parcela gerada em mês já exportado (HITL: decisão do dono); `run` para rodar de novo nos exports reais (os exports ficam na máquina do dono, em `data/historic/`)
 Modelo recomendado: Opus
 Effort recomendado: medium
 Issue: #569
@@ -27,4 +27,5 @@ Decisões do dono (grilling do ticket 216, Q4 e Q12):
 - [ ] Teste: parcela no meio com outro valor continua a sequência (não vira duas)
 - [ ] Teste: duas sequências paralelas iguais com valores diferentes continuam separadas pelo valor
 - [ ] Teste: linha sem sufixo no mês do buraco vira a parcela, com o número deduzido; sem sufixo e com outro valor continua avulsa
+- [ ] Decidir com o dono (HITL): a parcela gerada para uma sequência aceita como `parcelamento` que acaba antes do último mês cai como prevista em mês já exportado (ticket 216); entra realizada?
 - [ ] Rodar de novo nos exports reais e gravar a nova contagem de `Parcelas quebradas` (esperado: bem menos que 342)

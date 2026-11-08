@@ -962,3 +962,77 @@ def test_dono_decide_a_sequencia_quebrada_parcelamento_ou_duplicada_e_a_decisao_
         ("Fone", "1 a 2 de 2", "descartar duplicada"),
         ("Fone", "1 de 2", "descartar duplicada"),
     ]
+
+
+def test_os_dois_pedacos_aceitos_da_mesma_compra_nao_geram_parcela_em_dobro(pastas):
+    geral, faturas, revisao = pastas
+    coluna = "Decisão (avulsas, parcelamento ou descartar duplicada)"
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Curso (1/5)", -100.00, "Educação"),
+            linha("30/04/2019", "Curso (2/5)", -100.00, "Educação"),
+            linha("30/06/2019", "Curso (4/5)", -100.00, "Educação"),
+            linha("31/07/2019", "Curso (5/5)", -100.00, "Educação"),
+            linha("30/09/2019", "Mercado", -10.00, "Alimentação"),
+        ],
+    )
+    faturas.mkdir()
+    importar(geral, faturas, revisao)
+    editar_aba(revisao, "Parcelas quebradas", "Parcelas", "1 a 2 de 5", coluna, "parcelamento")
+    editar_aba(revisao, "Parcelas quebradas", "Parcelas", "4 a 5 de 5", coluna, "parcelamento")
+
+    importacao = importar(geral, faturas, revisao)
+
+    curso = sorted(x.parcela for x in importacao.lancamentos if x.descricao == "Curso")
+    assert curso == [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5)]
+
+
+def test_decisao_digitada_errado_nas_abas_de_revisao_impede_gravar(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("30/09/2024", "Youtube", -24.90, "Assinaturas", situacao="Pendente"),
+            linha("27/09/2024", "Youtube", -24.90, "Assinaturas"),
+            linha("30/09/2024", "Curso (2/3)", -100.00, "Educação"),
+            linha("31/12/2024", "Mercado", -10.00, "Alimentação"),
+        ],
+    )
+    escrever_fatura(faturas, "Cartao A", "202409", [("01/09/2024", "Youtube", "Assinaturas", 24.9)])
+    importar(geral, faturas, revisao)
+    editar_aba(
+        revisao,
+        "Grupos ambíguos",
+        "Descrição",
+        "Youtube",
+        "Decisão (descartar ou manter)",
+        "manetr",
+    )
+    editar_aba(
+        revisao,
+        "Parcelas quebradas",
+        "Descrição",
+        "Curso",
+        "Decisão (avulsas, parcelamento ou descartar duplicada)",
+        "parcelado",
+    )
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert [x for x in importacao.impedimentos if "decisão" in x] == [
+        "Grupos ambíguos: 'Youtube' de 2024-09 tem a decisão 'manetr', fora de descartar ou manter",
+        (
+            "Parcelas quebradas: 'Curso' tem a decisão 'parcelado',"
+            " fora de avulsas, parcelamento ou descartar duplicada"
+        ),
+    ]
+    # A decisão errada continua na planilha para o dono corrigir.
+    assert (
+        ler_aba(revisao, "Parcelas quebradas")[0][
+            "Decisão (avulsas, parcelamento ou descartar duplicada)"
+        ]
+        == "parcelado"
+    )

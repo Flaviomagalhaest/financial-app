@@ -22,7 +22,7 @@ from app.recorrencias import mais_meses
 
 # A fonte do lançamento importado (ticket 41): `lancamentos.fonte`, que no app fica `NULL`.
 FONTE = "mobills"
-MES = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
+FORMATO_DO_MES = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 TIPOS_DE_CONTA = ("corrente", "poupanca", "carteira")
 
 
@@ -94,7 +94,7 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     conta = _conta(decisoes, linhas_do_geral, impedimentos)
     cartoes = _cartoes(decisoes, pastas, impedimentos)
     nomes = {c.pasta: c.nome for c in cartoes}
-    mantidos = {c for c, d in decisoes.grupos.items() if d == "manter"}
+    mantidos = _grupos_mantidos(decisoes, impedimentos)
     cruzamento = cruzar(linhas_do_geral, linhas_de_fatura, decisoes.provaveis, mantidos)
     importacao = Importacao(conta, cartoes, cruzamento=cruzamento, impedimentos=impedimentos)
     importacao.meses_das_faturas = {nomes[pasta]: meses for pasta, meses in pastas.items()}
@@ -192,6 +192,19 @@ def _conta(
     return Conta(nome=nome, tipo=tipo)
 
 
+def _grupos_mantidos(decisoes: planilha.Decisoes, impedimentos: list[str]) -> set[tuple]:
+    mantidos = set()
+    for (mes, descricao, valor), decisao in decisoes.grupos.items():
+        if decisao.casefold() == "manter":
+            mantidos.add((mes, descricao, valor))
+        elif decisao.casefold() not in planilha.DECISOES_DO_GRUPO:
+            impedimentos.append(
+                f"Grupos ambíguos: {descricao!r} de {mes} tem a decisão {decisao!r},"
+                " fora de descartar ou manter"
+            )
+    return mantidos
+
+
 def _corte_dos_arquivados(decisoes: planilha.Decisoes, impedimentos: list[str]) -> dict[str, str]:
     """No cartão arquivado, a `Última fatura` que o dono deixou na planilha: as faturas depois
     dela ficam de fora (o Mobills continua exportando as previsões do cartão cancelado). No
@@ -201,7 +214,7 @@ def _corte_dos_arquivados(decisoes: planilha.Decisoes, impedimentos: list[str]) 
         ultima = decisoes.ultima_fatura.get(pasta, "")
         if not editado["arquivado"] or not ultima:
             continue
-        if MES.fullmatch(ultima) is None:
+        if FORMATO_DO_MES.fullmatch(ultima) is None:
             impedimentos.append(
                 f"Cartões: {editado['nome']!r} tem a última fatura {ultima!r}, fora de AAAA-MM"
             )
@@ -288,9 +301,15 @@ def _decidir_as_quebradas(
     repetida no mês (fica uma) e reagrupa; `parcelamento` aceita a sequência como um
     parcelamento só; `avulsas`, ou nada, deixa como está."""
     importacao.quebradas = [p for p in importacao.parcelamentos if p.quebra]
+    for (descricao, *_), escrita in decisoes.quebras.items():
+        if escrita.casefold() not in planilha.DECISOES_DA_QUEBRA:
+            importacao.impedimentos.append(
+                f"Parcelas quebradas: {descricao!r} tem a decisão {escrita!r},"
+                " fora de avulsas, parcelamento ou descartar duplicada"
+            )
 
     def decisao(parcelamento) -> str:
-        return decisoes.quebras.get(planilha.chave_do_parcelamento(parcelamento), "")
+        return decisoes.quebras.get(planilha.chave_do_parcelamento(parcelamento), "").casefold()
 
     # A mais curta primeiro: a parcela repetida sai do pedaço e fica na sequência mais longa.
     duplicadas = sorted(
@@ -299,13 +318,13 @@ def _decidir_as_quebradas(
     )
     if duplicadas:
         contagem = Counter(_chave_da_parcela(x) for x in importacao.lancamentos if x.parcela)
-        fora = set()
+        descartadas = set()
         for parcelamento in duplicadas:
             for parcela in parcelamento.lancamentos:
                 if contagem[_chave_da_parcela(parcela)] > 1:
                     contagem[_chave_da_parcela(parcela)] -= 1
-                    fora.add(id(parcela))
-        importacao.lancamentos = [x for x in importacao.lancamentos if id(x) not in fora]
+                    descartadas.add(id(parcela))
+        importacao.lancamentos = [x for x in importacao.lancamentos if id(x) not in descartadas]
         importacao.parcelamentos = parcelas.reagrupar(
             importacao.lancamentos, primeiro_mes, ultimo_mes
         )
@@ -399,6 +418,12 @@ def _gerar_parcelas_que_faltam(importacao: Importacao, ultimo_mes: str) -> None:
     a 1ª. Como no app:
     no cartão, todas têm a data da compra e a parcela n cai n - 1 faturas depois; no boleto, a
     parcela n vence n - 1 meses depois da 1ª."""
+    # As que já vieram em outro pedaço da mesma compra (o dono aceitou os dois) não se repetem.
+    vieram = {
+        (p.primeira.tipo, p.descricao.casefold(), p.total, x.parcela[0])
+        for p in importacao.parcelamentos
+        for x in p.lancamentos
+    }
     for parcelamento in importacao.parcelamentos:
         ultima = parcelamento.ultima
         # A que acaba antes do último mês só gera o resto se o dono a aceitou na revisão.
@@ -409,6 +434,8 @@ def _gerar_parcelas_que_faltam(importacao: Importacao, ultimo_mes: str) -> None:
         mes = ultima.mes
         for n in range(ultima.parcela[0] + 1, parcelamento.total + 1):
             mes = parcelas.mes_seguinte(mes)
+            if (ultima.tipo, parcelamento.descricao.casefold(), parcelamento.total, n) in vieram:
+                continue
             data = ultima.data if ultima.cartao else mais_meses(data_da_1a, n - 1)
             geradas.append(
                 replace(
