@@ -1,7 +1,7 @@
 # Lançamentos gerados por recorrência contam como usos do Sugerido?
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling`, `domain-modeling`; HITL (precisa do dono)
 Modelo recomendado: Sonnet
