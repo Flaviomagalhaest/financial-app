@@ -1,31 +1,76 @@
-/* Tipografia do sistema; o login é uma coluna estreita e a casca do app troca de layout pela largura. */
+/*
+ * Tokens do app (ticket 204: direção "painel de banco"). Fundo levemente esverdeado, conteúdo em
+ * cartões brancos, a faixa verde no alto das telas com um número que resume a tela, Inter embutida
+ * (funciona sem internet), botões em pílula. Claro e escuro seguem a preferência do sistema.
+ */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fontes/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
-  --fundo: #f6f7f5;
+  --fundo: #f3f5f2;
   --superficie: #ffffff;
   --texto: #1d231f;
   --texto-suave: #58635c;
-  --borda: #c9d1cb;
+  --borda: #d3dbd5;
+  --linha: #e7ece8;
   --destaque: #1f6b4f;
+  --destaque-suave: #e2efe7;
   --sobre-destaque: #ffffff;
   --erro: #a3271d;
+  --erro-suave: #fbe9e6;
   --aviso-fundo: #fbf1d9;
+  /* A faixa verde do alto das telas e o que vai em cima dela. */
+  --faixa: #1f6b4f;
+  --sobre-faixa: #ffffff;
+  --sobre-faixa-suave: rgb(255 255 255 / 0.78);
+  --vidro: rgb(255 255 255 / 0.16);
+  --sombra: 0 2px 12px rgb(20 40 30 / 0.08);
   /* Séries dos gráficos, validadas para daltonismo sobre a superfície de cada tema. */
   --serie-1: #2a78d6;
   --serie-2: #eb6834;
-  --fonte: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fonte: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Escala de texto e de espaço; os raios: cartão, campo e pílula. */
+  --texto-pp: 0.75rem;
+  --texto-p: 0.8125rem;
+  --texto-m: 0.9375rem;
+  --texto-g: 1.125rem;
+  --texto-gg: 1.5rem;
+  --espaco-1: 0.25rem;
+  --espaco-2: 0.5rem;
+  --espaco-3: 0.75rem;
+  --espaco-4: 1rem;
+  --espaco-5: 1.5rem;
+  --espaco-6: 2rem;
+  --raio-cartao: 1.125rem;
+  --raio-campo: 0.625rem;
+  --raio-pilula: 999px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --fundo: #141815;
-    --superficie: #1d231f;
+    --fundo: #111513;
+    --superficie: #1b211d;
     --texto: #e7ece8;
     --texto-suave: #a3aea6;
-    --borda: #3a443d;
+    --borda: #343e37;
+    --linha: #262e29;
     --destaque: #5fbf95;
+    --destaque-suave: #1e3529;
     --sobre-destaque: #0d1a14;
     --erro: #ff8a7f;
+    --erro-suave: #3a2220;
     --aviso-fundo: #3a3220;
+    --faixa: #174c38;
+    --sobre-faixa: #f0f6f2;
+    --sobre-faixa-suave: rgb(240 246 242 / 0.78);
+    --vidro: rgb(240 246 242 / 0.14);
+    --sombra: none;
     --serie-1: #3987e5;
     --serie-2: #d95926;
     color-scheme: dark;
@@ -37,12 +82,13 @@ body {
   background: var(--fundo);
   color: var(--texto);
   font: 1rem/1.5 var(--fonte);
+  -webkit-font-smoothing: antialiased;
 }
 
 main {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--espaco-4);
   max-width: 26rem;
   margin: 0 auto;
   padding-block: max(2rem, env(safe-area-inset-top, 0px)) 2rem;
@@ -52,12 +98,33 @@ main {
 
 h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--texto-gg);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+h2 {
+  margin: 0 0 var(--espaco-3);
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 
 p {
   margin: 0;
+}
+
+/* Link dentro do texto: a cor do app, sublinhado só ao passar ou focar. */
+a {
+  color: var(--destaque);
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 0.2em;
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration: underline;
 }
 
 form {
@@ -79,7 +146,7 @@ input {
   padding: 0.75rem;
   margin-bottom: 0.625rem;
   border: 1px solid var(--borda);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-campo);
   background: var(--superficie);
   color: var(--texto);
 }
@@ -87,9 +154,9 @@ input {
 button {
   font: inherit;
   font-weight: 600;
-  padding: 0.75rem 1rem;
+  padding: 0.6875rem 1.125rem;
   border: 1px solid var(--destaque);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-pilula);
   background: var(--destaque);
   color: var(--sobre-destaque);
   cursor: pointer;
@@ -103,6 +170,7 @@ button:disabled {
 button.secundario {
   background: transparent;
   color: var(--destaque);
+  border-color: var(--borda);
 }
 
 :focus-visible {
@@ -116,15 +184,16 @@ button.secundario {
 }
 
 .aviso {
-  padding: 0.75rem;
-  border-radius: 0.5rem;
+  padding: var(--espaco-3) 0.875rem;
+  border-radius: var(--raio-campo);
   background: var(--aviso-fundo);
 }
 
 a.botao {
   display: block;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  padding: 0.6875rem 1.125rem;
+  border: 1px solid var(--destaque);
+  border-radius: var(--raio-pilula);
   background: var(--destaque);
   color: var(--sobre-destaque);
   font-weight: 600;
@@ -136,12 +205,173 @@ a.botao {
   color: var(--texto-suave);
 }
 
-h2 {
-  margin: 0 0 0.75rem;
-  font-size: 1.25rem;
+/* Cartão: o bloco de um assunto, branco sobre o fundo. */
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
 }
 
-/* Casca: celular primeiro, com as abas coladas embaixo. */
+.cartao h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* Linha de menu: leva a outra tela, com a seta à direita. */
+.linhas-de-menu {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+
+.linhas-de-menu a {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: 0.875rem var(--espaco-4);
+  color: var(--texto);
+  font-weight: 500;
+}
+
+.linhas-de-menu li + li a {
+  border-top: 1px solid var(--linha);
+}
+
+.linhas-de-menu a::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--texto-suave);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.linhas-de-menu a:hover {
+  background: var(--fundo);
+  text-decoration: none;
+}
+
+/* Ícones de linha (casca): herdam a cor do texto. */
+svg.icone {
+  flex: none;
+  width: 1.375rem;
+  height: 1.375rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/*
+ * Faixa: o alto verde das telas que têm um número que resume a tela (Hoje, Mês, Cartões, Fatura).
+ * No celular ela continua o topo verde até as bordas, com o canto de baixo arredondado; na tela
+ * larga é um cartão verde.
+ */
+.faixa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  margin: calc(-1 * var(--espaco-4)) calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: var(--espaco-2) max(16px, env(safe-area-inset-right, 0px)) 1.375rem max(16px, env(safe-area-inset-left, 0px));
+  border-radius: 0 0 1.5rem 1.5rem;
+  background: var(--faixa);
+  color: var(--sobre-faixa);
+}
+
+.faixa h3,
+.faixa .vazio,
+.faixa .rotulo-da-faixa {
+  margin: 0;
+  color: var(--sobre-faixa-suave);
+  font-size: var(--texto-m);
+  font-weight: 600;
+}
+
+.faixa .valor-da-faixa {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.faixa a,
+.faixa button.secundario {
+  color: var(--sobre-faixa);
+}
+
+.faixa .trilho-da-faixa {
+  height: 0.5rem;
+  margin-top: var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--vidro);
+  overflow: hidden;
+}
+
+.faixa .trilho-da-faixa span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sobre-faixa);
+}
+
+/* Pílulas da faixa: atalhos que já trazem um dado; a fileira rola de lado se não couber. */
+.pilulas {
+  display: flex;
+  gap: var(--espaco-2);
+  margin: var(--espaco-4) calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 0 0;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  list-style: none;
+}
+
+.pilulas li {
+  flex: none;
+}
+
+.pilulas a {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem 0.625rem var(--espaco-3);
+  border-radius: 0.875rem;
+  background: var(--vidro);
+  color: var(--sobre-faixa);
+  text-decoration: none;
+}
+
+.pilulas a span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.pilulas strong {
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.pilulas small {
+  font-size: var(--texto-pp);
+  font-weight: 500;
+  color: var(--sobre-faixa-suave);
+  white-space: nowrap;
+}
+
+/* Casca: celular primeiro, com o topo verde e as abas coladas embaixo. */
 .casca {
   display: grid;
   grid-template-areas: "topo" "conteudo";
@@ -154,22 +384,72 @@ h2 {
 .casca .topo {
   grid-area: topo;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
-  padding: max(1rem, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 0.5rem
-    max(16px, env(safe-area-inset-left, 0px));
+  gap: var(--espaco-2);
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) var(--espaco-2) max(16px, env(safe-area-inset-left, 0px));
+  background: var(--faixa);
+  color: var(--sobre-faixa);
 }
 
 .casca .topo h1 {
-  flex-basis: 100%;
-}
-
-.casca .topo p {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  font-size: var(--texto-g);
+  font-weight: 700;
+}
+
+.botao-de-icone {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: transparent;
+  color: inherit;
+}
+
+.botao-de-icone:hover {
+  background: var(--vidro);
+}
+
+/* Menu da conta: o círculo com a inicial abre e-mail, Configurações, cadastros e Sair. */
+.menu-da-conta {
+  position: relative;
+}
+
+.menu-da-conta > summary {
+  display: grid;
+  place-items: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  margin: 0 0.1875rem;
+  border-radius: var(--raio-pilula);
+  background: var(--sobre-faixa);
+  color: var(--faixa);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.menu-da-conta > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* O painel é o mesmo do ⋯ (.itens-do-menu); aqui, mais largo e com o e-mail no alto. */
+.menu-da-conta .itens-do-menu {
+  z-index: 20;
+  top: calc(100% + 0.5rem);
+  width: 15rem;
+  color: var(--texto);
+}
+
+.menu-da-conta .itens-do-menu p {
+  padding: var(--espaco-2) var(--espaco-3);
   color: var(--texto-suave);
+  font-size: var(--texto-p);
+  overflow-wrap: anywhere;
 }
 
 .casca > main {
@@ -178,23 +458,29 @@ h2 {
   margin: 0;
   width: 100%;
   box-sizing: border-box;
-  padding-block: 1rem 5.5rem;
+  padding-block: var(--espaco-4) 6.5rem;
 }
 
 .abas {
   position: fixed;
+  z-index: 10;
   inset: auto 0 0 0;
   display: flex;
+  align-items: stretch;
   background: var(--superficie);
-  border-top: 1px solid var(--borda);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid var(--linha);
+  padding: 0 max(4px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(4px, env(safe-area-inset-left, 0px));
 }
 
 .abas a {
   flex: 1;
-  padding: 0.875rem 0.25rem;
-  text-align: center;
-  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  min-width: 0;
+  padding: var(--espaco-2) 2px 0.625rem;
+  font-size: var(--texto-pp);
   font-weight: 600;
   color: var(--texto-suave);
   text-decoration: none;
@@ -202,18 +488,72 @@ h2 {
 
 .abas a[aria-current="page"] {
   color: var(--destaque);
-  box-shadow: inset 0 3px 0 var(--destaque);
 }
 
-/* Tela larga: abas numa barra lateral e o conteúdo com largura de leitura. */
+/* O botão + fica no meio da barra, redondo e acima dela. */
+.abas a.novo {
+  order: 0;
+  justify-content: center;
+}
+
+.abas a.novo span {
+  display: grid;
+  place-items: center;
+  width: 3.375rem;
+  height: 3.375rem;
+  margin-top: -1.375rem;
+  border: 4px solid var(--fundo);
+  border-radius: var(--raio-pilula);
+  background: var(--destaque);
+  color: var(--sobre-destaque);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--destaque) 35%, transparent);
+}
+
+.abas a.novo svg {
+  width: 1.625rem;
+  height: 1.625rem;
+  stroke-width: 2.4;
+}
+
+.abas a.novo .nome-da-aba {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* O + vem primeiro no código (primeiro no teclado); no celular, as duas primeiras abas passam à frente dele. */
+.abas a:nth-child(-n + 3):not(.novo) {
+  order: -1;
+}
+
+.abas a:nth-child(n + 4) {
+  order: 1;
+}
+
+/* Tela larga: o topo branco, as abas numa barra lateral e o conteúdo com largura de leitura. */
 @media (min-width: 900px) {
   .casca {
     grid-template-areas: "topo topo" "abas conteudo";
-    grid-template-columns: 14rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
   }
 
-  .casca .topo h1 {
-    flex-basis: auto;
+  .casca .topo {
+    padding: var(--espaco-3) var(--espaco-5);
+    background: var(--superficie);
+    color: var(--texto);
+    border-bottom: 1px solid var(--linha);
+  }
+
+  .botao-de-icone:hover {
+    background: var(--destaque-suave);
+  }
+
+  .menu-da-conta > summary {
+    background: var(--destaque);
+    color: var(--sobre-destaque);
   }
 
   .abas {
@@ -223,27 +563,81 @@ h2 {
     inset: auto;
     align-self: start;
     flex-direction: column;
-    height: 100dvh;
-    padding: 0.5rem;
+    gap: 2px;
+    height: auto;
+    padding: var(--espaco-4) var(--espaco-3);
     border-top: 0;
-    border-right: 1px solid var(--borda);
+    border-right: 1px solid var(--linha);
+    background: transparent;
   }
 
   .abas a {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    font-size: 1rem;
-    border-radius: 0.5rem;
+    flex: none;
+    flex-direction: row;
+    gap: var(--espaco-3);
+    padding: 0.625rem var(--espaco-3);
+    font-size: var(--texto-m);
+    border-radius: var(--raio-campo);
+  }
+
+  .abas a:hover {
+    background: var(--superficie);
+    text-decoration: none;
   }
 
   .abas a[aria-current="page"] {
+    background: var(--destaque-suave);
+  }
+
+  .abas a.novo {
+    order: -2;
+    margin-bottom: var(--espaco-3);
+    padding: 0.6875rem var(--espaco-3);
+    border-radius: var(--raio-pilula);
+    background: var(--destaque);
+    color: var(--sobre-destaque);
+  }
+
+  .abas a.novo:hover {
+    background: var(--destaque);
+  }
+
+  .abas a.novo span {
+    width: auto;
+    height: auto;
+    margin: 0;
+    border: 0;
+    background: transparent;
     box-shadow: none;
-    background: var(--fundo);
+  }
+
+  .abas a.novo svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .abas a.novo .nome-da-aba {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
   }
 
   .casca > main {
-    max-width: 60rem;
-    padding-block: 1rem 2rem;
+    max-width: 62rem;
+    padding: var(--espaco-5) var(--espaco-6) var(--espaco-6);
+  }
+
+  .faixa {
+    margin: 0;
+    padding: var(--espaco-5) 1.75rem;
+    border-radius: 1.25rem;
+  }
+
+  .pilulas {
+    margin-right: 0;
+    padding-right: 0;
+    flex-wrap: wrap;
   }
 }
 
@@ -261,10 +655,30 @@ h2 {
   color: var(--texto-suave);
 }
 
+/* Alternância: um controle segmentado; o escolhido é o botão sem "secundario". */
 .alternancia {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 0.75rem;
+  background: var(--linha);
+}
+
+.alternancia > button {
+  padding: 0.5rem 0.5rem;
+  border: 0;
+  border-radius: 0.5625rem;
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+  font-size: 0.9375rem;
+}
+
+.alternancia > button.secundario {
+  background: transparent;
+  color: var(--texto-suave);
+  box-shadow: none;
 }
 
 .valor {
@@ -284,6 +698,8 @@ h2 {
 .tecla {
   padding: 0.875rem 0;
   font-size: 1.25rem;
+  font-weight: 500;
+  border-radius: var(--raio-campo);
   background: var(--superficie);
   color: var(--texto);
   border-color: var(--borda);
@@ -340,8 +756,16 @@ h2 {
 
 .lista .acoes {
   display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.5rem;
+  margin: 0.625rem 0 0;
+}
+
+.lista .acoes > button,
+.lista .acoes > a.botao {
+  padding: 0.4375rem 0.9375rem;
+  font-size: 0.875rem;
 }
 
 a.botao.secundario {
@@ -355,18 +779,111 @@ select {
   padding: 0.75rem;
   margin-bottom: 0.625rem;
   border: 1px solid var(--borda);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-campo);
   background: var(--superficie);
   color: var(--texto);
 }
 
-.lista .arquivada {
+/* Esmaece o conteúdo da linha arquivada, não a linha: a opacidade na linha prenderia o ⋯ aberto embaixo da linha seguinte. */
+.lista .arquivada > :not(.menu) {
   opacity: 0.6;
 }
 
-.configuracoes h3 {
-  margin: 0.5rem 0;
+/* A linha com o ⋯ aberto fica por cima das seguintes. */
+.lista > li:has(> .menu[open]) {
+  position: relative;
+  z-index: 16;
+}
+
+.configuracoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  max-width: 36rem;
+}
+
+.configuracoes h2 {
+  margin: 0;
+}
+
+.configuracoes > section:not(.cartao) > h3 {
+  margin: 0 0 var(--espaco-2) var(--espaco-1);
+  font-size: var(--texto-p);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.configuracoes .acoes {
+  margin: 0;
+}
+
+/* Interruptor: o texto à esquerda, a chave à direita. */
+label.interruptor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-4);
+  color: var(--texto);
   font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+label.interruptor > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+label.interruptor small {
+  color: var(--texto-suave);
+  font-size: var(--texto-p);
+  font-weight: 400;
+}
+
+label.interruptor input {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 3rem;
+  height: 1.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: var(--borda);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+label.interruptor input::after {
+  content: "";
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s;
+}
+
+label.interruptor input:checked {
+  background: var(--destaque);
+}
+
+label.interruptor input:checked::after {
+  transform: translateX(1.25rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  label.interruptor input,
+  label.interruptor input::after {
+    transition: none;
+  }
 }
 
 .acoes {
@@ -391,28 +908,15 @@ fieldset.sem-moldura {
 }
 
 /* Contas da semana: o atrasado leva um selo de aviso; o ajuste abre dentro da linha. */
-.contas-da-semana {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-block: 1rem;
-  max-width: 26rem;
-}
-
-.contas-da-semana h3 {
-  margin: 0;
-  font-size: 1.125rem;
-}
-
 .selo-atrasado {
   display: inline-block;
   margin-right: 0.5rem;
   padding: 0 0.5rem;
-  border-radius: 0.25rem;
-  background: var(--aviso-fundo);
+  border-radius: var(--raio-pilula);
+  background: var(--erro-suave);
   color: var(--erro);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--texto-pp);
+  font-weight: 700;
 }
 
 .ajuste {
@@ -452,13 +956,126 @@ fieldset.sem-moldura {
   margin-top: 0.5rem;
 }
 
+/* O ⋯ da linha (ticket 204): o botão redondo e, aberto, as ações num cartão por cima do conteúdo. */
+.menu {
+  position: relative;
+}
+
 .menu summary {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--raio-pilula);
+  color: var(--texto-suave);
+  font-weight: 800;
+  letter-spacing: 0.05em;
   cursor: pointer;
   list-style: none;
-  padding: 0.5rem 0.75rem;
-  min-height: 2.75rem;
-  display: inline-flex;
-  align-items: center;
+}
+
+.menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu summary:hover,
+.menu[open] summary {
+  background: var(--fundo);
+  color: var(--texto);
+}
+
+.itens-do-menu {
+  position: absolute;
+  z-index: 15;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  padding: 0.375rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-campo);
+  background: var(--superficie);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+}
+
+.itens-do-menu > button,
+.itens-do-menu > a {
+  display: block;
+  padding: 0.625rem 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--texto);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  text-align: left;
+}
+
+.itens-do-menu > button:hover,
+.itens-do-menu > a:hover {
+  background: var(--fundo);
+  text-decoration: none;
+}
+
+.itens-do-menu > .perigo {
+  color: var(--erro);
+}
+
+/* Dentro de uma tabela que rola de lado, o menu abre na própria célula, para não ser cortado. */
+.tabela .itens-do-menu {
+  position: static;
+  min-width: 0;
+  margin-top: 0.25rem;
+  box-shadow: none;
+}
+
+/* Linha com ⋯: o resumo (que abre ao tocar) à esquerda e o ⋯ à direita; o resto embaixo. */
+.lista > li.linha-com-menu {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--espaco-2);
+  align-items: start;
+}
+
+.lista > li.linha-com-menu > * {
+  grid-column: 1 / -1;
+}
+
+.lista > li.linha-com-menu > :first-child {
+  grid-column: 1;
+}
+
+.lista > li.linha-com-menu > .menu {
+  grid-column: 2;
+  grid-row: 1;
+  margin: -0.375rem -0.5rem 0 0;
+}
+
+.lista > li.linha-com-menu > div:first-child {
+  align-self: center;
+}
+
+.abre-a-linha {
+  display: block;
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+}
+
+.abre-a-linha:hover {
+  text-decoration: none;
+}
+
+.abre-a-linha > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+a.abre-a-linha:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .informacoes {
@@ -494,6 +1111,25 @@ fieldset.sem-moldura {
 .fileira.rolavel .ficha {
   flex: none;
   white-space: nowrap;
+}
+
+/* Enquanto houver mais à direita, a fileira some na borda (só onde o navegador liga a animação à rolagem). */
+@supports (animation-timeline: scroll()) {
+  .fileira.rolavel {
+    animation: fileira-com-mais linear both;
+    animation-timeline: scroll(self inline);
+  }
+
+  @keyframes fileira-com-mais {
+    0%,
+    95% {
+      mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+    }
+
+    100% {
+      mask-image: none;
+    }
+  }
 }
 
 /* O resumo dos detalhes, numa linha embaixo do valor; tocar abre a folha. */
@@ -637,21 +1273,25 @@ dialog.folha > input {
 .aba-mes {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--espaco-4);
 }
 .aba-mes h3 {
-  margin: 0 0 0.5rem;
+  margin: 0;
   font-size: 1rem;
 }
 .aba-mes > section {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--espaco-3);
   min-width: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
 }
 .navegacao-do-mes {
   display: grid;
-  grid-template-columns: 3rem 1fr 3rem;
+  grid-template-columns: 2.5rem 1fr 2.5rem;
   align-items: center;
   gap: 0.5rem;
   text-align: center;
@@ -660,9 +1300,72 @@ dialog.folha > input {
   margin: 0;
   font-size: 1.25rem;
 }
+.faixa .nome-do-mes {
+  color: var(--sobre-faixa);
+}
 .navegacao-do-mes a.botao {
-  padding: 0.5rem 0;
-  font-size: 1.25rem;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  font-size: 1.375rem;
+  line-height: 1;
+}
+.faixa .navegacao-do-mes a.botao {
+  border: 0;
+  background: var(--vidro);
+  color: var(--sobre-faixa);
+}
+/* Despesas × planejamento dentro da faixa: a barra e a legenda nas cores de cima do verde. */
+.despesas-do-mes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin-top: var(--espaco-3);
+}
+.faixa .despesas-do-mes p {
+  color: var(--sobre-faixa-suave);
+  font-size: 0.875rem;
+}
+.faixa .despesas-do-mes .acima {
+  color: var(--sobre-faixa);
+}
+.faixa .barra-do-mes {
+  background: var(--vidro);
+  box-shadow: none;
+}
+.faixa .barra-do-mes .realizado,
+.faixa .legenda .realizado {
+  background: var(--sobre-faixa);
+}
+.faixa .barra-do-mes .previsto,
+.faixa .legenda .previsto {
+  background: repeating-linear-gradient(135deg, var(--sobre-faixa) 0 2px, transparent 2px 6px);
+}
+.faixa .barra-do-mes .marca-do-planejado {
+  background: var(--sobre-faixa);
+}
+.faixa .legenda {
+  color: var(--sobre-faixa);
+  font-weight: 600;
+}
+.faixa .legenda .livre {
+  background: var(--vidro);
+  box-shadow: none;
+}
+/* Cabeçalho de cartão: o título à esquerda e o link da seção à direita. */
+.cabecalho-do-cartao {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+.cabecalho-do-cartao a {
+  font-size: 0.875rem;
+}
+.cabecalho-do-cartao a::after {
+  content: " ›";
 }
 /* Realizado cheio, previsto riscado, livre só o fundo; a marca é o planejado. */
 .barra-do-mes {
@@ -724,6 +1427,7 @@ dialog.folha > input {
 }
 /* A tabela larga rola dentro do bloco, sem alargar a página. */
 .rolagem {
+  position: relative;
   overflow-x: auto;
 }
 .tabela {
@@ -734,8 +1438,8 @@ dialog.folha > input {
 }
 .tabela th,
 .tabela td {
-  padding: 0.375rem 0.5rem;
-  border-bottom: 1px solid var(--borda);
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--linha);
   text-align: right;
   white-space: nowrap;
 }
@@ -778,9 +1482,10 @@ button.linha-que-abre {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.25rem 0.75rem;
   width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--borda);
-  background: var(--superficie);
+  padding: 0.5rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--texto);
   font-weight: 400;
   text-align: left;
@@ -796,7 +1501,7 @@ button.linha-que-abre {
   grid-column: 1 / -1;
   height: 0.375rem;
   border-radius: 0.1875rem;
-  background: var(--fundo);
+  background: var(--linha);
 }
 .ranking .trilho span {
   display: block;
@@ -822,36 +1527,168 @@ button.linha-que-abre {
   margin-bottom: 0;
 }
 
-/* Hoje: o "ainda dá para gastar" em destaque e os blocos de cada aviso. */
-.destaque-da-hoje {
-  padding: 1rem;
-  border-radius: 0.5rem;
-  background: var(--aviso-fundo);
-  max-width: 26rem;
-}
-
-.destaque-da-hoje h3,
-.bloco-da-hoje h3 {
-  margin: 0;
-  font-size: 1.125rem;
-}
-
-.destaque-da-hoje .valor {
-  margin: 0.25rem 0;
-  font-size: 2rem;
-  font-weight: 700;
-}
-
-.bloco-da-hoje {
+/* Hoje: a faixa verde no alto e cada aviso num cartão; na tela larga, os cartões em duas colunas. */
+.tela-hoje {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-block: 1rem;
-  max-width: 26rem;
+  gap: var(--espaco-4);
 }
 
-.bloco-da-hoje progress {
+.bloco-da-hoje,
+.contas-da-semana {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.bloco-da-hoje h3,
+.contas-da-semana h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tela-hoje > .aviso {
+  margin: 0;
+  border: 0;
+  background: var(--erro-suave);
+}
+
+.tela-hoje > .aviso strong {
+  color: var(--erro);
+}
+
+.bloco-da-hoje .lista,
+.contas-da-semana .lista {
+  gap: 0;
+}
+
+.bloco-da-hoje .lista > li,
+.contas-da-semana .lista > li {
+  padding-block: var(--espaco-3);
+}
+
+.bloco-da-hoje .lista > li + li,
+.contas-da-semana .lista > li + li {
+  border-top: 1px solid var(--linha);
+}
+
+.bloco-da-hoje .lista > li:first-child,
+.contas-da-semana .lista > li:first-child {
+  padding-top: 0;
+}
+
+.bloco-da-hoje .lista > li:last-child,
+.contas-da-semana .lista > li:last-child {
+  padding-bottom: 0;
+}
+
+.bloco-da-hoje .vazio,
+.contas-da-semana .vazio {
+  font-size: 0.875rem;
+}
+
+.bloco-da-hoje a.botao.secundario {
+  display: inline-block;
+  margin-top: var(--espaco-2);
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+}
+
+/* Barra de progresso: trilho claro e o preenchido na cor do app (vermelho se passou do planejado). */
+progress {
+  appearance: none;
   width: 100%;
+  height: 0.5rem;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: var(--linha);
+  color: var(--destaque);
+  accent-color: var(--destaque);
+  overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+  background: var(--linha);
+  border-radius: var(--raio-pilula);
+}
+
+progress::-webkit-progress-value {
+  background: var(--destaque);
+  border-radius: var(--raio-pilula);
+}
+
+progress::-moz-progress-bar {
+  background: var(--destaque);
+  border-radius: var(--raio-pilula);
+}
+
+progress[value="100"]::-webkit-progress-value {
+  background: var(--erro);
+}
+
+progress[value="100"]::-moz-progress-bar {
+  background: var(--erro);
+}
+
+/* O estado da API, discreto, no fim da Hoje. */
+.estado-da-api {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espaco-1) var(--espaco-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-p);
+}
+
+.estado-da-api span::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.375rem;
+  border-radius: 50%;
+  background: var(--texto-suave);
+}
+
+.estado-da-api span[data-estado="no ar"]::before {
+  background: var(--destaque);
+}
+
+.estado-da-api span[data-estado="sem conexão"]::before {
+  background: var(--erro);
+}
+
+.estado-da-api button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--destaque);
+  font-size: inherit;
+}
+
+@media (min-width: 900px) {
+  .tela-hoje {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--espaco-5);
+  }
+
+  .tela-hoje > .faixa,
+  .tela-hoje > .aviso,
+  .tela-hoje > .estado-da-api,
+  .tela-hoje > p,
+  .tela-hoje > [role="alert"],
+  .tela-hoje > [data-testid="nao-enviados"] {
+    grid-column: 1 / -1;
+  }
 }
 
 .limite summary {
@@ -889,10 +1726,9 @@ label.caixa > input {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
-  padding: 0.75rem;
-  border: 1px solid var(--borda);
-  border-radius: 0.75rem;
-  background: var(--superficie);
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--raio-campo);
+  background: var(--fundo);
   color: var(--texto);
   text-decoration: none;
 }
@@ -1058,7 +1894,7 @@ label.caixa > input {
 .tabela th,
 .tabela td {
   padding: 0.5rem 0.625rem;
-  border-bottom: 1px solid var(--borda);
+  border-bottom: 1px solid var(--linha);
   text-align: right;
   white-space: nowrap;
 }
@@ -1085,10 +1921,6 @@ label.caixa > input {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-}
-.abas-internas button[aria-pressed="true"] {
-  background: var(--destaque);
-  color: var(--sobre-destaque);
 }
 .evolucao {
   display: flex;
@@ -1180,10 +2012,6 @@ label.caixa > input {
   margin-top: 0.5rem;
   padding-left: 1rem;
   border-left: 2px solid var(--borda);
-}
-.lupa {
-  font-size: 1.25rem;
-  text-decoration: none;
 }
 
 /* Aviso de planejamento ao lançar: o item antes e depois, numa barra do planejado. */
@@ -1317,4 +2145,432 @@ label.caixa > input {
 
 .partes-da-compra p {
   margin: 0;
+}
+
+/* Cartões e Fatura (ticket 204): a faixa com o limite usado de cada cartão ou o total da fatura; o resto em cartões. */
+.tela-de-cartoes,
+.tela-da-fatura {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.faixa h2 {
+  margin: 0;
+  color: var(--sobre-faixa);
+}
+
+.faixa a.voltar {
+  align-self: flex-start;
+  margin-bottom: var(--espaco-1);
+  font-size: 0.875rem;
+}
+
+.faixa a.voltar::before {
+  content: "‹ ";
+}
+
+.limites-na-faixa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  margin: var(--espaco-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.limites-na-faixa li > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.limites-na-faixa .trilho-da-faixa {
+  margin-top: var(--espaco-1);
+}
+
+.tela-de-cartoes .cartao .lista {
+  gap: 0;
+}
+
+.tela-de-cartoes .cartao .lista > li {
+  padding-block: var(--espaco-3);
+  border-top: 1px solid var(--linha);
+}
+
+.lista a.linha-da-fatura > div:first-child strong::after {
+  content: " ›";
+  color: var(--texto-suave);
+}
+
+.limite summary {
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+/* O resumo da fatura: rótulo à esquerda, valor à direita, em duas colunas na tela larga. */
+.resumo-da-fatura {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.resumo-da-fatura dt,
+.resumo-da-fatura dd {
+  margin: 0;
+  padding: 0.4375rem 0;
+  border-top: 1px solid var(--linha);
+}
+
+.resumo-da-fatura dt {
+  color: var(--texto-suave);
+  font-weight: 500;
+}
+
+.resumo-da-fatura dd {
+  text-align: right;
+  font-weight: 600;
+}
+
+.resumo-da-fatura dt:first-of-type,
+.resumo-da-fatura dt:first-of-type + dd {
+  border-top: 0;
+}
+
+.acoes-da-fatura {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.acoes-da-fatura:empty {
+  display: none;
+}
+
+.acoes-da-fatura > a.botao {
+  display: inline-block;
+}
+
+.filtros-da-fatura {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--espaco-3);
+}
+
+.filtros-da-fatura label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.filtros-da-fatura select {
+  margin: 0;
+  min-width: 0;
+}
+
+.tela-da-fatura > [role="group"] h3 {
+  margin: 0;
+  font-size: var(--texto-p);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.tela-da-fatura .lista {
+  gap: 0;
+}
+
+.tela-da-fatura .lista > li {
+  padding-block: var(--espaco-3);
+}
+
+.tela-da-fatura .lista > li + li {
+  border-top: 1px solid var(--linha);
+}
+
+@media (min-width: 900px) {
+  .aba-mes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--espaco-5);
+  }
+
+  .aba-mes > :not(section[aria-label="Comparação"], section[aria-label="Ranking"]) {
+    grid-column: 1 / -1;
+  }
+
+  .resumo-da-fatura {
+    grid-template-columns: repeat(2, minmax(0, 1fr) auto);
+    column-gap: var(--espaco-5);
+  }
+
+  .resumo-da-fatura dt:nth-of-type(2),
+  .resumo-da-fatura dt:nth-of-type(2) + dd {
+    border-top: 0;
+  }
+}
+
+/* Contas e categorias (ticket 204): cada lista num cartão com filetes, o cadastro novo num cartão com título. */
+.contas-e-categorias {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  max-width: 40rem;
+}
+
+.contas-e-categorias h2 {
+  margin: 0;
+}
+
+.contas-e-categorias fieldset.sem-moldura,
+.contas-e-categorias fieldset.sem-moldura > section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.contas-e-categorias h3 {
+  margin: var(--espaco-4) 0 0 var(--espaco-1);
+  font-size: var(--texto-p);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.contas-e-categorias h4 {
+  margin: var(--espaco-2) 0 var(--espaco-2) var(--espaco-1);
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.contas-e-categorias .lista {
+  gap: 0;
+  padding: 0 var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.contas-e-categorias .lista:empty {
+  display: none;
+}
+
+.contas-e-categorias .lista > li {
+  padding-block: var(--espaco-2);
+}
+
+.contas-e-categorias .lista > li + li {
+  border-top: 1px solid var(--linha);
+}
+
+.contas-e-categorias .lista > li > div:first-child {
+  min-height: 2.5rem;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.contas-e-categorias form[aria-label^="Nov"] {
+  gap: var(--espaco-1);
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.contas-e-categorias form[aria-label^="Nov"] h4 {
+  margin: 0 0 var(--espaco-2);
+  color: var(--texto);
+  font-size: 1rem;
+}
+
+.contas-e-categorias form[aria-label^="Nov"] button[type="submit"] {
+  align-self: flex-start;
+}
+
+.contas-e-categorias form input,
+.contas-e-categorias form select {
+  margin-bottom: var(--espaco-2);
+}
+
+/* Histórico e busca: cada mês num cartão, com as linhas separadas por filete. */
+.lista-do-historico > section > h3 {
+  margin: var(--espaco-4) 0 var(--espaco-2) var(--espaco-1);
+  font-size: var(--texto-p);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.lista-do-historico > section > .lista {
+  gap: 0;
+  padding: 0 var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.lista-do-historico > section > .lista > li {
+  padding-block: var(--espaco-3);
+}
+
+.lista-do-historico > section > .lista > li + li {
+  border-top: 1px solid var(--linha);
+}
+
+.lista .vazio {
+  font-size: 0.875rem;
+}
+
+/* Futuro e evolução do Histórico: cada bloco num cartão; períodos num controle segmentado. */
+.tela-do-futuro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.tela-do-futuro h2 {
+  margin: 0;
+}
+
+.tela-do-futuro > section,
+.evolucao-da-aba {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.tela-do-futuro h3,
+.evolucao-da-aba h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tela-do-futuro .grafico {
+  border: 0;
+  background: transparent;
+}
+
+/* A tabela que rola de lado avisa que há mais à direita com uma sombra na borda. */
+.rolavel-de-lado,
+.rolagem {
+  background:
+    linear-gradient(to right, var(--superficie) 30%, transparent) left / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--superficie) 30%, transparent) right / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.14), transparent) left / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.14), transparent) right / 0.75rem 100% no-repeat scroll;
+}
+
+.evolucao {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.abas-internas {
+  gap: 3px;
+  padding: 3px;
+  border-radius: 0.75rem;
+  background: var(--linha);
+  align-self: flex-start;
+}
+
+.abas-internas button,
+.abas-internas button.secundario {
+  padding: 0.375rem 0.875rem;
+  border: 0;
+  border-radius: 0.5625rem;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.abas-internas button[aria-pressed="true"] {
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+
+.lista-do-historico {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.lista-do-historico > h2 {
+  margin: 0;
+}
+
+
+.contas-e-categorias .lista > li.linha-com-menu > .menu {
+  margin-top: 0;
+  align-self: center;
+}
+
+/* Login: no celular, a coluna; na tela larga, um cartão no alto da página. */
+main.login h1 {
+  margin-bottom: var(--espaco-2);
+  color: var(--destaque);
+}
+
+@media (min-width: 600px) {
+  main.login {
+    margin-top: 12vh;
+    padding: var(--espaco-6);
+    border-radius: 1.25rem;
+    background: var(--superficie);
+    box-shadow: var(--sombra);
+  }
+}
+
+/* O mês passado: o fechamento vai na faixa, no lugar da barra. */
+.faixa .fechamento {
+  margin-top: var(--espaco-3);
+  color: var(--sobre-faixa);
+}
+
+.faixa .fechamento h3 {
+  color: var(--sobre-faixa-suave);
+  font-size: var(--texto-m);
+}
+
+.faixa .fechamento p {
+  color: var(--sobre-faixa);
+}
+
+/* A linha que abre ao tocar quando é um botão (contas, categorias, tags, cartões, itens do Mês). */
+button.abre-a-linha {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+}
+
+.contas-e-categorias .lista > li > button.abre-a-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  min-height: 2.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabela button.abre-a-linha {
+  color: var(--texto);
+  font-weight: 600;
 }

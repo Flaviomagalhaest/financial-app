@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import { api } from "../api/cliente";
 import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta, type ContaNaTela, type RecorrenciaNaTela } from "../dados";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
@@ -111,7 +112,7 @@ export function TelaDeContasECategorias() {
   }
 
   return (
-    <section>
+    <section className="contas-e-categorias">
       <h2>Contas e categorias</h2>
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {erro && (
@@ -144,6 +145,7 @@ export function TelaDeContasECategorias() {
           })
         }
       >
+        <h4>Nova conta</h4>
         <label htmlFor="conta-nome">Nome</label>
         <input id="conta-nome" name="nome" required />
         <label htmlFor="conta-tipo">Tipo</label>
@@ -190,6 +192,7 @@ export function TelaDeContasECategorias() {
           )
         }
       >
+        <h4>Nova categoria</h4>
         <label htmlFor="categoria-nome">Nome</label>
         <input id="categoria-nome" name="nome" required />
         <label htmlFor="categoria-tipo">Tipo</label>
@@ -210,13 +213,13 @@ export function TelaDeContasECategorias() {
           ))}
         </ul>
         <form aria-label="Nova tag" onSubmit={(e) => void criarTag(e)}>
+          <h4>Nova tag</h4>
           <label htmlFor="tag-nome">Nome da nova tag</label>
           <input id="tag-nome" name="nome" required pattern=".*\S.*" />
           <button type="submit">Criar tag</button>
         </form>
       </section>
       </fieldset>
-      <a href="#/hoje">Voltar</a>
     </section>
   );
 }
@@ -242,6 +245,14 @@ function LinhaDeConta({
   const [tipo, setTipo] = useState(conta.tipo);
   const [saldo, setSaldo] = useState("");
   const [data, setData] = useState(conta.data_abertura ?? "");
+
+  const abrirEdicao = () => {
+    setNome(conta.nome);
+    setTipo(conta.tipo);
+    setSaldo(conta.saldo_abertura_centavos == null ? "" : String(conta.saldo_abertura_centavos / 100).replace(".", ","));
+    setData(conta.data_abertura ?? "");
+    setEditando(true);
+  };
 
   if (editando) {
     return (
@@ -280,8 +291,9 @@ function LinhaDeConta({
     );
   }
   return (
-    <li className={conta.arquivada ? "arquivada" : undefined}>
-      <div>
+    <li className={`linha-com-menu${conta.arquivada ? " arquivada" : ""}`}>
+      {/* Tocar na linha abre a edição (ticket 204); o ⋯ tem o resto. */}
+      <button type="button" className="abre-a-linha" onClick={abrirEdicao}>
         <span>
           {conta.nome}
           {conta.arquivada && " (arquivada)"}
@@ -290,25 +302,20 @@ function LinhaDeConta({
           {formatarCentavos(conta.saldo_centavos)}
           {conta.saldoNaoEnviado && " ⏳"}
         </span>
-      </div>
-      <div className="acoes">
+      </button>
+      <MenuDeAcoes rotulo={`Mais ações ${conta.nome}`}>
         <button
           type="button"
           className="secundario"
-          onClick={() => {
-            setNome(conta.nome);
-            setTipo(conta.tipo);
-            setSaldo(conta.saldo_abertura_centavos == null ? "" : String(conta.saldo_abertura_centavos / 100).replace(".", ","));
-            setData(conta.data_abertura ?? "");
-            setEditando(true);
-          }}
+          aria-label={`Editar ${conta.nome}`}
+          onClick={abrirEdicao}
         >
-          Editar {conta.nome}
+          Editar
         </button>
-        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
-          {conta.arquivada ? "Desarquivar" : "Arquivar"} conta {conta.nome}
+        <button type="button" className="secundario" disabled={arquivar.esperando} aria-label={`${conta.arquivada ? "Desarquivar" : "Arquivar"} conta ${conta.nome}`} onClick={arquivar.tocar}>
+          {conta.arquivada ? "Desarquivar" : "Arquivar"}
         </button>
-      </div>
+      </MenuDeAcoes>
       {arquivar.painel}
     </li>
   );
@@ -366,34 +373,42 @@ function LinhaDeItem({
     );
   }
   return (
-    <li className={item.arquivada ? "arquivada" : undefined}>
-      <div>
+    <li className={`linha-com-menu${item.arquivada ? " arquivada" : ""}`}>
+      <button
+        type="button"
+        className="abre-a-linha"
+        onClick={() => {
+          setNome(item.nome);
+          setEditando(true);
+        }}
+      >
         {item.nome}
         {item.arquivada && " (arquivada)"}
-      </div>
-      <div className="acoes">
+      </button>
+      <MenuDeAcoes rotulo={`Mais ações ${item.nome}`}>
         <button
           type="button"
           className="secundario"
+          aria-label={`Renomear ${item.nome}`}
           onClick={() => {
             setNome(item.nome);
             setEditando(true);
           }}
         >
-          Renomear {item.nome}
+          Renomear
         </button>
-        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
-          {item.arquivada ? "Desarquivar" : "Arquivar"} {item.nome}
-        </button>
-        <button type="button" className="secundario" onClick={() => void manutencao.excluir(item.id)}>
-          Excluir {item.nome}
+        <button type="button" className="secundario" disabled={arquivar.esperando} aria-label={`${item.arquivada ? "Desarquivar" : "Arquivar"} ${item.nome}`} onClick={arquivar.tocar}>
+          {item.arquivada ? "Desarquivar" : "Arquivar"}
         </button>
         {destinos.length > 0 && !juntando && (
-          <button type="button" className="secundario" onClick={() => setJuntando(true)}>
-            Juntar {item.nome}
+          <button type="button" className="secundario" aria-label={`Juntar ${item.nome}`} onClick={() => setJuntando(true)}>
+            Juntar em outra
           </button>
         )}
-      </div>
+        <button type="button" className="secundario perigo" aria-label={`Excluir ${item.nome}`} onClick={() => void manutencao.excluir(item.id)}>
+          Excluir
+        </button>
+      </MenuDeAcoes>
       {arquivar.painel}
       {juntando && (
         <form

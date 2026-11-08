@@ -52,7 +52,7 @@ Lançamento sem pessoa: é do casal (mercado, internet, gasolina, rendimento da 
 _Avoid_: compartilhado, comum
 
 **Favorito**:
-Lançamento-modelo que o casal marca (ou aceita dos sugeridos, os mais usados) para registrar de novo com um toque: preenche conta, categorias, tags, pessoa e o último valor, que é só o padrão e se confirma ao salvar. Aparece numa fileira acima do teclado do novo lançamento e numa grade na tela inicial.
+Lançamento-modelo que o casal marca (ou aceita dos sugeridos, os mais usados) para registrar de novo com um toque: preenche conta, categorias, tags, pessoa e o último valor, que é só o padrão e se confirma ao salvar. Aparece numa fileira acima do teclado do novo lançamento e, na Hoje, nos **atalhos da faixa** (com os atalhos desligados, numa grade no corpo da Hoje).
 _Avoid_: atalho, modelo
 
 **Sugerido**:
@@ -354,6 +354,24 @@ _Avoid_: recorrência importada
 **Par provável**:
 Uma linha de fatura e uma do geral que sobraram do cruzamento no mesmo mês e são as únicas com aquele valor; viram uma compra só quando o dono as junta na planilha de revisão, e até lá cada uma entra sozinha.
 _Avoid_: par duvidoso, casamento parcial
+
+### Telas
+
+**Faixa**:
+O alto verde das telas que têm um número que resume a tela: na Hoje, quanto ainda dá para gastar; no Mês, as despesas contra o planejamento (no mês passado, o fechamento); em Cartões, o limite usado de cada cartão; na fatura, o total. No celular ela continua o topo verde.
+_Avoid_: banner, cabeçalho
+
+**Atalhos da faixa**:
+As pílulas na faixa da Hoje: cada **Favorito** com o valor, a fatura que vence (sem fatura, os cartões) e as contas. Liga e desliga em Configurações, só no aparelho. O favorito é um dos atalhos, mas continua se chamando favorito.
+_Avoid_: pílulas (é a forma, não o nome)
+
+**Menu da conta**:
+O círculo com a inicial no topo: mostra com que e-mail se entrou e leva a Configurações, Contas e categorias, Favoritos e Sair.
+_Avoid_: perfil, avatar
+
+**Menu da linha**:
+O ⋯ de uma linha (lançamento, compra da fatura, item do planejamento, conta, categoria, tag, cartão): reúne as ações que não são a principal. Tocar na própria linha abre o item.
+_Avoid_: mais opções
 
 ### Sem internet
 

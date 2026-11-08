@@ -18,9 +18,29 @@ import { TelaDoMes } from "../mes/TelaDoMes";
 import { TelaDoModelo } from "../mes/TelaDoModelo";
 import { TelaDaBusca } from "../busca/TelaDaBusca";
 import { TelaDasEdicoesEmLote } from "../busca/TelaDasEdicoesEmLote";
-import { ABAS, useRota } from "./rota";
+import { Icone } from "./icones";
+import { MenuDeAcoes } from "./MenuDeAcoes";
+import { ABAS, useRota, type Rota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
+
+/** As telas de lançar: nelas o botão + some (ticket 204). */
+const TELAS_DE_LANCAR: Rota[] = ["novo", "estornar", "credito", "favorito"];
+
+/** O círculo com a inicial abre o e-mail, Configurações, os cadastros e Sair (ticket 204). */
+function MenuDaConta({ email, onSair }: { email: string; onSair: () => void }) {
+  return (
+    <MenuDeAcoes classe="menu-da-conta" rotulo={`Conta de ${email}`} botao={email.charAt(0).toUpperCase()} nomeDosItens="Menu da conta">
+      <p>Entrou como {email}</p>
+      <a href="#/configuracoes">Configurações</a>
+      <a href="#/contas-e-categorias">Contas e categorias</a>
+      <a href="#/favoritos">Favoritos</a>
+      <button type="button" onClick={onSair}>
+        Sair
+      </button>
+    </MenuDeAcoes>
+  );
+}
 
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
@@ -32,33 +52,34 @@ export function Casca({ email, onSair, hoje }: Props) {
     <div className="casca">
       <header className="topo">
         <h1>Financial App</h1>
-        <p>Entrou como {email}</p>
-        <a className="lupa" href="#/busca" aria-label="Buscar lançamentos">
-          🔍
+        <a className="botao-de-icone" href="#/busca" aria-label="Buscar lançamentos">
+          <Icone nome="lupa" />
         </a>
-        <a href="#/configuracoes">Configurações</a>
-        <button className="secundario" onClick={onSair}>
-          Sair
-        </button>
+        <MenuDaConta email={email} onSair={onSair} />
       </header>
       <nav className="abas" aria-label="Telas">
+        {!TELAS_DE_LANCAR.includes(rota) && (
+          <a className="novo" href="#/novo">
+            <span>
+              <Icone nome="mais" />
+            </span>
+            <span className="nome-da-aba">Novo lançamento</span>
+          </a>
+        )}
         {ABAS.map((a) => (
           <a key={a.id} href={`#/${a.id}`} aria-current={a.id === aba ? "page" : undefined}>
-            {a.nome}
+            <Icone nome={a.id} />
+            <span className="nome-da-aba">{a.nome}</span>
           </a>
         ))}
       </nav>
       <OfertaDeFavoritar />
       <main>
         {rota === "hoje" && (
-          <section>
-            <h2>Hoje</h2>
-            <a className="botao" href="#/novo">
-              + Novo lançamento
-            </a>
+          <section className="tela-hoje">
+            <h2 className="oculto">Hoje</h2>
             <TelaHoje />
             {hoje}
-            <a href="#/contas-e-categorias">Contas e categorias</a>
           </section>
         )}
         {rota === "novo" && (id ? <TelaDeLancamento key={id} id={id} /> : <NovoLancamento />)}

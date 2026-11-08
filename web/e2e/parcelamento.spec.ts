@@ -26,7 +26,7 @@ const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "
 /** Abre o novo lançamento pelo app, preenche valor, conta, categoria e descrição e marca "Parcelado". */
 async function comecarParcelado(page: Page, { teclas, conta, categoria, descricao }: { teclas: string[]; conta: string; categoria: string; descricao: string }) {
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, ...teclas);
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: categoria }).click();
@@ -135,7 +135,7 @@ test("parcelamento recusado fica 'não enviado: <motivo>' até ser descartado", 
   await salvo();
   // Um lançamento junto: o aviso conta os dois tipos de pedido.
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, "5");
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: eletro }).click();
@@ -414,7 +414,7 @@ test("sem internet, abre a tela de um parcelamento que o aparelho nunca abriu", 
   // A leitura dos parcelamentos vem com o app aberto, sem abrir a tela do parcelamento.
   await page.reload();
   await aba(page, "Hoje");
-  await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Novo lançamento" })).toBeVisible();
   // Só vale a leitura que já tem este parcelamento: a guardada antes de ele existir não serve.
   await expect
     .poll(() =>

@@ -52,25 +52,31 @@ test("mantém as tags: cria, renomeia, arquiva, junta e exclui só a que não te
   await expect(linha(page, avulsa)).toBeVisible();
 
   // Renomear.
+  await page.getByLabel(`Mais ações ${viagem}`).click();
   await page.getByRole("button", { name: `Renomear ${viagem}` }).click();
   await page.getByLabel(`Novo nome de ${viagem}`).fill(`viagem 2026 ${s}`);
   await page.getByRole("button", { name: "Salvar nome" }).click();
   await expect(linha(page, `viagem 2026 ${s}`)).toBeVisible();
 
   // Arquivar e desarquivar.
+  await page.getByLabel(`Mais ações ${avulsa}`).click();
   await page.getByRole("button", { name: `Arquivar ${avulsa}` }).click();
   await expect(linha(page, avulsa)).toContainText("(arquivada)");
+  await page.getByLabel(`Mais ações ${avulsa}`).click();
   await page.getByRole("button", { name: `Desarquivar ${avulsa}` }).click();
   await expect(linha(page, avulsa)).not.toContainText("(arquivada)");
 
   // Excluir recusa a tag com lançamentos e aceita a sem.
+  await page.getByLabel(`Mais ações ${ferias}`).click();
   await page.getByRole("button", { name: `Excluir ${ferias}` }).click();
   await expect(page.getByRole("alert")).toContainText("lançamentos");
   await expect(linha(page, ferias)).toBeVisible();
+  await page.getByLabel(`Mais ações ${avulsa}`).click();
   await page.getByRole("button", { name: `Excluir ${avulsa}` }).click();
   await expect(linha(page, avulsa)).toHaveCount(0);
 
   // Juntar move os lançamentos para o destino e some com a origem.
+  await page.getByLabel(`Mais ações ${ferias}`).click();
   await page.getByRole("button", { name: `Juntar ${ferias}` }).click();
   await page.getByLabel(`Juntar ${ferias} em`).selectOption({ label: `viagem 2026 ${s}` });
   await page.getByRole("button", { name: "Confirmar junção" }).click();
@@ -111,13 +117,16 @@ test("junta e exclui categorias na tela de configuração", async ({ page }) => 
   await page.reload();
 
   // Excluir recusa a categoria com lançamentos e aceita a vazia.
+  await page.getByLabel(`Mais ações ${mercado}`).click();
   await page.getByRole("button", { name: `Excluir ${mercado}` }).click();
   await expect(page.getByRole("alert")).toContainText("lançamentos");
   await expect(linha(page, mercado)).toBeVisible();
+  await page.getByLabel(`Mais ações ${vazia}`).click();
   await page.getByRole("button", { name: `Excluir ${vazia}` }).click();
   await expect(linha(page, vazia)).toHaveCount(0);
 
   // Juntar só oferece categorias do mesmo tipo.
+  await page.getByLabel(`Mais ações ${mercado}`).click();
   await page.getByRole("button", { name: `Juntar ${mercado}` }).click();
   const destinos = page.getByLabel(`Juntar ${mercado} em`);
   await expect(destinos.getByRole("option", { name: supermercado })).toHaveCount(1);

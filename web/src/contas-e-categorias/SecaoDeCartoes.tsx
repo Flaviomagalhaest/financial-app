@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import { api } from "../api/cliente";
 import { useCartoesComArquivados, useFaturas, type Cartao, type RecorrenciaNaTela } from "../dados";
 import { mesPorExtenso } from "../lancamentos/datas";
@@ -77,6 +78,7 @@ export function SecaoDeCartoes({
         ))}
       </ul>
       <form aria-label="Novo cartão" onSubmit={(e) => void criar(e)}>
+        <h4>Novo cartão</h4>
         <label htmlFor="cartao-nome">Nome</label>
         <input id="cartao-nome" name="nome" required pattern=".*\S.*" />
         <label htmlFor="cartao-titular">Titular</label>
@@ -147,6 +149,14 @@ function LinhaDeCartao({
     alternar: (arquivado) => aoSalvar(cartao, { arquivado }),
   });
   const adicional = !!cartao.titular_id;
+  const abrirEdicao = () => {
+    setNome(cartao.nome);
+    setFechamento(cartao.dia_fechamento == null ? "" : String(cartao.dia_fechamento));
+    setVencimento(cartao.dia_vencimento == null ? "" : String(cartao.dia_vencimento));
+    setLimite(cartao.limite_centavos == null ? "" : String(cartao.limite_centavos / 100).replace(".", ","));
+    setMesAnterior(cartao.mes_anterior_ao_fechamento);
+    setEditando(true);
+  };
 
   if (acertando) {
     return (
@@ -202,38 +212,32 @@ function LinhaDeCartao({
     );
   }
   return (
-    <li className={cartao.arquivado ? "arquivada" : undefined}>
-      <div>
+    <li className={`linha-com-menu${cartao.arquivado ? " arquivada" : ""}`}>
+      <button type="button" className="abre-a-linha" onClick={abrirEdicao}>
         <span>
           {cartao.nome}
           {cartao.arquivado && " (arquivado)"}
         </span>
         <span>{adicional ? `adicional de ${titular}` : resumoDoTitular(cartao)}</span>
-      </div>
-      <div className="acoes">
+      </button>
+      <MenuDeAcoes rotulo={`Mais ações ${cartao.nome}`}>
         <button
           type="button"
           className="secundario"
-          onClick={() => {
-            setNome(cartao.nome);
-            setFechamento(cartao.dia_fechamento == null ? "" : String(cartao.dia_fechamento));
-            setVencimento(cartao.dia_vencimento == null ? "" : String(cartao.dia_vencimento));
-            setLimite(cartao.limite_centavos == null ? "" : String(cartao.limite_centavos / 100).replace(".", ","));
-            setMesAnterior(cartao.mes_anterior_ao_fechamento);
-            setEditando(true);
-          }}
+          aria-label={`Editar cartão ${cartao.nome}`}
+          onClick={abrirEdicao}
         >
-          Editar cartão {cartao.nome}
+          Editar
         </button>
         {!adicional && !cartao.arquivado && (
-          <button type="button" className="secundario" onClick={() => setAcertando(true)}>
-            Acertar fatura de {cartao.nome}
+          <button type="button" className="secundario" aria-label={`Acertar fatura de ${cartao.nome}`} onClick={() => setAcertando(true)}>
+            Acertar fatura
           </button>
         )}
-        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
-          {cartao.arquivado ? "Desarquivar" : "Arquivar"} cartão {cartao.nome}
+        <button type="button" className="secundario" disabled={arquivar.esperando} aria-label={`${cartao.arquivado ? "Desarquivar" : "Arquivar"} cartão ${cartao.nome}`} onClick={arquivar.tocar}>
+          {cartao.arquivado ? "Desarquivar" : "Arquivar"}
         </button>
-      </div>
+      </MenuDeAcoes>
       {arquivar.painel}
     </li>
   );

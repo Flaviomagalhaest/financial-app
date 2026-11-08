@@ -34,7 +34,7 @@ function daquiAUmMes(): string {
 test("lança a compra parcelada dividida em partes e cada parcela se divide na proporção delas", async ({ page }) => {
   const { api, nomes } = await preparar(page);
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
 
   // R$ 300,00 em 3x no boleto: R$ 200,00 de roupa e R$ 100,00 de casa.
   await digitar(page, "3", "00", "00");
@@ -139,7 +139,7 @@ test("a parcela que muda de valor se redivide na proporção, e mudar as partes 
 test("o parcelado não salva se a menor parcela não dá um centavo a cada parte", async ({ page }) => {
   const { nomes } = await preparar(page);
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
 
   // R$ 3,00 em 3x: R$ 2,99 e R$ 0,01 dariam zero à segunda parte numa parcela de R$ 1,00.
   await digitar(page, "3", "00");

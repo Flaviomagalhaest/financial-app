@@ -51,7 +51,7 @@ async function abrirRecorrencia(page: Page, lancamento: Locator, descricao: stri
 test("lança a recorrência dividida em partes, e cada ocorrência aparece numa linha só que abre as partes", async ({ page }) => {
   const { api, nomes } = await preparar(page);
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
 
   // R$ 100,00 por mês, três vezes, no combo.
   await digitar(page, "1", "00", "00");

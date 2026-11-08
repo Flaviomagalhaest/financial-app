@@ -1,6 +1,7 @@
 import { atualizadoAs, useCadastro, useFaturas, useLimite, type Cartao, type LimiteDoCartao } from "../dados";
 import { mesPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
+import { TrilhoDaFaixa } from "../casca/TrilhoDaFaixa";
 import { faturasDaLinha, SITUACAO, saldoQuePassou } from "./apresentacao";
 
 /** A barra do comprometido e, ao tocar, as três partes, os parcelamentos e os próximos 12 meses. */
@@ -78,8 +79,8 @@ function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
   const limite = useLimite(cartao.id).dados;
 
   return (
-    <section aria-label={cartao.nome}>
-      <h3>💳 {cartao.nome}</h3>
+    <section aria-label={cartao.nome} className="cartao">
+      <h3>{cartao.nome}</h3>
       {limite && <LimiteDoCartaoNaLinha limite={limite} />}
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {semDados && (
@@ -112,14 +113,43 @@ function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
   );
 }
 
+/** Na faixa, o limite usado de um cartão: comprometido sobre o limite (sem limite, nada). */
+function LimiteNaFaixa({ cartao }: { cartao: Cartao }) {
+  const limite = useLimite(cartao.id).dados;
+  if (!limite || limite.limite_centavos == null) return null;
+  return (
+    <li>
+      <div>
+        <strong>{cartao.nome}</strong>
+        <span>
+          {formatarCentavos(limite.comprometido_centavos)} de {formatarCentavos(limite.limite_centavos)}
+        </span>
+      </div>
+      <TrilhoDaFaixa usado={limite.comprometido_centavos} total={limite.limite_centavos} />
+    </li>
+  );
+}
+
 /** Uma linha por cartão titular (o adicional compra na fatura dele) com a fatura anterior, a atual e a próxima. */
 export function TelaDeCartoes() {
   const { cartoes } = useCadastro();
   const titulares = cartoes.filter((c) => !c.titular_id);
 
   return (
-    <section>
-      <h2>Cartões</h2>
+    <section className="tela-de-cartoes">
+      <div className="faixa">
+        <h2>Cartões</h2>
+        {titulares.length > 0 && (
+          <>
+            <p className="rotulo-da-faixa">Limite usado</p>
+            <ul className="limites-na-faixa">
+              {titulares.map((c) => (
+                <LimiteNaFaixa key={c.id} cartao={c} />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
       {titulares.length === 0 && <p className="vazio">Nenhum cartão cadastrado.</p>}
       {titulares.map((c) => (
         <CartaoComFaturas key={c.id} cartao={c} />

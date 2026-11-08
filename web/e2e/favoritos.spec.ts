@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { digitar } from "./lancar";
+import { peloMenuDaConta } from "./conta";
 
 // O dia do casal é o de São Paulo, como na API.
 test.use({ timezoneId: "America/Sao_Paulo" });
@@ -26,7 +27,7 @@ const naHoje = (page: Page) => page.getByRole("navigation", { name: "Telas" }).g
 /** Abre o novo lançamento pelo app, digita o valor e escolhe a conta e a categoria. */
 async function novoComValor(page: Page, s: string, teclas: string[], descricao: string) {
   await naHoje(page);
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, ...teclas);
   await page.getByRole("button", { name: `Corrente ${s}` }).click();
   await page.getByRole("button", { name: `Café ${s}` }).click();
@@ -46,7 +47,7 @@ test("marcar pela ⭐ cria o favorito na fileira e na grade, e lança sem intern
 
   // A grade da Hoje traz o favorito com o valor do lançamento.
   await naHoje(page);
-  const grade = page.getByRole("region", { name: "Favoritos" });
+  const grade = page.getByRole("list", { name: "Atalhos" });
   await expect(grade.getByRole("link", { name: new RegExp(`Padaria ${s}`) })).toContainText("R$ 12,00");
   // O app já guardou os favoritos para lançar sem internet.
   await page.reload();
@@ -54,7 +55,7 @@ test("marcar pela ⭐ cria o favorito na fileira e na grade, e lança sem intern
 
   await context.setOffline(true);
   // A fileira acima do teclado: tocar preenche tudo e o valor é só o padrão, editável.
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await page.getByRole("group", { name: "Favoritos" }).getByRole("button", { name: new RegExp(`Padaria ${s}`) }).click();
   await expect(page.getByTestId("valor")).toHaveText("R$ 12,00");
   await expect(page.getByRole("button", { name: `Corrente ${s}` })).toHaveAttribute("aria-pressed", "true");
@@ -91,7 +92,7 @@ test("depois de salvar, o app oferece Favoritar; sem internet não oferece", asy
   await oferta.getByRole("button", { name: "⭐ Favoritar" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Favorito criado" })).toBeVisible();
   await naHoje(page);
-  await expect(page.getByRole("region", { name: "Favoritos" }).getByRole("link", { name: new RegExp(`Lanche ${s}`) })).toContainText("R$ 8,00");
+  await expect(page.getByRole("list", { name: "Atalhos" }).getByRole("link", { name: new RegExp(`Lanche ${s}`) })).toContainText("R$ 8,00");
 
   // Sem internet, favoritar é impossível: nada a oferecer, e a ⭐ avisa por quê.
   await context.setOffline(true);
@@ -130,13 +131,13 @@ test("os mais repetidos viram sugeridos; promover ou dispensar, e reordenar e re
 
   // A ⭐ promove o sugerido; "Dispensar" o tira da lista.
   await sugeridos.getByRole("button", { name: `Favoritar Mercado ${s}` }).click();
-  await expect(page.getByRole("region", { name: "Favoritos" }).getByRole("link", { name: new RegExp(`Mercado ${s}`) })).toContainText("R$ 20,00");
+  await expect(page.getByRole("list", { name: "Atalhos" }).getByRole("link", { name: new RegExp(`Mercado ${s}`) })).toContainText("R$ 20,00");
   await sugeridos.getByRole("button", { name: `Dispensar Feira ${s}` }).click();
   await expect(sugeridos.getByRole("listitem").filter({ hasText: `Feira ${s}` })).toHaveCount(0);
 
   // Reordenar e remover ficam nas configurações.
   await api.criar("/api/favoritos", { id: randomUUID(), descricao: `Padaria ${s}`, tipo: "despesa", conta_id: conta.id, categoria_ids: [categoria.id], tags: [], pessoa: null, valor_centavos: 1200 });
-  await page.getByRole("link", { name: "Configurações" }).click();
+  await peloMenuDaConta(page, "Configurações");
   await page.getByRole("link", { name: "Favoritos" }).click();
   const lista = page.getByRole("list", { name: "Favoritos" }).getByRole("listitem");
   await expect(lista.filter({ hasText: `Padaria ${s}` })).toBeVisible();
@@ -170,7 +171,7 @@ test("o favorito com partes preenche as partes na proporção do último valor, 
   await api.criar("/api/favoritos", { id: randomUUID(), descricao: `Mercado Livre ${s}`, tipo: "despesa", conta_id: conta.id, categoria_ids: [], tags: [], pessoa: null, valor_centavos: 100000, partes: modelo });
   await page.reload();
 
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await page.getByRole("group", { name: "Favoritos" }).getByRole("button", { name: new RegExp(`Mercado Livre ${s}`) }).click();
   await expect(page.getByTestId("valor")).toHaveText("R$ 1.000,00");
   const parte = (n: number) => page.getByRole("group", { name: `Parte ${n}`, exact: true });

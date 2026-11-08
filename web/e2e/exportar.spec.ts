@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { entrar } from "./entrar";
+import { peloMenuDaConta } from "./conta";
 
 /** A API de verdade não tem o bucket de exportações aqui: a resposta e o arquivo são de mentira,
  *  e a URL é de outra origem, como a assinada do S3 (o service worker não a toca). */
@@ -25,7 +26,7 @@ test("as configurações baixam o backup e o CSV de planilha", async ({ page }) 
   await page.goto("/");
   await entrar(page);
 
-  await page.getByRole("link", { name: "Configurações" }).click();
+  await peloMenuDaConta(page, "Configurações");
   await expect(page.getByRole("heading", { name: "Configurações", level: 2 })).toBeVisible();
 
   const backup = page.waitForEvent("download");
@@ -42,7 +43,7 @@ test("as configurações baixam o backup e o CSV de planilha", async ({ page }) 
 test("sem internet o botão de exportar fica desligado e avisa", async ({ page, context }) => {
   await page.goto("/");
   await entrar(page);
-  await page.getByRole("link", { name: "Configurações" }).click();
+  await peloMenuDaConta(page, "Configurações");
   const botao = page.getByRole("button", { name: "Exportar tudo (backup .zip)" });
   await expect(botao).toBeEnabled();
 
@@ -59,7 +60,7 @@ test("se a API falhar, a tela mostra o erro e deixa tentar de novo", async ({ pa
   await page.route("**/api/exportacoes", (rota) => rota.fulfill({ status: 500, body: "erro" }));
   await page.goto("/");
   await entrar(page);
-  await page.getByRole("link", { name: "Configurações" }).click();
+  await peloMenuDaConta(page, "Configurações");
 
   await page.getByRole("button", { name: "Exportar tudo (backup .zip)" }).click();
 

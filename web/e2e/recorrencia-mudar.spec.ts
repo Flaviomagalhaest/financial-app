@@ -193,7 +193,7 @@ test("a mudança sem internet sobre um campo que mudou depois é recusada, e a e
 /** Abre o novo lançamento, preenche e marca "Recorrente", todo mês por 2 vezes a partir de hoje. */
 async function lancarRecorrente(page: Page, { conta, casa, descricao }: { conta: string; casa: string; descricao: string }) {
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, "1", "8", "9", "9", "0");
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: casa }).click();

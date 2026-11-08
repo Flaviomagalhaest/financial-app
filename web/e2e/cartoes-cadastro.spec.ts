@@ -52,6 +52,7 @@ test("edita os dias padrão do cartão com o aviso das faturas, e arquiva e desa
   expect(criado.ok()).toBe(true);
   await page.reload();
 
+  await page.getByLabel(`Mais ações ${nome}`).click();
   await page.getByRole("button", { name: `Editar cartão ${nome}` }).click();
   const edicao = page.getByRole("form", { name: `Editar cartão ${nome}` });
   await expect(edicao).toContainText("só as faturas abertas e futuras mudam");
@@ -65,10 +66,12 @@ test("edita os dias padrão do cartão com o aviso das faturas, e arquiva e desa
   await expect(linha).toContainText("vence dia 15");
   await expect(linha).toContainText("R$ 1.200,50");
 
+  await page.getByLabel(`Mais ações ${nome}`).click();
   await page.getByRole("button", { name: `Arquivar cartão ${nome}` }).click();
   await expect(linha).toContainText("(arquivado)");
   const ativos = await (await page.request.get("/api/cartoes", { headers })).json();
   expect(ativos.map((c: { nome: string }) => c.nome)).not.toContain(nome);
+  await page.getByLabel(`Mais ações ${nome}`).click();
   await page.getByRole("button", { name: `Desarquivar cartão ${nome}` }).click();
   await expect(linha).not.toContainText("(arquivado)");
 });
@@ -97,6 +100,7 @@ test("acerta o fechamento e o vencimento de uma fatura existente e de outra esco
   const [nascida] = await faturas();
   await page.reload();
 
+  await page.getByLabel(`Mais ações ${nome}`).click();
   await page.getByRole("button", { name: `Acertar fatura de ${nome}` }).click();
   const form = page.getByRole("form", { name: `Acertar fatura de ${nome}` });
   await expect(form).toContainText("as compras delas se redistribuem");
@@ -114,6 +118,7 @@ test("acerta o fechamento e o vencimento de uma fatura existente e de outra esco
   // Uma fatura que ainda não nasceu: escolhe o mês e ela nasce com as datas informadas.
   const [ano, mes] = nascida.mes.split("-").map(Number);
   const futuro = new Date(Date.UTC(ano, mes - 1 + 3, 1)).toISOString().slice(0, 7);
+  await page.getByLabel(`Mais ações ${nome}`).click();
   await page.getByRole("button", { name: `Acertar fatura de ${nome}` }).click();
   await form.getByLabel("Fatura", { exact: true }).selectOption("outro");
   await form.getByLabel("Mês da fatura").fill(futuro);
@@ -157,6 +162,7 @@ test("o acerto da fatura abre na fatura que nasceu, mesmo com as faturas guardad
     await rota.fulfill({ response: resposta });
   });
   await page.reload();
+  await page.getByLabel(`Mais ações ${nome}`).click();
   await page.getByRole("button", { name: `Acertar fatura de ${nome}` }).click();
   const form = page.getByRole("form", { name: `Acertar fatura de ${nome}` });
   await expect(form.getByLabel("Fatura", { exact: true })).toHaveValue(nascida.mes);

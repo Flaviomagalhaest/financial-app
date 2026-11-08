@@ -21,7 +21,7 @@ async function prepararCasal(page: Page) {
   const s = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   await page.goto("/#/hoje");
   await entrar(page);
-  await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Novo lançamento" })).toBeVisible();
   const pedido = page.waitForRequest((r) => r.url().includes("/api/") && !!r.headers().authorization);
   await page.reload();
   const headers = { authorization: (await pedido).headers().authorization };
@@ -43,7 +43,7 @@ async function prepararCasal(page: Page) {
 
 async function novoLancamento(page: Page) {
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
 }
 
 const aviso = (page: Page) => page.getByRole("region", { name: "Aviso de planejamento" });
@@ -153,7 +153,7 @@ test("sem internet, o aviso usa o planejamento guardado e já conta o não envia
   // Ao abrir, o app guarda o planejamento do mês. A resposta chega antes de ser gravada no
   // aparelho: espera a gravação (com o item já criado) antes de desligar a rede.
   await page.reload();
-  await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Novo lançamento" })).toBeVisible();
   await expect.poll(() => planejamentoGuardado(page, hoje().slice(0, 7), mercado.id)).toBe(82000);
 
   await context.setOffline(true);
@@ -240,7 +240,7 @@ test("a compra não enviada num cartão arquivado conta pela fatura, não pelo m
 
   // A compra que ficou na fila antes do arquivamento, posta direto no aparelho: sem tentativa de envio.
   await page.reload();
-  await expect(page.getByRole("link", { name: "+ Novo lançamento" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Novo lançamento" })).toBeVisible();
   const id = randomUUID();
   await page.evaluate(
     ([id, contaId, categoriaId, descricao, data]) =>

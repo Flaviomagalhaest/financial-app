@@ -135,7 +135,7 @@ test("confirma sem internet pela fila: some do bloco, fica realizado ⏳ e sobe 
   await expect(minhas).toHaveCount(2);
 
   // O previsto lançado sem internet já é conta da semana; confirmá-lo muda o pedido de criar.
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, "3", "0", "00");
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: luz }).click();

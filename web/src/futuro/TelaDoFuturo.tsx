@@ -52,6 +52,8 @@ function GraficoDaProjecao({ pontos, passados }: { pontos: Ponto[]; passados: nu
   const x = (i: number) => MARGEM.esquerda + (i + 0.5) * coluna;
   const y = (v: number) => MARGEM.topo + ((maximo - v) / (maximo - minimo)) * (ALTURA - MARGEM.topo - MARGEM.base);
   const inicioDoFuturo = MARGEM.esquerda + passados * coluna;
+  // Um rótulo de mês a cada 3 colunas; se não couber (celular), a cada 6.
+  const passo = coluna * 3 < 52 ? 6 : 3;
 
   function aoMover(evento: PointerEvent<SVGRectElement>) {
     const caixa = evento.currentTarget.getBoundingClientRect();
@@ -80,9 +82,9 @@ function GraficoDaProjecao({ pontos, passados }: { pontos: Ponto[]; passados: nu
           ))}
           {pontos.map(
             (p, i) =>
-              i % 3 === 0 && (
+              i % passo === 0 && (
                 <text key={p.mes} className="rotulo" x={x(i)} y={ALTURA - 8} textAnchor="middle">
-                  {mesCurto(p.mes)}
+                  {mesCurto(p.mes, i === 0 || p.mes.slice(0, 4) !== pontos[i - passo]?.mes.slice(0, 4))}
                 </text>
               ),
           )}
@@ -185,7 +187,7 @@ export function TelaDoFuturo() {
   const esteMes = dados?.proximos_meses[0];
 
   return (
-    <section>
+    <section className="tela-do-futuro">
       <h2>Futuro</h2>
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {semDados && (

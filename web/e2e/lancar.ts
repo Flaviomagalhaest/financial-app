@@ -21,7 +21,7 @@ export async function lancar(
   { teclas, conta, categoria, descricao, pessoa, vezes }: { teclas: string[]; conta: string; categoria: string; descricao: string; pessoa?: string; vezes?: number },
 ) {
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, ...teclas);
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: categoria }).click();

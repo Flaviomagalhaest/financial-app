@@ -39,7 +39,7 @@ test("a aba aberta recarrega quando o service worker de uma versão nova assume"
   await instalarCasca(page);
 
   // Com um lançamento sendo digitado: ele se perde (decisão do dono).
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await page.getByRole("button", { name: "7", exact: true }).click();
   await marcar(page);
   await comVersaoNova(async () => {
@@ -49,7 +49,7 @@ test("a aba aberta recarrega quando o service worker de uma versão nova assume"
   });
 
   expect(await semRecarga(page)).toBe(false);
-  await expect(page.getByText("Entrou como flavio@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de flavio@teste.com")).toBeVisible();
 });
 
 test("a primeira instalação do service worker não recarrega a aba", async ({ page }) => {

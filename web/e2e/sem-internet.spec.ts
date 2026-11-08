@@ -6,6 +6,7 @@ import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
 import { esperarFilaVazia } from "./fila";
 import { soltarRotas } from "./rotas";
+import { peloMenuDaConta } from "./conta";
 
 test.afterEach(async ({ page }) => {
   await soltarRotas(page);
@@ -62,6 +63,7 @@ test("edita e exclui sem internet e, se a resposta do envio se perde, reenviar n
   await expect(feira).toContainText("− R$ 10,07");
   await expect(feira).toContainText("⏳ não enviado");
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await farmacia.getByLabel(`Mais ações Farmácia ${s}`).click();
   await farmacia.getByRole("button", { name: `Excluir Farmácia ${s}` }).click();
   await expect(farmacia).toHaveCount(0);
   await lancar(page, { teclas: ["3", "00"], conta, categoria: mercado, descricao: `Açougue ${s}` });
@@ -117,6 +119,7 @@ test("recusado pelo servidor fica 'não enviado: <motivo>' para corrigir ou desc
   await expect(page.getByTestId("nao-enviados")).toContainText("2 lançamentos não enviados (2 recusados");
 
   await aba(page, "Histórico");
+  await descartar.getByLabel(`Mais ações Descartar ${s}`).click();
   await descartar.getByRole("button", { name: `Descartar Descartar ${s}` }).click();
   await expect(descartar).toHaveCount(0);
   await corrigir.getByRole("link", { name: `Corrigir Corrigir ${s}` }).click();
@@ -166,10 +169,12 @@ test("sem internet, as telas abertas mostram a última resposta com 'atualizado 
   await expect(page.getByRole("listitem").filter({ hasText: conta })).toBeVisible();
   const novaConta = page.getByRole("form", { name: "Nova conta" });
   await expect(novaConta.getByRole("button", { name: "Cadastrar" })).toBeDisabled();
+  await page.getByLabel(`Mais ações ${conta}`).click();
   await expect(page.getByRole("button", { name: `Arquivar conta ${conta}` })).toBeDisabled();
   await expect(page.getByText("Mudar contas e categorias precisa de internet.")).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: cartao })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cadastrar cartão" })).toBeDisabled();
+  await page.getByLabel(`Mais ações ${cartao}`).click();
   await expect(page.getByRole("button", { name: `Editar cartão ${cartao}` })).toBeDisabled();
   await expect(page.getByRole("button", { name: `Acertar fatura de ${cartao}` })).toBeDisabled();
   await expect(page.getByRole("button", { name: `Arquivar cartão ${cartao}` })).toBeDisabled();
@@ -216,17 +221,17 @@ test("sair com lançamentos não enviados pede confirmação e, confirmado, apag
     mensagem = dialogo.message();
     void dialogo.dismiss();
   });
-  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await peloMenuDaConta(page, "Sair");
   await expect.poll(() => mensagem).toContain("1 lançamento ainda não foi enviado");
-  await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de esposa@teste.com")).toBeVisible();
 
   page.once("dialog", (dialogo) => void dialogo.accept());
-  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await peloMenuDaConta(page, "Sair");
   await expect(page.getByLabel("Senha")).toBeVisible();
 
   await context.setOffline(false);
   await entrar(page, "esposa@teste.com");
-  await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de esposa@teste.com")).toBeVisible();
   await aba(page, "Hoje");
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
   await esperarFilaVazia(page);
@@ -296,7 +301,7 @@ test("no Android, o service worker sobe a fila em segundo plano, sem o app abert
   const esposa = await outro.newPage();
   await esposa.goto("/#/historico");
   await entrar(esposa, "esposa@teste.com");
-  await expect(esposa.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await expect(esposa.getByLabel("Conta de esposa@teste.com")).toBeVisible();
   const linha = esposa.getByRole("listitem").filter({ hasText: `Segundo plano ${s}` });
   await expect(async () => {
     await esposa.reload();
@@ -341,6 +346,7 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(editado).toContainText("− R$ 0,19");
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await excluido.getByLabel(`Mais ações Excluído ${s}`).click();
   await excluido.getByRole("button", { name: `Excluir Excluído ${s}` }).click();
   await expect(excluido).toHaveCount(0);
 
@@ -360,7 +366,7 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
   const saldo = () => page.getByRole("listitem").filter({ hasText: conta });
   const verSaldo = async () => {
     await aba(page, "Hoje");
-    await page.getByRole("link", { name: "Contas e categorias" }).click();
+    await peloMenuDaConta(page, "Contas e categorias");
   };
   await verSaldo();
   await expect(saldo()).toContainText("-R$ 1,00");
@@ -374,6 +380,7 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
 
   await aba(page, "Histórico");
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await page.getByLabel(`Mais ações Enviado ${s}`).click();
   await page.getByRole("button", { name: `Excluir Enviado ${s}` }).click();
   await verSaldo();
   await expect(saldo()).toContainText("-R$ 45,00");
@@ -409,7 +416,7 @@ test("a rede cai logo depois do envio, antes de o saldo ser lido de novo: o sald
   await context.setOffline(true);
   await page.unroute("**/api/contas**");
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "Contas e categorias" }).click();
+  await peloMenuDaConta(page, "Contas e categorias");
   await expect(saldo).toContainText("-R$ 1,00");
   await expect(saldo).not.toContainText("⏳");
 

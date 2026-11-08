@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import { api } from "../api/cliente";
 import { enderecoDaBusca, useCadastro, useConexao, useFaturas, useLancamentos, useLancamentosDaTela, useLidosDoServidor, leituraDaFatura, type LancamentoNaTela, useParcelamentos, usePessoas, type Fatura } from "../dados";
 import { eCredito, eEstorno, indiceDeEstornos, ligacaoDoEstorno, nomePorId, podeEstornar, tituloDoLancamento, ValorComSinal } from "../lancamentos/apresentacao";
@@ -148,12 +149,28 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
   const somaFiltrada = filtradas.reduce((soma, l) => soma + (eCredito(l) ? -1 : 1) * valorNoFiltro(l, filtro), 0);
 
   return (
-    <section>
-      <a href="#/cartoes">Voltar aos cartões</a>
-      <h2>Fatura de {mesPorExtenso(mes)}</h2>
-      <p className="vazio">{cartao?.nome}</p>
+    <section className="tela-da-fatura">
+      <div className="faixa">
+        <a className="voltar" href="#/cartoes">
+          Voltar aos cartões
+        </a>
+        <h2>Fatura de {mesPorExtenso(mes)}</h2>
+        <p className="vazio">
+          {cartao?.nome}
+          {fatura && ` · ${SITUACAO[fatura.situacao]}`}
+        </p>
+        {fatura && (
+          <>
+            <p className="valor-da-faixa">{formatarCentavos(fatura.total_centavos)}</p>
+            <p className="vazio">
+              {fatura.vencimento ? `vence em ${dataPorExtenso(fatura.vencimento)}` : "total"}
+              {!pagaPeloPagamento(fatura) && ` · a pagar ${formatarCentavos(fatura.a_pagar_centavos)}`}
+            </p>
+          </>
+        )}
+      </div>
       {fatura && (
-        <dl className="informacoes" aria-label="Resumo da fatura">
+        <dl className="informacoes resumo-da-fatura cartao" aria-label="Resumo da fatura">
           <dt>Situação</dt>
           <dd>{SITUACAO[fatura.situacao]}</dd>
           {fatura.fechamento && (
@@ -197,81 +214,85 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
           )}
         </dl>
       )}
-      {fatura && paga && !corrigindo && (
-        <button type="button" className="secundario" disabled={!online} onClick={() => setCorrigindo(true)}>
-          Corrigir fatura
-        </button>
-      )}
-      {fatura && !paga && !ajustando && (
-        <button type="button" className="secundario" disabled={!online} onClick={() => setAjustando(true)}>
-          Ajustar fatura
-        </button>
-      )}
-      {faturas && !paga && (
-        <a className="botao secundario" href={`#/credito/${cartaoId}`}>
-          Lançar crédito
-        </a>
-      )}
+      <div className="acoes-da-fatura">
+        {fatura && paga && !corrigindo && (
+          <button type="button" className="secundario" disabled={!online} onClick={() => setCorrigindo(true)}>
+            Corrigir fatura
+          </button>
+        )}
+        {fatura && !paga && !ajustando && (
+          <button type="button" className="secundario" disabled={!online} onClick={() => setAjustando(true)}>
+            Ajustar fatura
+          </button>
+        )}
+        {faturas && !paga && (
+          <a className="botao secundario" href={`#/credito/${cartaoId}`}>
+            Lançar crédito
+          </a>
+        )}
+      </div>
       {fatura && !online && <p className="vazio">{paga ? "Corrigir" : "Ajustar"} a fatura precisa de internet.</p>}
       {fatura && ajustando && <FormularioDeAjuste cartaoId={cartaoId} fatura={fatura} aoFechar={() => setAjustando(false)} aoSalvar={buscar} />}
       {fatura && corrigindo && <FormularioDeCorrecao cartaoId={cartaoId} doCartao={doCartao} fatura={fatura} compras={compras} aoFechar={() => setCorrigindo(false)} aoSalvar={buscar} />}
       {fatura && paga && <p className="aviso">Esta fatura está paga: não recebe mais compras, estornos nem pagamentos. Para consertar um erro, corrija a fatura.</p>}
       {fatura && !paga && fatura.situacao !== "aberta" && <p className="aviso">Esta fatura já fechou: para cancelar uma compra, estorne-a.</p>}
-      <label>
-        Categoria
-        <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-          <option value={TODAS}>Todas</option>
-          {categorias.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nome}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Tag
-        <select value={tag} onChange={(e) => setTag(e.target.value)}>
-          <option value={TODAS}>Todas</option>
-          {tags.map((t) => (
-            <option key={t} value={t}>
-              #{t}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="filtros-da-fatura">
+        <label>
+          Categoria
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            <option value={TODAS}>Todas</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Tag
+          <select value={tag} onChange={(e) => setTag(e.target.value)}>
+            <option value={TODAS}>Todas</option>
+            {tags.map((t) => (
+              <option key={t} value={t}>
+                #{t}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {filtrando && <p className="vazio">Filtrado: {formatarCentavos(somaFiltrada)}</p>}
       {/* A busca pelo filtro Fatura, com a categoria e a tag escolhidas aqui. */}
       <a href={enderecoDaBusca({ fatura: { mes, cartao_id: cartaoId }, categoria_ids: categoria === TODAS ? undefined : [categoria], tags: tag === TODAS ? undefined : [tag] })}>Ver os lançamentos</a>
       <AvisoDeLeituraDoServidor daUltimaLeitura={atualizadoEm} semDados={semInternet} oQue="as compras" precisam="as compras desta fatura precisam de internet." />
       {daLeitura && !semInternet && filtradas.length === 0 && <p className="vazio">Nenhuma compra nesta fatura.</p>}
       {dias.map((dia) => (
-        <div key={dia} role="group" aria-label={dataPorExtenso(dia)}>
+        <div key={dia} role="group" aria-label={dataPorExtenso(dia)} className="cartao">
           <h3>{dataPorExtenso(dia)}</h3>
           <ul className="lista">
             {filtradas
               .filter((l) => l.data === dia)
               .map((l) => (
-                <li key={l.id}>
-                  <div>
-                    <strong>{tituloDoLancamento(l, categorias)}</strong>
-                    <ValorComSinal l={{ ...l, valor_centavos: valorNoFiltro(l, filtro) }} />
-                  </div>
-                  <p className="vazio">
-                    {[nomePorId(contasECartoes, l.conta_id), !l.partes?.length && l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")].filter(Boolean).join(" · ")}
-                    {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
-                    {l.situacao === "previsto" && " · previsto"}
-                    {l.pessoa ? ` · ${nomeDe(l.pessoa)}` : ""}
-                    {ligacoes.get(l.id) && ` · ${ligacoes.get(l.id)}`}
-                  </p>
-                  {!!l.partes?.length && (
-                    <PartesDaCompra partes={l.partes} so={partesQueBatem(l, filtro)} categorias={categorias} nomeDe={nomeDe} titulo={tituloDoLancamento(l, categorias)} />
-                  )}
+                <li key={l.id} className="linha-com-menu">
+                  <a className="abre-a-linha" href={`#/novo/${l.id}`} aria-label={`Editar ${tituloDoLancamento(l, categorias)}`}>
+                    <div>
+                      <strong>{tituloDoLancamento(l, categorias)}</strong>
+                      <ValorComSinal l={{ ...l, valor_centavos: valorNoFiltro(l, filtro) }} />
+                    </div>
+                    <p className="vazio">
+                      {[nomePorId(contasECartoes, l.conta_id), !l.partes?.length && l.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")].filter(Boolean).join(" · ")}
+                      {l.tags?.length ? ` · ${l.tags.map((t) => `#${t}`).join(" ")}` : ""}
+                      {l.situacao === "previsto" && " · previsto"}
+                      {l.pessoa ? ` · ${nomeDe(l.pessoa)}` : ""}
+                      {ligacoes.get(l.id) && ` · ${ligacoes.get(l.id)}`}
+                    </p>
+                  </a>
+                  {!!l.partes?.length && <PartesDaCompra partes={l.partes} so={partesQueBatem(l, filtro)} categorias={categorias} nomeDe={nomeDe} titulo={tituloDoLancamento(l, categorias)} />}
                   {podeEstornar(l, cartoes, indice) && (
-                    <div className="acoes">
+                    <MenuDeAcoes rotulo={`Mais ações ${tituloDoLancamento(l, categorias)}`}>
                       <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${tituloDoLancamento(l, categorias)}`}>
                         Estornar
                       </a>
-                    </div>
+                    </MenuDeAcoes>
                   )}
                 </li>
               ))}
