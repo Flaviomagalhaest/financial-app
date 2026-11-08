@@ -1,7 +1,7 @@
 # Importador do Mobills: decisão para grupos ambíguos e parcelas quebradas
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: o dono diz o que decide em cada aba), `domain-modeling` se surgir termo novo; depois `implement`, `tdd`
 Modelo recomendado: Opus
