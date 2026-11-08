@@ -1,7 +1,7 @@
 # Simulação da correção do parcelamento usa SAVEPOINT, que o DSQL não suporta
 
 Type: bug
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`, `implement`
 Modelo recomendado: Sonnet
