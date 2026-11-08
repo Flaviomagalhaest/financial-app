@@ -1,0 +1,343 @@
+<title>Barra de baixo e Explorar</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/*
+ * PROTÓTIPO do ticket 210 (descartável; branch prototipo/210-barra-de-baixo).
+ * Layout: dois celulares lado a lado (claro e escuro, mesma navegação) e, embaixo, a tela larga sem mudança.
+ * Tokens copiados de web/src/estilo.css (ticket 204). A página segue o tema de quem vê; cada celular fixa o seu.
+ */
+:root {
+  --fundo: #f3f5f2; --superficie: #ffffff; --texto: #1d231f; --texto-suave: #58635c;
+  --borda: #d3dbd5; --linha: #e7ece8; --destaque: #1f6b4f; --destaque-suave: #e2efe7;
+  --sobre-destaque: #ffffff; --faixa: #1f6b4f; --sobre-faixa: #ffffff;
+  --sobre-faixa-suave: rgb(255 255 255 / 0.78); --vidro: rgb(255 255 255 / 0.16);
+  --sombra: 0 2px 12px rgb(20 40 30 / 0.08);
+  --pagina: #e9ede9; --moldura: #1d231f;
+  --fonte: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --raio-cartao: 1.125rem; --raio-campo: 0.625rem; --raio-pilula: 999px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pagina: #0b0e0c; --moldura: #2b332e; --texto: #e7ece8; --texto-suave: #a3aea6;
+    --superficie: #1b211d; --linha: #262e29; --borda: #343e37; --destaque: #5fbf95; --destaque-suave: #1e3529;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --pagina: #0b0e0c; --moldura: #2b332e; --texto: #e7ece8; --texto-suave: #a3aea6;
+  --superficie: #1b211d; --linha: #262e29; --borda: #343e37; --destaque: #5fbf95; --destaque-suave: #1e3529;
+  color-scheme: dark;
+}
+/* Cada aparelho fixa o tema que simula. */
+.claro {
+  --fundo: #f3f5f2; --superficie: #ffffff; --texto: #1d231f; --texto-suave: #58635c;
+  --borda: #d3dbd5; --linha: #e7ece8; --destaque: #1f6b4f; --destaque-suave: #e2efe7;
+  --sobre-destaque: #ffffff; --faixa: #1f6b4f; --sobre-faixa: #ffffff;
+  --sobre-faixa-suave: rgb(255 255 255 / 0.78); --vidro: rgb(255 255 255 / 0.16);
+  --sombra: 0 2px 12px rgb(20 40 30 / 0.08); color-scheme: light;
+}
+.escuro {
+  --fundo: #111513; --superficie: #1b211d; --texto: #e7ece8; --texto-suave: #a3aea6;
+  --borda: #343e37; --linha: #262e29; --destaque: #5fbf95; --destaque-suave: #1e3529;
+  --sobre-destaque: #0d1a14; --faixa: #174c38; --sobre-faixa: #f0f6f2;
+  --sobre-faixa-suave: rgb(240 246 242 / 0.78); --vidro: rgb(240 246 242 / 0.14);
+  --sombra: none; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--pagina); color: var(--texto);
+  font: 15px/1.5 var(--fonte); -webkit-font-smoothing: antialiased;
+}
+.pagina {
+  max-width: 64rem; margin: 0 auto;
+  padding-block: 2rem 7rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 2rem;
+}
+.cabeca { display: grid; gap: 0.5rem; max-width: 42rem; }
+.cabeca p { margin: 0; color: var(--texto-suave); }
+.etiqueta { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--destaque); }
+h1 { margin: 0; font-size: 1.625rem; letter-spacing: -0.015em; text-wrap: balance; }
+h2 { margin: 0; font-size: 1.125rem; text-wrap: balance; }
+
+.estado {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; align-items: center;
+  padding: 0.75rem 1rem; border: 1px solid var(--linha); border-radius: var(--raio-campo);
+  background: var(--superficie); font-size: 0.8125rem;
+}
+.estado b { font-weight: 600; }
+.estado code { font-family: var(--mono); font-size: 0.8125rem; color: var(--destaque); }
+
+.aparelhos { display: flex; flex-wrap: wrap; gap: 2rem; justify-content: center; }
+.aparelho { display: grid; gap: 0.625rem; justify-items: center; }
+.aparelho > span { font-size: 0.8125rem; font-weight: 600; color: var(--texto-suave); }
+
+/* O celular: 360 x 720, a casca do app dentro. */
+.tela {
+  position: relative; width: 360px; max-width: 100%; height: 720px;
+  border: 10px solid var(--moldura); border-radius: 2.5rem; overflow: hidden;
+  background: var(--fundo); color: var(--texto); display: flex; flex-direction: column;
+}
+.topo {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.875rem 12px 0.5rem 16px;
+  background: var(--faixa); color: var(--sobre-faixa);
+}
+.topo strong { flex: 1; font-size: 1.125rem; font-weight: 700; }
+.icone-topo { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 999px; }
+.inicial {
+  display: grid; place-items: center; width: 2.125rem; height: 2.125rem; margin: 0 3px;
+  border-radius: 999px; background: var(--sobre-faixa); color: var(--faixa); font-weight: 700;
+}
+.conteudo { flex: 1; overflow-y: auto; padding: 1rem 16px 6rem; display: grid; align-content: start; gap: 1rem; }
+.conteudo h3 { margin: 0; font-size: 1.25rem; letter-spacing: -0.01em; }
+.faixa {
+  margin: -1rem -16px 0; padding: 0.25rem 16px 1.5rem; background: var(--faixa); color: var(--sobre-faixa);
+  display: grid; gap: 0.125rem;
+}
+.faixa small { color: var(--sobre-faixa-suave); font-size: 0.8125rem; }
+.faixa b { font-size: 1.75rem; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cartao {
+  background: var(--superficie); border-radius: var(--raio-cartao); box-shadow: var(--sombra);
+  padding: 0.875rem 1rem; display: grid; gap: 0.5rem;
+}
+.cartao .linha { display: flex; justify-content: space-between; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.cartao .linha span:first-child { color: var(--texto-suave); }
+.marcador { height: 0.625rem; border-radius: 999px; background: var(--linha); }
+.voltar-nota { font-size: 0.75rem; color: var(--texto-suave); }
+
+/* Explorar: grade de 2 colunas, cartões com ícone e nome. */
+.grade { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.grade button {
+  display: grid; gap: 0.75rem; justify-items: start; align-content: space-between; min-height: 6.5rem;
+  padding: 1rem; border: 0; border-radius: var(--raio-cartao);
+  background: var(--superficie); box-shadow: var(--sombra); color: var(--texto);
+  font: 600 0.9375rem/1.25 var(--fonte); text-align: left; cursor: pointer;
+}
+.grade button:hover { outline: 2px solid var(--destaque-suave); }
+.grade .bolinha {
+  display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;
+  background: var(--destaque-suave); color: var(--destaque);
+}
+
+/* Barra de baixo: Hoje, Mês, +, Cartões e o ícone de grade (sem nome). */
+.abas {
+  position: absolute; inset: auto 0 0 0; display: flex; align-items: stretch;
+  background: var(--superficie); border-top: 1px solid var(--linha); padding: 0 4px;
+}
+.abas button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.1875rem; min-width: 0;
+  padding: 0.5rem 2px 0.625rem; border: 0; background: none; cursor: pointer;
+  font: 600 0.75rem/1.2 var(--fonte); color: var(--texto-suave);
+}
+.abas button[aria-current="page"] { color: var(--destaque); }
+.abas .novo { justify-content: center; }
+.abas .novo span {
+  display: grid; place-items: center; width: 3.375rem; height: 3.375rem; margin-top: -1.375rem;
+  border: 4px solid var(--fundo); border-radius: 999px; background: var(--destaque); color: var(--sobre-destaque);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--destaque) 35%, transparent);
+}
+.abas .novo svg { width: 1.625rem; height: 1.625rem; stroke-width: 2.4; }
+/* Variante 1: o ícone na mesma altura dos outros. Variante 2: centralizado na barra e um pouco maior. */
+[data-variante="2"] .abas .explorar { justify-content: center; padding-bottom: 0.5rem; }
+[data-variante="2"] .abas .explorar svg { width: 1.625rem; height: 1.625rem; }
+.oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+svg.i { width: 1.375rem; height: 1.375rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Tela larga: a barra lateral de hoje, sem a tela Explorar. */
+.larga-caixa { overflow-x: auto; border-radius: 1rem; }
+.larga {
+  width: 900px; border: 1px solid var(--linha); border-radius: 1rem; overflow: hidden; background: var(--fundo); color: var(--texto);
+  display: grid; grid-template-columns: 15rem 1fr; grid-template-rows: auto 22rem;
+}
+.larga .topo { grid-column: 1 / -1; background: var(--superficie); color: var(--texto); border-bottom: 1px solid var(--linha); padding: 0.625rem 1.25rem; }
+.larga .topo .inicial { background: var(--destaque); color: var(--sobre-destaque); }
+.lateral { display: flex; flex-direction: column; gap: 2px; padding: 1rem 0.75rem; border-right: 1px solid var(--linha); }
+.lateral button {
+  display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.75rem; border: 0; border-radius: var(--raio-campo);
+  background: none; color: var(--texto-suave); font: 600 0.9375rem/1.2 var(--fonte); text-align: left; cursor: pointer; white-space: nowrap;
+}
+.lateral button[aria-current="page"] { background: var(--destaque-suave); color: var(--destaque); }
+.lateral .novo { margin-bottom: 0.75rem; border-radius: 999px; background: var(--destaque); color: var(--sobre-destaque); }
+.larga .conteudo { padding: 1.25rem 1.5rem; overflow: auto; }
+.larga .grade { grid-template-columns: repeat(3, 1fr); max-width: 36rem; }
+
+.decisoes { display: grid; gap: 0.5rem; max-width: 46rem; }
+.decisoes ul { margin: 0; padding-left: 1.125rem; display: grid; gap: 0.375rem; color: var(--texto-suave); }
+.decisoes li b { color: var(--texto); font-weight: 600; }
+
+/* Seletor flutuante do protótipo (não faz parte do desenho). */
+.seletor {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  display: flex; align-items: center; gap: 0.25rem; padding: 0.375rem;
+  border-radius: 999px; background: #111; color: #fff; box-shadow: 0 6px 24px rgb(0 0 0 / 0.3);
+  font: 600 0.8125rem/1 var(--fonte); max-width: calc(100% - 32px);
+}
+.seletor button {
+  border: 0; border-radius: 999px; background: transparent; color: #fff; width: 2.25rem; height: 2.25rem;
+  font: 600 1rem/1 var(--fonte); cursor: pointer;
+}
+.seletor button:hover { background: rgb(255 255 255 / 0.14); }
+.seletor span { padding: 0 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button:focus-visible { outline: 2px solid var(--destaque); outline-offset: 2px; }
+.seletor button:focus-visible { outline-color: #fff; }
+</style>
+
+<div class="pagina" id="pagina" data-variante="1">
+  <header class="cabeca">
+    <span class="etiqueta">Protótipo · ticket 210</span>
+    <h1>Barra de baixo com Explorar</h1>
+    <p>Toque nos itens da barra e nos cartões. Os dois celulares andam juntos, um claro e um escuro. O conteúdo das telas é de exemplo: só a barra e a grade estão em julgamento.</p>
+  </header>
+
+  <div class="estado" aria-live="polite">
+    <span>Endereço: <code id="endereco">#/hoje</code></span>
+    <span>Marcado no celular: <b id="marcado-celular">Hoje</b></span>
+    <span>Marcado na tela larga: <b id="marcado-larga">Hoje</b></span>
+  </div>
+
+  <section class="aparelhos" aria-label="Celular">
+    <div class="aparelho"><span>Claro</span><div class="tela claro" data-celular></div></div>
+    <div class="aparelho"><span>Escuro</span><div class="tela escuro" data-celular></div></div>
+  </section>
+
+  <section style="display:grid;gap:0.75rem">
+    <h2>Tela larga, sem mudança</h2>
+    <p style="margin:0;color:var(--texto-suave)">A barra lateral continua com Hoje, Mês, Cartões, Histórico e Futuro. A grade só aparece aqui se alguém abrir <code style="font-family:var(--mono)">#/explorar</code> direto, e aí nada fica marcado.</p>
+    <div class="larga-caixa"><div class="larga claro" id="larga"></div></div>
+  </section>
+
+  <section class="decisoes">
+    <h2>O que está decidido</h2>
+    <ul>
+      <li><b>Barra do celular:</b> Hoje, Mês, +, Cartões e o ícone de grade, sem nome visível (leitor de tela: "Explorar").</li>
+      <li><b>Ícone:</b> traço, com o peso das outras abas. O + continua sendo o único destaque.</li>
+      <li><b>Explorar:</b> Histórico, Futuro, Busca, Favoritos, Contas e categorias, Configurações, em grade de 2 colunas, só ícone e nome, sem busca no alto.</li>
+      <li><b>Marcação:</b> no celular, toda tela que não é Hoje, Mês, Cartões nem de lançar marca a grade; tocar nela volta à grade. O modelo do planejamento marca Mês.</li>
+      <li><b>Endereços:</b> <code style="font-family:var(--mono)">#/historico</code> e <code style="font-family:var(--mono)">#/futuro</code> seguem abrindo as telas; lupa e Menu da conta não mudam.</li>
+    </ul>
+  </section>
+</div>
+
+<nav class="seletor" aria-label="Variante do protótipo">
+  <button type="button" id="anterior" aria-label="Variante anterior">‹</button>
+  <span id="rotulo-variante">1 · ícone alinhado aos outros</span>
+  <button type="button" id="proxima" aria-label="Próxima variante">›</button>
+</nav>
+
+<script>
+const ICONES = {
+  hoje: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  mes: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  cartoes: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>',
+  historico: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/>',
+  futuro: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+  lupa: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
+  mais: '<path d="M12 5v14M5 12h14"/>',
+  estrela: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+  pastas: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  engrenagem: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/><circle cx="12" cy="12" r="6.5"/>',
+  grade: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.75"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.75"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.75"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.75"/>',
+};
+const svg = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONES[n]}</svg>`;
+
+const TELAS = {
+  hoje: { nome: "Hoje", icone: "hoje" },
+  mes: { nome: "Mês", icone: "mes" },
+  cartoes: { nome: "Cartões", icone: "cartoes" },
+  novo: { nome: "Novo lançamento", icone: "mais" },
+  explorar: { nome: "Explorar", icone: "grade" },
+  historico: { nome: "Histórico", icone: "historico" },
+  futuro: { nome: "Futuro", icone: "futuro" },
+  busca: { nome: "Busca", icone: "lupa" },
+  favoritos: { nome: "Favoritos", icone: "estrela" },
+  "contas-e-categorias": { nome: "Contas e categorias", icone: "pastas" },
+  configuracoes: { nome: "Configurações", icone: "engrenagem" },
+};
+const NA_GRADE = ["historico", "futuro", "busca", "favoritos", "contas-e-categorias", "configuracoes"];
+const NA_LATERAL = ["hoje", "mes", "cartoes", "historico", "futuro"];
+
+let rota = "hoje";
+let variante = 1;
+const VARIANTES = { 1: "ícone alinhado aos outros", 2: "ícone centralizado na barra" };
+
+/** Regra do celular: Hoje, Mês e Cartões marcam a si; as telas de lançar não marcam nada; o resto marca a grade. */
+function marcadoNoCelular(r) {
+  if (["hoje", "mes", "cartoes"].includes(r)) return r;
+  if (r === "novo") return null;
+  return "explorar";
+}
+/** Tela larga: como hoje. A busca é da aba Histórico; Menu da conta e Explorar não marcam nada. */
+function marcadoNaLarga(r) {
+  if (NA_LATERAL.includes(r)) return r;
+  if (r === "busca") return "historico";
+  return null;
+}
+
+function conteudo(r, larga) {
+  if (r === "hoje") return `
+    <div class="faixa"><small>Ainda dá para gastar em novembro</small><b>R$ 1.240,00</b></div>
+    <div class="cartao"><div class="linha"><span>Contas da semana</span><span>R$ 412,90</span></div><div class="linha"><span>Fatura Nubank vence dia 12</span><span>R$ 2.318,45</span></div></div>
+    <div class="cartao"><div class="marcador" style="width:70%"></div><div class="marcador" style="width:45%"></div></div>`;
+  if (r === "explorar") return `
+    <h3>Explorar</h3>
+    <div class="grade">${NA_GRADE.map((t) => `<button type="button" data-ir="${t}"><span class="bolinha">${svg(TELAS[t].icone)}</span>${TELAS[t].nome}</button>`).join("")}</div>`;
+  const nota = !larga && NA_GRADE.includes(r) ? `<span class="voltar-nota">Aberta pela grade: o ícone de grade fica marcado; tocar nele volta a Explorar.</span>` : "";
+  return `
+    <h3>${TELAS[r].nome}</h3>${nota}
+    <div class="cartao"><div class="marcador" style="width:80%"></div><div class="marcador" style="width:55%"></div><div class="marcador" style="width:65%"></div></div>
+    <div class="cartao"><div class="marcador" style="width:60%"></div><div class="marcador" style="width:35%"></div></div>`;
+}
+
+function topo() {
+  return `<header class="topo"><strong>Financial App</strong><button type="button" class="icone-topo" data-ir="busca" aria-label="Buscar lançamentos" style="border:0;background:none;color:inherit;cursor:pointer">${svg("lupa")}</button><span class="inicial" aria-hidden="true">F</span></header>`;
+}
+
+function celular() {
+  const m = marcadoNoCelular(rota);
+  const aba = (t) => `<button type="button" data-ir="${t}" ${m === t ? 'aria-current="page"' : ""}>${svg(TELAS[t].icone)}<span>${TELAS[t].nome}</span></button>`;
+  const novo = rota === "novo" ? `<span style="flex:1"></span>` : `<button type="button" class="novo" data-ir="novo"><span>${svg("mais")}</span><span class="oculto">Novo lançamento</span></button>`;
+  const explorar = `<button type="button" class="explorar" data-ir="explorar" aria-label="Explorar" ${m === "explorar" ? 'aria-current="page"' : ""}>${svg("grade")}</button>`;
+  return `${topo()}<div class="conteudo">${conteudo(rota, false)}</div>
+    <nav class="abas" aria-label="Telas">${aba("hoje")}${aba("mes")}${novo}${aba("cartoes")}${explorar}</nav>`;
+}
+
+function larga() {
+  const m = marcadoNaLarga(rota);
+  const item = (t) => `<button type="button" data-ir="${t}" ${m === t ? 'aria-current="page"' : ""}>${svg(TELAS[t].icone)}${TELAS[t].nome}</button>`;
+  return `${topo()}<nav class="lateral" aria-label="Telas na tela larga"><button type="button" class="novo" data-ir="novo">${svg("mais")}Novo lançamento</button>${NA_LATERAL.map(item).join("")}</nav><div class="conteudo">${conteudo(rota, true)}</div>`;
+}
+
+function desenhar() {
+  document.querySelectorAll("[data-celular]").forEach((el) => { el.innerHTML = celular(); });
+  document.getElementById("larga").innerHTML = larga();
+  document.getElementById("endereco").textContent = `#/${rota}`;
+  const nome = (t) => (t ? (t === "explorar" ? "grade (Explorar)" : TELAS[t].nome) : "nada");
+  document.getElementById("marcado-celular").textContent = nome(marcadoNoCelular(rota));
+  document.getElementById("marcado-larga").textContent = nome(marcadoNaLarga(rota));
+  document.getElementById("pagina").dataset.variante = variante;
+  document.getElementById("rotulo-variante").textContent = `${variante} · ${VARIANTES[variante]}`;
+}
+
+document.addEventListener("click", (e) => {
+  const alvo = e.target.closest("[data-ir]");
+  if (!alvo) return;
+  rota = alvo.dataset.ir;
+  desenhar();
+});
+const trocar = (passo) => { variante = ((variante - 1 + passo + 2) % 2) + 1; desenhar(); };
+document.getElementById("anterior").addEventListener("click", () => trocar(-1));
+document.getElementById("proxima").addEventListener("click", () => trocar(1));
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea, [contenteditable]")) return;
+  if (e.key === "ArrowLeft") trocar(-1);
+  if (e.key === "ArrowRight") trocar(1);
+});
+desenhar();
+</script>
