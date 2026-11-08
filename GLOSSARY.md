@@ -60,7 +60,7 @@ Lançamento que o casal repete muito (os 3 mais repetidos, a partir de 5 usos) e
 _Avoid_: favorito automático
 
 **Identidade do favorito**:
-O que faz dois lançamentos serem "o mesmo": descrição normalizada, tipo, conta, categorias, tags e pessoa; na compra com partes, também as partes (descrição, categorias, tags, pessoa e **proporção** de cada uma, a fatia dela no total em percentual inteiro, para 500+250+250 e 1000+500+500 serem a mesma divisão). As parcelas de uma compra parcelada contam um uso só, o da mais recente. Conta os usos do **Sugerido** e dá o valor padrão do **Favorito**, que é o valor do último lançamento com essa identidade.
+O que faz dois lançamentos serem "o mesmo": descrição normalizada, tipo, conta, categorias, tags e pessoa; na compra com partes, também as partes (descrição, categorias, tags, pessoa e **proporção** de cada uma, a fatia dela no total em percentual inteiro, para 500+250+250 e 1000+500+500 serem a mesma divisão). As parcelas de uma compra parcelada contam um uso só, o da mais recente. Os lançamentos gerados por uma regra de recorrência não contam (ticket 212). Conta os usos do **Sugerido** e dá o valor padrão do **Favorito**, que é o valor do último lançamento com essa identidade.
 
 **Sugestão**:
 Categorias, tags, conta e pessoa (ou, na compra com partes, o pacote das partes) de um lançamento anterior de descrição parecida, oferecidas enquanto se digita a descrição; escolher uma preenche esses campos, mantém o valor já digitado e completa a descrição com a da sugestão (sem a parcela `(n/total)`) quando o digitado é o começo dela; se o casamento foi por uma palavra do meio, a descrição fica como foi digitada (o pacote com partes divide esse valor na proporção da última compra). Vem da **fonte de sugestão**.

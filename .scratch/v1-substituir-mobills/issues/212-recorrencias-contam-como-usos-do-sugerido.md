@@ -1,7 +1,7 @@
 # Lançamentos gerados por recorrência contam como usos do Sugerido?
 
 Type: decision
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling`, `domain-modeling`; HITL (precisa do dono)
 Modelo recomendado: Sonnet
@@ -15,5 +15,5 @@ Uma regra de recorrência é uma escolha só da pessoa, como o parcelamento; mas
 
 ## Checklist
 
-- [ ] Decisão do dono registrada aqui
-- [ ] Se mudar, ajustar `_grupos` em `backend/app/favoritos.py` com teste, e o `GLOSSARY.md`
+- [x] Decisão do dono registrada aqui: **não contar**. O que a recorrência gera sozinho não é a pessoa repetindo; só lançamento feito à mão conta.
+- [x] Se mudar, ajustar `_grupos` em `backend/app/favoritos.py` com teste, e o `GLOSSARY.md`
