@@ -17,6 +17,12 @@ Origem: [ticket 92](92-rodar-o-importador-nos-exports-reais.md) (a rodada nos ex
 
 ## Checklist
 
-- [ ] Tags: confirmado ou corrigido o separador
-- [ ] Centavo da divisão conferido num parcelamento
-- [ ] Contagem das parcelas de cartão sem fatura em mês exportado gravada em `## Answer`
+- [x] Tags: confirmado ou corrigido o separador
+- [x] Centavo da divisão conferido num parcelamento
+- [x] Contagem das parcelas de cartão sem fatura em mês exportado gravada em `## Answer`
+
+## Answer
+
+- **Tags**: o dono conferiu no app e nenhuma transação tem mais de uma tag. O separador (vírgula) continua sem exemplo real, mas não há o que corrigir.
+- **Centavo da divisão**: o dono conferiu e a parcela gerada bate com a do Mobills.
+- **Parcelas de cartão sem fatura em mês exportado**: a aba `Parcelamentos sem cartão` tem 134 parcelamentos na rodada de hoje (o ticket 92 contou 135). Tirando os 12 nomes que o dono apontou como pagamento da conta (Aluguel, Buenos Aires, Imposto de renda/IR, Lavanderia, pagamento buffet e decoração, PECE-Poli, Reembolso vistoria carro, Samuel Fotografia, Seguro residencial, Título de capitalização), sobram **31 parcelamentos com 81 parcelas** que ficam na conta enquanto o parcelamento deveria estar no cartão (Airbnb, Amazon, Apple Watch, Tênis, Passagens etc.). 'Reembolso celular manu' (2 parcelamentos, 5 parcelas) está nessa conta e talvez seja reembolso, não cartão. Não separei por mês exportado (as faturas vão até 2027-07, então quase tudo conta). Contagem feita sobre os XLSX; as faturas em PDF não estão na máquina, e a conferência por PDF é o ticket 220.
