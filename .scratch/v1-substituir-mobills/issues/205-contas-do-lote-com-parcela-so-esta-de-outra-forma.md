@@ -1,7 +1,7 @@
 # Contas do lote com a parcela "só esta" de outra forma que o parcelamento
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -18,8 +18,14 @@ Origem: revisão do [ticket 202](202-contas-da-edicao-em-lote-com-partes.md): o 
 
 ## Checklist
 
-- [ ] Teste de API: parcela "só esta" com as partes em outra ordem
-- [ ] Teste de API: parcela "só esta" com outra quantidade de partes
-- [ ] Teste de API: parcelamento misto (parcela com e sem partes) nos blocos da aplicação
-- [ ] Decidir se o desfazer passa a pesar como a aplicação
-- [ ] Implementar no servidor
+- [x] Teste de API: parcela "só esta" com as partes em outra ordem
+- [x] Teste de API: parcela "só esta" com outra quantidade de partes
+- [x] Teste de API: parcelamento misto (parcela com e sem partes) nos blocos da aplicação
+- [x] Decidir se o desfazer passa a pesar como a aplicação: **não**. O desfazer pesa o que o lote gravou de fato (`edicao_em_lote_partes`), que é o custo real; a aplicação pesa as partes do parcelamento inteiro, por segurança. O desfazer nunca pesa mais que a aplicação, então o bloco dele cabe.
+- [x] Implementar no servidor
+
+## Feito
+
+`_posicoes_na_regra` casa a parte "só esta" com a do parcelamento pelo id derivado, ou pela descrição e pessoa quando só uma de cada lado tem o par (sem distinguir e com a mesma quantidade, pela posição). `_partes_que_mudam` conta pelas posições assim casadas e `_blocos` pesa o parcelamento pelas partes dele (`_Plano.partes_do_parcelamento`).
+
+Limite conhecido: com quantidade de partes diferente, a parte "só esta" sem par único por descrição e pessoa fica de fora da busca (sem aviso). Não há teste do parcelamento misto (parcelas com e sem partes juntas): o teste cobre o parcelamento com partes e todas as parcelas sem elas.

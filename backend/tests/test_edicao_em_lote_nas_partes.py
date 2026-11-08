@@ -565,3 +565,105 @@ def test_a_parte_com_categoria_de_antes_excluida_depois_sai(casal: Casal):
         ("Vestido", "saiu"),
         ("Fone", "saiu"),
     ]
+
+
+def test_na_busca_a_parcela_so_esta_com_as_partes_em_outra_ordem_casa_cada_parte_com_a_dela(
+    casal: Casal, categorias
+):
+    roupa, _, casa = categorias
+    criado = parcelado(
+        casal,
+        casal.conta(),
+        [parte([roupa], 20000, descricao="Roupa"), parte([casa], 10000, descricao="Casa")],
+    ).json()
+    [_, segunda, _] = parcelas(casal, criado["id"])
+    trocadas = [parte([casa], 3000, descricao="Casa"), parte([roupa], 7000, descricao="Roupa")]
+    editar_so_nela(casal, segunda, partes=trocadas)
+    mudanca = {"tags": {"acao": "acrescentar", "tags": ["loja"]}}
+
+    vista = previa(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+    aplicada(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+
+    assert (vista["mudam"], vista["partes_que_mudam"]) == (3, 1)
+    assert [p["tags"] for p in regra(casal, criado["id"])["partes"]] == [[], ["loja"]]
+    agora = parcelas(casal, criado["id"])
+    assert [[p["tags"] for p in l["partes"]] for l in agora[1:2]] == [[["loja"], []]]
+
+
+def test_na_busca_a_parcela_so_esta_com_outra_quantidade_de_partes_casa_as_que_tem_par(
+    casal: Casal, categorias
+):
+    roupa, eletronico, casa = categorias
+    criado = parcelado(
+        casal,
+        casal.conta(),
+        [parte([roupa], 20000, descricao="Roupa"), parte([casa], 10000, descricao="Casa")],
+    ).json()
+    [_, segunda, _] = parcelas(casal, criado["id"])
+    tres = [
+        parte([roupa], 5000, descricao="Roupa"),
+        parte([casa], 3000, descricao="Casa"),
+        parte([eletronico], 2000, descricao="Extra"),
+    ]
+    editar_so_nela(casal, segunda, partes=tres)
+    mudanca = {"tags": {"acao": "acrescentar", "tags": ["loja"]}}
+
+    vista = previa(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+    aplicada(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+
+    assert (vista["mudam"], vista["partes_que_mudam"]) == (3, 1)
+    assert [p["tags"] for p in regra(casal, criado["id"])["partes"]] == [[], ["loja"]]
+    [_, segunda_agora, _] = parcelas(casal, criado["id"])
+    assert [p["tags"] for p in segunda_agora["partes"]] == [[], ["loja"], []]
+
+
+def test_o_bloco_da_aplicacao_pesa_as_partes_do_parcelamento_mesmo_com_parcelas_sem_partes(
+    casal: Casal, categorias, monkeypatch: pytest.MonkeyPatch
+):
+    roupa, _, casa = categorias
+    criado = parcelado(casal, casal.conta(), [parte([roupa], 20000), parte([casa], 10000)]).json()
+    # As parcelas viraram "só esta" sem partes, com a classificação própria, e o parcelamento
+    # segue com as duas partes dele, que o lote muda uma vez.
+    for parcela in parcelas(casal, criado["id"]):
+        editar_so_nela(casal, parcela, partes=[], categoria_ids=[roupa])
+    monkeypatch.setattr(edicao_em_lote, "POR_TRANSACAO", 4)
+    por_bloco: list[int] = []
+    original = edicao_em_lote._aplicar_bloco
+
+    def contar(conn, lote_id, ids, *args):
+        por_bloco.append(len(ids))
+        return original(conn, lote_id, ids, *args)
+
+    monkeypatch.setattr(edicao_em_lote, "_aplicar_bloco", contar)
+
+    aplicada(
+        casal,
+        marcados(*parcelas(casal, criado["id"])),
+        tags={"acao": "acrescentar", "tags": ["loja"]},
+    )
+
+    # A 1ª parcela vista pesa três (ela e as duas partes do parcelamento), as outras, uma cada: cabem duas
+    # no bloco de quatro.
+    assert por_bloco == [2, 1]
+
+
+def test_na_busca_a_parcela_so_esta_com_a_descricao_renomeada_e_mesma_quantidade_vale_pela_posicao(
+    casal: Casal, categorias
+):
+    roupa, _, casa = categorias
+    criado = parcelado(
+        casal,
+        casal.conta(),
+        [parte([roupa], 20000, descricao="Roupa"), parte([casa], 10000, descricao="Casa")],
+    ).json()
+    [_, segunda, _] = parcelas(casal, criado["id"])
+    renomeadas = [parte([roupa], 7000, descricao="Camisa"), parte([casa], 3000, descricao="Sofá")]
+    editar_so_nela(casal, segunda, partes=renomeadas)
+    mudanca = {"tags": {"acao": "acrescentar", "tags": ["loja"]}}
+
+    vista = previa(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+    aplicada(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+
+    assert (vista["mudam"], vista["partes_que_mudam"]) == (3, 1)
+    [_, segunda_agora, _] = parcelas(casal, criado["id"])
+    assert [p["tags"] for p in segunda_agora["partes"]] == [[], ["loja"]]
