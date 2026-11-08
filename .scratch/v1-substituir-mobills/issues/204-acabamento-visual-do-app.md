@@ -63,3 +63,7 @@ Decidido em seguida:
 - **Aprovação final** no protótipo atualizado (Hoje e Mês) antes de implementar.
 
 Em aberto: Q11, atalhos da faixa em Hoje. O dono pediu para ver as opções; o protótipo (versão 2) mostra redondos (Favoritos, Fatura, Contas e categorias), pílulas com informação, os do 1º protótipo e sem atalhos.
+
+### 08/11: grilling, rodada 3
+
+Q11: **pílulas com informação** na faixa de Hoje, com uma opção em Configurações para desligar (aí a faixa fica sem atalhos). Hoje já tem a grade de Favoritos (`web/src/hoje/GradeDeFavoritos.tsx`), então o protótipo (versão 3) compara a escolha com "pílulas com os favoritos" (cada favorito vira pílula e a grade sai). Em aberto: Q17 a Q20 (onde guardar a preferência, o controle em Configurações, qual das duas pílulas, o dado da pílula de contas).
