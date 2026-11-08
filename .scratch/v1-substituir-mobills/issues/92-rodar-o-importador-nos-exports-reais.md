@@ -46,7 +46,7 @@ Rodado em 2026-11-08 pelo agente, na máquina do dono, sobre `data/historic/` (f
 
 - 11 dos 13 meses fecham com diferença 0.
 - **2022-11, diferença -50,00**: um dos dois lançamentos de 50,00 do mês é uma "transação ignorada" no Mobills, que o export não distingue (vem como `Paga`). Decisão do dono: fica fora da conta. Vira o [ticket 215](215-importador-do-mobills-deixar-de-fora-os-lancamentos-ignorados.md).
-- **2023-11, diferença -196,30** (nosso 154,35, Mobills 350,65): o "Por quê" lista 6 linhas de fatura sem par (-192,66), e as duas compras do cartão sem par somam exatamente 196,30. Sobram 3,64, o valor de quatro estornos sem par. O Mobills do dono não tem compra de 196,30 no mês. A causa exata dos 3,64 não foi fechada; a pergunta é se essas linhas de fatura sem par devem ou não entrar (o ticket 18 já mandava as sem par entrarem).
+- **2023-11, diferença -196,30** (nosso 154,35, Mobills 350,65): as duas compras do cartão sem par (149,62 e 46,68, que somam exatamente 196,30) existem na fatura do app do Mobills, mas o geral não as traz. É o caso das 111 linhas de fatura sem par do ticket 18: o importador as inclui por regra, e o "Por quê" da Conferência as lista. Diferença esperada, não é erro. Sobram 3,64 (quatro estornos sem par da mesma fatura) cuja contagem não bate com o "Por quê" (-192,66); fica como pendência pequena, sem ticket.
 
 ### Falta o dono
 
