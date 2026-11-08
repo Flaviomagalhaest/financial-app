@@ -1,7 +1,7 @@
 # Contas da edição em lote com partes
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 201
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
