@@ -2,8 +2,8 @@
 mesma descrição base, o mesmo valor (tolerância de 1 centavo sobre a primeira parcela), o mesmo
 total e números `n` em meses consecutivos. As parcelas que o export não traz são do ticket 68."""
 
-from collections import Counter, defaultdict
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, replace
 from datetime import date
 
 from app.recorrencias import mais_meses
@@ -65,35 +65,39 @@ def mes_seguinte(mes: str) -> str:
     return f"{ano + numero // 12}-{numero % 12 + 1:02d}"
 
 
-def reagrupar(lancamentos, primeiro_mes: str, ultimo_mes: str) -> list[Parcelamento]:
+def mes_anterior(mes: str) -> str:
+    ano, numero = int(mes[:4]), int(mes[5:])
+    return f"{ano - (numero == 1)}-{(numero - 2) % 12 + 1:02d}"
+
+
+def reagrupar(
+    lancamentos: list, primeiro_mes: str, ultimo_mes: str
+) -> tuple[list[Parcelamento], list]:
     """Uma sequência que começa depois do primeiro mês do export sem a parcela 1, que acaba antes
-    do último sem a última parcela, ou que tem a mesma parcela repetida num mês, está quebrada."""
+    do último sem a última parcela, ou que tem a mesma parcela repetida num mês, está quebrada.
+
+    A linha sem `(n/total)` com a mesma descrição, o valor da parcela vizinha (tolerância de 1
+    centavo) e o mês exato de uma parcela que falta é essa parcela, com o número deduzido pela
+    posição (ticket 219). Devolve também os lançamentos, com ela no lugar da avulsa."""
     grupos = defaultdict(list)
+    avulsas = defaultdict(list)
     for lancamento in lancamentos:
         if lancamento.parcela:
             chave = (lancamento.tipo, lancamento.descricao.casefold(), lancamento.parcela[1])
             grupos[chave].append(lancamento)
+        else:
+            avulsas[(lancamento.tipo, lancamento.descricao.casefold())].append(lancamento)
+    trocadas: dict[int, object] = {}
     parcelamentos = []
-    for (_, _, total), parcelas in grupos.items():
-        cadeias: list[list] = []
-        for parcela in sorted(parcelas, key=lambda x: (x.mes, x.parcela[0])):
-            continua = [
-                c
-                for c in cadeias
-                if c[-1].parcela[0] == parcela.parcela[0] - 1
-                and mes_seguinte(c[-1].mes) == parcela.mes
-                and abs(c[0].valor_centavos - parcela.valor_centavos) <= TOLERANCIA_EM_CENTAVOS
-            ]
-            # Entre parcelamentos iguais em paralelo, fica junto o do mesmo cartão.
-            continua.sort(key=lambda c: c[-1].cartao != parcela.cartao)
-            if continua:
-                continua[0].append(parcela)
-            else:
-                cadeias.append([parcela])
-        vistas = Counter((x.mes, x.parcela[0]) for x in parcelas)
+    for (tipo, descricao, total), parcelas in grupos.items():
+        cadeias = _cadeias(parcelas)
+        _preencher_buracos(cadeias, total, avulsas[(tipo, descricao)], trocadas)
+        no_mes = defaultdict(list)
+        for x in (x for c in cadeias for x in c):
+            no_mes[(x.mes, x.parcela[0])].append(x)
         for cadeia in cadeias:
             motivos = _faltas(cadeia, total, primeiro_mes, ultimo_mes)
-            repetida = next((x for x in cadeia if vistas[(x.mes, x.parcela[0])] > 1), None)
+            repetida = next((x for x in cadeia if _tem_par_no_mes(x, no_mes)), None)
             if repetida is not None:
                 motivos.append(f"duas parcelas {repetida.parcela[0]} de {total} em {repetida.mes}")
             parcelamentos.append(
@@ -105,7 +109,92 @@ def reagrupar(lancamentos, primeiro_mes: str, ultimo_mes: str) -> list[Parcelame
                 )
             )
     parcelamentos.sort(key=lambda p: (p.descricao.casefold(), p.primeira.mes))
-    return parcelamentos
+    return parcelamentos, [trocadas.get(id(x), x) for x in lancamentos]
+
+
+def _tem_par_no_mes(parcela, no_mes: dict) -> bool:
+    """Outra parcela de mesmo número no mês e com o mesmo valor; com outro valor é outra compra
+    igual em paralelo (ticket 219)."""
+    return any(
+        outra is not parcela
+        and abs(outra.valor_centavos - parcela.valor_centavos) <= TOLERANCIA_EM_CENTAVOS
+        for outra in no_mes[(parcela.mes, parcela.parcela[0])]
+    )
+
+
+def _cadeias(parcelas: list) -> list[list]:
+    """As parcelas `(n/total)` de uma descrição em sequências de números e meses seguidos."""
+    cadeias: list[list] = []
+    for parcela in sorted(parcelas, key=lambda x: (x.mes, x.parcela[0])):
+        continua = [
+            c
+            for c in cadeias
+            if c[-1].parcela[0] == parcela.parcela[0] - 1 and mes_seguinte(c[-1].mes) == parcela.mes
+        ]
+        # O valor não separa a compra (ticket 219): só desempata parcelamentos iguais em
+        # paralelo, pelo valor mais perto e depois pelo mesmo cartão.
+        continua.sort(
+            key=lambda c: (
+                abs(c[0].valor_centavos - parcela.valor_centavos),
+                c[-1].cartao != parcela.cartao,
+            )
+        )
+        if continua:
+            continua[0].append(parcela)
+        else:
+            cadeias.append([parcela])
+    return cadeias
+
+
+def _preencher_buracos(cadeias: list[list], total: int, avulsas: list, trocadas: dict) -> None:
+    """Põe a linha sem sufixo no lugar da parcela que falta antes ou depois de cada sequência e
+    junta a sequência com a que continua no mês seguinte."""
+    usadas = set()
+
+    def deduzida(vizinha, mes: str, numero: int):
+        avulsa = next(
+            (
+                x
+                for x in avulsas
+                if id(x) not in usadas
+                and x.mes == mes
+                and abs(x.valor_centavos - vizinha.valor_centavos) <= TOLERANCIA_EM_CENTAVOS
+            ),
+            None,
+        )
+        if avulsa is None:
+            return None
+        usadas.add(id(avulsa))
+        trocadas[id(avulsa)] = replace(avulsa, parcela=(numero, total))
+        return trocadas[id(avulsa)]
+
+    for cadeia in sorted(cadeias, key=lambda c: c[0].mes):
+        if not any(c is cadeia for c in cadeias):
+            continue  # já entrou numa sequência anterior
+        while cadeia[-1].parcela[0] < total:
+            ultima = cadeia[-1]
+            parcela = deduzida(ultima, mes_seguinte(ultima.mes), ultima.parcela[0] + 1)
+            if parcela is None:
+                break
+            cadeia.append(parcela)
+            seguinte = next(
+                (
+                    i
+                    for i, c in enumerate(cadeias)
+                    if c is not cadeia
+                    and c[0].parcela[0] == parcela.parcela[0] + 1
+                    and c[0].mes == mes_seguinte(parcela.mes)
+                ),
+                None,
+            )
+            if seguinte is not None:
+                cadeia.extend(cadeias.pop(seguinte))
+        while cadeia[0].parcela[0] > 1:
+            primeira = cadeia[0]
+            parcela = deduzida(primeira, mes_anterior(primeira.mes), primeira.parcela[0] - 1)
+            if parcela is None:
+                break
+            cadeia.insert(0, parcela)
 
 
 def _faltas(cadeia: list, total: int, primeiro_mes: str, ultimo_mes: str) -> list[str]:

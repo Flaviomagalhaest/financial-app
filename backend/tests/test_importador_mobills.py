@@ -947,7 +947,8 @@ def test_dono_decide_a_sequencia_quebrada_parcelamento_ou_duplicada_e_a_decisao_
     assert curso.anteriores == 1
     assert [(x.parcela, x.mes, x.situacao) for x in curso.lancamentos] == [
         ((2, 3), "2019-04", "realizado"),
-        ((3, 3), "2019-05", "previsto"),
+        # Antes do último mês pago (2019-06): o banco cobrou (ticket 219).
+        ((3, 3), "2019-05", "realizado"),
     ]
     fone = [p for p in segunda.parcelamentos if p.descricao == "Fone"]
     assert [(p.do_app, [x.parcela for x in p.lancamentos]) for p in fone] == [
@@ -1036,3 +1037,143 @@ def test_decisao_digitada_errado_nas_abas_de_revisao_impede_gravar(pastas):
         ]
         == "parcelado"
     )
+
+
+def test_parcela_do_meio_com_outro_valor_continua_a_mesma_compra(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Sofá (1/3)", -300.00, "Casa"),
+            # O Mobills mudou o valor da 2ª: continua sendo a mesma compra (ticket 219).
+            linha("30/04/2019", "Sofá (2/3)", -312.50, "Casa"),
+            linha("31/05/2019", "Sofá (3/3)", -300.00, "Casa"),
+        ],
+    )
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert [
+        (p.descricao, [(x.parcela, x.valor_centavos) for x in p.lancamentos], p.quebra)
+        for p in importacao.parcelamentos
+    ] == [("Sofá", [((1, 3), 30000), ((2, 3), 31250), ((3, 3), 30000)], None)]
+    assert ler_aba(revisao, "Parcelas quebradas") == []
+
+
+def test_duas_compras_iguais_em_paralelo_continuam_separadas_pelo_valor(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Passagem (1/3)", -100.00, "Viagem"),
+            linha("31/03/2019", "Passagem (1/3)", -250.00, "Viagem"),
+            # Na ordem do export a de 250 vem antes: o valor mais perto decide.
+            linha("30/04/2019", "Passagem (2/3)", -250.00, "Viagem"),
+            linha("30/04/2019", "Passagem (2/3)", -100.03, "Viagem"),
+            linha("31/05/2019", "Passagem (3/3)", -100.00, "Viagem"),
+            linha("31/05/2019", "Passagem (3/3)", -250.00, "Viagem"),
+        ],
+    )
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert sorted([x.valor_centavos for x in p.lancamentos] for p in importacao.parcelamentos) == [
+        [10000, 10003, 10000],
+        [25000, 25000, 25000],
+    ]
+    # Com outro valor não é parcela repetida: as duas compras não vão para a revisão.
+    assert ler_aba(revisao, "Parcelas quebradas") == []
+
+
+def test_linha_sem_sufixo_no_mes_do_buraco_vira_a_parcela_que_falta(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/08/2024", "Televisão (12/21)", -250.00, "Casa"),
+            # O Mobills tirou o sufixo da 13ª: o mês e o valor dizem que é ela (ticket 219).
+            linha("30/09/2024", "Televisão", -250.01, "Casa"),
+            linha("31/10/2024", "Televisão (14/21)", -250.00, "Casa"),
+            linha("31/08/2024", "Robô aspirador (8/10)", -90.00, "Casa"),
+            # Sem sufixo e com outro valor: continua avulsa.
+            linha("30/09/2024", "Robô aspirador", -45.00, "Casa"),
+            linha("31/10/2024", "Robô aspirador (10/10)", -90.00, "Casa"),
+        ],
+    )
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    tv = next(p for p in importacao.parcelamentos if p.descricao == "Televisão")
+    assert [(x.parcela, x.mes, x.valor_centavos) for x in tv.lancamentos[:3]] == [
+        ((12, 21), "2024-08", 25000),
+        ((13, 21), "2024-09", 25001),
+        ((14, 21), "2024-10", 25000),
+    ]
+    assert tv.quebra is None
+    assert [x.parcela for x in importacao.lancamentos if x.descricao == "Televisão"][:3] == [
+        (12, 21),
+        (13, 21),
+        (14, 21),
+    ]
+    robo = [p for p in importacao.parcelamentos if p.descricao == "Robô aspirador"]
+    assert [[x.parcela for x in p.lancamentos] for p in robo] == [[(8, 10)], [(10, 10)]]
+    assert [
+        (x.parcela, x.valor_centavos)
+        for x in importacao.lancamentos
+        if x.descricao == "Robô aspirador" and x.mes == "2024-09"
+    ] == [(None, 4500)]
+
+
+def test_linha_sem_sufixo_antes_da_primeira_parcela_que_veio_vira_a_anterior(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("28/02/2019", "Mercado", -30.00, "Alimentação"),
+            linha("31/03/2019", "Sofá", -400.00, "Casa"),
+            linha("30/04/2019", "Sofá (2/3)", -400.00, "Casa"),
+            linha("31/05/2019", "Sofá (3/3)", -400.00, "Casa"),
+        ],
+    )
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert [
+        ([(x.parcela, x.mes) for x in p.lancamentos], p.quebra) for p in importacao.parcelamentos
+    ] == [([((1, 3), "2019-03"), ((2, 3), "2019-04"), ((3, 3), "2019-05")], None)]
+
+
+def test_parcela_gerada_da_sequencia_aceita_entra_realizada_ate_o_ultimo_mes_pago(pastas):
+    geral, faturas, revisao = pastas
+    coluna = "Decisão (avulsas, parcelamento ou descartar duplicada)"
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Curso (1/4)", -100.00, "Educação"),
+            linha("31/05/2019", "Mercado", -10.00, "Alimentação"),
+            linha("31/07/2019", "Mercado", -10.00, "Alimentação", situacao="Pendente"),
+        ],
+    )
+    faturas.mkdir()
+    importar(geral, faturas, revisao)
+    editar_aba(revisao, "Parcelas quebradas", "Descrição", "Curso", coluna, "parcelamento")
+
+    importacao = importar(geral, faturas, revisao)
+
+    # O último mês pago é 2019-05: até ele o banco cobrou (ticket 219); depois, prevista.
+    curso = next(p for p in importacao.parcelamentos if p.descricao == "Curso")
+    assert [(x.parcela, x.mes, x.situacao) for x in curso.lancamentos] == [
+        ((1, 4), "2019-03", "realizado"),
+        ((2, 4), "2019-04", "realizado"),
+        ((3, 4), "2019-05", "realizado"),
+        ((4, 4), "2019-06", "previsto"),
+    ]
