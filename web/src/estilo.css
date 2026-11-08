@@ -784,8 +784,15 @@ select {
   color: var(--texto);
 }
 
-.lista .arquivada {
+/* Esmaece o conteúdo da linha arquivada, não a linha: a opacidade na linha prenderia o ⋯ aberto embaixo da linha seguinte. */
+.lista .arquivada > :not(.menu) {
   opacity: 0.6;
+}
+
+/* A linha com o ⋯ aberto fica por cima das seguintes. */
+.lista > li:has(> .menu[open]) {
+  position: relative;
+  z-index: 16;
 }
 
 .configuracoes {
