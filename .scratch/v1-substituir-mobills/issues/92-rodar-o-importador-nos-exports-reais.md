@@ -1,7 +1,7 @@
 # Rodar o importador do Mobills nos exports reais e conferir
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `run` (o dono roda localmente; HITL: só ele tem os exports reais)
 Modelo recomendado: Sonnet
