@@ -49,3 +49,17 @@ Fatos levantados:
 - "Sem conexão" × "API no ar": sem diferença de código entre web e celular; o indicador trata qualquer falha como "Sem conexão" e só verifica ao abrir. Virou o [ticket 205](205-indicador-da-api-sem-conexao-enganoso.md).
 - Capturas "antes" de todas as telas (celular e larga) feitas sobre a base local; problemas visuais vistos, que entram neste ticket: no celular, Mês tem 601 px de largura (o `<span class="oculto">` do cabeçalho da tabela de itens escapa do `.rolagem` sem `position: relative`, `web/src/mes/TelaDoMes.tsx:164`); barras de progresso de Hoje no azul do navegador; nenhuma aba ativa em Novo lançamento; fileiras de chips cortadas sem indicação de rolagem; botões de ação repetidos em cada linha (Histórico, Contas e categorias, fatura); eixo do gráfico do Futuro repete os meses sem o ano; tabela "Próximos meses" sem sinal de rolagem lateral; fatura com o resumo em lista de rótulo e valor muito alta.
 - Fora do visual, viraram ticket: [206](206-sugeridos-contam-parcelas-como-usos.md) (Sugeridos conta parcelas como usos) e [207](207-historico-abre-com-previstos-distantes.md) (Histórico abre com previstos de dois anos à frente).
+
+### 08/11: grilling, rodada 2
+
+Escolhido no protótipo: **direção C · Painel de banco**, fonte **Inter** (baixada com o app, para funcionar offline), topo **avatar com menu** e abas **com botão +**.
+
+Decidido em seguida:
+
+- **Faixa verde**: no celular, o topo verde aparece em todas as telas; a faixa com o número principal fica só em Hoje (ainda dá para gastar), Mês (despesas × planejamento), Cartões (limite usado) e Fatura (total e situação). As outras telas têm topo verde e conteúdo em cartões.
+- **Menu do avatar**: e-mail, Configurações, Contas e categorias, Favoritos e Sair; sem engrenagem. Na tela larga o avatar também fica no topo, sem nada no pé da barra lateral.
+- **Botão +**: abre direto o Novo lançamento, aparece em todas as abas e some dentro do lançamento; na tela larga é o botão "Novo lançamento" no alto da barra lateral.
+- **Ações por linha**: tocar na linha abre o item, e um botão ⋯ reúne as outras ações (Histórico, Contas e categorias, Fatura, itens do Mês). Só as ações de confirmar (Confirmar/Ajustar nas contas da semana) ficam visíveis.
+- **Aprovação final** no protótipo atualizado (Hoje e Mês) antes de implementar.
+
+Em aberto: Q11, atalhos da faixa em Hoje. O dono pediu para ver as opções; o protótipo (versão 2) mostra redondos (Favoritos, Fatura, Contas e categorias), pílulas com informação, os do 1º protótipo e sem atalhos.
