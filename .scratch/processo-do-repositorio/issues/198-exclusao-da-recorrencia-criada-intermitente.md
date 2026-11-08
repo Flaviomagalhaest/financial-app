@@ -1,7 +1,7 @@
 # Exclusão da recorrência criada falha de vez em quando no teste de navegador
 
 Type: task
-Status: ready-for-human
+Status: wontfix
 Blocked by: —
 Skills: `diagnosing-bugs`; apoio: `tdd`, `run`
 Modelo recomendado: Sonnet
@@ -45,3 +45,7 @@ Sem laço vermelho não há correção honesta. Próximo passo, que precisa do d
 
 - [ ] Dono: anexar/ler o trace do artefato e dizer o que a região fazia no instante do clique
 - [ ] Reproduzir com esse dado, corrigir sem desligar o teste, verificações e PR
+
+## Fechado como wontfix
+
+Decisão do dono: a falha não reproduz (25/25 verdes sob carga; hipótese do reenvio falsificada), então não se corrige às cegas. Se o sintoma voltar no CI, reabrir com o trace do artefato `testes-com-navegador` da execução que falhou.
