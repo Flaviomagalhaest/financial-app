@@ -2,7 +2,7 @@
 
 Type: task
 Status: ready-for-agent
-Blocked by: —
+Blocked by: [213](213-specs-de-recorrencia-sem-previstos-no-historico.md), [214](214-busca-abre-parcelamento-e-recorrencia.md)
 Skills: `grilling`; apoio: `implement`, `tdd`. HITL: a ordem e o recorte da lista são decisão do dono.
 Modelo recomendado: Sonnet
 Effort recomendado: medium
@@ -26,6 +26,6 @@ Implementação testada e descartada nesta sessão: em `web/src/lancamentos/useH
 Atenção ao caminho de gestão: sem os previstos no Histórico, o ⋯ de Recorrência/Parcelamento some da linha futura. A recorrência ainda abre por Contas e categorias; o **parcelamento** e o **previsto avulso** só têm a Busca (que tem Editar, sem ⋯ de Parcelamento). Decidir se a Busca ganha o ⋯ (ou se o parcelamento ganha entrada própria) antes de mesclar.
 
 - [ ] Implementar o filtro e o spec novo
-- [ ] Reescrever os 12 specs acima
-- [ ] Dar à Busca o caminho para Parcelamento (ou criar ticket próprio)
+- [ ] Reescrever os 12 specs acima: ticket 213
+- [ ] Dar à Busca o caminho para Parcelamento: ticket 214
 - [ ] Specs e verificações verdes; PR para `main`
