@@ -430,18 +430,48 @@ def _partes_achadas(
     return achadas
 
 
+def _posicoes_na_regra(partes: list[Parte], parcela: Lancamento, ids: set[UUID]) -> set[int]:
+    """As posições, nas partes do parcelamento, das partes da parcela que estão em `ids`. A parte
+    que nasceu do parcelamento vale pelo id (`id_na_parcela`); a refeita "só esta" vale pela
+    descrição e pela pessoa, se só uma de cada lado tem o par (a ordem e a quantidade da parcela
+    não importam)."""
+    das_partes = {q.id for q in parcela.partes}
+    posicoes: set[int] = set()
+    sem_par = []
+    for i, p in enumerate(partes):
+        if (propria := id_na_parcela(parcela.id, p.id)) in das_partes:
+            if propria in ids:
+                posicoes.add(i)
+        else:
+            sem_par.append(i)
+    proprias = [
+        q for q in parcela.partes if q.id not in {id_na_parcela(parcela.id, p.id) for p in partes}
+    ]
+
+    def chave(p: Parte) -> tuple[str, str | None]:
+        return p.descricao, p.pessoa
+
+    # Sem descrição que distinga, e com tantas partes quanto o parcelamento, vale a posição.
+    por_posicao = len(parcela.partes) == len(partes)
+    for i in sem_par:
+        pares = [q for q in proprias if chave(q) == chave(partes[i])]
+        iguais = [j for j in sem_par if chave(partes[j]) == chave(partes[i])]
+        if len(pares) == 1 and len(iguais) == 1:
+            achou = pares[0]
+        elif pares and por_posicao:
+            achou = parcela.partes[i]
+        else:
+            continue
+        if achou.id in ids:
+            posicoes.add(i)
+    return posicoes
+
+
 def _partes_do_parcelamento_achadas(
     partes: list[Parte], parcela: Lancamento, achadas: set[UUID]
 ) -> list[Parte]:
-    """As partes do parcelamento que a busca achou numa parcela. A parcela com partes refeitas
-    "só esta" (ids que não vêm de `id_na_parcela`) vale pela posição, se tem tantas partes quanto o
-    parcelamento."""
-    das_partes = {q.id for q in parcela.partes}
-    if all(id_na_parcela(parcela.id, p.id) in das_partes for p in partes):
-        return [p for p in partes if id_na_parcela(parcela.id, p.id) in achadas]
-    if len(parcela.partes) != len(partes):
-        return []
-    return [p for p, propria in zip(partes, parcela.partes) if propria.id in achadas]
+    """As partes do parcelamento que a busca achou numa parcela (`_posicoes_na_regra`)."""
+    return [partes[i] for i in sorted(_posicoes_na_regra(partes, parcela, achadas))]
 
 
 def _itens_por_mes(conn, meses: set[date]) -> dict[date, set[UUID]]:
@@ -483,6 +513,8 @@ class _Muda:
     tags: list[str]
     partes: list[Parte] = field(default_factory=list)
     nas_partes: set[UUID] = field(default_factory=set)
+    # Na parcela, as posições dessas partes nas partes do parcelamento.
+    na_regra: set[int] = field(default_factory=set)
 
     @property
     def partes_sem_categoria(self) -> int:
@@ -506,6 +538,8 @@ class _Plano:
     partes_sem_categoria: int
     # As partes que a busca achou, por compra e por parcelamento (`_partes_achadas`).
     achadas: dict[UUID, set[UUID]]
+    # Quantas partes tem cada parcelamento com partes que o lote toca.
+    partes_do_parcelamento: dict[UUID, int] = field(default_factory=dict)
 
     @property
     def recusa(self) -> str | None:
@@ -533,8 +567,13 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
     com_partes = {l.id for l in lancamentos if l.partes}
     lancamentos = [l for l in lancamentos if l.estorno_de not in com_partes]
     mudam, ja_estao, de_outro_tipo, sem_categoria, partes_sem_categoria = [], 0, 0, 0, 0
+    regras: dict[UUID, list[Parte]] = {}
     for l in lancamentos:
+        if l.parcelamento_id and l.parcelamento_id not in regras:
+            regras[l.parcelamento_id] = r.partes if (r := ler_um(conn, l.parcelamento_id)) else []
         muda, outro_tipo = _o_que_muda(mudancas, l, achadas)
+        if muda and l.parcelamento_id and l.partes:
+            muda.na_regra = _posicoes_na_regra(regras[l.parcelamento_id], l, muda.nas_partes)
         de_outro_tipo += outro_tipo
         if not muda:
             # A parcela cujas partes a busca não achou não foi pedida: não "já está como pedido".
@@ -556,6 +595,7 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
         sem_categoria,
         partes_sem_categoria,
         achadas,
+        {id: len(partes) for id, partes in regras.items() if partes},
     )
 
 
@@ -604,16 +644,15 @@ def _trocam_de_item(conn, plano: _Plano) -> int:
 
 
 def _partes_que_mudam(mudam: list[_Muda]) -> int:
-    """As partes que o lote muda: no parcelamento, as da compra (cada posição uma vez), não as de
-    cada parcela."""
+    """As partes que o lote muda: no parcelamento, as da compra (cada posição dela uma vez), não as
+    de cada parcela."""
     avulsas = 0
     do_parcelamento: dict[UUID, set[int]] = {}
     for m in mudam:
-        posicoes = {i for i, p in enumerate(m.lancamento.partes) if p.id in m.nas_partes}
         if m.lancamento.parcelamento_id and m.lancamento.partes:
-            do_parcelamento.setdefault(m.lancamento.parcelamento_id, set()).update(posicoes)
+            do_parcelamento.setdefault(m.lancamento.parcelamento_id, set()).update(m.na_regra)
         else:
-            avulsas += len(posicoes)
+            avulsas += len(m.nas_partes)
     return avulsas + sum(len(posicoes) for posicoes in do_parcelamento.values())
 
 
@@ -1374,10 +1413,10 @@ class _Gravacao(NamedTuple):
     achadas: dict[UUID, set[UUID]]
 
 
-def _blocos(mudam: list[_Muda]) -> list[list[UUID]]:
+def _blocos(mudam: list[_Muda], partes_do_parcelamento: dict[UUID, int]) -> list[list[UUID]]:
     """Os lançamentos em blocos de uma transação: cada parte de uma compra pesa como um
     lançamento, porque grava as ligações e o registro do desfazer dela; o mesmo vale para as partes
-    do parcelamento, na primeira parcela dele."""
+    do parcelamento (`partes_do_parcelamento`), na primeira parcela dele que muda."""
     blocos: list[list[UUID]] = []
     peso = 0
     vistos: set[UUID] = set()
@@ -1386,7 +1425,7 @@ def _blocos(mudam: list[_Muda]) -> list[list[UUID]]:
         # O parcelamento muda uma vez, com a primeira parcela dele: as partes dele pesam nela.
         if m.lancamento.parcelamento_id and m.lancamento.parcelamento_id not in vistos:
             vistos.add(m.lancamento.parcelamento_id)
-            do_lancamento += len(m.lancamento.partes)
+            do_lancamento += partes_do_parcelamento.get(m.lancamento.parcelamento_id, 0)
         if not blocos or peso + do_lancamento > POR_TRANSACAO:
             blocos.append([])
             peso = 0
@@ -1411,7 +1450,9 @@ def aplicar(url: str | None, nova: NovaEdicaoEmLote, usuario: str) -> tuple[Edic
             " VALUES (%s, %s, 'aplicando', %s)",
             (nova.id, plano.mudancas.resumo(), usuario),
         )
-        return _ler(conn, nova.id), _Gravacao(_blocos(plano.mudam), plano.achadas)
+        return _ler(conn, nova.id), _Gravacao(
+            _blocos(plano.mudam, plano.partes_do_parcelamento), plano.achadas
+        )
 
     gravado, gravacao = em_transacao(url, preparar)
     if gravacao is None:
