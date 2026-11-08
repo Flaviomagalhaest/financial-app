@@ -1,7 +1,7 @@
 # Contas do lote com a parcela "só esta" de outra forma que o parcelamento
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
