@@ -7,8 +7,16 @@ from pathlib import Path
 import pytest
 
 from app.mobills import AjusteDeFatura, Cartao, Conta, importar
+from app.mobills.__main__ import main
 from app.mobills.leitura import ArquivoInvalido
-from tests.mobills_ficticio import editar_aba, escrever_fatura, escrever_geral, ler_aba, linha
+from tests.mobills_ficticio import (
+    editar_aba,
+    escrever_fatura,
+    escrever_fatura_pdf,
+    escrever_geral,
+    ler_aba,
+    linha,
+)
 
 
 @pytest.fixture
@@ -1153,3 +1161,106 @@ def test_linha_de_fatura_que_repete_data_valor_e_cartao_de_uma_casada_so_some_co
         "Faturas repetidas: 'Compra no mercado' de Cartao A em 2026-03 tem a decisão 'talvez',"
         " fora de descartar ou manter"
     ) in importar(geral, faturas, revisao).impedimentos
+
+
+# Texto de fatura como o `pdftotext` tira do PDF do Itaú (ticket 220): o layout de colunas e o raw.
+FATURA_PDF_EM_COLUNAS = """\
+                              Vencimento: 03/05/2024          +                         120,58
+                                 Emissão: 27/04/2024
+                    Previsão prox. Fechamento: 27/05/2024    = Total desta fatura          120,58
+"""
+FATURA_PDF_RAW = """\
+Vencimento: 01/04/2024
+Emissão: 25/03/2024
+Total da fatura anterior 22.392,72
+Lançamentos atuais 1.234,50
+Total desta fatura 1.234,50
+Total para próximas faturas 9.524,86
+"""
+
+
+def test_total_da_fatura_em_pdf_preenche_a_coluna_do_mobills_pelo_mes_antes_do_vencimento(
+    pastas, tmp_path
+):
+    geral, faturas, revisao = pastas
+    pdfs = tmp_path / "faturas-pdf"
+    escrever_geral(geral, "geral.xlsx", [linha("31/03/2024", "Padaria", -20.00, "Alimentação")])
+    escrever_fatura(faturas, "Cartao A", "202403", [("10/03/2024", "Loja", "Outros", 1234.50)])
+    escrever_fatura(faturas, "Cartao A", "202404", [("10/04/2024", "Loja", "Outros", 100.00)])
+    escrever_fatura(faturas, "Cartao B", "202404", [("10/04/2024", "Bar", "Outros", 10.00)])
+    # O PDF que vence em abril é a fatura que o Mobills chama de 2024-03.
+    escrever_fatura_pdf(pdfs, "Cartao A", "abril.txt", FATURA_PDF_RAW)
+    # O texto em colunas sai do pdftotext em Latin-1.
+    escrever_fatura_pdf(pdfs, "Cartao A", "maio.txt", FATURA_PDF_EM_COLUNAS, "latin-1")
+
+    importacao = importar(geral, faturas, revisao, faturas_pdf=pdfs)
+
+    linhas = {(x["Cartão"], x["Mês"]): x for x in ler_aba(revisao, "Faturas")}
+    marco, abril = linhas["Cartao A", "2024-03"], linhas["Cartao A", "2024-04"]
+    assert (marco["Mobills"], marco["Diferença"]) == (1234.50, 0)
+    assert (abril["Mobills"], abril["Diferença"]) == (120.58, -20.58)
+    # Cartão sem PDF fica com a coluna em branco, sem aviso.
+    assert linhas["Cartao B", "2024-04"]["Mobills"] is None
+    assert not [x for x in importacao.avisos if "fatura em texto" in x]
+
+    # O valor que o dono digitou vale mais que o do PDF, com aviso da diferença.
+    editar_aba(revisao, "Faturas", "Mês", "2024-03", "Mobills", 1200.00)
+    segunda = importar(geral, faturas, revisao, faturas_pdf=pdfs)
+    assert ler_aba(revisao, "Faturas")[0]["Mobills"] == 1200.00
+    assert [x for x in segunda.avisos if x.startswith("Faturas:")] == [
+        (
+            "Faturas: Cartao A 2024-03 tem 1.200,00 na coluna Mobills e o PDF diz 1.234,50;"
+            " apague a célula para usar o do PDF"
+        )
+    ]
+
+
+def test_texto_de_fatura_sem_vencimento_ou_sem_total_vira_aviso(pastas, tmp_path):
+    geral, faturas, revisao = pastas
+    pdfs = tmp_path / "faturas-pdf"
+    escrever_geral(geral, "geral.xlsx", [linha("31/03/2024", "Padaria", -20.00, "Alimentação")])
+    escrever_fatura(faturas, "Cartao A", "202403", [])
+    escrever_fatura_pdf(pdfs, "Cartao A", "sem-total.txt", "Vencimento: 01/04/2024\n")
+    escrever_fatura_pdf(pdfs, "Cartao A", "a.txt", FATURA_PDF_RAW)
+    escrever_fatura_pdf(pdfs, "Cartao A", "b.txt", FATURA_PDF_RAW)
+    escrever_fatura_pdf(pdfs, "Cartao Errado", "c.txt", FATURA_PDF_RAW)
+
+    importacao = importar(geral, faturas, revisao, faturas_pdf=pdfs)
+
+    assert [x for x in importacao.avisos if "em texto" in x] == [
+        "fatura em texto Cartao A/b.txt repete o mês 2024-03 de Cartao A/a.txt",
+        "fatura em texto Cartao A/sem-total.txt sem vencimento ou sem 'Total desta fatura'",
+        "faturas em texto de Cartao Errado: nenhum cartão com esse nome",
+    ]
+    assert ler_aba(revisao, "Faturas")[0]["Mobills"] == 1234.50
+
+
+def test_linha_de_comando_le_as_faturas_em_texto_e_recusa_pasta_que_nao_existe(
+    pastas, tmp_path, capsys
+):
+    geral, faturas, revisao = pastas
+    pdfs = tmp_path / "faturas-pdf"
+    escrever_geral(geral, "geral.xlsx", [linha("31/03/2024", "Padaria", -20.00, "Alimentação")])
+    escrever_fatura(faturas, "Cartao A", "202403", [])
+    escrever_fatura_pdf(pdfs, "Cartao A", "abril.txt", FATURA_PDF_RAW)
+
+    main([str(geral), str(faturas), str(revisao), "--faturas-pdf", str(pdfs)])
+
+    assert ler_aba(revisao, "Faturas")[0]["Mobills"] == 1234.50
+    with pytest.raises(SystemExit):
+        main([str(geral), str(faturas), str(revisao), "--faturas-pdf", str(tmp_path / "nada")])
+    assert "não é uma pasta" in capsys.readouterr().err
+
+
+def test_fatura_em_texto_que_vence_em_janeiro_e_a_de_dezembro_do_ano_anterior(pastas, tmp_path):
+    geral, faturas, revisao = pastas
+    pdfs = tmp_path / "faturas-pdf"
+    escrever_geral(geral, "geral.xlsx", [linha("31/12/2023", "Padaria", -20.00, "Alimentação")])
+    escrever_fatura(faturas, "Cartao A", "202312", [])
+    escrever_fatura_pdf(
+        pdfs, "Cartao A", "janeiro.txt", FATURA_PDF_RAW.replace("01/04/2024", "01/01/2024")
+    )
+
+    importar(geral, faturas, revisao, faturas_pdf=pdfs)
+
+    assert ler_aba(revisao, "Faturas")[0]["Mobills"] == 1234.50

@@ -63,6 +63,13 @@ def escrever_fatura(pasta: Path, cartao: str, rotulo: str, linhas: list[tuple]) 
     return caminho
 
 
+def escrever_fatura_pdf(pasta: Path, cartao: str, nome: str, texto: str, codificacao="utf-8"):
+    """O texto que o `pdftotext` tira de uma fatura em PDF, na subpasta do cartão (ticket 220)."""
+    destino = pasta / cartao
+    destino.mkdir(parents=True, exist_ok=True)
+    (destino / nome).write_bytes(texto.encode(codificacao))
+
+
 def ler_aba(planilha: Path, nome: str) -> list[dict]:
     """As linhas de uma aba da planilha de revisão, pelo cabeçalho."""
     aba = load_workbook(planilha)[nome]

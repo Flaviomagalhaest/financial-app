@@ -65,6 +65,11 @@ def mes_seguinte(mes: str) -> str:
     return f"{ano + numero // 12}-{numero % 12 + 1:02d}"
 
 
+def mes_anterior(mes: str) -> str:
+    ano, numero = int(mes[:4]), int(mes[5:])
+    return f"{ano - (numero == 1)}-{(numero - 2) % 12 + 1:02d}"
+
+
 def reagrupar(lancamentos, primeiro_mes: str, ultimo_mes: str) -> list[Parcelamento]:
     """Uma sequência que começa depois do primeiro mês do export sem a parcela 1, que acaba antes
     do último sem a última parcela, ou que tem a mesma parcela repetida num mês, está quebrada."""
