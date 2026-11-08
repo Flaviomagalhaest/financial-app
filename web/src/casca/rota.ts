@@ -8,7 +8,7 @@ export const ABAS = [
   { id: "futuro", nome: "Futuro" },
 ] as const;
 
-export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "credito" | "favorito" | "favoritos" | "conflito" | "parcelamento" | "recorrencia" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento" | "busca" | "edicoes-em-lote";
+export type Rota = (typeof ABAS)[number]["id"] | "novo" | "estornar" | "credito" | "favorito" | "favoritos" | "conflito" | "parcelamento" | "recorrencia" | "contas-e-categorias" | "configuracoes" | "modelo-do-planejamento" | "busca" | "edicoes-em-lote" | "explorar";
 
 /** A rota vive no hash (`/#/mes`), para o endereço do app nunca mudar e servir qualquer cache. */
 export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; consulta?: string } {
@@ -29,6 +29,7 @@ export function lerRota(hash: string): { rota: Rota; id?: string; mes?: string; 
     tela === "configuracoes" ||
     tela === "modelo-do-planejamento" ||
     tela === "edicoes-em-lote" ||
+    tela === "explorar" ||
     ABAS.some((aba) => aba.id === tela);
   // `#/favorito/<id>` abre o novo lançamento já preenchido pelo favorito `<id>`.
   // `#/estornar/<id>` abre o estorno da compra `<id>`.
@@ -51,4 +52,28 @@ export function useRota(): ReturnType<typeof lerRota> {
     return () => window.removeEventListener("hashchange", aoMudar);
   }, []);
   return rota;
+}
+
+/** As telas de lançar: nelas o botão + some (ticket 204). */
+export const TELAS_DE_LANCAR: Rota[] = ["novo", "estornar", "credito", "favorito"];
+
+/** Telas que não marcam nada na tela larga: as do Menu da conta, Explorar, as de lançar e as de decidir uma linha. */
+const SEM_MARCA_NA_LARGA: Rota[] = ["explorar", "favoritos", "contas-e-categorias", "configuracoes", "conflito", "parcelamento", "recorrencia", ...TELAS_DE_LANCAR];
+
+/** Telas que não marcam nada no celular (ticket 211): as de lançar e as de decidir uma linha. */
+const SEM_MARCA_NO_CELULAR: Rota[] = [...TELAS_DE_LANCAR, "conflito", "parcelamento", "recorrencia"];
+
+/**
+ * Qual item da barra de navegação fica marcado. Tela larga: a busca e as edições em lote marcam Histórico (ticket 24),
+ * o modelo do planejamento marca Mês e as telas do Menu da conta não marcam. Celular (ticket 211): Hoje, Mês e Cartões
+ * marcam a si, o modelo marca Mês e toda outra tela marca a grade (Explorar), venha de onde vier.
+ */
+export function itemMarcado(rota: Rota, larga: boolean): Rota | undefined {
+  if (rota === "modelo-do-planejamento") return "mes";
+  if (larga) {
+    if (rota === "busca" || rota === "edicoes-em-lote") return "historico";
+    return SEM_MARCA_NA_LARGA.includes(rota) ? undefined : rota;
+  }
+  if (rota === "hoje" || rota === "mes" || rota === "cartoes") return rota;
+  return SEM_MARCA_NO_CELULAR.includes(rota) ? undefined : "explorar";
 }

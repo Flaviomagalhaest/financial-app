@@ -34,6 +34,20 @@ const TRACOS = {
   mais: <path d="M12 5v14M5 12h14" />,
   estrela: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />,
   pastas: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  grade: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="2" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="2" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="2" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="2" />
+    </>
+  ),
+  engrenagem: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.5l1.6 2.3 2.7-.6.9 2.6 2.6.9-.6 2.7L21.5 12l-2.3 1.6.6 2.7-2.6.9-.9 2.6-2.7-.6L12 21.5l-1.6-2.3-2.7.6-.9-2.6-2.6-.9.6-2.7L2.5 12l2.3-1.6-.6-2.7 2.6-.9.9-2.6 2.7.6z" />
+    </>
+  ),
 } as const;
 
 export type NomeDoIcone = keyof typeof TRACOS;

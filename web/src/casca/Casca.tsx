@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Configuracoes } from "../configuracoes/Configuracoes";
 import { TelaDeFavoritos } from "../configuracoes/TelaDeFavoritos";
 import { OfertaDeFavoritar } from "../lancamentos/OfertaDeFavoritar";
@@ -20,12 +20,24 @@ import { TelaDaBusca } from "../busca/TelaDaBusca";
 import { TelaDasEdicoesEmLote } from "../busca/TelaDasEdicoesEmLote";
 import { Icone } from "./icones";
 import { MenuDeAcoes } from "./MenuDeAcoes";
-import { ABAS, useRota, type Rota } from "./rota";
+import { TelaExplorar } from "./TelaExplorar";
+import { ABAS, TELAS_DE_LANCAR, itemMarcado, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
 
-/** As telas de lançar: nelas o botão + some (ticket 204). */
-const TELAS_DE_LANCAR: Rota[] = ["novo", "estornar", "credito", "favorito"];
+/** Tela larga (barra lateral, com nomes) a partir de 900 px; abaixo disso, a barra de baixo só com ícones. */
+function useTelaLarga(): boolean {
+  const consulta = "(min-width: 900px)";
+  const [larga, setLarga] = useState(() => window.matchMedia(consulta).matches);
+  useEffect(() => {
+    const lista = window.matchMedia(consulta);
+    const aoMudar = () => setLarga(lista.matches);
+    aoMudar();
+    lista.addEventListener("change", aoMudar);
+    return () => lista.removeEventListener("change", aoMudar);
+  }, []);
+  return larga;
+}
 
 /** O círculo com a inicial abre o e-mail, Configurações, os cadastros e Sair (ticket 204). */
 function MenuDaConta({ email, onSair }: { email: string; onSair: () => void }) {
@@ -45,8 +57,9 @@ function MenuDaConta({ email, onSair }: { email: string; onSair: () => void }) {
 /** Casca do app: navegação por abas (embaixo no celular, ao lado na tela larga) e a tela atual. */
 export function Casca({ email, onSair, hoje }: Props) {
   const { rota, id, mes, consulta } = useRota();
-  // A busca é da aba Histórico (ticket 24), e a lupa a abre de qualquer aba; as edições em lote saem dela.
-  const aba = rota === "busca" || rota === "edicoes-em-lote" ? "historico" : rota;
+  const larga = useTelaLarga();
+  const marcada = itemMarcado(rota, larga);
+  const abas = larga ? ABAS : ABAS.filter((a) => a.id !== "historico" && a.id !== "futuro");
 
   return (
     <div className="casca">
@@ -66,12 +79,17 @@ export function Casca({ email, onSair, hoje }: Props) {
             <span className="nome-da-aba">Novo lançamento</span>
           </a>
         )}
-        {ABAS.map((a) => (
-          <a key={a.id} href={`#/${a.id}`} aria-current={a.id === aba ? "page" : undefined}>
+        {abas.map((a) => (
+          <a key={a.id} href={`#/${a.id}`} aria-label={a.nome} aria-current={a.id === marcada ? "page" : undefined}>
             <Icone nome={a.id} />
             <span className="nome-da-aba">{a.nome}</span>
           </a>
         ))}
+        {!larga && (
+          <a href="#/explorar" aria-label="Explorar" aria-current={marcada === "explorar" ? "page" : undefined}>
+            <Icone nome="grade" />
+          </a>
+        )}
       </nav>
       <OfertaDeFavoritar />
       <main>
@@ -99,6 +117,7 @@ export function Casca({ email, onSair, hoje }: Props) {
         {rota === "modelo-do-planejamento" && <TelaDoModelo />}
         {rota === "cartoes" && (id && mes ? <TelaDaFatura key={`${id}/${mes}`} cartaoId={id} mes={mes} /> : <TelaDeCartoes />)}
         {rota === "futuro" && <TelaDoFuturo />}
+        {rota === "explorar" && <TelaExplorar />}
       </main>
     </div>
   );
