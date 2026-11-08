@@ -75,6 +75,9 @@ test("celular tem as abas embaixo e tela larga tem as abas ao lado", async ({ pa
   expect(Math.abs(mais.x + mais.width / 2 - 195)).toBeLessThan(40);
   expect(mais.y + mais.height).toBeLessThanOrEqual(800);
 
+  // No celular a barra não escreve os nomes: as abas se acham pelo nome acessível.
+  for (const nome of ["Hoje", "Mês", "Cartões", "Explorar"]) await expect(abas.getByRole("link", { name: nome, exact: true })).toBeVisible();
+
   await page.setViewportSize({ width: 1280, height: 800 });
   const larga = (await abas.boundingBox())!;
   const principal = (await conteudo.boundingBox())!;

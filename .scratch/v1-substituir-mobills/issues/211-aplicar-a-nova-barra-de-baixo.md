@@ -1,7 +1,7 @@
 # Aplicar a nova barra de baixo e a tela de funcionalidades no celular
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 210
 Skills: `implement`, `tdd`, `run`; apoio: `code-review`
 Modelo recomendado: Sonnet
@@ -21,8 +21,12 @@ Decidido no 210 (detalhes no `## Comments` dele; protótipo aprovado, variante 4
 
 ## Checklist
 
-- [ ] `## Comments` do 210 relido; escopo deste ticket conferido com o que foi decidido
-- [ ] Barra de baixo nova no celular (só ícones, pílula no marcado) e tela Explorar
-- [ ] Barra lateral da tela larga sem mudança (captura antes e depois)
-- [ ] `web/e2e/pwa.spec.ts` e os testes que navegam pelas abas ajustados (no celular, as abas são achadas pelo nome acessível, não pelo texto visível); teste novo para abrir Histórico e Futuro pela tela Explorar e para a marcação da grade
-- [ ] Capturas do celular (claro e escuro) e da tela larga; specs e verificações do projeto verdes; PR para `main`
+- [x] `## Comments` do 210 relido; escopo deste ticket conferido com o que foi decidido
+- [x] Barra de baixo nova no celular (só ícones, pílula no marcado) e tela Explorar
+- [x] Barra lateral da tela larga sem mudança (captura antes e depois)
+- [x] `web/e2e/pwa.spec.ts` e os testes que navegam pelas abas ajustados (no celular, as abas são achadas pelo nome acessível, não pelo texto visível); teste novo para abrir Histórico e Futuro pela tela Explorar e para a marcação da grade
+- [x] Capturas do celular (claro e escuro) e da tela larga; specs e verificações do projeto verdes; PR para `main`
+
+## Comments
+
+**08/11, feito:** a barra de baixo e a tela Explorar entraram (`web/src/casca/`: `TelaExplorar.tsx`, `itemMarcado` em `rota.ts`, ícones `grade` e `engrenagem`). A barra lateral da tela larga não mudou (capturas antes/depois conferidas em tela larga). `web/e2e/explorar.spec.ts` cobre os cinco itens por nome acessível, a grade, os cartões, a marcação e a pílula; `pwa.spec.ts` ganhou a conferência das abas pelo nome no celular. Suíte e2e completa: 335 de 341 verdes; as seis que falham também falham numa `main` limpa e viraram o [ticket 212](212-specs-e2e-falhando-na-main.md). A revisão (Standards e Spec) não achou violação; a marcação foi extraída para `itemMarcado`, tipada.

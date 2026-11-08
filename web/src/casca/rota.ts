@@ -53,3 +53,27 @@ export function useRota(): ReturnType<typeof lerRota> {
   }, []);
   return rota;
 }
+
+/** As telas de lançar: nelas o botão + some (ticket 204). */
+export const TELAS_DE_LANCAR: Rota[] = ["novo", "estornar", "credito", "favorito"];
+
+/** Telas que não marcam nada na tela larga: as do Menu da conta, Explorar, as de lançar e as de decidir uma linha. */
+const SEM_MARCA_NA_LARGA: Rota[] = ["explorar", "favoritos", "contas-e-categorias", "configuracoes", "conflito", "parcelamento", "recorrencia", ...TELAS_DE_LANCAR];
+
+/** Telas que não marcam nada no celular (ticket 211): as de lançar e as de decidir uma linha. */
+const SEM_MARCA_NO_CELULAR: Rota[] = [...TELAS_DE_LANCAR, "conflito", "parcelamento", "recorrencia"];
+
+/**
+ * Qual item da barra de navegação fica marcado. Tela larga: a busca e as edições em lote marcam Histórico (ticket 24),
+ * o modelo do planejamento marca Mês e as telas do Menu da conta não marcam. Celular (ticket 211): Hoje, Mês e Cartões
+ * marcam a si, o modelo marca Mês e toda outra tela marca a grade (Explorar), venha de onde vier.
+ */
+export function itemMarcado(rota: Rota, larga: boolean): Rota | undefined {
+  if (rota === "modelo-do-planejamento") return "mes";
+  if (larga) {
+    if (rota === "busca" || rota === "edicoes-em-lote") return "historico";
+    return SEM_MARCA_NA_LARGA.includes(rota) ? undefined : rota;
+  }
+  if (rota === "hoje" || rota === "mes" || rota === "cartoes") return rota;
+  return SEM_MARCA_NO_CELULAR.includes(rota) ? undefined : "explorar";
+}

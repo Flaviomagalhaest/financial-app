@@ -21,14 +21,9 @@ import { TelaDasEdicoesEmLote } from "../busca/TelaDasEdicoesEmLote";
 import { Icone } from "./icones";
 import { MenuDeAcoes } from "./MenuDeAcoes";
 import { TelaExplorar } from "./TelaExplorar";
-import { ABAS, useRota, type Rota } from "./rota";
+import { ABAS, TELAS_DE_LANCAR, itemMarcado, useRota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
-
-/** As telas de lançar: nelas o botão + some (ticket 204). */
-const TELAS_DE_LANCAR: Rota[] = ["novo", "estornar", "credito", "favorito"];
-
-const SEM_MARCA_NA_LARGA: Rota[] = ["explorar", "favoritos", "contas-e-categorias", "configuracoes", "conflito", "parcelamento", "recorrencia", ...TELAS_DE_LANCAR];
 
 /** Tela larga (barra lateral, com nomes) a partir de 900 px; abaixo disso, a barra de baixo só com ícones. */
 function useTelaLarga(): boolean {
@@ -63,24 +58,7 @@ function MenuDaConta({ email, onSair }: { email: string; onSair: () => void }) {
 export function Casca({ email, onSair, hoje }: Props) {
   const { rota, id, mes, consulta } = useRota();
   const larga = useTelaLarga();
-  // Tela larga: a busca e as edições em lote marcam Histórico (ticket 24), o modelo do planejamento marca Mês, e as
-  // telas do Menu da conta e Explorar não marcam nada. Celular (ticket 211): marcam Hoje, Mês e Cartões; as telas de
-  // lançar, o parcelamento, a recorrência e o conflito não marcam; toda outra tela marca a grade (Explorar).
-  const marcada: string | undefined = larga
-    ? rota === "busca" || rota === "edicoes-em-lote"
-      ? "historico"
-      : rota === "modelo-do-planejamento"
-        ? "mes"
-        : SEM_MARCA_NA_LARGA.includes(rota)
-          ? undefined
-          : rota
-    : ["hoje", "mes", "cartoes"].includes(rota)
-      ? rota
-      : rota === "modelo-do-planejamento"
-        ? "mes"
-        : [...TELAS_DE_LANCAR, "conflito", "parcelamento", "recorrencia"].includes(rota)
-          ? undefined
-          : "explorar";
+  const marcada = itemMarcado(rota, larga);
   const abas = larga ? ABAS : ABAS.filter((a) => a.id !== "historico" && a.id !== "futuro");
 
   return (

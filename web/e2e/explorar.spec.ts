@@ -52,6 +52,10 @@ test("no celular, a grade marca toda tela fora de Hoje, Mês, Cartões e lançar
     await page.goto(`/#/${rota}`);
     await expect(marcado).toHaveAttribute("aria-label", "Explorar");
   }
+  // A pílula atrás do ícone marcado muda o fundo do ícone, que nos outros fica transparente.
+  const fundo = (nome: string) => barra.getByRole("link", { name: nome, exact: true }).locator("svg").evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(await fundo("Explorar")).not.toBe("rgba(0, 0, 0, 0)");
+  expect(await fundo("Hoje")).toBe("rgba(0, 0, 0, 0)");
   await page.goto("/#/modelo-do-planejamento");
   await expect(marcado).toHaveAttribute("aria-label", "Mês");
   await page.goto("/#/novo");
