@@ -1177,3 +1177,73 @@ def test_parcela_gerada_da_sequencia_aceita_entra_realizada_ate_o_ultimo_mes_pag
         ((3, 4), "2019-05", "realizado"),
         ((4, 4), "2019-06", "previsto"),
     ]
+
+
+def test_buraco_sem_sufixo_em_compras_paralelas_junta_cada_uma_com_a_sua(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Passagem (1/3)", -250.00, "Viagem"),
+            linha("31/03/2019", "Passagem (1/3)", -100.00, "Viagem"),
+            linha("30/04/2019", "Passagem", -250.00, "Viagem"),
+            linha("30/04/2019", "Passagem", -100.00, "Viagem"),
+            linha("31/05/2019", "Passagem (3/3)", -100.00, "Viagem"),
+            linha("31/05/2019", "Passagem (3/3)", -250.00, "Viagem"),
+        ],
+    )
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert sorted([x.valor_centavos for x in p.lancamentos] for p in importacao.parcelamentos) == [
+        [10000, 10000, 10000],
+        [25000, 25000, 25000],
+    ]
+
+
+def test_buraco_sem_sufixo_com_o_valor_da_parcela_seguinte_junta_os_dois_pedacos(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Sofá (1/3)", -100.00, "Casa"),
+            # O valor mudou a partir da 2ª, que veio sem sufixo.
+            linha("30/04/2019", "Sofá", -120.00, "Casa"),
+            linha("31/05/2019", "Sofá (3/3)", -120.00, "Casa"),
+        ],
+    )
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert [([x.parcela for x in p.lancamentos], p.quebra) for p in importacao.parcelamentos] == [
+        ([(1, 3), (2, 3), (3, 3)], None)
+    ]
+
+
+def test_descartar_duplicada_nao_tira_a_parcela_da_compra_paralela_de_outro_valor(pastas):
+    geral, faturas, revisao = pastas
+    coluna = "Decisão (avulsas, parcelamento ou descartar duplicada)"
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("31/03/2019", "Fone (1/2)", -50.00, "Eletrônicos"),
+            linha("31/03/2019", "Fone (1/2)", -50.00, "Eletrônicos"),
+            linha("31/03/2019", "Fone (1/2)", -80.00, "Eletrônicos"),
+            linha("30/04/2019", "Fone (2/2)", -50.00, "Eletrônicos"),
+            linha("30/04/2019", "Fone (2/2)", -80.00, "Eletrônicos"),
+        ],
+    )
+    faturas.mkdir()
+    importar(geral, faturas, revisao)
+    editar_aba(revisao, "Parcelas quebradas", "Parcelas", "1 de 2", coluna, "descartar duplicada")
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert sorted(
+        (x.parcela, x.valor_centavos) for x in importacao.lancamentos if x.descricao == "Fone"
+    ) == [((1, 2), 5000), ((1, 2), 8000), ((2, 2), 5000), ((2, 2), 8000)]

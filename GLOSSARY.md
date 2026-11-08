@@ -360,7 +360,7 @@ Linhas de fatura e do geral com a mesma chave no mesmo mês em que as do geral d
 _Avoid_: duplicado (no app, "Parece repetido" é outra coisa)
 
 **Sequência quebrada**:
-Parcelas `(n/total)` de uma compra em que falta uma parcela dentro do período do export, ou em que a mesma parcela aparece duas vezes no mês. Entra como lançamentos avulsos, a não ser que o dono a aceite como parcelamento ou descarte a parcela duplicada na planilha de revisão.
+Parcelas `(n/total)` de uma compra em que falta uma parcela dentro do período do export, ou em que a mesma parcela aparece duas vezes no mês com o mesmo valor (com outro valor é outra compra igual em paralelo). A parcela com outro valor continua a sequência, e a linha sem `(n/total)` com a mesma descrição e o valor da parcela vizinha no mês exato da que falta é essa parcela, com o número deduzido pela posição. Entra como lançamentos avulsos, a não ser que o dono a aceite como parcelamento (as parcelas que faltam são geradas: realizadas até o último mês pago, previstas depois) ou descarte a parcela duplicada na planilha de revisão.
 _Avoid_: parcelamento incompleto
 
 **Cartão encerrado no Mobills**:
