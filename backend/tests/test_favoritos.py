@@ -158,9 +158,7 @@ def test_o_que_a_recorrencia_gera_nao_conta_como_uso(casal: Casal, monkeypatch: 
     monkeypatch.setattr(favoritos, "hoje", lambda: date(2026, 11, 8))
     with monkeypatch.context() as naquele_dia:
         naquele_dia.setattr(lancamentos, "hoje", lambda: date(2026, 1, 1))
-        nova = recorrencia(
-            conta, [aluguel], descricao="Aluguel", inicio="2026-01-05"
-        )
+        nova = recorrencia(conta, [aluguel], descricao="Aluguel", inicio="2026-01-05")
         assert casal.pedir("flavio", "POST", "/api/recorrencias", json=nova).status_code == 201
     assert listar(casal)["sugeridos"] == []
 
