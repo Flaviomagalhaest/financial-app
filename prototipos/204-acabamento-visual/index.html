@@ -235,6 +235,9 @@ body { background: var(--p-fundo); color: var(--p-texto); font: 15px/1.5 var(--p
 .mock.larga .grade-hoje { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
 .mock.larga .grade-hoje > .largo { grid-column: 1 / -1; }
 
+.mock .grade-fav { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.mock .grade-fav span { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; background: var(--m-fundo); font-size: .85rem; color: var(--m-suave); }
+.mock .grade-fav b { color: var(--m-texto); font-size: .92rem; }
 /* Mês */
 .mock .nav-mes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mock .nav-mes .centro { text-align: center; }
@@ -381,7 +384,7 @@ body { background: var(--p-fundo); color: var(--p-texto); font: 15px/1.5 var(--p
   <header class="p-cabeca">
     <span class="etiqueta">Protótipo · ticket 204</span>
     <h1>Acabamento visual do Financial App</h1>
-    <p><b>Rodada 2.</b> Já abre com o que você escolheu: painel de banco, Inter, avatar com menu (toque no "F") e botão +. Falta a Q11: os atalhos da faixa verde em Hoje. Os outros grupos continuam aí para comparar. Escolha uma opção em cada grupo e veja Hoje e Mês com a combinação, no celular e na tela larga. Os números são os da base de teste. As abas Hoje e Mês dentro do aparelho funcionam. No computador, ← e → trocam a opção do último grupo em que você clicou.</p>
+    <p><b>Rodada 3.</b> Já abre com o que você escolheu: painel de banco, Inter, avatar com menu (toque no "F") e botão +. Na Q11, compare "Pílulas com informação" (sua escolha) com "Pílulas com os favoritos": Hoje já tem uma grade de Favoritos, que agora aparece no protótipo. "Sem atalhos" é como fica quando a opção é desligada em Configurações. Escolha uma opção em cada grupo e veja Hoje e Mês com a combinação, no celular e na tela larga. Os números são os da base de teste. As abas Hoje e Mês dentro do aparelho funcionam. No computador, ← e → trocam a opção do último grupo em que você clicou.</p>
   </header>
 
   <section class="escolhas" id="escolhas" aria-label="Escolhas"></section>
@@ -405,8 +408,9 @@ body { background: var(--p-fundo); color: var(--p-texto); font: 15px/1.5 var(--p
 <script>
 const GRUPOS = [
   { id: "atalhos", q: "Q11", titulo: "Atalhos da faixa em Hoje", opcoes: [
-    { id: "redondos", nome: "Redondos", rec: true, nota: "Três botões redondos na faixa: Favoritos, Fatura (abre a que vence; sem fatura, vira Cartões) e Contas e categorias. Nada repete o botão +, a lupa ou as abas." },
-    { id: "pilulas", nome: "Pílulas com informação", nota: "Os mesmos três atalhos como pílulas que já trazem um dado: quantos favoritos, o valor e o vencimento da fatura. A fileira rola de lado se não couber." },
+    { id: "redondos", nome: "Redondos", nota: "Três botões redondos na faixa: Favoritos, Fatura (abre a que vence; sem fatura, vira Cartões) e Contas e categorias. Nada repete o botão +, a lupa ou as abas." },
+    { id: "pilulas", nome: "Pílulas com informação", esc: true, nota: "Pílulas que já trazem um dado: quantos favoritos (tocar rola até a grade de Favoritos, que continua no corpo de Hoje), o valor e o vencimento da fatura, quantas contas. A fileira rola de lado se não couber." },
+    { id: "favoritos", nome: "Pílulas com os favoritos", rec: true, nota: "Cada favorito vira uma pílula na faixa com o valor (tocar abre o lançamento preenchido, como a grade faz hoje), seguida de Fatura e Contas e categorias. A grade de Favoritos sai do corpo de Hoje." },
     { id: "original", nome: "Como no 1º protótipo", nota: "Novo, Buscar, Cartões e Mês: todos repetem algo que já está na tela (botão +, lupa, abas)." },
     { id: "nenhum", nome: "Sem atalhos", nota: "A faixa fica só com o número do mês. Favoritos e Contas e categorias continuam no menu do avatar." },
   ]},
@@ -439,7 +443,7 @@ const GRUPOS = [
     { id: "fab", nome: "Com botão +", esc: true, nota: "Contorno, mais um botão redondo de Novo lançamento no meio da barra (no celular) e no alto da barra lateral. O botão grande de Hoje sai." },
   ]},
 ];
-const estado = { atalhos: "redondos", direcao: "banco", fonte: "inter", topo: "avatar", icones: "fab", tela: "hoje", aparelho: "ambos", tema: "claro", grupo: "atalhos", menuAvatar: false };
+const estado = { atalhos: "favoritos", direcao: "banco", fonte: "inter", topo: "avatar", icones: "fab", tela: "hoje", aparelho: "ambos", tema: "claro", grupo: "atalhos", menuAvatar: false };
 
 const IC = {
   hoje: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
@@ -488,6 +492,13 @@ function atalhos() {
       <div class="atalho"><span>${ic("cartoes")}</span>Cartões</div>
       <div class="atalho"><span>${ic("mes")}</span>Mês</div>
     </div>`;
+  if (a === "favoritos") return `<div class="atalhos pilulas">
+      <button class="pil">${ic("estrela")}<span><b>Café</b><small>R$ 8,00</small></span></button>
+      <button class="pil">${ic("estrela")}<span><b>Mercado</b><small>R$ 150,00</small></span></button>
+      <button class="pil">${ic("estrela")}<span><b>Uber</b><small>R$ 25,00</small></span></button>
+      <button class="pil">${ic("cartoes")}<span><b>Fatura R$ 145,50</b><small>Nubank · vence 10/11</small></span></button>
+      <button class="pil">${ic("pastas")}<span><b>Contas e categorias</b><small>4 contas</small></span></button>
+    </div>`;
   if (a === "pilulas") return `<div class="atalhos pilulas">
       <button class="pil">${ic("estrela")}<span><b>Favoritos</b><small>3 salvos</small></span></button>
       <button class="pil">${ic("cartoes")}<span><b>Fatura R$ 145,50</b><small>Nubank · vence 10/11</small></span></button>
@@ -525,6 +536,10 @@ function hoje() {
     <div class="item-prog"><div class="l1"><span>Moradia</span><span class="num">100%</span></div><div class="progresso cheio"><span style="width:100%"></span></div><span class="l3">ainda dá para gastar R$ 0,00 de R$ 2.800,00</span></div>
     <div class="item-prog"><div class="l1"><span>Luz e água</span><span class="num">81%</span></div><div class="progresso"><span style="width:81%"></span></div><span class="l3">ainda dá para gastar R$ 57,60 de R$ 300,00</span></div>
   </section>
+  ${estado.direcao === "banco" && estado.atalhos === "favoritos" ? "" : `<section class="bloco">
+    <h3 class="secao" style="margin-bottom:8px">Favoritos</h3>
+    <div class="grade-fav"><span><b>Café</b>R$ 8,00</span><span><b>Mercado</b>R$ 150,00</span><span><b>Uber</b>R$ 25,00</span></div>
+  </section>`}
   <section class="bloco">
     <h3 class="secao" style="margin-bottom:2px">Sugeridos</h3>
     <p class="suave" style="font-size:.85rem">Você repete este lançamento com frequência.</p>
