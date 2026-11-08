@@ -421,13 +421,26 @@ def _partes_achadas(
         regra = ler_um(conn, parcelamento_id)
         if not regra or not regra.partes:
             continue
-        parcelas = [l.id for l in lidos if l.parcelamento_id == parcelamento_id and l.id in achadas]
         achadas[parcelamento_id] = {
             p.id
-            for p in regra.partes
-            if any(id_na_parcela(parcela, p.id) in achadas[parcela] for parcela in parcelas)
+            for l in lidos
+            if l.parcelamento_id == parcelamento_id and l.id in achadas
+            for p in _partes_do_parcelamento_achadas(regra.partes, l, achadas[l.id])
         }
     return achadas
+
+
+def _partes_do_parcelamento_achadas(
+    partes: list[Parte], parcela: Lancamento, achadas: set[UUID]
+) -> list[Parte]:
+    """As partes do parcelamento que a busca achou numa parcela. A parcela com partes refeitas
+    "só esta" (ids que não vêm de `id_na_parcela`) vale pela posição, se tem tantas partes quanto o
+    parcelamento."""
+    if all(id_na_parcela(parcela.id, p.id) in {q.id for q in parcela.partes} for p in partes):
+        return [p for p in partes if id_na_parcela(parcela.id, p.id) in achadas]
+    if len(parcela.partes) != len(partes):
+        return []
+    return [p for p, propria in zip(partes, parcela.partes) if propria.id in achadas]
 
 
 def _itens_por_mes(conn, meses: set[date]) -> dict[date, set[UUID]]:
@@ -523,7 +536,9 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
         muda, outro_tipo = _o_que_muda(mudancas, l, achadas)
         de_outro_tipo += outro_tipo
         if not muda:
-            ja_estao += not outro_tipo
+            # A parcela cujas partes a busca não achou não foi pedida: não "já está como pedido".
+            nao_achada = bool(l.parcelamento_id and l.partes and achadas.get(l.id) == set())
+            ja_estao += not (outro_tipo or nao_achada)
             continue
         mudam.append(muda)
         if l.partes:
@@ -587,13 +602,27 @@ def _trocam_de_item(conn, plano: _Plano) -> int:
     return trocam
 
 
+def _partes_que_mudam(mudam: list[_Muda]) -> int:
+    """As partes que o lote muda: no parcelamento, as da compra (cada posição uma vez), não as de
+    cada parcela."""
+    avulsas = 0
+    do_parcelamento: dict[UUID, set[int]] = {}
+    for m in mudam:
+        posicoes = {i for i, p in enumerate(m.lancamento.partes) if p.id in m.nas_partes}
+        if m.lancamento.parcelamento_id and m.lancamento.partes:
+            do_parcelamento.setdefault(m.lancamento.parcelamento_id, set()).update(posicoes)
+        else:
+            avulsas += len(posicoes)
+    return avulsas + sum(len(posicoes) for posicoes in do_parcelamento.values())
+
+
 def previa(conn, pedido: PedidoDeEdicaoEmLote) -> PreviaDaEdicaoEmLote:
     plano = _planejar(conn, pedido)
     return PreviaDaEdicaoEmLote(
         compras=len({l.parcelamento_id or l.id for l in plano.lancamentos}),
         lancamentos=len(plano.lancamentos),
         mudam=len(plano.mudam),
-        partes_que_mudam=sum(len(m.nas_partes) for m in plano.mudam),
+        partes_que_mudam=_partes_que_mudam(plano.mudam),
         ja_estao_como_pedido=plano.ja_estao_como_pedido,
         de_outro_tipo=plano.de_outro_tipo,
         trocam_de_item=_trocam_de_item(conn, plano),
@@ -1177,16 +1206,34 @@ def _desfazer_parcelamento(conn, lote_id: UUID, registro: tuple) -> str:
     return "desfeito"
 
 
-def _desfazer_bloco(conn, lote_id: UUID, usuario: str, momento: datetime) -> int:
+def _pesos_das_partes(conn, lote_id: UUID, donos: list[UUID]) -> dict[UUID, int]:
+    """Quantas partes o lote mudou em cada compra ou parcelamento: cada uma grava as ligações dela
+    ao voltar, e pesa como um lançamento no bloco (`_blocos`)."""
+    return dict(
+        conn.execute(
+            "SELECT dono_id, count(*) FROM edicao_em_lote_partes"
+            " WHERE lote_id = %s AND dono_id = ANY(%s) GROUP BY dono_id",
+            (lote_id, donos),
+        ).fetchall()
+    )
+
+
+def _desfazer_bloco(conn, lote_id: UUID, usuario: str, momento: datetime) -> bool:
     """Desfaz, numa transação, o próximo bloco do que o lote gravou: os lançamentos e, depois
-    deles, os parcelamentos. Devolve quantos viu."""
-    vistos = 0
-    for antes in conn.execute(
+    deles, os parcelamentos, cada parte pesando como um lançamento. Devolve se o bloco encheu, e
+    então pode haver mais."""
+    peso = 0
+    lancamentos = conn.execute(
         "SELECT lancamento_id, versao, categoria_ids_antes, tag_ids_antes,"
         " item_categoria_id_antes, item_atual_categoria_id_antes FROM edicao_em_lote_lancamentos"
         " WHERE lote_id = %s AND resultado_do_desfazer IS NULL ORDER BY lancamento_id LIMIT %s",
         (lote_id, POR_TRANSACAO),
-    ).fetchall():
+    ).fetchall()
+    pesos = _pesos_das_partes(conn, lote_id, [antes[0] for antes in lancamentos])
+    for antes in lancamentos:
+        do_lancamento = 1 + pesos.get(antes[0], 0)
+        if peso and peso + do_lancamento > POR_TRANSACAO:
+            return True
         conn.execute(
             "UPDATE edicao_em_lote_lancamentos SET resultado_do_desfazer = %s"
             " WHERE lote_id = %s AND lancamento_id = %s",
@@ -1196,31 +1243,35 @@ def _desfazer_bloco(conn, lote_id: UUID, usuario: str, momento: datetime) -> int
                 antes[0],
             ),
         )
-        vistos += 1
-    for registro in conn.execute(
+        peso += do_lancamento
+    if len(lancamentos) == POR_TRANSACAO:
+        return True
+    parcelamentos = conn.execute(
         "SELECT parcelamento_id, categoria_ids_antes, tag_ids_antes, item_categoria_id_antes,"
         " categoria_ids_depois, tag_ids_depois FROM edicao_em_lote_parcelamentos"
         " WHERE lote_id = %s AND resultado_do_desfazer IS NULL ORDER BY parcelamento_id LIMIT %s",
-        (lote_id, POR_TRANSACAO - vistos),
-    ).fetchall():
+        (lote_id, max(1, POR_TRANSACAO - peso)),
+    ).fetchall()
+    pesos = _pesos_das_partes(conn, lote_id, [registro[0] for registro in parcelamentos])
+    for registro in parcelamentos:
+        do_parcelamento = 1 + pesos.get(registro[0], 0)
+        if peso and peso + do_parcelamento > POR_TRANSACAO:
+            return True
         conn.execute(
             "UPDATE edicao_em_lote_parcelamentos SET resultado_do_desfazer = %s"
             " WHERE lote_id = %s AND parcelamento_id = %s",
             (_desfazer_parcelamento(conn, lote_id, registro), lote_id, registro[0]),
         )
-        vistos += 1
-    return vistos
+        peso += do_parcelamento
+    return peso >= POR_TRANSACAO
 
 
 def _voltar(url: str | None, lote_id: UUID, usuario: str) -> None:
     """Desfaz, em blocos, tudo o que o lote gravou e ainda não foi desfeito; parado no meio,
     chamar de novo continua de onde parou."""
     momento = datetime.now(UTC)
-    while (
-        em_transacao(
-            url, partial(_desfazer_bloco, lote_id=lote_id, usuario=usuario, momento=momento)
-        )
-        == POR_TRANSACAO
+    while em_transacao(
+        url, partial(_desfazer_bloco, lote_id=lote_id, usuario=usuario, momento=momento)
     ):
         pass
 
@@ -1324,11 +1375,17 @@ class _Gravacao(NamedTuple):
 
 def _blocos(mudam: list[_Muda]) -> list[list[UUID]]:
     """Os lançamentos em blocos de uma transação: cada parte de uma compra pesa como um
-    lançamento, porque grava as ligações e o registro do desfazer dela."""
+    lançamento, porque grava as ligações e o registro do desfazer dela; o mesmo vale para as partes
+    do parcelamento, na primeira parcela dele."""
     blocos: list[list[UUID]] = []
     peso = 0
+    vistos: set[UUID] = set()
     for m in mudam:
         do_lancamento = 1 + len(m.lancamento.partes)
+        # O parcelamento muda uma vez, com a primeira parcela dele: as partes dele pesam nela.
+        if m.lancamento.parcelamento_id and m.lancamento.parcelamento_id not in vistos:
+            vistos.add(m.lancamento.parcelamento_id)
+            do_lancamento += len(m.lancamento.partes)
         if not blocos or peso + do_lancamento > POR_TRANSACAO:
             blocos.append([])
             peso = 0
