@@ -430,7 +430,7 @@ def _partes_achadas(
     return achadas
 
 
-def _posicoes_na_regra(partes: list[Parte], parcela: Lancamento, ids: set[UUID]) -> set[int]:
+def _posicoes_no_parcelamento(partes: list[Parte], parcela: Lancamento, ids: set[UUID]) -> set[int]:
     """As posições, nas partes do parcelamento, das partes da parcela que estão em `ids`. A parte
     que nasceu do parcelamento vale pelo id (`id_na_parcela`); a refeita "só esta" vale pela
     descrição e pela pessoa, se só uma de cada lado tem o par (a ordem e a quantidade da parcela
@@ -458,7 +458,7 @@ def _posicoes_na_regra(partes: list[Parte], parcela: Lancamento, ids: set[UUID])
         iguais = [j for j in sem_par if chave(partes[j]) == chave(partes[i])]
         if len(pares) == 1 and len(iguais) == 1:
             achou = pares[0]
-        elif pares and por_posicao:
+        elif por_posicao:
             achou = parcela.partes[i]
         else:
             continue
@@ -470,8 +470,8 @@ def _posicoes_na_regra(partes: list[Parte], parcela: Lancamento, ids: set[UUID])
 def _partes_do_parcelamento_achadas(
     partes: list[Parte], parcela: Lancamento, achadas: set[UUID]
 ) -> list[Parte]:
-    """As partes do parcelamento que a busca achou numa parcela (`_posicoes_na_regra`)."""
-    return [partes[i] for i in sorted(_posicoes_na_regra(partes, parcela, achadas))]
+    """As partes do parcelamento que a busca achou numa parcela (`_posicoes_no_parcelamento`)."""
+    return [partes[i] for i in sorted(_posicoes_no_parcelamento(partes, parcela, achadas))]
 
 
 def _itens_por_mes(conn, meses: set[date]) -> dict[date, set[UUID]]:
@@ -514,7 +514,7 @@ class _Muda:
     partes: list[Parte] = field(default_factory=list)
     nas_partes: set[UUID] = field(default_factory=set)
     # Na parcela, as posições dessas partes nas partes do parcelamento.
-    na_regra: set[int] = field(default_factory=set)
+    no_parcelamento: set[int] = field(default_factory=set)
 
     @property
     def partes_sem_categoria(self) -> int:
@@ -573,7 +573,9 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
             regras[l.parcelamento_id] = r.partes if (r := ler_um(conn, l.parcelamento_id)) else []
         muda, outro_tipo = _o_que_muda(mudancas, l, achadas)
         if muda and l.parcelamento_id and l.partes:
-            muda.na_regra = _posicoes_na_regra(regras[l.parcelamento_id], l, muda.nas_partes)
+            muda.no_parcelamento = _posicoes_no_parcelamento(
+                regras[l.parcelamento_id], l, muda.nas_partes
+            )
         de_outro_tipo += outro_tipo
         if not muda:
             # A parcela cujas partes a busca não achou não foi pedida: não "já está como pedido".
@@ -595,7 +597,7 @@ def _planejar(conn, pedido: PedidoDeEdicaoEmLote) -> _Plano:
         sem_categoria,
         partes_sem_categoria,
         achadas,
-        {id: len(partes) for id, partes in regras.items() if partes},
+        {dono: len(partes) for dono, partes in regras.items() if partes},
     )
 
 
@@ -650,7 +652,9 @@ def _partes_que_mudam(mudam: list[_Muda]) -> int:
     do_parcelamento: dict[UUID, set[int]] = {}
     for m in mudam:
         if m.lancamento.parcelamento_id and m.lancamento.partes:
-            do_parcelamento.setdefault(m.lancamento.parcelamento_id, set()).update(m.na_regra)
+            do_parcelamento.setdefault(m.lancamento.parcelamento_id, set()).update(
+                m.no_parcelamento
+            )
         else:
             avulsas += len(m.nas_partes)
     return avulsas + sum(len(posicoes) for posicoes in do_parcelamento.values())

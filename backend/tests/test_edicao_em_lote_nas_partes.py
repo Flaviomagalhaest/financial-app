@@ -645,3 +645,25 @@ def test_o_bloco_da_aplicacao_pesa_as_partes_do_parcelamento_mesmo_com_parcelas_
     # A 1ª parcela vista pesa três (ela e as duas partes do parcelamento), as outras, uma cada: cabem duas
     # no bloco de quatro.
     assert por_bloco == [2, 1]
+
+
+def test_na_busca_a_parcela_so_esta_com_a_descricao_renomeada_e_mesma_quantidade_vale_pela_posicao(
+    casal: Casal, categorias
+):
+    roupa, _, casa = categorias
+    criado = parcelado(
+        casal,
+        casal.conta(),
+        [parte([roupa], 20000, descricao="Roupa"), parte([casa], 10000, descricao="Casa")],
+    ).json()
+    [_, segunda, _] = parcelas(casal, criado["id"])
+    renomeadas = [parte([roupa], 7000, descricao="Camisa"), parte([casa], 3000, descricao="Sofá")]
+    editar_so_nela(casal, segunda, partes=renomeadas)
+    mudanca = {"tags": {"acao": "acrescentar", "tags": ["loja"]}}
+
+    vista = previa(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+    aplicada(casal, {"busca": {"categoria_ids": [casa]}}, **mudanca)
+
+    assert (vista["mudam"], vista["partes_que_mudam"]) == (3, 1)
+    [_, segunda_agora, _] = parcelas(casal, criado["id"])
+    assert [p["tags"] for p in segunda_agora["partes"]] == [[], ["loja"]]

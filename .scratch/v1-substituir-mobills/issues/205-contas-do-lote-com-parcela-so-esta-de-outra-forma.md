@@ -27,3 +27,5 @@ Origem: revisão do [ticket 202](202-contas-da-edicao-em-lote-com-partes.md): o 
 ## Feito
 
 `_posicoes_na_regra` casa a parte "só esta" com a do parcelamento pelo id derivado, ou pela descrição e pessoa quando só uma de cada lado tem o par (sem distinguir e com a mesma quantidade, pela posição). `_partes_que_mudam` conta pelas posições assim casadas e `_blocos` pesa o parcelamento pelas partes dele (`_Plano.partes_do_parcelamento`).
+
+Limite conhecido: com quantidade de partes diferente, a parte "só esta" sem par único por descrição e pessoa fica de fora da busca (sem aviso). Não há teste do parcelamento misto (parcelas com e sem partes juntas): o teste cobre o parcelamento com partes e todas as parcelas sem elas.
