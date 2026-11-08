@@ -534,6 +534,34 @@ svg.icone {
   white-space: nowrap;
 }
 
+/* Celular (ticket 211): só ícones de 24 px, centralizados na altura da barra; o marcado leva uma pílula atrás. */
+.abas a:not(.novo) {
+  justify-content: center;
+  min-height: 3.5rem;
+  padding: 0;
+}
+
+.abas a:not(.novo) .nome-da-aba {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.abas a:not(.novo) svg {
+  box-sizing: content-box;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0.375rem 1rem;
+  border-radius: var(--raio-pilula);
+}
+
+.abas a:not(.novo)[aria-current="page"] svg {
+  background: var(--destaque-suave);
+}
+
 /* O + vem primeiro no código (primeiro no teclado); no celular, as duas primeiras abas passam à frente dele. */
 .abas a:nth-child(-n + 3):not(.novo) {
   order: -1;
@@ -588,6 +616,27 @@ svg.icone {
     padding: 0.625rem var(--espaco-3);
     font-size: var(--texto-m);
     border-radius: var(--raio-campo);
+  }
+
+  .abas a:not(.novo) {
+    justify-content: flex-start;
+    min-height: 0;
+    padding: 0.625rem var(--espaco-3);
+  }
+
+  .abas a:not(.novo) .nome-da-aba {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+  }
+
+  .abas a:not(.novo) svg,
+  .abas a:not(.novo)[aria-current="page"] svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    background: transparent;
   }
 
   .abas a:hover {
@@ -649,6 +698,36 @@ svg.icone {
     padding-right: 0;
     flex-wrap: wrap;
   }
+}
+
+/* Explorar (ticket 211): cartões de ícone e nome, em duas colunas. */
+.cartoes-explorar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-3);
+}
+
+.cartoes-explorar a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espaco-2);
+  min-height: 6.5rem;
+  padding: var(--espaco-3);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+  color: var(--texto);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.cartoes-explorar svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--destaque);
 }
 
 /* Lançamento: valor em destaque, teclado próprio e fileiras de toque. */
