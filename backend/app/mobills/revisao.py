@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter
 
 from app.mobills import de_para
 from app.mobills.conferencia import Fatura, Mes
-from app.mobills.cruzamento import Cruzamento
+from app.mobills.cruzamento import Cruzamento, chave_do_grupo
 from app.mobills.leitura import centavos, data, texto
 from app.mobills.parcelas import Parcelamento
 
@@ -39,6 +39,10 @@ COLUNA_DO_CARTAO_ESCOLHIDO = "Cartão (escolha)"
 COLUNA_DO_TIPO = "Tipo (corrente, poupanca ou carteira)"
 COLUNA_DO_ARQUIVADO = "Arquivado (sim ou não)"
 DECISOES_DO_PROVAVEL = {"juntar", "separar"}
+COLUNA_DA_DECISAO_DO_GRUPO = "Decisão (descartar ou manter)"
+COLUNA_DA_DECISAO_DA_QUEBRA = "Decisão (avulsas, parcelamento ou descartar duplicada)"
+DECISOES_DA_QUEBRA = {"avulsas", "parcelamento", "descartar duplicada"}
+DECISOES_DO_GRUPO = {"descartar", "manter"}
 
 
 @dataclass
@@ -46,9 +50,16 @@ class Decisoes:
     """O que o dono editou na planilha da rodada anterior."""
 
     provaveis: dict[tuple, str] = field(default_factory=dict)
+    # Por `chave_do_grupo`: 'manter' desfaz o descarte da pendente duplicada.
+    grupos: dict[tuple, str] = field(default_factory=dict)
+    # Por `chave_do_parcelamento`, o que fazer com a sequência quebrada.
+    quebras: dict[tuple, str] = field(default_factory=dict)
     conta: tuple[str, str] | None = None  # nome e tipo
     # Por pasta, os campos de `Cartao`; o dia vem como o dono digitou, para a conferência dizer.
     cartoes: dict[str, dict] = field(default_factory=dict)
+    # Por pasta, a `Última fatura` como o dono deixou: no cartão arquivado, corta as faturas
+    # que o Mobills exportou depois do cancelamento (ticket 216).
+    ultima_fatura: dict[str, str] = field(default_factory=dict)
     de_para: dict[de_para.Chave, tuple[str, str]] = field(default_factory=dict)  # papel e nome
     cartao_dos_parcelamentos: dict[tuple, str] = field(default_factory=dict)
     # Pelo mês e pelo valor: dois ajustes iguais no mesmo mês ficam com a mesma escolha.
@@ -78,6 +89,7 @@ def ler_decisoes(caminho: Path) -> Decisoes:
             "fechamento": _dia_do_mes(linha.get("Dia do fechamento")),
             "vencimento": _dia_do_mes(linha.get("Dia do vencimento")),
         }
+        decisoes.ultima_fatura[texto(linha.get("Pasta"))] = _mes(linha.get("Última fatura"))
     for linha in _linhas(livro, "De-para"):
         chave = (
             texto(linha.get("Tipo")),
@@ -96,6 +108,16 @@ def ler_decisoes(caminho: Path) -> Decisoes:
             texto(linha.get("Primeiro mês")),
         )
         decisoes.cartao_dos_parcelamentos[chave] = texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
+    for linha in _linhas(livro, "Parcelas quebradas"):
+        decisao = texto(linha.get(COLUNA_DA_DECISAO_DA_QUEBRA)).casefold()
+        if decisao in DECISOES_DA_QUEBRA:
+            chave = (
+                texto(linha.get("Descrição")),
+                valor(linha, "Valor"),
+                texto(linha.get("Parcelas")).split(" ")[0],
+                texto(linha.get("Primeiro mês")),
+            )
+            decisoes.quebras[chave] = decisao
     for linha in _linhas(livro, "Ajustes sem cartão"):
         chave = (texto(linha.get("Mês")), valor(linha, "Valor"))
         decisoes.cartao_dos_ajustes[chave] = texto(linha.get(COLUNA_DO_CARTAO_ESCOLHIDO))
@@ -106,6 +128,13 @@ def ler_decisoes(caminho: Path) -> Decisoes:
         if (do_mobills := valor(linha, "Mobills")) is not None:
             chave = (texto(linha.get("Cartão")), texto(linha.get("Mês")))
             decisoes.mobills_por_fatura[chave] = do_mobills
+    for linha in _linhas(livro, "Grupos ambíguos"):
+        decisao = texto(linha.get(COLUNA_DA_DECISAO_DO_GRUPO)).casefold()
+        if decisao in DECISOES_DO_GRUPO:
+            chave = (texto(linha.get("Mês")), texto(linha.get("Descrição")), valor(linha, "Valor"))
+            # Uma linha com 'manter' vale para o grupo inteiro.
+            if decisoes.grupos.get(chave) != "manter":
+                decisoes.grupos[chave] = decisao
     for linha in _linhas(livro, "Pares prováveis"):
         decisao = texto(linha.get(COLUNA_DA_DECISAO)).casefold()
         if decisao in DECISOES_DO_PROVAVEL:
@@ -130,6 +159,13 @@ def _linhas(livro, nome: str) -> list[dict]:
     return [
         dict(zip(cabecalho, valores)) for valores in linhas if any(v is not None for v in valores)
     ]
+
+
+def _mes(valor) -> str:
+    """`AAAA-MM`; o Excel transforma o `2026-04` digitado em data."""
+    if isinstance(valor, date):
+        return f"{valor:%Y-%m}"
+    return texto(valor)
 
 
 def _dia_do_mes(valor) -> int | str | None:
@@ -222,8 +258,10 @@ def aba_pares_provaveis(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
     return cabecalho, linhas
 
 
-def aba_grupos_ambiguos(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
-    """Um par por linha; o lado que sobrou fica em branco."""
+def aba_grupos_ambiguos(
+    cruzamento: Cruzamento, decisoes: dict[tuple, str]
+) -> tuple[list[str], list[list]]:
+    """Um par por linha; o lado que sobrou fica em branco. A decisão do dono vale para o grupo."""
     cabecalho = [
         COLUNA_DA_PASTA,
         "Mês",
@@ -235,11 +273,15 @@ def aba_grupos_ambiguos(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
         "Linha no arquivo",
         "Tags no geral",
         "Situação no geral",
+        "Resultado",
+        COLUNA_DA_DECISAO_DO_GRUPO,
     ]
     linhas = []
     for grupo in cruzamento.ambiguos:
-        geral = next(g for _, g in grupo if g is not None)
-        for f, g in grupo:
+        geral = next(x.geral for x in grupo if x.geral is not None)
+        decisao = decisoes.get(chave_do_grupo(geral))
+        for x in grupo:
+            f, g = x.fatura, x.geral
             linhas.append(
                 [
                     f.pasta if f else None,
@@ -252,6 +294,8 @@ def aba_grupos_ambiguos(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
                     g.linha if g else None,
                     ", ".join(g.tags) if g else None,
                     g.situacao if g else None,
+                    x.resultado,
+                    decisao,
                 ]
             )
     return cabecalho, linhas
@@ -268,8 +312,21 @@ def chave_do_parcelamento(parcelamento: Parcelamento) -> tuple:
     )
 
 
-def aba_parcelas_quebradas(parcelamentos: list[Parcelamento]) -> tuple[list[str], list[list]]:
-    cabecalho = ["Descrição", "Valor", "Parcelas", "Primeiro mês", "Último mês", "Cartão", "Motivo"]
+def aba_parcelas_quebradas(
+    quebradas: list[Parcelamento], decisoes: dict[tuple, str]
+) -> tuple[list[str], list[list]]:
+    """As sequências como o export as traz, antes das decisões, para a linha não sumir quando
+    o dono decide."""
+    cabecalho = [
+        "Descrição",
+        "Valor",
+        "Parcelas",
+        "Primeiro mês",
+        "Último mês",
+        "Cartão",
+        "Motivo",
+        COLUNA_DA_DECISAO_DA_QUEBRA,
+    ]
     linhas = [
         [
             p.descricao,
@@ -279,9 +336,9 @@ def aba_parcelas_quebradas(parcelamentos: list[Parcelamento]) -> tuple[list[str]
             p.ultima.mes,
             p.cartao,
             p.quebra,
+            decisoes.get(chave_do_parcelamento(p)),
         ]
-        for p in parcelamentos
-        if p.quebra
+        for p in quebradas
     ]
     return cabecalho, linhas
 

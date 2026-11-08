@@ -24,6 +24,15 @@ class Provavel:
     decisao: str | None  # do dono na planilha: 'juntar', 'separar' ou ainda aberto
 
 
+@dataclass(frozen=True)
+class LinhaDoGrupo:
+    """Uma linha de um grupo ambíguo: o par, ou o lado que sobrou, e o que aconteceu com ela."""
+
+    fatura: LinhaDeFatura | None
+    geral: LinhaDoGeral | None
+    resultado: str  # 'par', 'descartada' (a duplicada do Mobills, que não entra) ou 'sem par'
+
+
 @dataclass
 class Cruzamento:
     pares: list[Par] = field(default_factory=list)
@@ -33,10 +42,9 @@ class Cruzamento:
     fatura_sem_par: list[LinhaDeFatura] = field(default_factory=list)
     geral_sem_par: list[LinhaDoGeral] = field(default_factory=list)
     # Grupos de mesma chave em que as linhas do geral diferem nas tags ou na situação: casaram
-    # na ordem, mas outra ordem daria outro resultado. Cada item é um par do grupo.
-    ambiguos: list[list[tuple[LinhaDeFatura | None, LinhaDoGeral | None]]] = field(
-        default_factory=list
-    )
+    # na ordem, mas outra ordem daria outro resultado. Quando a diferença é a situação, a fatura
+    # casa primeiro com a paga e a pendente que sobra é a duplicada do Mobills (ticket 216).
+    ambiguos: list[list[LinhaDoGrupo]] = field(default_factory=list)
 
 
 def chave_do_provavel(fatura: LinhaDeFatura, geral: LinhaDoGeral) -> tuple:
@@ -52,10 +60,16 @@ def chave_do_provavel(fatura: LinhaDeFatura, geral: LinhaDoGeral) -> tuple:
     )
 
 
+def chave_do_grupo(geral: LinhaDoGeral) -> tuple:
+    """Mês, descrição e valor (como a fatura, compra positiva): o que a aba mostra do grupo."""
+    return (geral.mes, geral.descricao, -geral.valor_centavos)
+
+
 def cruzar(
     geral: list[LinhaDoGeral],
     faturas: list[LinhaDeFatura],
     decisoes_dos_provaveis: dict[tuple, str] | None = None,
+    grupos_mantidos: set[tuple] | None = None,
 ) -> Cruzamento:
     resultado = Cruzamento()
     # A ordem em que as linhas de um grupo casam: pela data da compra, de qualquer cartão.
@@ -74,7 +88,11 @@ def cruzar(
         ),
     ):
         pares, sobra_da_fatura, sobra_do_geral, ambiguos = _casar_na_ordem(
-            sobra_da_fatura, sobra_do_geral, chave_da_fatura, chave_do_geral
+            sobra_da_fatura,
+            sobra_do_geral,
+            chave_da_fatura,
+            chave_do_geral,
+            grupos_mantidos or set(),
         )
         resultado.pares.extend(Par(f, g, como) for f, g in pares)
         resultado.ambiguos.extend(ambiguos)
@@ -114,6 +132,7 @@ def _casar_na_ordem(
     geral: list[LinhaDoGeral],
     chave_da_fatura: Callable[[LinhaDeFatura], tuple],
     chave_do_geral: Callable[[LinhaDoGeral], tuple],
+    grupos_mantidos: set[tuple],
 ):
     """Linhas com a mesma chave casam na ordem: a fatura pela data da compra (a ordem de
     `faturas`), o geral pela posição; a sobra de contagem fica sem par. Devolve os pares, as
@@ -127,22 +146,49 @@ def _casar_na_ordem(
     pares = []
     sobra_da_fatura = []
     ambiguos = []
+    usadas = set()
     for chave, linhas in da_fatura.items():
         candidatas = do_geral.get(chave, [])
-        pares.extend(zip(linhas, candidatas))
-        sobra_da_fatura.extend(linhas[len(candidatas) :])
-        if len(candidatas) > 1 and len({(g.tags, g.situacao) for g in candidatas}) > 1:
-            tamanho = max(len(linhas), len(candidatas))
-            ambiguos.append(
-                [
-                    (
-                        linhas[i] if i < len(linhas) else None,
-                        candidatas[i] if i < len(candidatas) else None,
-                    )
-                    for i in range(tamanho)
-                ]
-            )
-    usadas = {g.posicao for _, g in pares}
+        ambiguo = len(candidatas) > 1 and len({(g.tags, g.situacao) for g in candidatas}) > 1
+        if (
+            ambiguo
+            and len({g.situacao for g in candidatas}) > 1
+            and chave_do_grupo(candidatas[0]) not in grupos_mantidos
+        ):
+            grupo = _sem_as_pendentes_duplicadas(linhas, candidatas)
+        else:
+            grupo = [LinhaDoGrupo(f, g, "par") for f, g in zip(linhas, candidatas)]
+            grupo += [LinhaDoGrupo(f, None, "sem par") for f in linhas[len(candidatas) :]]
+            grupo += [LinhaDoGrupo(None, g, "sem par") for g in candidatas[len(linhas) :]]
+        pares.extend((x.fatura, x.geral) for x in grupo if x.resultado == "par")
+        sobra_da_fatura.extend(x.fatura for x in grupo if x.fatura and x.resultado == "sem par")
+        usadas.update(x.geral.posicao for x in grupo if x.geral and x.resultado != "sem par")
+        if ambiguo:
+            ambiguos.append(grupo)
     ordem = {id(x): i for i, x in enumerate(faturas)}
     sobra_da_fatura.sort(key=lambda x: ordem[id(x)])
     return pares, sobra_da_fatura, [x for x in geral if x.posicao not in usadas], ambiguos
+
+
+def _sem_as_pendentes_duplicadas(
+    linhas: list[LinhaDeFatura], candidatas: list[LinhaDoGeral]
+) -> list[LinhaDoGrupo]:
+    """A fatura casa primeiro com as pagas. A pendente que sobra é a previsão que o Mobills
+    deixou junto da compra paga e é descartada, com a linha de fatura que repete a data e o
+    cartão de uma já casada (o Mobills duplicou as duas). Uma linha de fatura de outra data
+    casa com a pendente, como antes: são duas compras."""
+    pagas = [g for g in candidatas if g.situacao != "Pendente"]
+    pendentes = [g for g in candidatas if g.situacao == "Pendente"]
+    grupo = [LinhaDoGrupo(f, g, "par") for f, g in zip(linhas, pagas)]
+    casadas = {(x.fatura.pasta, x.fatura.data) for x in grupo}
+    restantes = []
+    for fatura in linhas[len(pagas) :]:
+        if pendentes and (fatura.pasta, fatura.data) in casadas:
+            grupo.append(LinhaDoGrupo(fatura, pendentes.pop(0), "descartada"))
+        else:
+            restantes.append(fatura)
+    grupo += [LinhaDoGrupo(f, g, "par") for f, g in zip(restantes, pendentes)]
+    grupo += [LinhaDoGrupo(f, None, "sem par") for f in restantes[len(pendentes) :]]
+    grupo += [LinhaDoGrupo(None, g, "descartada") for g in pendentes[len(restantes) :]]
+    grupo += [LinhaDoGrupo(None, g, "sem par") for g in pagas[len(linhas) :]]
+    return grupo

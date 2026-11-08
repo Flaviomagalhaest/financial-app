@@ -17,6 +17,8 @@ class Parcelamento:
     total: int
     lancamentos: list  # as parcelas encontradas, em ordem
     quebra: str | None  # por que a sequência está quebrada, se estiver
+    # O dono mandou tratar a sequência quebrada como um parcelamento só (ticket 216).
+    aceito: bool = False
 
     @property
     def primeira(self):
@@ -29,10 +31,14 @@ class Parcelamento:
     @property
     def do_app(self) -> bool:
         """Vira parcelamento no app: é de despesa, tem 2 parcelas ou mais e a sequência não está
-        quebrada. Os outros (a receita parcelada, o `(1/1)` e a sequência quebrada, que vai para
-        a revisão) entram como lançamentos avulsos, sem gerar o que falta: os pedaços de uma
-        sequência quebrada seriam dois parcelamentos da mesma compra."""
-        return self.primeira.tipo == "despesa" and self.total >= 2 and self.quebra is None
+        quebrada, ou o dono a aceitou na revisão. Os outros (a receita parcelada, o `(1/1)` e a
+        sequência quebrada sem decisão) entram como lançamentos avulsos, sem gerar o que falta:
+        os pedaços de uma sequência quebrada seriam dois parcelamentos da mesma compra."""
+        return (
+            self.primeira.tipo == "despesa"
+            and self.total >= 2
+            and (self.quebra is None or self.aceito)
+        )
 
     @property
     def anteriores(self) -> int:
