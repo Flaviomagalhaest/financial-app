@@ -149,6 +149,10 @@ h2 { margin: 0; font-size: 1.125rem; text-wrap: balance; }
    até a linha de base dos nomes (44 px), com o traço na espessura dos outros ícones (1,65 px na tela). */
 [data-variante="3"] .abas .explorar svg { width: 32.4px; height: 32.4px; margin-top: 2.75px; overflow: visible; }
 [data-variante="3"] .abas .explorar svg rect { vector-effect: non-scaling-stroke; stroke-width: 1.65px; }
+/* Variante 4: todos só com ícone, do mesmo tamanho; o nome vai para o leitor de tela e o marcado ganha uma pílula verde clara. */
+[data-variante="4"] .abas button:not(.novo) { justify-content: center; padding: 0.875rem 2px; }
+[data-variante="4"] .abas button:not(.novo) svg { width: 1.5rem; height: 1.5rem; padding: 0.375rem 0.875rem; box-sizing: content-box; border-radius: 999px; }
+[data-variante="4"] .abas button[aria-current="page"] svg { background: var(--destaque-suave); }
 .oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 svg.i { width: 1.375rem; height: 1.375rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -193,7 +197,7 @@ button:focus-visible { outline: 2px solid var(--destaque); outline-offset: 2px; 
 .seletor button:focus-visible { outline-color: #fff; }
 </style>
 
-<div class="pagina" id="pagina" data-variante="3">
+<div class="pagina" id="pagina" data-variante="4">
   <header class="cabeca">
     <span class="etiqueta">Protótipo · ticket 210</span>
     <h1>Barra de baixo com Explorar</h1>
@@ -220,8 +224,8 @@ button:focus-visible { outline: 2px solid var(--destaque); outline-offset: 2px; 
   <section class="decisoes">
     <h2>O que está decidido</h2>
     <ul>
-      <li><b>Barra do celular:</b> Hoje, Mês, +, Cartões e o ícone de grade, sem nome visível (leitor de tela: "Explorar").</li>
-      <li><b>Ícone:</b> traço, com o peso das outras abas e sem quadrado cheio; o + continua sendo o único destaque. O desenho da grade ocupa a altura de ícone e nome juntos: do alto do traço do ícone do Mês até a linha de base dos nomes (variante 3).</li>
+      <li><b>Barra do celular:</b> Hoje, Mês, +, Cartões e o ícone de grade, todos só com ícone (variante 4); os nomes ficam para o leitor de tela ("Hoje", "Mês", "Novo lançamento", "Cartões", "Explorar").</li>
+      <li><b>Ícones:</b> traço, todos do mesmo tamanho, sem quadrado cheio; o + continua sendo o único destaque. O item marcado fica verde, com uma pílula verde clara atrás do ícone.</li>
       <li><b>Explorar:</b> Histórico, Futuro, Busca, Favoritos, Contas e categorias, Configurações, em grade de 2 colunas, só ícone e nome, sem busca no alto.</li>
       <li><b>Marcação:</b> no celular, toda tela que não é Hoje, Mês, Cartões nem de lançar marca a grade; tocar nela volta à grade. O modelo do planejamento marca Mês.</li>
       <li><b>Endereços:</b> <code style="font-family:var(--mono)">#/historico</code> e <code style="font-family:var(--mono)">#/futuro</code> seguem abrindo as telas; lupa e Menu da conta não mudam.</li>
@@ -231,7 +235,7 @@ button:focus-visible { outline: 2px solid var(--destaque); outline-offset: 2px; 
 
 <nav class="seletor" aria-label="Variante do protótipo">
   <button type="button" id="anterior" aria-label="Variante anterior">‹</button>
-  <span id="rotulo-variante">3 · do alto do ícone à base do nome</span>
+  <span id="rotulo-variante">4 · todos só com ícone</span>
   <button type="button" id="proxima" aria-label="Próxima variante">›</button>
 </nav>
 
@@ -268,8 +272,8 @@ const NA_GRADE = ["historico", "futuro", "busca", "favoritos", "contas-e-categor
 const NA_LATERAL = ["hoje", "mes", "cartoes", "historico", "futuro"];
 
 let rota = "hoje";
-let variante = 3;
-const VARIANTES = { 1: "ícone alinhado aos outros", 2: "ícone centralizado na barra", 3: "do alto do ícone à base do nome" };
+let variante = 4;
+const VARIANTES = { 1: "ícone alinhado aos outros", 2: "ícone centralizado na barra", 3: "do alto do ícone à base do nome", 4: "todos só com ícone" };
 
 /** Regra do celular: Hoje, Mês e Cartões marcam a si; as telas de lançar não marcam nada; o resto marca a grade. */
 function marcadoNoCelular(r) {
@@ -305,7 +309,9 @@ function topo() {
 
 function celular() {
   const m = marcadoNoCelular(rota);
-  const aba = (t) => `<button type="button" data-ir="${t}" ${m === t ? 'aria-current="page"' : ""}>${svg(TELAS[t].icone)}<span>${TELAS[t].nome}</span></button>`;
+  const aba = (t) => variante === 4
+    ? `<button type="button" data-ir="${t}" aria-label="${TELAS[t].nome}" ${m === t ? 'aria-current="page"' : ""}>${svg(TELAS[t].icone)}</button>`
+    : `<button type="button" data-ir="${t}" ${m === t ? 'aria-current="page"' : ""}>${svg(TELAS[t].icone)}<span>${TELAS[t].nome}</span></button>`;
   const novo = rota === "novo" ? `<span style="flex:1"></span>` : `<button type="button" class="novo" data-ir="novo"><span>${svg("mais")}</span><span class="oculto">Novo lançamento</span></button>`;
   const grade = variante === 3 ? `<svg class="i" viewBox="3.5 3.5 17 17" aria-hidden="true">${ICONES.grade}</svg>` : svg("grade");
   const explorar = `<button type="button" class="explorar" data-ir="explorar" aria-label="Explorar" ${m === "explorar" ? 'aria-current="page"' : ""}>${grade}</button>`;
@@ -336,7 +342,7 @@ document.addEventListener("click", (e) => {
   rota = alvo.dataset.ir;
   desenhar();
 });
-const trocar = (passo) => { variante = ((variante - 1 + passo + 3) % 3) + 1; desenhar(); };
+const trocar = (passo) => { variante = ((variante - 1 + passo + 4) % 4) + 1; desenhar(); };
 document.getElementById("anterior").addEventListener("click", () => trocar(-1));
 document.getElementById("proxima").addEventListener("click", () => trocar(1));
 document.addEventListener("keydown", (e) => {
