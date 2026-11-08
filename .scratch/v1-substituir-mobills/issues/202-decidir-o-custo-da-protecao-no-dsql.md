@@ -1,8 +1,8 @@
 # Decidir se o custo da proteção da fatura paga no DSQL pesa
 
 Type: decision
-Status: claimed
-Blocked by: [201](201-conferencia-sem-gravar-usa-savepoint-no-dsql.md)
+Status: resolved
+Blocked by: —
 Skills: `grilling`, `domain-modeling` se virar ADR; HITL (decisão do dono)
 Modelo recomendado: Sonnet
 Effort recomendado: low
@@ -11,5 +11,5 @@ Origem: [ticket 130](130-medir-a-protecao-da-fatura-paga-no-dsql.md): no DSQL a 
 
 ## Checklist
 
-- [ ] Medir a correção do parcelamento longo com `DSQL_TESTE=1 uv run python medir_fatura_paga.py` depois do 201
-- [ ] Decidir se pesa; se sim, conferir só os titulares tocados pela gravação, ou só as faturas fechadas, mantendo `backend/tests/test_fatura_paga.py` (vira ticket de implementação)
+- [ ] (movido para o [ticket 206](206-medir-a-correcao-do-longo-no-dsql.md), bloqueado pelo 203) Medir a correção do parcelamento longo com `DSQL_TESTE=1 uv run python medir_fatura_paga.py` depois do 201
+- [x] Decidir se pesa: **decisão do dono (08/11): pesa só no lote**. Lançamento avulso (282 ms a mais) fica como está; o lote (7,9 s a mais, 17,5 s no total, perto do limite de ~30 s do HTTP API) vira o [ticket 205](205-lote-confere-so-os-titulares-tocados.md)
