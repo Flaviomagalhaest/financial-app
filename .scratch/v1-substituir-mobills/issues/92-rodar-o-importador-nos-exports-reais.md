@@ -1,7 +1,7 @@
 # Rodar o importador do Mobills nos exports reais e conferir
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `run` (o dono roda localmente; HITL: só ele tem os exports reais)
 Modelo recomendado: Sonnet
@@ -21,9 +21,9 @@ O dono roda o importador sobre `data/historic/` (fora do git) e cola aqui **só 
 
 - [x] Layout: o geral numa pasta, uma subpasta por cartão com os arquivos `<cartão>_-_<AAAAMM>.xlsx`; se os exports estiverem em outro arranjo, ajustar `backend/app/mobills/leitura.py`
 - [x] Taxa de casamento perto dos 97,7% do [ticket 18](18-importacao-do-mobills-cartao-e-datas.md) (4.618 exatos, 11 só sem a categoria, 2 prováveis, 111 sem par); se ficar longe, diagnosticar a comparação da descrição (hoje sem diferença de maiúsculas e de espaços)
-- [ ] Separador de várias tags: conferir no export real se é a vírgula (`_tags` em `leitura.py` é uma aposta; os exports de teste só tinham uma tag por linha)
+- [x] Separador de várias tags (não confirmável: ticket 218): conferir no export real se é a vírgula (`_tags` em `leitura.py` é uma aposta; os exports de teste só tinham uma tag por linha)
 - [x] A Conferência termina no último mês com lançamento pago: confirmar que é o mês do export (a virada) e que os meses seguintes, só de previstos, podem ficar de fora. O mesmo mês decide os pendentes avulsos descartados (ticket 68): se o export sair num dia em que o mês corrente ainda não tem nada pago, os pendentes desse mês entram como previstos
-- [ ] Parcelas (ticket 68): contar as sequências quebradas, que entram como lançamentos avulsos, sem parcelamento e sem gerar as que faltam (o limite não conta as previstas delas como parcelas futuras); as parcelas de um parcelamento de cartão sem fatura em mês já exportado, que ficam na conta enquanto o parcelamento fica no cartão; e se o centavo da divisão aparece (a parcela gerada copia o valor da última que veio)
+- [x] Parcelas (ticket 68; o centavo e as parcelas de cartão sem fatura vão para o ticket 218): contar as sequências quebradas, que entram como lançamentos avulsos, sem parcelamento e sem gerar as que faltam (o limite não conta as previstas delas como parcelas futuras); as parcelas de um parcelamento de cartão sem fatura em mês já exportado, que ficam na conta enquanto o parcelamento fica no cartão; e se o centavo da divisão aparece (a parcela gerada copia o valor da última que veio)
 - [x] Ajustes sem cartão (ticket 68): se aparecem e se há dois reajustes iguais no mesmo mês, que dividem a escolha do cartão
 - [x] Dono preenche a coluna Mobills da Conferência (13 meses) e das Faturas (17) em alguns meses, roda de novo e confere a diferença e o "Por quê"
 - [x] Dono diz se as abas Grupos ambíguos e Parcelas quebradas bastam como informação ou se precisam de uma coluna de decisão (hoje só informam: o ticket 18 manda o grupo e a sequência "para a revisão" sem dizer o que o dono decide); se precisar, vira ticket
@@ -53,3 +53,10 @@ Rodado em 2026-11-08 pelo agente, na máquina do dono, sobre `data/historic/` (f
 - ~~Faturas~~: o dono preencheu 17 (16 com diferença 0; a do Personnalite 2023-11 é o duplicado do Mobills, ticket 217).
 - ~~Dizer se as abas bastam~~: o dono disse que **precisam de decisão**; vira o [ticket 216](216-importador-do-mobills-decisao-para-grupos-ambiguos-e-parcelas-quebradas.md).
 - Dizer se os 342 de parcelas quebradas são esperados (compras avulsas lançadas como parcelas em meses fora dos exports) ou sinal de problema em `parcelas.py`.
+
+### Pendências gravadas
+
+- [ticket 215](215-importador-do-mobills-deixar-de-fora-os-lancamentos-ignorados.md): lançamentos ignorados no Mobills.
+- [ticket 216](216-importador-do-mobills-decisao-para-grupos-ambiguos-e-parcelas-quebradas.md): decisão nos grupos ambíguos e nas parcelas quebradas (342).
+- [ticket 217](217-importador-do-mobills-linha-de-fatura-duplicada-pelo-mobills.md): linha de fatura duplicada pelo Mobills.
+- [ticket 218](218-importador-do-mobills-premissas-que-o-export-real-nao-confirmou.md): tags, centavo e parcelas de cartão sem fatura.
