@@ -1,7 +1,7 @@
 # Mês no celular fica mais largo que a tela e desloca a barra de baixo
 
 Type: bug
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `tdd`, `implement`; apoio: `run`, `diagnosing-bugs` se a correção não bastar no aparelho
 Modelo recomendado: Sonnet
