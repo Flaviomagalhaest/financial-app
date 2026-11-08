@@ -1,7 +1,7 @@
 # Decidir se o custo da proteção da fatura paga no DSQL pesa
 
 Type: decision
-Status: ready-for-human
+Status: claimed
 Blocked by: [201](201-conferencia-sem-gravar-usa-savepoint-no-dsql.md)
 Skills: `grilling`, `domain-modeling` se virar ADR; HITL (decisão do dono)
 Modelo recomendado: Sonnet
