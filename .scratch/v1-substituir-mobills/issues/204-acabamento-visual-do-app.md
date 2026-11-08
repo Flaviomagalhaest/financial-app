@@ -24,10 +24,10 @@ Decidir com o dono a direção visual (protótipo) e aplicar: estilo de link, ba
 
 ## Checklist
 
-- [ ] Grilling com o dono: referência visual, o que incomoda mais, escopo da primeira rodada (rodada 1 respondida em 08/11; faltam Q1, Q2, Q6 e Q7, que o dono quer ver no protótipo)
-- [ ] Protótipo (`prototype`) da casca e de duas telas, aprovado pelo dono
-- [ ] Estilo de link e de barra lateral corrigidos na web e no celular
-- [ ] Tipografia, espaçamento, botões e cartões em tokens no `estilo.css`
+- [x] Grilling com o dono: referência visual, o que incomoda mais, escopo da primeira rodada (três rodadas, em `## Comments`)
+- [x] Protótipo (`prototype`) da casca e de duas telas, aprovado pelo dono (branch `prototipo/204-acabamento-visual`)
+- [x] Estilo de link e de barra lateral corrigidos na web e no celular
+- [x] Tipografia, espaçamento, botões e cartões em tokens no `estilo.css`
 - [ ] Revisão tela a tela com capturas antes e depois; specs e verificações do projeto verdes; PR para `main`
 
 ## Comments
@@ -76,3 +76,14 @@ Respostas (todas aceitas):
 - **Q20**: a pílula de contas mostra **"N contas"**.
 
 Protótipo aprovado nesta forma (versão 3). Próximo passo: implementar.
+
+### 08/11: implementação
+
+- Casca: topo verde no celular (branco na tela larga) com a lupa e o menu da conta; abas com ícones de linha; botão + no meio da barra (no alto da lateral na tela larga), que some nas telas de lançar.
+- Inter embutida no build (`web/src/fontes/`, licença OFL), cacheada pelo service worker com o resto da casca.
+- Faixa verde em Hoje (ainda dá para gastar, trilho e atalhos), Mês (navegação e despesas × planejamento; no mês passado, o fechamento), Cartões (limite usado de cada cartão) e Fatura (total, vencimento, a pagar). O resto em cartões.
+- Atalhos da faixa: favoritos, fatura que vence (ou cartões) e contas; interruptor "Atalhos na faixa verde" em Configurações › Tela Hoje, guardado no aparelho (`web/src/hoje/atalhosDaFaixa.ts`). Teste: `web/e2e/atalhos-da-faixa.spec.ts`.
+- Menu da linha (⋯) em Histórico, Fatura, itens do Mês e Contas e categorias; tocar na linha abre o item. Os testes e2e abrem o ⋯ antes da ação.
+- Corrigidos da lista das capturas: Mês com 601 px no celular, barras de progresso azuis, fileiras de fichas sem sinal de rolagem (somem na borda enquanto há mais), eixo do Futuro sem o ano (e rótulos sobrepostos no celular), tabela sem sinal de rolagem lateral (sombra na borda).
+- Por decisão (Q14), Novo lançamento não marca aba: o + some lá dentro.
+- Sobras registradas no [ticket 208](208-acabamento-visual-sobras.md). Vocabulário novo no `GLOSSARY.md` (Telas).

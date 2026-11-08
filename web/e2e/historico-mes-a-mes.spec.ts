@@ -99,6 +99,7 @@ test("excluir um lançamento do mês lido do servidor tira a linha na hora", asy
   await rolarAte(page, linha("Geladeira"));
 
   page.once("dialog", (d) => void d.accept());
+  await linha("Geladeira").getByLabel(/^Mais ações/).click();
   await linha("Geladeira").getByRole("button", { name: /^Excluir/ }).click();
   await expect(linha("Geladeira")).toHaveCount(0);
 });
