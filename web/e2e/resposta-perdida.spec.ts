@@ -67,6 +67,7 @@ for (const perder of ["resposta", "recarga"] as const) {
   test(`excluir ao reabrir, sobre a edição sem ${perder}, não vira conflito`, async ({ page }) => {
     const { linha, descricao, soltar, api } = await editarSemResposta(page, perder);
     page.once("dialog", (dialogo) => void dialogo.accept());
+    await linha.getByLabel(`Mais ações ${descricao}`).click();
     await linha.getByRole("button", { name: `Excluir ${descricao}` }).click();
     await expect(linha).toHaveCount(0);
     await soltar();
@@ -140,6 +141,7 @@ for (const sair of ["recarga", "aba fechada"] as const) {
     expect(await noServidor()).toBe(true);
 
     page.once("dialog", (dialogo) => void dialogo.accept());
+    await linha.getByLabel(`Mais ações ${descricao}`).click();
     await linha.getByRole("button", { name: `Excluir ${descricao}` }).click();
     await expect(linha).toHaveCount(0);
     await soltar();

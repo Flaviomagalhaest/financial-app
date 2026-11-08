@@ -143,6 +143,7 @@ test("a exclusão vence a edição, com aviso e 'Lançar de novo'", async ({ pag
   await context.setOffline(true);
   await editarValor(page, descricao, "7");
   dela.once("dialog", (dialogo) => void dialogo.accept());
+  await linha(dela, descricao).getByLabel(`Mais ações ${descricao}`).click();
   await linha(dela, descricao).getByRole("button", { name: `Excluir ${descricao}` }).click();
   await expect(linha(dela, descricao)).toHaveCount(0);
   await esperarNoServidor(dela, descricao);
@@ -171,6 +172,7 @@ test("excluir o que a outra pessoa mudou depois pergunta antes", async ({ page, 
   await expect(linha(dela, descricao)).not.toContainText("não enviado");
   await esperarNoServidor(dela, descricao, 1005);
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await linha(page, descricao).getByLabel(`Mais ações ${descricao}`).click();
   await linha(page, descricao).getByRole("button", { name: `Excluir ${descricao}` }).click();
   await expect(linha(page, descricao)).toHaveCount(0);
   await context.setOffline(false);

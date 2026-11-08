@@ -72,6 +72,7 @@ test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ pa
 
   // Exclui pela lista, com confirmação.
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await linha.getByLabel(`Mais ações Jantar ${s}`).click();
   await linha.getByRole("button", { name: `Excluir Jantar ${s}` }).click();
   await expect(linha).toHaveCount(0);
   await page.reload();
@@ -110,6 +111,7 @@ test("contas e categorias: cria, renomeia e arquiva categorias, e a arquivada sa
   await cadastrar(page, "Nova categoria", transferencia, "transferencia");
 
   // Renomeia: o nome novo vale também depois de recarregar.
+  await page.getByLabel(`Mais ações ${despesa}`).click();
   await page.getByRole("button", { name: `Renomear ${despesa}` }).click();
   await page.getByLabel(`Novo nome de ${despesa}`).fill(renomeada);
   await page.getByRole("button", { name: "Salvar nome" }).click();
@@ -119,14 +121,18 @@ test("contas e categorias: cria, renomeia e arquiva categorias, e a arquivada sa
   await expect(page.getByRole("listitem").filter({ hasText: renomeada })).toBeVisible();
 
   // Arquivada some do novo lançamento; desarquivada volta.
+  await page.getByLabel(`Mais ações ${renomeada}`).click();
   await page.getByRole("button", { name: `Arquivar ${renomeada}` }).click();
+  await page.getByLabel(`Mais ações ${renomeada}`).click();
   await expect(page.getByRole("button", { name: `Desarquivar ${renomeada}` })).toBeVisible();
   await page.goto("/#/novo");
   await expect(page.getByRole("button", { name: renomeada })).toHaveCount(0);
   await page.getByRole("button", { name: "Receita" }).click();
   await expect(page.getByRole("button", { name: receita })).toBeVisible();
   await page.goto("/#/contas-e-categorias");
+  await page.getByLabel(`Mais ações ${renomeada}`).click();
   await page.getByRole("button", { name: `Desarquivar ${renomeada}` }).click();
+  await page.getByLabel(`Mais ações ${renomeada}`).click();
   await expect(page.getByRole("button", { name: `Arquivar ${renomeada}`, exact: true })).toBeVisible();
   await page.goto("/#/novo");
   await expect(page.getByRole("button", { name: renomeada })).toBeVisible();
@@ -154,6 +160,7 @@ test("contas: cria com saldo de abertura, renomeia e arquiva, e a arquivada sai 
   await expect(linha).toContainText("R$ 1.234,56");
   await cadastrar(page, "Nova categoria", categoria, "despesa");
 
+  await page.getByLabel(`Mais ações ${conta}`).click();
   await page.getByRole("button", { name: `Editar ${conta}` }).click();
   await page.getByLabel(`Novo nome de ${conta}`).fill(renomeada);
   await page.getByRole("button", { name: "Salvar conta" }).click();
@@ -163,7 +170,9 @@ test("contas: cria com saldo de abertura, renomeia e arquiva, e a arquivada sai 
   await page.goto("/#/novo");
   await expect(page.getByRole("button", { name: renomeada })).toBeVisible();
   await page.goto("/#/contas-e-categorias");
+  await page.getByLabel(`Mais ações ${renomeada}`).click();
   await page.getByRole("button", { name: `Arquivar conta ${renomeada}` }).click();
+  await page.getByLabel(`Mais ações ${renomeada}`).click();
   await expect(page.getByRole("button", { name: `Desarquivar conta ${renomeada}` })).toBeVisible();
   await page.goto("/#/novo");
   await expect(page.getByRole("button", { name: renomeada })).toHaveCount(0);
@@ -191,8 +200,10 @@ test("a leitura das contas que saiu antes de arquivar e chega depois não desfaz
   );
   await page.goto("/#/novo");
   await page.goto("/#/contas-e-categorias");
+  await page.getByLabel(`Mais ações ${conta}`).click();
   await page.getByRole("button", { name: `Arquivar conta ${conta}` }).click();
   const desarquivar = page.getByRole("button", { name: `Desarquivar conta ${conta}` });
+  await page.getByLabel(`Mais ações ${conta}`).click();
   await expect(desarquivar).toBeVisible();
   await expect.poll(() => entregue).toBe(true);
 
@@ -200,6 +211,7 @@ test("a leitura das contas que saiu antes de arquivar e chega depois não desfaz
   await context.setOffline(true);
   await page.goto("/#/novo");
   await page.goto("/#/contas-e-categorias");
+  await page.getByLabel(`Mais ações ${conta}`).click();
   await expect(desarquivar).toBeVisible();
 });
 

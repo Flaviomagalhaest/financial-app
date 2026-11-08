@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import { api } from "../api/cliente";
 import { atualizadoAs, useCadastro, useConexao, useContasComArquivadas, useTagsComArquivadas, type Categoria, type Conta, type ContaNaTela, type RecorrenciaNaTela } from "../dados";
 import { emCentavos, formatarCentavos } from "../lancamentos/dinheiro";
@@ -280,7 +281,7 @@ function LinhaDeConta({
     );
   }
   return (
-    <li className={conta.arquivada ? "arquivada" : undefined}>
+    <li className={`linha-com-menu${conta.arquivada ? " arquivada" : ""}`}>
       <div>
         <span>
           {conta.nome}
@@ -291,10 +292,11 @@ function LinhaDeConta({
           {conta.saldoNaoEnviado && " ⏳"}
         </span>
       </div>
-      <div className="acoes">
+      <MenuDeAcoes rotulo={`Mais ações ${conta.nome}`}>
         <button
           type="button"
           className="secundario"
+          aria-label={`Editar ${conta.nome}`}
           onClick={() => {
             setNome(conta.nome);
             setTipo(conta.tipo);
@@ -303,12 +305,12 @@ function LinhaDeConta({
             setEditando(true);
           }}
         >
-          Editar {conta.nome}
+          Editar
         </button>
-        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
-          {conta.arquivada ? "Desarquivar" : "Arquivar"} conta {conta.nome}
+        <button type="button" className="secundario" disabled={arquivar.esperando} aria-label={`${conta.arquivada ? "Desarquivar" : "Arquivar"} conta ${conta.nome}`} onClick={arquivar.tocar}>
+          {conta.arquivada ? "Desarquivar" : "Arquivar"}
         </button>
-      </div>
+      </MenuDeAcoes>
       {arquivar.painel}
     </li>
   );
@@ -366,34 +368,35 @@ function LinhaDeItem({
     );
   }
   return (
-    <li className={item.arquivada ? "arquivada" : undefined}>
+    <li className={`linha-com-menu${item.arquivada ? " arquivada" : ""}`}>
       <div>
         {item.nome}
         {item.arquivada && " (arquivada)"}
       </div>
-      <div className="acoes">
+      <MenuDeAcoes rotulo={`Mais ações ${item.nome}`}>
         <button
           type="button"
           className="secundario"
+          aria-label={`Renomear ${item.nome}`}
           onClick={() => {
             setNome(item.nome);
             setEditando(true);
           }}
         >
-          Renomear {item.nome}
+          Renomear
         </button>
-        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
-          {item.arquivada ? "Desarquivar" : "Arquivar"} {item.nome}
-        </button>
-        <button type="button" className="secundario" onClick={() => void manutencao.excluir(item.id)}>
-          Excluir {item.nome}
+        <button type="button" className="secundario" disabled={arquivar.esperando} aria-label={`${item.arquivada ? "Desarquivar" : "Arquivar"} ${item.nome}`} onClick={arquivar.tocar}>
+          {item.arquivada ? "Desarquivar" : "Arquivar"}
         </button>
         {destinos.length > 0 && !juntando && (
-          <button type="button" className="secundario" onClick={() => setJuntando(true)}>
-            Juntar {item.nome}
+          <button type="button" className="secundario" aria-label={`Juntar ${item.nome}`} onClick={() => setJuntando(true)}>
+            Juntar em outra
           </button>
         )}
-      </div>
+        <button type="button" className="secundario perigo" aria-label={`Excluir ${item.nome}`} onClick={() => void manutencao.excluir(item.id)}>
+          Excluir
+        </button>
+      </MenuDeAcoes>
       {arquivar.painel}
       {juntando && (
         <form

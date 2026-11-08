@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import {
   atualizadoAs,
   descartarNaoEnviado,
@@ -163,8 +164,10 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   const linha = (l: LancamentoNaTela) => {
     const titulo = tituloDoLancamento(l, categorias);
     const ligacao = ligacaoDoEstorno(l, estornos, categorias);
-    return (
-      <li key={l.id} id={`lancamento-${l.id}`}>
+    // Tocar na linha abre o lançamento (ticket 204); as outras ações ficam no ⋯.
+    const editavel = !l.conflito && !l.exclusao;
+    const resumo = (
+      <>
         <div>
           <strong>
             {titulo}
@@ -180,6 +183,47 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
           {l.alterada_a_mao && " · alterada à mão"}
           {!l.partes?.length && ` · ${l.pessoa ? nomeDe(l.pessoa) : "conjunto"}`}
         </p>
+      </>
+    );
+    return (
+      <li key={l.id} id={`lancamento-${l.id}`} className="linha-com-menu">
+        {editavel ? (
+          <a className="abre-a-linha" href={`#/novo/${l.id}`} aria-label={`${l.recusa ? "Corrigir" : "Editar"} ${titulo}`}>
+            {resumo}
+          </a>
+        ) : (
+          <div className="abre-a-linha">{resumo}</div>
+        )}
+        <MenuDeAcoes rotulo={`Mais ações ${titulo}`}>
+          {editavel && podeEstornar(l, cartoes, estornos) && (
+            <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${titulo}`}>
+              Estornar
+            </a>
+          )}
+          {editavel &&
+            (l.recusa ? (
+              <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(l)}>
+                Descartar
+              </button>
+            ) : (
+              <button type="button" className="secundario perigo" aria-label={`Excluir ${titulo}`} onClick={() => void excluir(l)}>
+                Excluir
+              </button>
+            ))}
+          <button type="button" className="secundario" aria-label={`Informações ${titulo}`} onClick={() => setInformacoes(informacoes === l.id ? null : l.id)}>
+            Informações
+          </button>
+          {l.recorrencia_id && l.ocorrencia && (!regras || regras.some((r) => r.id === l.recorrencia_id)) && (
+            <a className="botao secundario" href={`#/recorrencia/${l.id}`} aria-label={`Recorrência ${titulo}`}>
+              Recorrência
+            </a>
+          )}
+          {l.parcelamento_id && !l.naoEnviado && (
+            <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
+              Parcelamento
+            </a>
+          )}
+        </MenuDeAcoes>
         {!!l.partes?.length && <PartesDaCompra partes={l.partes} categorias={categorias} nomeDe={nomeDe} titulo={titulo} />}
         {l.parece_repetido_de && euId && l.criado_por !== euId && !l.naoEnviado && (
           <div className="aviso" role="group" aria-label={`Parece repetido ${titulo}`}>
@@ -249,58 +293,24 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
         ) : (
           l.naoEnviado && <p className={l.recusa ? "erro" : "vazio"}>{l.recusa ? `⏳ não enviado: ${l.recusa}` : "⏳ não enviado"}</p>
         )}
-        <div className="acoes">
-          {l.conflito ? (
+        {l.conflito ? (
+          <div className="acoes">
             <a className="botao" href={`#/conflito/${l.id}`} aria-label={`Decidir ${titulo}`}>
               Decidir
             </a>
-          ) : l.exclusao ? (
-            <>
+          </div>
+        ) : (
+          l.exclusao && (
+            <div className="acoes">
               <button type="button" aria-label={`Lançar de novo ${titulo}`} onClick={() => void lancarDeNovo(l)}>
                 Lançar de novo
               </button>
               <button type="button" className="secundario" aria-label={`Dispensar ${titulo}`} onClick={() => void descartar(l)}>
                 Dispensar
               </button>
-            </>
-          ) : (
-            <>
-              <a className="botao secundario" href={`#/novo/${l.id}`} aria-label={`${l.recusa ? "Corrigir" : "Editar"} ${titulo}`}>
-                {l.recusa ? "Corrigir" : "Editar"}
-              </a>
-              {podeEstornar(l, cartoes, estornos) && (
-                <a className="botao secundario" href={`#/estornar/${l.id}`} aria-label={`Estornar ${titulo}`}>
-                  Estornar
-                </a>
-              )}
-              {l.recusa ? (
-                <button type="button" className="secundario" aria-label={`Descartar ${titulo}`} onClick={() => void descartar(l)}>
-                  Descartar
-                </button>
-              ) : (
-                <button type="button" className="secundario" aria-label={`Excluir ${titulo}`} onClick={() => void excluir(l)}>
-                  Excluir
-                </button>
-              )}
-            </>
-          )}
-          <details className="menu">
-            <summary aria-label={`Mais ações ${titulo}`}>⋯</summary>
-            <button type="button" className="secundario" aria-label={`Informações ${titulo}`} onClick={() => setInformacoes(informacoes === l.id ? null : l.id)}>
-              Informações
-            </button>
-            {l.recorrencia_id && l.ocorrencia && (!regras || regras.some((r) => r.id === l.recorrencia_id)) && (
-              <a className="botao secundario" href={`#/recorrencia/${l.id}`} aria-label={`Recorrência ${titulo}`}>
-                Recorrência
-              </a>
-            )}
-            {l.parcelamento_id && !l.naoEnviado && (
-              <a className="botao secundario" href={`#/parcelamento/${l.parcelamento_id}`} aria-label={`Parcelamento ${titulo}`}>
-                Parcelamento
-              </a>
-            )}
-          </details>
-        </div>
+            </div>
+          )
+        )}
         {informacoes === l.id && (
           <dl className="informacoes" aria-label={`Informações de ${titulo}`}>
             <dt>Criado por</dt>

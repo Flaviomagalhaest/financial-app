@@ -81,9 +81,11 @@ test("o estorno de todas as parcelas sem partes leva o item do parcelamento sem 
     automatico: true,
   });
   await page.reload();
-  await expect(page.getByRole("link", { name: `Estornar ${compra}` }).first()).toBeVisible();
+  await expect(page.getByLabel(`Mais ações ${compra}`).first()).toBeVisible();
 
   await context.setOffline(true);
+  await page.getByRole("listitem").filter({ hasText: compra }).first().getByLabel(`Mais ações ${compra}`).click();
+  await expect(page.getByRole("link", { name: `Estornar ${compra}` }).first()).toBeVisible();
   await page.getByRole("listitem").filter({ hasText: compra }).first().getByRole("link", { name: `Estornar ${compra}` }).click();
   await page.getByRole("radio", { name: "Todas as parcelas" }).check();
   await page.getByRole("button", { name: "Salvar" }).click();

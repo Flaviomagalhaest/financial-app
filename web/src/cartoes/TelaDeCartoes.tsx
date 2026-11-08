@@ -78,8 +78,8 @@ function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
   const limite = useLimite(cartao.id).dados;
 
   return (
-    <section aria-label={cartao.nome}>
-      <h3>💳 {cartao.nome}</h3>
+    <section aria-label={cartao.nome} className="cartao">
+      <h3>{cartao.nome}</h3>
       {limite && <LimiteDoCartaoNaLinha limite={limite} />}
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {semDados && (
@@ -112,14 +112,46 @@ function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
   );
 }
 
+/** Na faixa, o limite usado de um cartão: comprometido sobre o limite (sem limite, nada). */
+function LimiteNaFaixa({ cartao }: { cartao: Cartao }) {
+  const limite = useLimite(cartao.id).dados;
+  if (!limite || limite.limite_centavos == null) return null;
+  const parte = Math.min(100, Math.max(0, (limite.comprometido_centavos / limite.limite_centavos) * 100));
+  return (
+    <li>
+      <div>
+        <strong>{cartao.nome}</strong>
+        <span>
+          {formatarCentavos(limite.comprometido_centavos)} de {formatarCentavos(limite.limite_centavos)}
+        </span>
+      </div>
+      <div className="trilho-da-faixa" aria-hidden="true">
+        <span style={{ width: `${parte}%` }} />
+      </div>
+    </li>
+  );
+}
+
 /** Uma linha por cartão titular (o adicional compra na fatura dele) com a fatura anterior, a atual e a próxima. */
 export function TelaDeCartoes() {
   const { cartoes } = useCadastro();
   const titulares = cartoes.filter((c) => !c.titular_id);
 
   return (
-    <section>
-      <h2>Cartões</h2>
+    <section className="tela-de-cartoes">
+      <div className="faixa">
+        <h2>Cartões</h2>
+        {titulares.length > 0 && (
+          <>
+            <p className="rotulo-da-faixa">Limite usado</p>
+            <ul className="limites-na-faixa">
+              {titulares.map((c) => (
+                <LimiteNaFaixa key={c.id} cartao={c} />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
       {titulares.length === 0 && <p className="vazio">Nenhum cartão cadastrado.</p>}
       {titulares.map((c) => (
         <CartaoComFaturas key={c.id} cartao={c} />

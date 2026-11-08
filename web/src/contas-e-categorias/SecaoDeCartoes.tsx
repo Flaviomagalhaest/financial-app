@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import { api } from "../api/cliente";
 import { useCartoesComArquivados, useFaturas, type Cartao, type RecorrenciaNaTela } from "../dados";
 import { mesPorExtenso } from "../lancamentos/datas";
@@ -202,7 +203,7 @@ function LinhaDeCartao({
     );
   }
   return (
-    <li className={cartao.arquivado ? "arquivada" : undefined}>
+    <li className={`linha-com-menu${cartao.arquivado ? " arquivada" : ""}`}>
       <div>
         <span>
           {cartao.nome}
@@ -210,10 +211,11 @@ function LinhaDeCartao({
         </span>
         <span>{adicional ? `adicional de ${titular}` : resumoDoTitular(cartao)}</span>
       </div>
-      <div className="acoes">
+      <MenuDeAcoes rotulo={`Mais ações ${cartao.nome}`}>
         <button
           type="button"
           className="secundario"
+          aria-label={`Editar cartão ${cartao.nome}`}
           onClick={() => {
             setNome(cartao.nome);
             setFechamento(cartao.dia_fechamento == null ? "" : String(cartao.dia_fechamento));
@@ -223,17 +225,17 @@ function LinhaDeCartao({
             setEditando(true);
           }}
         >
-          Editar cartão {cartao.nome}
+          Editar
         </button>
         {!adicional && !cartao.arquivado && (
-          <button type="button" className="secundario" onClick={() => setAcertando(true)}>
-            Acertar fatura de {cartao.nome}
+          <button type="button" className="secundario" aria-label={`Acertar fatura de ${cartao.nome}`} onClick={() => setAcertando(true)}>
+            Acertar fatura
           </button>
         )}
-        <button type="button" className="secundario" disabled={arquivar.esperando} onClick={arquivar.tocar}>
-          {cartao.arquivado ? "Desarquivar" : "Arquivar"} cartão {cartao.nome}
+        <button type="button" className="secundario" disabled={arquivar.esperando} aria-label={`${cartao.arquivado ? "Desarquivar" : "Arquivar"} cartão ${cartao.nome}`} onClick={arquivar.tocar}>
+          {cartao.arquivado ? "Desarquivar" : "Arquivar"}
         </button>
-      </div>
+      </MenuDeAcoes>
       {arquivar.painel}
     </li>
   );

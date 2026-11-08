@@ -44,6 +44,7 @@ test("estorna parte da compra no cartão: abre preenchido, mostra a fatura e lig
   const { compra, cartaoNome, categoriaNome, tag, compraNome } = await prepararCompra(page);
 
   const naCompra = page.getByRole("listitem").filter({ hasText: compraNome });
+  await naCompra.getByLabel(`Mais ações ${compraNome}`).click();
   await naCompra.getByRole("link", { name: `Estornar ${compraNome}` }).click();
 
   // Já vem com o valor, as categorias, as tags e o cartão da compra, e a data de hoje.
@@ -137,6 +138,7 @@ test("cancelar a compra de uma fatura aberta é excluir; depois do fechamento a 
   // Aberta: a exclusão que já existia, com a confirmação, e a compra some de tudo.
   const linhaDeHoje = page.getByRole("listitem").filter({ hasText: nomeDeHoje });
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await linhaDeHoje.getByLabel(`Mais ações ${nomeDeHoje}`).click();
   await linhaDeHoje.getByRole("button", { name: `Excluir ${nomeDeHoje}` }).click();
   await expect(linhaDeHoje).toHaveCount(0);
   // A linha some assim que a exclusão entra na fila; a fatura só muda quando ela sobe ao servidor.
@@ -151,6 +153,7 @@ test("cancelar a compra de uma fatura aberta é excluir; depois do fechamento a 
     perguntou = true;
     void dialogo.dismiss();
   });
+  await linhaAntiga.getByLabel(`Mais ações ${nomeAntiga}`).click();
   await linhaAntiga.getByRole("button", { name: `Excluir ${nomeAntiga}` }).click();
   const sugestao = linhaAntiga.getByRole("group", { name: "Fatura fechada" });
   await expect(sugestao).toContainText(`A fatura de ${mesDaFatura(antiga.mes)} já fechou`);
@@ -175,6 +178,7 @@ test("sem internet o estorno entra na fila e sobe quando a rede volta, mas o aju
   await expect(page.getByRole("button", { name: "Ajustar fatura" })).toBeDisabled();
   await expect(page.getByText("Ajustar a fatura precisa de internet.")).toBeVisible();
 
+  await page.getByLabel(`Mais ações ${compraNome}`).click();
   await page.getByRole("link", { name: `Estornar ${compraNome}` }).click();
   await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
   await expect(page.getByText(`Entra na fatura de ${mesDaFatura(compra.mes)}`)).toBeVisible();
@@ -206,6 +210,7 @@ test("um segundo estorno começa no que ainda resta da compra e não deixa passa
   });
   await page.reload();
 
+  await page.getByRole("listitem").filter({ hasText: compraNome }).filter({ hasText: "estornada em" }).getByLabel(`Mais ações ${compraNome}`).click();
   await page.getByRole("listitem").filter({ hasText: compraNome }).filter({ hasText: "estornada em" }).getByRole("link", { name: `Estornar ${compraNome}` }).click();
   await expect(page.getByTestId("valor")).toHaveText("R$ 60,00");
   await expect(page.getByText("ainda dá para estornar até R$ 60,00")).toBeVisible();
@@ -251,6 +256,7 @@ test("a compra com estorno não se exclui: o Excluir segue ativo, explica o porq
   };
   page.on("dialog", naoDevePerguntar);
   const naCompra = page.getByRole("listitem").filter({ hasText: p.compraNome }).filter({ hasText: "estornada em" });
+  await naCompra.getByLabel(`Mais ações ${p.compraNome}`).click();
   await expect(naCompra.getByRole("button", { name: `Excluir ${p.compraNome}` })).toBeEnabled();
   await naCompra.getByRole("button", { name: `Excluir ${p.compraNome}` }).click();
 
@@ -264,10 +270,12 @@ test("a compra com estorno não se exclui: o Excluir segue ativo, explica o porq
   // Excluído o estorno, a compra se exclui.
   const doEstorno = page.getByRole("listitem").filter({ hasText: `estorno de ${p.compraNome}` });
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await doEstorno.getByLabel(`Mais ações Estorno ${p.compraNome}`).click();
   await doEstorno.getByRole("button", { name: `Excluir Estorno ${p.compraNome}` }).click();
   await expect(doEstorno).toHaveCount(0);
   const compra = page.getByRole("listitem").filter({ hasText: p.compraNome });
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await compra.getByLabel(`Mais ações ${p.compraNome}`).click();
   await compra.getByRole("button", { name: `Excluir ${p.compraNome}` }).click();
   await expect(compra).toHaveCount(0);
 });
@@ -279,6 +287,7 @@ test("a exclusão que o servidor recusa depois (estorno feito em outro aparelho)
   await expect(naCompra).toHaveCount(1);
   await context.setOffline(true);
   page.once("dialog", (dialogo) => void dialogo.accept());
+  await naCompra.getByLabel(`Mais ações ${p.compraNome}`).click();
   await naCompra.getByRole("button", { name: `Excluir ${p.compraNome}` }).click();
   await expect(naCompra).toHaveCount(0);
 
@@ -286,6 +295,7 @@ test("a exclusão que o servidor recusa depois (estorno feito em outro aparelho)
   await context.setOffline(false);
 
   await expect(naCompra).toContainText("⏳ não enviado: a compra tem estorno; exclua o estorno antes");
+  await naCompra.getByLabel(`Mais ações ${p.compraNome}`).click();
   await expect(naCompra.getByRole("button", { name: `Descartar ${p.compraNome}` })).toBeVisible();
 });
 
@@ -295,6 +305,7 @@ test("a compra de um cartão arquivado (reemitido) ainda se estorna, e o cartão
   await p.api.substituir(`/api/cartoes/${p.cartao.id}`, { nome: p.cartaoNome, dia_fechamento: 10, dia_vencimento: 20, arquivado: true });
   await page.reload();
 
+  await page.getByRole("listitem").filter({ hasText: p.compraNome }).getByLabel(`Mais ações ${p.compraNome}`).click();
   await page.getByRole("listitem").filter({ hasText: p.compraNome }).getByRole("link", { name: `Estornar ${p.compraNome}` }).click();
   await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
   // O cartão arquivado não é opção; sem escolher o novo, não salva.

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import { api } from "../api/cliente";
 import {
   aplicarModeloPadrao,
@@ -35,8 +36,8 @@ function BarraDoMes({ leitura }: { leitura: LeituraDoMes }) {
   const largura = (centavos: number) => `${(Math.max(centavos, 0) * 100) / escala}%`;
   const passou = realizado + previsto - planejado;
   return (
-    <section aria-label="Despesas × planejamento">
-      <h3>Despesas × planejamento</h3>
+    <section aria-label="Despesas × planejamento" className="despesas-do-mes">
+      <h3 className="rotulo-da-faixa">Despesas × planejamento</h3>
       <div className="barra-do-mes" role="img" aria-label={`realizado ${formatarCentavos(realizado)}, previsto ${formatarCentavos(previsto)}, livre ${formatarCentavos(livre)}`}>
         <span className="realizado" style={{ width: largura(realizado) }} />
         <span className="previsto" style={{ width: largura(previsto) }} />
@@ -147,7 +148,10 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
 
   return (
     <section aria-label="Itens do planejamento">
-      <h3>Itens do planejamento</h3>
+      <div className="cabecalho-do-cartao">
+        <h3>Itens do planejamento</h3>
+        <a href="#/modelo-do-planejamento">Modelo padrão</a>
+      </div>
       {itens.length > 0 ? (
         <>
           {leitura.situacao !== "passado" && <p>Ainda dá para gastar: {ainda_da_para_gastar_centavos < 0 ? `passou ${formatarCentavos(-ainda_da_para_gastar_centavos)}` : formatarCentavos(ainda_da_para_gastar_centavos)}</p>}
@@ -195,14 +199,14 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
                           </button>
                         </div>
                       ) : (
-                        <div className="acoes-em-linha">
+                        <MenuDeAcoes rotulo={`Mais ações ${nomePorId(categorias, i.categoria_id)}`}>
                           <button className="secundario" disabled={!online || enviando} aria-label={`Mudar valor de ${nomePorId(categorias, i.categoria_id)}`} onClick={() => setEditando({ id: i.id, reais: comoReais(i.planejado_centavos) })}>
                             Mudar valor
                           </button>
-                          <button className="secundario" disabled={!online || enviando} aria-label={`Excluir ${nomePorId(categorias, i.categoria_id)}`} onClick={() => void pedir(() => excluirItemDoPlanejamento(i.id))}>
+                          <button className="secundario perigo" disabled={!online || enviando} aria-label={`Excluir ${nomePorId(categorias, i.categoria_id)}`} onClick={() => void pedir(() => excluirItemDoPlanejamento(i.id))}>
                             Excluir
                           </button>
-                        </div>
+                        </MenuDeAcoes>
                       )}
                     </td>
                   </tr>
@@ -253,7 +257,6 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
           Não deu: {recusa}.
         </p>
       )}
-      <a href="#/modelo-do-planejamento">Modelo padrão</a>
     </section>
   );
 }
@@ -435,18 +438,21 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
   return (
     <section className="aba-mes">
       <h2 className="oculto">Mês</h2>
-      <nav className="navegacao-do-mes" aria-label="Meses">
-        <a className="botao secundario" href={`#/mes/${mesVizinho(mes, -1)}`} aria-label="Mês anterior">
-          ‹
-        </a>
-        <div>
-          <h3 className="nome-do-mes">{nomeDoMes(mes).replace(/^./, (c) => c.toUpperCase())}</h3>
-          {leitura && <p className="vazio">{SITUACAO[leitura.situacao]}</p>}
-        </div>
-        <a className="botao secundario" href={`#/mes/${mesVizinho(mes, 1)}`} aria-label="Próximo mês">
-          ›
-        </a>
-      </nav>
+      <div className="faixa">
+        <nav className="navegacao-do-mes" aria-label="Meses">
+          <a className="botao secundario" href={`#/mes/${mesVizinho(mes, -1)}`} aria-label="Mês anterior">
+            ‹
+          </a>
+          <div>
+            <h3 className="nome-do-mes">{nomeDoMes(mes).replace(/^./, (c) => c.toUpperCase())}</h3>
+            {leitura && <p className="vazio">{SITUACAO[leitura.situacao]}</p>}
+          </div>
+          <a className="botao secundario" href={`#/mes/${mesVizinho(mes, 1)}`} aria-label="Próximo mês">
+            ›
+          </a>
+        </nav>
+        {leitura && leitura.situacao !== "passado" && <BarraDoMes leitura={leitura} />}
+      </div>
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {semDados && (
         <p role="alert" className="erro">
@@ -461,7 +467,7 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
       />
       {leitura && (
         <>
-          {leitura.situacao === "passado" ? <Fechamento leitura={leitura} categorias={categorias} /> : <BarraDoMes leitura={leitura} />}
+          {leitura.situacao === "passado" && <Fechamento leitura={leitura} categorias={categorias} />}
           <AEscolher leitura={leitura} categorias={categorias} lancamentos={lancamentos ?? []} aoEscolher={() => void buscar()} />
           <Itens leitura={leitura} categorias={categorias} aoMudar={() => void buscar()} />
           <Comparacao leitura={leitura} categorias={categorias} />

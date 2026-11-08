@@ -39,6 +39,7 @@ test("estorna uma parte da compra: escolhe a parte, herda as categorias dela e v
   });
   await page.reload();
 
+  await page.getByRole("listitem").filter({ hasText: compra }).getByLabel(`Mais ações ${compra}`).click();
   await page.getByRole("listitem").filter({ hasText: compra }).getByRole("link", { name: `Estornar ${compra}` }).click();
 
   // A primeira parte já vem escolhida, com o valor e as categorias dela.
@@ -68,6 +69,7 @@ test("estorna uma parte da compra: escolhe a parte, herda as categorias dela e v
     .toMatchObject({ valor_centavos: 4000, categoria_ids: [casa.id] });
 
   // A parte toda devolvida não se escolhe de novo; a outra, sim.
+  await page.getByRole("listitem").filter({ hasText: compra }).filter({ hasText: "estornada em" }).getByLabel(`Mais ações ${compra}`).click();
   await page.getByRole("listitem").filter({ hasText: compra }).filter({ hasText: "estornada em" }).getByRole("link", { name: `Estornar ${compra}` }).click();
   await expect(partes.getByRole("radio", { name: /^Cortina/ })).toBeDisabled();
   await expect(partes.getByRole("radio", { name: /^Vestido/ })).toBeChecked();
@@ -89,6 +91,7 @@ test("estorna todas as parcelas num estorno só, ligado ao parcelamento, que con
   });
   await page.reload();
 
+  await page.getByRole("listitem").filter({ hasText: compra }).first().getByLabel(`Mais ações ${compra}`).click();
   await page.getByRole("listitem").filter({ hasText: compra }).first().getByRole("link", { name: `Estornar ${compra}` }).click();
   await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
   // "Só esta parcela" é o começo: R$ 100,00.
@@ -110,7 +113,11 @@ test("estorna todas as parcelas num estorno só, ligado ao parcelamento, que con
     .toMatchObject({ valor_centavos: 30000, estorno_de: null, categoria_ids: [roupa.id], tags: ["troca"] });
 
   // Não sobra nada: nenhuma parcela oferece mais "Estornar".
-  await expect(page.getByRole("link", { name: `Estornar ${compra}` })).toHaveCount(0);
+  for (const menu of await page.getByLabel(`Mais ações ${compra}`).all()) {
+    await menu.click();
+    await expect(page.getByRole("link", { name: `Estornar ${compra}` })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  }
 });
 
 test("estorna todas as parcelas de uma parte do parcelamento, também sem internet", async ({ page, context }) => {
@@ -132,10 +139,12 @@ test("estorna todas as parcelas de uma parte do parcelamento, também sem intern
     ],
   });
   await page.reload();
-  await expect(page.getByRole("link", { name: `Estornar ${compra}` }).first()).toBeVisible();
+  await expect(page.getByLabel(`Mais ações ${compra}`).first()).toBeVisible();
 
   // Sem internet: o aparelho já tem o parcelamento e as partes dele.
   await context.setOffline(true);
+  await page.getByRole("listitem").filter({ hasText: compra }).first().getByLabel(`Mais ações ${compra}`).click();
+  await expect(page.getByRole("link", { name: `Estornar ${compra}` }).first()).toBeVisible();
   await page.getByRole("listitem").filter({ hasText: compra }).first().getByRole("link", { name: `Estornar ${compra}` }).click();
   await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
   await page.getByRole("radio", { name: "Todas as parcelas" }).check();
