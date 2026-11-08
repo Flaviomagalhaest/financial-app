@@ -1,7 +1,7 @@
 # Importador do Mobills: deixar de fora os lançamentos ignorados
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: o dono decide como marcar o que fica de fora, já que o export não traz a marca); depois `implement`, `tdd`
 Modelo recomendado: Opus
