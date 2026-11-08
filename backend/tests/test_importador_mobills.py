@@ -1066,6 +1066,7 @@ def test_transacao_ignorada_no_mobills_fica_de_fora_e_a_conferencia_do_mes_fecha
     importar(geral, faturas, revisao)
     novembro = next(x for x in ler_aba(revisao, "Conferência") if x["Mês"] == "2022-11")
     assert (novembro["Resultado"], novembro["Diferença"]) == (950.00, 0)
+    assert not novembro["Por quê"]
 
 
 def test_transacao_ignorada_que_o_export_nao_traz_so_vira_aviso(pastas):

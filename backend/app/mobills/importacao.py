@@ -26,7 +26,8 @@ FORMATO_DO_MES = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 TIPOS_DE_CONTA = ("corrente", "poupanca", "carteira")
 # As transações que o dono ignorou no Mobills (ticket 215): o Mobills as deixa fora das contas, mas
 # o export as traz como pagas, sem marca. São só estas, então a lista fica aqui e não na planilha.
-# Cada uma é (data, descrição, conta, valor em centavos sem o sinal) e tira uma linha do geral.
+# Cada uma é (data, descrição, conta, valor em centavos) e tira uma linha do geral. O valor vai sem o
+# sinal porque a lista copia a tela do Mobills, que mostra o valor sem ele.
 IGNORADAS = (
     (date(2024, 7, 8), "Sem parar", "Carteira", 23047),
     (date(2022, 11, 28), "Passagem Ester", "Carteira", 5000),
@@ -206,27 +207,27 @@ def _conta(
 def _sem_as_ignoradas(linhas: list[LinhaDoGeral]) -> tuple[list[LinhaDoGeral], list[str]]:
     """O geral sem as `IGNORADAS`, antes do cruzamento: elas não entram em nada. A que o export
     não traz (um export parcial) só vira aviso."""
-    fora = set()
+    posicoes_fora = set()
     avisos = []
     for dia, descricao, conta, valor in IGNORADAS:
-        achada = next(
+        posicao = next(
             (
                 x.posicao
                 for x in linhas
-                if x.posicao not in fora
+                if x.posicao not in posicoes_fora
                 and (x.data, x.descricao.strip(), x.conta, abs(x.valor_centavos))
                 == (dia, descricao, conta, valor)
             ),
             None,
         )
-        if achada is None:
+        if posicao is None:
             avisos.append(
                 f"ignorada não achada no geral: {descricao!r} de {planilha.data_br(dia)}"
                 f" na {conta} ({planilha.reais_br(valor)})"
             )
         else:
-            fora.add(achada)
-    return [x for x in linhas if x.posicao not in fora], avisos
+            posicoes_fora.add(posicao)
+    return [x for x in linhas if x.posicao not in posicoes_fora], avisos
 
 
 def _grupos_mantidos(decisoes: planilha.Decisoes, impedimentos: list[str]) -> set[tuple]:
