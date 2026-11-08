@@ -32,3 +32,18 @@ Origem: pedido do dono (08/11), com captura do app do banco dele como referênci
 - As abas vêm de `ABAS` em `web/src/casca/rota.ts` e a barra é montada em `web/src/casca/Casca.tsx` (`nav.abas`); a ordem no celular sai do CSS (`.abas a:nth-child(...)` em `web/src/estilo.css`), com a quebra para barra lateral em `@media (min-width: 900px)`.
 - `web/e2e/pwa.spec.ts` confere as cinco abas pelo nome.
 - O visual atual (direção "Painel de banco", Inter, + no meio) foi decidido no [ticket 204](204-acabamento-visual-do-app.md).
+
+## Comments
+
+**08/11, decisões do dono (grilling, duas rodadas):**
+
+- **Quinto item**: só o ícone de grade 2×2, **sem rótulo visível**, como no print do app do banco; o nome acessível (`aria-label`), o título da tela e o endereço são **Explorar** (`#/explorar`). Termo no `GLOSSARY.md` (Telas). "Mais" e "Menu" foram descartados: "mais" se confunde com o + e com o "mais opções" que o glossário proíbe no Menu da linha; "Menu" já nomeia o Menu da conta e o Menu da linha.
+- **Destaque**: ícone de traço com o peso das outras abas (verde quando marcado), sem quadrado cheio. O + continua sendo o único destaque da barra.
+- **O que entra em Explorar**: seis cartões, nesta ordem: Histórico, Futuro, Busca, Favoritos, Contas e categorias, Configurações. A lupa e o Menu da conta continuam iguais (a duplicação é de propósito). Modelo do planejamento e Edições em lote ficam fora (chega-se a eles pelo Mês e pela Busca).
+- **Cartão**: só ícone e nome, grade de 2 colunas.
+- **Busca no alto da grade**: não por enquanto; volta quando houver uns 10 cartões, e então filtra funcionalidades (a de lançamentos já tem a lupa).
+- **Item marcado no celular**: Hoje, Mês e Cartões (com a fatura) marcam a si; as telas de lançar não marcam nada; **toda outra tela marca o ícone de grade**, venha da grade, da lupa ou do Menu da conta (Histórico, Futuro, Busca, Edições em lote, Favoritos, Contas e categorias, Configurações). Tocar no ícone de grade volta à grade; a tela não ganha seta de voltar própria. Exceção: o **modelo do planejamento marca Mês** (nas duas larguras). Parcelamento, recorrência e conflito seguem sem marca.
+- **Tela larga**: nada muda. A barra lateral segue com Hoje, Mês, Cartões, Histórico e Futuro; Busca e Edições em lote continuam marcando Histórico; as telas do Menu da conta seguem sem marca. `#/explorar` aberto na tela larga mostra a grade, sem item marcado na barra lateral.
+- **Endereços**: `#/historico` e `#/futuro` continuam abrindo as mesmas telas, sem redirecionar.
+- **Glossário**: Histórico e Futuro continuam se chamando "aba Histórico" e "aba Futuro" (são abas na tela larga; o nome não muda com a largura).
+- **Protótipo**: https://claude.ai/artifact/EXim1PGPQL6HoLsLRVJppe (fonte na branch `prototipo/210-barra-de-baixo`, em `.scratch/v1-substituir-mobills/prototipos/210/barra-de-baixo.html`). Aguardando a aprovação do dono e a escolha entre o ícone de grade alinhado aos outros ícones (variante 1) ou centralizado na barra (variante 2).

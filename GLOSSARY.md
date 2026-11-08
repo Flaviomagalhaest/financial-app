@@ -365,6 +365,10 @@ _Avoid_: banner, cabeçalho
 As pílulas na faixa da Hoje: cada **Favorito** com o valor, a fatura que vence (sem fatura, os cartões) e as contas. Liga e desliga em Configurações, só no aparelho. O favorito é um dos atalhos, mas continua se chamando favorito.
 _Avoid_: pílulas (é a forma, não o nome)
 
+**Explorar**:
+A tela do celular com o que não cabe na barra de baixo, em cartões com ícone e nome: as abas Histórico e Futuro, a **Busca**, os Favoritos, Contas e categorias e Configurações. Abre pelo ícone de grade, sem nome, à direita da barra, que fica marcado em toda tela que não é Hoje, Mês, Cartões nem de lançar; tocar nele de novo volta à grade. Cresce a cada versão; na tela larga, o que ela reúne fica na barra lateral e no **Menu da conta**.
+_Avoid_: mais, menu, funcionalidades
+
 **Menu da conta**:
 O círculo com a inicial no topo: mostra com que e-mail se entrou e leva a Configurações, Contas e categorias, Favoritos e Sair.
 _Avoid_: perfil, avatar
