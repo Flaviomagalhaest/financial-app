@@ -594,6 +594,7 @@ def test_conferencia_mes_a_mes_e_faturas_com_a_coluna_do_mobills_mantida(pastas)
             "Total": 275.52,
             "Mobills": None,
             "Diferença": None,
+            "Por quê": None,
         },
         {
             "Cartão": "Cartao A",
@@ -603,6 +604,7 @@ def test_conferencia_mes_a_mes_e_faturas_com_a_coluna_do_mobills_mantida(pastas)
             "Total": 0,
             "Mobills": None,
             "Diferença": None,
+            "Por quê": None,
         },
     ]
 
@@ -1036,3 +1038,72 @@ def test_decisao_digitada_errado_nas_abas_de_revisao_impede_gravar(pastas):
         ]
         == "parcelado"
     )
+
+
+def test_linha_de_fatura_que_repete_data_valor_e_cartao_de_uma_casada_so_some_com_decisao(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(geral, "geral.xlsx", [linha("10/03/2026", "Mercado", -100.00, "Alimentação")])
+    escrever_fatura(
+        faturas,
+        "Cartao A",
+        "202603",
+        [
+            ("05/03/2026", "Mercado", "Alimentação", 100.00),
+            # O Mobills duplicou a compra, com outra descrição e categoria.
+            ("05/03/2026", "Compra no mercado", "Outros", 100.00),
+            # Outra data: é outra compra, não é repetida.
+            ("06/03/2026", "Padaria", "Alimentação", 100.00),
+        ],
+    )
+
+    primeira = importar(geral, faturas, revisao)
+
+    assert len(primeira.lancamentos) == 3
+    assert ler_aba(revisao, "Faturas repetidas") == [
+        {
+            "Pasta do cartão": "Cartao A",
+            "Mês": "2026-03",
+            "Data da compra": "05/03/2026",
+            "Descrição": "Compra no mercado",
+            "Categoria": "Outros",
+            "Valor": 100.00,
+            "Descrição da linha casada": "Mercado",
+            "Categoria da linha casada": "Alimentação",
+            "Decisão (descartar ou manter)": None,
+        }
+    ]
+
+    # Em branco, ou `manter`, a compra continua (podem ser duas compras iguais de verdade).
+    editar_aba(
+        revisao, "Faturas repetidas", "Descrição", "Compra no mercado",
+        "Decisão (descartar ou manter)", "manter",
+    )  # fmt: skip
+    assert len(importar(geral, faturas, revisao).lancamentos) == 3
+
+    editar_aba(
+        revisao, "Faturas repetidas", "Descrição", "Compra no mercado",
+        "Decisão (descartar ou manter)", "descartar",
+    )  # fmt: skip
+    importar(geral, faturas, revisao)
+    segunda = importar(geral, faturas, revisao)
+
+    assert sorted(x.descricao for x in segunda.lancamentos) == ["Mercado", "Padaria"]
+    repetidas = ler_aba(revisao, "Faturas repetidas")
+    assert [x["Decisão (descartar ou manter)"] for x in repetidas] == ["descartar"]
+    assert ler_aba(revisao, "Faturas")[0]["Total"] == 200.00
+    assert ler_aba(revisao, "Faturas")[0]["Por quê"] == (
+        "1 linha duplicada pelo Mobills descartada (100,00)"
+    )
+    assert (
+        "1 linha duplicada pelo Mobills descartada (100,00)"
+        in (ler_aba(revisao, "Conferência")[0]["Por quê"])
+    )
+
+    editar_aba(
+        revisao, "Faturas repetidas", "Descrição", "Compra no mercado",
+        "Decisão (descartar ou manter)", "talvez",
+    )  # fmt: skip
+    assert (
+        "Faturas repetidas: 'Compra no mercado' de Cartao A em 2026-03 tem a decisão 'talvez',"
+        " fora de descartar ou manter"
+    ) in importar(geral, faturas, revisao).impedimentos

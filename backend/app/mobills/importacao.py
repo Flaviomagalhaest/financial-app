@@ -95,7 +95,10 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     cartoes = _cartoes(decisoes, pastas, impedimentos)
     nomes = {c.pasta: c.nome for c in cartoes}
     mantidos = _grupos_mantidos(decisoes, impedimentos)
-    cruzamento = cruzar(linhas_do_geral, linhas_de_fatura, decisoes.provaveis, mantidos)
+    _conferir_repetidas(decisoes, impedimentos)
+    cruzamento = cruzar(
+        linhas_do_geral, linhas_de_fatura, decisoes.provaveis, mantidos, decisoes.repetidas
+    )
     importacao = Importacao(conta, cartoes, cruzamento=cruzamento, impedimentos=impedimentos)
     importacao.meses_das_faturas = {nomes[pasta]: meses for pasta, meses in pastas.items()}
     importacao.lancamentos, importacao.ajustes = conferencia.separar_ajustes(
@@ -141,6 +144,7 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
         importacao.lancamentos,
         importacao.ajustes,
         {nomes[pasta]: lista for pasta, lista in pastas.items()},
+        [(nomes[pasta], mes, custo) for pasta, mes, custo in cruzamento.descartadas() if pasta],
     )
     planilha.escrever_planilha(
         revisao,
@@ -149,6 +153,7 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
             "Cartões": planilha.aba_cartoes(cartoes, pastas),
             "De-para": planilha.aba_de_para(contagem, regras),
             "Pares prováveis": planilha.aba_pares_provaveis(cruzamento),
+            "Faturas repetidas": planilha.aba_faturas_repetidas(cruzamento),
             "Grupos ambíguos": planilha.aba_grupos_ambiguos(cruzamento, decisoes.grupos),
             "Categoria diferente": planilha.aba_categoria_diferente(cruzamento),
             "Parcelas quebradas": planilha.aba_parcelas_quebradas(
@@ -203,6 +208,15 @@ def _grupos_mantidos(decisoes: planilha.Decisoes, impedimentos: list[str]) -> se
                 " fora de descartar ou manter"
             )
     return mantidos
+
+
+def _conferir_repetidas(decisoes: planilha.Decisoes, impedimentos: list[str]) -> None:
+    for (pasta, mes, _, descricao, _), decisao in decisoes.repetidas.items():
+        if decisao.casefold() not in planilha.DECISOES_DO_GRUPO:
+            impedimentos.append(
+                f"Faturas repetidas: {descricao!r} de {pasta} em {mes} tem a decisão"
+                f" {decisao!r}, fora de descartar ou manter"
+            )
 
 
 def _corte_dos_arquivados(decisoes: planilha.Decisoes, impedimentos: list[str]) -> dict[str, str]:
