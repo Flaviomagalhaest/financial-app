@@ -1049,3 +1049,48 @@ def test_o_cartao_reemitido_com_o_valor_novo_em_todas_nao_olha_a_paga_do_cartao_
         (l["conta_id"], l["valor_centavos"], l["alterada_a_mao"])
         for l in parcelas(casal, novo["id"])
     ] == [(reemitido, 8000, False), (antigo, 10000, False), (reemitido, 8000, False)]
+
+
+def test_simular_o_cartao_novo_nao_usa_savepoint_e_nao_deixa_rastro(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    # O DSQL recusa SAVEPOINT (ticket 203): a simulação da correção não abre transação aninhada.
+    import psycopg
+
+    from tests.test_cartoes import comprar
+    from tests.test_contas import nova_conta
+    from tests.test_pagamento_de_fatura import pagar
+
+    antigo, reemitido, novo, pago = _reemitido_recusado_no_meio(casal, monkeypatch, 4)
+    _tirar_o_pagamento(casal, pago)
+    comprar(casal, antigo, "2026-04-10", valor_centavos=10000)
+    pago_no_antigo = pagar(
+        casal,
+        nova_conta(casal)["id"],
+        antigo,
+        fatura_mes="2026-04-01",
+        valor_centavos=10000,
+        data="2026-06-05",
+    )
+    assert pago_no_antigo.status_code == 201, pago_no_antigo.text
+
+    def sem_savepoint(*_a, **_k):
+        raise psycopg.errors.FeatureNotSupported("unsupported transaction statement: SAVEPOINT")
+
+    monkeypatch.setattr(psycopg.Connection, "transaction", sem_savepoint)
+    resposta = mudar_parcela(
+        casal,
+        parcelas(casal, novo["id"])[2],
+        "todas",
+        conta_id=reemitido,
+        data="2026-01-20",
+        confirmar_realizadas=True,
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    assert [(l["conta_id"], l["fatura_mes"]) for l in parcelas(casal, novo["id"])] == [
+        (reemitido, "2026-01-01"),
+        (reemitido, "2026-02-01"),
+        (reemitido, "2026-03-01"),
+        (reemitido, "2026-04-01"),
+    ]

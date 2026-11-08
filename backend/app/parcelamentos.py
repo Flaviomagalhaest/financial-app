@@ -1264,6 +1264,7 @@ def gravar_correcao(
     editada: UUID | None = None,
     tambem_mudam: Sequence[ParcelaQueMuda] = (),
     conferir_os_lotes: bool = True,
+    so_conferir: bool = False,
 ) -> CorrecaoGravada:
     """Valida e grava o parcelamento corrigido (recusa antes de gravar, e avisa se uma realizada
     mudaria sem `confirmar_realizadas`); as parcelas são refeitas depois, em lotes. A
@@ -1271,7 +1272,9 @@ def gravar_correcao(
     136), a `editada` segue o parcelamento nos campos pedidos mesmo que alguém a tenha mudado à
     mão, não entra no aviso nem na contagem, e o aviso leva também as realizadas
     `tambem_mudam`. Sem `conferir_os_lotes`, quem chama já conferiu as regras da fatura paga
-    no refazer (o cartão reemitido junto com a data ou o valor, ticket 196)."""
+    no refazer (o cartão reemitido junto com a data ou o valor, ticket 196). Com `so_conferir`,
+    para depois das conferências e das recusas, sem gravar o parcelamento (a simulação não usa
+    SAVEPOINT, que o DSQL recusa, ticket 203)."""
     if not (lidos := _ler(conn, "id = %s", (id,))):
         raise HTTPException(status_code=404, detail="parcelamento não encontrado")
     [atual] = lidos
@@ -1404,6 +1407,8 @@ def gravar_correcao(
                 motivo="a correção muda parcelas que já foram realizadas", parcelas=realizadas
             )
         )
+    if so_conferir:
+        return CorrecaoGravada(classificacao, mantidas)
     tags_de_antes = set(_tags_do_parcelamento(conn, id))
     tags = ids_das_tags(conn, nova.tags, usuario, tags_de_antes)
     if not conn.execute(

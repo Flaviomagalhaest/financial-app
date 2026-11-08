@@ -268,9 +268,9 @@ def _por_no_cartao_novo(
 ) -> None:
     """Põe o parcelamento e as parcelas que faltam no cartão novo como os lotes da conta as
     deixariam (a conta sem a marca, a fatura pedida com ela), sem as regras da fatura paga, já
-    conferidas em `_conferir_antes_de_gravar`: só para a correção simular o refazer sobre elas,
-    num savepoint desfeito em seguida. Uma linha por parcela, e não a edição inteira, para caber
-    numa transação mesmo no parcelamento longo (`parcelas_por_lote`)."""
+    conferidas em `_conferir_antes_de_gravar`: só para a correção simular o refazer sobre elas;
+    `_desfazer_o_cartao_novo` devolve o que foi mudado. Uma linha por parcela, e não a edição
+    inteira, para caber numa transação mesmo no parcelamento longo (`parcelas_por_lote`)."""
     conn.execute(
         "UPDATE parcelamentos SET conta_id = %s WHERE id = %s", (conta_id, parcelamento_id)
     )
@@ -293,6 +293,46 @@ def _por_no_cartao_novo(
                 " ON CONFLICT (lancamento_id, campo) DO UPDATE SET origem = NULL",
                 (outra.id, outra.versao, pendente.usuario),
             )
+
+
+_CAMPOS_DA_CONTA = ["conta_id", "fatura_mes"]
+
+
+def _guardar_o_cartao_de_antes(conn, parcelamento_id: UUID, ids: list[UUID]) -> tuple:
+    """O que `_por_no_cartao_novo` muda, como estava antes."""
+    (conta,) = conn.execute(
+        "SELECT conta_id FROM parcelamentos WHERE id = %s", (parcelamento_id,)
+    ).fetchone()
+    parcelas = conn.execute(
+        "SELECT id, conta_id, mes FROM lancamentos WHERE id = ANY(%s)", (ids,)
+    ).fetchall()
+    campos = conn.execute(
+        "SELECT lancamento_id, campo, versao, alterado_por, alterado_em, origem"
+        " FROM lancamento_campos WHERE lancamento_id = ANY(%s) AND campo = ANY(%s)",
+        (ids, _CAMPOS_DA_CONTA),
+    ).fetchall()
+    return conta, parcelas, campos
+
+
+def _desfazer_o_cartao_novo(conn, parcelamento_id: UUID, ids: list[UUID], antes: tuple) -> None:
+    """Devolve o que `_por_no_cartao_novo` mudou, sem SAVEPOINT (o DSQL o recusa, ticket 203)."""
+    conta, parcelas, campos = antes
+    conn.execute("UPDATE parcelamentos SET conta_id = %s WHERE id = %s", (conta, parcelamento_id))
+    for id, conta_id, mes in parcelas:
+        conn.execute(
+            "UPDATE lancamentos SET conta_id = %s, mes = %s WHERE id = %s", (conta_id, mes, id)
+        )
+    conn.execute(
+        "DELETE FROM lancamento_campos WHERE lancamento_id = ANY(%s) AND campo = ANY(%s)",
+        (ids, _CAMPOS_DA_CONTA),
+    )
+    for linha in campos:
+        conn.execute(
+            "INSERT INTO lancamento_campos"
+            " (lancamento_id, campo, versao, alterado_por, alterado_em, origem)"
+            " VALUES (%s, %s, %s, %s, %s, %s)",
+            linha,
+        )
 
 
 def _ha_pendente(conn, parcelamento_id: UUID) -> bool:
@@ -399,7 +439,7 @@ def _mudar_a_parcela(
             **na_regra, confirmar_realizadas=alteracao.confirmar_realizadas
         )
 
-        def gravar_a_correcao(conferir_os_lotes: bool):
+        def gravar_a_correcao(conferir_os_lotes: bool, so_conferir: bool = False):
             return parcelamentos.gravar_correcao(
                 conn,
                 regra.id,
@@ -409,6 +449,7 @@ def _mudar_a_parcela(
                 editada=id,
                 tambem_mudam=realizadas,
                 conferir_os_lotes=conferir_os_lotes,
+                so_conferir=so_conferir,
             )
 
         # O cartão reemitido junto com a data ou o valor (ticket 196), também o pedido de novo
@@ -420,10 +461,12 @@ def _mudar_a_parcela(
             and (conta_na_regra or any("conta_id" in valores for _, valores in falta))
         )
         if simular_no_cartao_novo:
-            with conn.transaction():
-                _por_no_cartao_novo(conn, regra.id, mudou["conta_id"], editada, pendente, falta)
-                gravar_a_correcao(conferir_os_lotes=True)
-                raise psycopg.Rollback()
+            # Sem SAVEPOINT (o DSQL o recusa, ticket 203): muda, confere e devolve.
+            ids = [editada.id, *(o.id for o, valores in falta if "conta_id" in valores)]
+            de_antes = _guardar_o_cartao_de_antes(conn, regra.id, ids)
+            _por_no_cartao_novo(conn, regra.id, mudou["conta_id"], editada, pendente, falta)
+            gravar_a_correcao(conferir_os_lotes=True, so_conferir=True)
+            _desfazer_o_cartao_novo(conn, regra.id, ids, de_antes)
             correcao = gravar_a_correcao(conferir_os_lotes=False)
         else:
             correcao = gravar_a_correcao(conferir_os_lotes=True)
