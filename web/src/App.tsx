@@ -52,10 +52,14 @@ function Inicio({ email }: { email: string }) {
       email={email}
       onSair={() => void sairDaConta()}
       hoje={
-        <>
-          <p data-testid="estado-da-api">{textos[estado]}</p>
-          <button onClick={() => void verificar()}>Verificar de novo</button>
-        </>
+        <p className="estado-da-api">
+          <span data-testid="estado-da-api" data-estado={estado}>
+            {textos[estado]}
+          </span>
+          <button type="button" onClick={() => void verificar()}>
+            Verificar de novo
+          </button>
+        </p>
       }
     />
   );

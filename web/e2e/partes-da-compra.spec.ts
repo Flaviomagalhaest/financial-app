@@ -35,7 +35,7 @@ const parte = (page: Page, n: number) => page.getByRole("group", { name: `Parte 
 test("divide a compra em partes ao lançar: cada parte com a classificação e o aviso dela, e a compra numa linha só que abre as partes", async ({ page }) => {
   const { nomes, cartao, mesDaFatura, roupa } = await preparar(page);
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
 
   // R$ 1.000,00 no cartão, com a descrição da compra.
   await digitar(page, "1", "00", "00", "0");
@@ -179,7 +179,7 @@ test("divide uma compra que já existe: ela perde a classificação própria e a
 test("sem internet, a compra com partes entra na fila como um pedido só e sobe quando a rede volta", async ({ page, context }) => {
   const { nomes } = await preparar(page);
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   // A rede cai com o cadastro já guardado no aparelho.
   await expect(page.getByRole("button", { name: nomes.casa })).toBeVisible();
   await context.setOffline(true);

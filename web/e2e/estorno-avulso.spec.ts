@@ -105,7 +105,7 @@ test("o crédito com categoria entra na fila sem internet e sobe quando a rede v
 
   // O crédito não serve de modelo para o "Repetir último" do lançamento novo.
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await expect(page.getByRole("button", { name: /^Repetir último/ })).toHaveCount(0);
   await page.goto("/#/historico");
 

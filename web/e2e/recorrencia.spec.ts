@@ -26,7 +26,7 @@ const aba = (page: Page, nome: string) => page.getByRole("navigation", { name: "
 /** Abre o novo lançamento pelo app, preenche valor, conta, categoria e descrição e marca "Recorrente". */
 async function comecarRecorrente(page: Page, { teclas, conta, categoria, descricao }: { teclas: string[]; conta: string; categoria: string; descricao: string }) {
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, ...teclas);
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: categoria }).click();

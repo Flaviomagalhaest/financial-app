@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/cliente";
+import { mudarAtalhosDaFaixa, useAtalhosDaFaixa } from "../hoje/atalhosDaFaixa";
 
 type Formato = "backup" | "planilha";
 
@@ -43,32 +44,60 @@ export function Configuracoes() {
   }
 
   const desligado = !online || gerando !== null;
+  const atalhos = useAtalhosDaFaixa();
   return (
     <section className="configuracoes">
       <h2>Configurações</h2>
-      <h3>Planejamento</h3>
-      <a href="#/modelo-do-planejamento">Modelo padrão do planejamento</a>
-      <h3>Lançar</h3>
-      <a href="#/favoritos">Favoritos</a>
-      <h3>Exportar</h3>
-      <p className="vazio">
-        O backup traz todas as tabelas com os ids originais. A planilha traz os lançamentos de todo
-        o histórico, com nomes no lugar dos ids, para abrir no Excel ou no Google Planilhas.
-      </p>
-      <div className="acoes">
-        <button disabled={desligado} onClick={() => void exportar("backup")}>
-          {gerando === "backup" ? "Gerando…" : "Exportar tudo (backup .zip)"}
-        </button>
-        <button className="secundario" disabled={desligado} onClick={() => void exportar("planilha")}>
-          {gerando === "planilha" ? "Gerando…" : "Exportar lançamentos (planilha .csv)"}
-        </button>
-      </div>
-      {!online && <p className="aviso">Exportar precisa de internet.</p>}
-      {erro && (
-        <p role="alert" className="erro">
-          Não foi possível exportar. Tente de novo.
+      <section className="cartao" aria-labelledby="config-tela-hoje">
+        <h3 id="config-tela-hoje">Tela Hoje</h3>
+        <label className="interruptor">
+          <span>
+            Atalhos na faixa verde
+            <small>Favoritos, a fatura que vence e as contas, no alto da Hoje. Vale só neste aparelho.</small>
+          </span>
+          <input type="checkbox" role="switch" checked={atalhos} onChange={(e) => mudarAtalhosDaFaixa(e.target.checked)} />
+        </label>
+      </section>
+      <section aria-labelledby="config-planejamento">
+        <h3 id="config-planejamento">Planejamento</h3>
+        <ul className="linhas-de-menu">
+          <li>
+            <a href="#/modelo-do-planejamento">Modelo padrão do planejamento</a>
+          </li>
+        </ul>
+      </section>
+      <section aria-labelledby="config-lancar">
+        <h3 id="config-lancar">Lançar</h3>
+        <ul className="linhas-de-menu">
+          <li>
+            <a href="#/favoritos">Favoritos</a>
+          </li>
+          <li>
+            <a href="#/contas-e-categorias">Contas e categorias</a>
+          </li>
+        </ul>
+      </section>
+      <section className="cartao" aria-labelledby="config-exportar">
+        <h3 id="config-exportar">Exportar</h3>
+        <p className="vazio">
+          O backup traz todas as tabelas com os ids originais. A planilha traz os lançamentos de todo
+          o histórico, com nomes no lugar dos ids, para abrir no Excel ou no Google Planilhas.
         </p>
-      )}
+        <div className="acoes">
+          <button disabled={desligado} onClick={() => void exportar("backup")}>
+            {gerando === "backup" ? "Gerando…" : "Exportar tudo (backup .zip)"}
+          </button>
+          <button className="secundario" disabled={desligado} onClick={() => void exportar("planilha")}>
+            {gerando === "planilha" ? "Gerando…" : "Exportar lançamentos (planilha .csv)"}
+          </button>
+        </div>
+        {!online && <p className="aviso">Exportar precisa de internet.</p>}
+        {erro && (
+          <p role="alert" className="erro">
+            Não foi possível exportar. Tente de novo.
+          </p>
+        )}
+      </section>
     </section>
   );
 }

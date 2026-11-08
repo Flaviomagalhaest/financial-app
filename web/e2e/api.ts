@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 /** Algumas telas de cadastro ainda não existem: o teste prepara os dados pela API, com o token da página. */
 export async function tokenDaPagina(page: Page): Promise<string> {
   // Recarregar no meio do login volta ao formulário, e nenhum pedido leva o token.
-  await expect(page.getByRole("button", { name: "Sair" })).toBeVisible();
+  await expect(page.getByLabel(/^Conta de /)).toBeVisible();
   const pedido = page.waitForRequest((r) => r.url().includes("/api/") && !!r.headers().authorization);
   await page.reload();
   return (await pedido).headers().authorization;

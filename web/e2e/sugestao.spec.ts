@@ -6,7 +6,7 @@ import { cadastrar, digitar, lancar } from "./lancar";
 /** Abre o novo lançamento pelo app, digita o valor e escreve a descrição na folha de detalhes. */
 async function descrever(page: Page, teclas: string[], descricao: string) {
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, ...teclas);
   await page.getByRole("button", { name: /^Detalhes/ }).click();
   await page.getByLabel("Descrição").fill(descricao);

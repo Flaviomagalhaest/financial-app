@@ -26,7 +26,7 @@ async function prepararCasal(page: Page) {
 
 async function abrirDetalhes(page: Page, { conta, categoria, repete }: { conta: string; categoria: string; repete: "Parcelado" | "Recorrente" }) {
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, "1", "00", "00");
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: categoria }).click();

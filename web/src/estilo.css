@@ -1,31 +1,76 @@
-/* Tipografia do sistema; o login é uma coluna estreita e a casca do app troca de layout pela largura. */
+/*
+ * Tokens do app (ticket 204: direção "painel de banco"). Fundo levemente esverdeado, conteúdo em
+ * cartões brancos, a faixa verde no alto das telas com um número que resume a tela, Inter embutida
+ * (funciona sem internet), botões em pílula. Claro e escuro seguem a preferência do sistema.
+ */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fontes/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
-  --fundo: #f6f7f5;
+  --fundo: #f3f5f2;
   --superficie: #ffffff;
   --texto: #1d231f;
   --texto-suave: #58635c;
-  --borda: #c9d1cb;
+  --borda: #d3dbd5;
+  --linha: #e7ece8;
   --destaque: #1f6b4f;
+  --destaque-suave: #e2efe7;
   --sobre-destaque: #ffffff;
   --erro: #a3271d;
+  --erro-suave: #fbe9e6;
   --aviso-fundo: #fbf1d9;
+  /* A faixa verde do alto das telas e o que vai em cima dela. */
+  --faixa: #1f6b4f;
+  --sobre-faixa: #ffffff;
+  --sobre-faixa-suave: rgb(255 255 255 / 0.78);
+  --vidro: rgb(255 255 255 / 0.16);
+  --sombra: 0 2px 12px rgb(20 40 30 / 0.08);
   /* Séries dos gráficos, validadas para daltonismo sobre a superfície de cada tema. */
   --serie-1: #2a78d6;
   --serie-2: #eb6834;
-  --fonte: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fonte: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Escala de texto e de espaço; os raios: cartão, campo e pílula. */
+  --texto-pp: 0.75rem;
+  --texto-p: 0.8125rem;
+  --texto-m: 0.9375rem;
+  --texto-g: 1.125rem;
+  --texto-gg: 1.5rem;
+  --espaco-1: 0.25rem;
+  --espaco-2: 0.5rem;
+  --espaco-3: 0.75rem;
+  --espaco-4: 1rem;
+  --espaco-5: 1.5rem;
+  --espaco-6: 2rem;
+  --raio-cartao: 1.125rem;
+  --raio-campo: 0.625rem;
+  --raio-pilula: 999px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --fundo: #141815;
-    --superficie: #1d231f;
+    --fundo: #111513;
+    --superficie: #1b211d;
     --texto: #e7ece8;
     --texto-suave: #a3aea6;
-    --borda: #3a443d;
+    --borda: #343e37;
+    --linha: #262e29;
     --destaque: #5fbf95;
+    --destaque-suave: #1e3529;
     --sobre-destaque: #0d1a14;
     --erro: #ff8a7f;
+    --erro-suave: #3a2220;
     --aviso-fundo: #3a3220;
+    --faixa: #174c38;
+    --sobre-faixa: #f0f6f2;
+    --sobre-faixa-suave: rgb(240 246 242 / 0.78);
+    --vidro: rgb(240 246 242 / 0.14);
+    --sombra: none;
     --serie-1: #3987e5;
     --serie-2: #d95926;
     color-scheme: dark;
@@ -37,12 +82,13 @@ body {
   background: var(--fundo);
   color: var(--texto);
   font: 1rem/1.5 var(--fonte);
+  -webkit-font-smoothing: antialiased;
 }
 
 main {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--espaco-4);
   max-width: 26rem;
   margin: 0 auto;
   padding-block: max(2rem, env(safe-area-inset-top, 0px)) 2rem;
@@ -52,12 +98,33 @@ main {
 
 h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--texto-gg);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+h2 {
+  margin: 0 0 var(--espaco-3);
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 
 p {
   margin: 0;
+}
+
+/* Link dentro do texto: a cor do app, sublinhado só ao passar ou focar. */
+a {
+  color: var(--destaque);
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 0.2em;
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration: underline;
 }
 
 form {
@@ -79,7 +146,7 @@ input {
   padding: 0.75rem;
   margin-bottom: 0.625rem;
   border: 1px solid var(--borda);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-campo);
   background: var(--superficie);
   color: var(--texto);
 }
@@ -87,9 +154,9 @@ input {
 button {
   font: inherit;
   font-weight: 600;
-  padding: 0.75rem 1rem;
+  padding: 0.6875rem 1.125rem;
   border: 1px solid var(--destaque);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-pilula);
   background: var(--destaque);
   color: var(--sobre-destaque);
   cursor: pointer;
@@ -103,6 +170,7 @@ button:disabled {
 button.secundario {
   background: transparent;
   color: var(--destaque);
+  border-color: var(--borda);
 }
 
 :focus-visible {
@@ -116,15 +184,16 @@ button.secundario {
 }
 
 .aviso {
-  padding: 0.75rem;
-  border-radius: 0.5rem;
+  padding: var(--espaco-3) 0.875rem;
+  border-radius: var(--raio-campo);
   background: var(--aviso-fundo);
 }
 
 a.botao {
   display: block;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  padding: 0.6875rem 1.125rem;
+  border: 1px solid var(--destaque);
+  border-radius: var(--raio-pilula);
   background: var(--destaque);
   color: var(--sobre-destaque);
   font-weight: 600;
@@ -136,12 +205,173 @@ a.botao {
   color: var(--texto-suave);
 }
 
-h2 {
-  margin: 0 0 0.75rem;
-  font-size: 1.25rem;
+/* Cartão: o bloco de um assunto, branco sobre o fundo. */
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
 }
 
-/* Casca: celular primeiro, com as abas coladas embaixo. */
+.cartao h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* Linha de menu: leva a outra tela, com a seta à direita. */
+.linhas-de-menu {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+
+.linhas-de-menu a {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: 0.875rem var(--espaco-4);
+  color: var(--texto);
+  font-weight: 500;
+}
+
+.linhas-de-menu li + li a {
+  border-top: 1px solid var(--linha);
+}
+
+.linhas-de-menu a::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--texto-suave);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.linhas-de-menu a:hover {
+  background: var(--fundo);
+  text-decoration: none;
+}
+
+/* Ícones de linha (casca): herdam a cor do texto. */
+svg.icone {
+  flex: none;
+  width: 1.375rem;
+  height: 1.375rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/*
+ * Faixa: o alto verde das telas que têm um número que resume a tela (Hoje, Mês, Cartões, Fatura).
+ * No celular ela continua o topo verde até as bordas, com o canto de baixo arredondado; na tela
+ * larga é um cartão verde.
+ */
+.faixa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  margin: calc(-1 * var(--espaco-4)) calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: var(--espaco-2) max(16px, env(safe-area-inset-right, 0px)) 1.375rem max(16px, env(safe-area-inset-left, 0px));
+  border-radius: 0 0 1.5rem 1.5rem;
+  background: var(--faixa);
+  color: var(--sobre-faixa);
+}
+
+.faixa h3,
+.faixa .vazio,
+.faixa .rotulo-da-faixa {
+  margin: 0;
+  color: var(--sobre-faixa-suave);
+  font-size: var(--texto-m);
+  font-weight: 600;
+}
+
+.faixa .valor-da-faixa {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.faixa a,
+.faixa button.secundario {
+  color: var(--sobre-faixa);
+}
+
+.faixa .trilho-da-faixa {
+  height: 0.5rem;
+  margin-top: var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: var(--vidro);
+  overflow: hidden;
+}
+
+.faixa .trilho-da-faixa span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sobre-faixa);
+}
+
+/* Pílulas da faixa: atalhos que já trazem um dado; a fileira rola de lado se não couber. */
+.pilulas {
+  display: flex;
+  gap: var(--espaco-2);
+  margin: var(--espaco-4) calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 0 0;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  list-style: none;
+}
+
+.pilulas li {
+  flex: none;
+}
+
+.pilulas a {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem 0.625rem var(--espaco-3);
+  border-radius: 0.875rem;
+  background: var(--vidro);
+  color: var(--sobre-faixa);
+  text-decoration: none;
+}
+
+.pilulas a span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.pilulas strong {
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.pilulas small {
+  font-size: var(--texto-pp);
+  font-weight: 500;
+  color: var(--sobre-faixa-suave);
+  white-space: nowrap;
+}
+
+/* Casca: celular primeiro, com o topo verde e as abas coladas embaixo. */
 .casca {
   display: grid;
   grid-template-areas: "topo" "conteudo";
@@ -154,22 +384,98 @@ h2 {
 .casca .topo {
   grid-area: topo;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
-  padding: max(1rem, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 0.5rem
-    max(16px, env(safe-area-inset-left, 0px));
+  gap: var(--espaco-2);
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) var(--espaco-2) max(16px, env(safe-area-inset-left, 0px));
+  background: var(--faixa);
+  color: var(--sobre-faixa);
 }
 
 .casca .topo h1 {
-  flex-basis: 100%;
-}
-
-.casca .topo p {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  font-size: var(--texto-g);
+  font-weight: 700;
+}
+
+.botao-de-icone {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: transparent;
+  color: inherit;
+}
+
+.botao-de-icone:hover {
+  background: var(--vidro);
+}
+
+/* Menu da conta: o círculo com a inicial abre e-mail, Configurações, cadastros e Sair. */
+.menu-da-conta {
+  position: relative;
+}
+
+.menu-da-conta > summary {
+  display: grid;
+  place-items: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  margin: 0 0.1875rem;
+  border-radius: var(--raio-pilula);
+  background: var(--sobre-faixa);
+  color: var(--faixa);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.menu-da-conta > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-da-conta > div {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: 15rem;
+  padding: 0.375rem;
+  border: 1px solid var(--borda);
+  border-radius: 0.875rem;
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.menu-da-conta p {
+  padding: var(--espaco-2) 0.625rem;
   color: var(--texto-suave);
+  font-size: var(--texto-p);
+  overflow-wrap: anywhere;
+}
+
+.menu-da-conta a,
+.menu-da-conta button {
+  display: block;
+  padding: 0.625rem;
+  border: 0;
+  border-radius: var(--espaco-2);
+  background: transparent;
+  color: var(--texto);
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+}
+
+.menu-da-conta a:hover,
+.menu-da-conta button:hover {
+  background: var(--fundo);
 }
 
 .casca > main {
@@ -178,23 +484,29 @@ h2 {
   margin: 0;
   width: 100%;
   box-sizing: border-box;
-  padding-block: 1rem 5.5rem;
+  padding-block: var(--espaco-4) 6.5rem;
 }
 
 .abas {
   position: fixed;
+  z-index: 10;
   inset: auto 0 0 0;
   display: flex;
+  align-items: stretch;
   background: var(--superficie);
-  border-top: 1px solid var(--borda);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid var(--linha);
+  padding: 0 max(4px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(4px, env(safe-area-inset-left, 0px));
 }
 
 .abas a {
   flex: 1;
-  padding: 0.875rem 0.25rem;
-  text-align: center;
-  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  min-width: 0;
+  padding: var(--espaco-2) 2px 0.625rem;
+  font-size: var(--texto-pp);
   font-weight: 600;
   color: var(--texto-suave);
   text-decoration: none;
@@ -202,18 +514,72 @@ h2 {
 
 .abas a[aria-current="page"] {
   color: var(--destaque);
-  box-shadow: inset 0 3px 0 var(--destaque);
 }
 
-/* Tela larga: abas numa barra lateral e o conteúdo com largura de leitura. */
+/* O botão + fica no meio da barra, redondo e acima dela. */
+.abas a.novo {
+  order: 0;
+  justify-content: center;
+}
+
+.abas a.novo span {
+  display: grid;
+  place-items: center;
+  width: 3.375rem;
+  height: 3.375rem;
+  margin-top: -1.375rem;
+  border: 4px solid var(--fundo);
+  border-radius: var(--raio-pilula);
+  background: var(--destaque);
+  color: var(--sobre-destaque);
+  box-shadow: 0 4px 14px rgb(31 107 79 / 0.35);
+}
+
+.abas a.novo svg {
+  width: 1.625rem;
+  height: 1.625rem;
+  stroke-width: 2.4;
+}
+
+.abas a.novo .nome-da-aba {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* O + vem primeiro no código (primeiro no teclado); no celular, as duas primeiras abas passam à frente dele. */
+.abas a:nth-child(-n + 3):not(.novo) {
+  order: -1;
+}
+
+.abas a:nth-child(n + 4) {
+  order: 1;
+}
+
+/* Tela larga: o topo branco, as abas numa barra lateral e o conteúdo com largura de leitura. */
 @media (min-width: 900px) {
   .casca {
     grid-template-areas: "topo topo" "abas conteudo";
-    grid-template-columns: 14rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
   }
 
-  .casca .topo h1 {
-    flex-basis: auto;
+  .casca .topo {
+    padding: var(--espaco-3) var(--espaco-5);
+    background: var(--superficie);
+    color: var(--texto);
+    border-bottom: 1px solid var(--linha);
+  }
+
+  .botao-de-icone:hover {
+    background: var(--destaque-suave);
+  }
+
+  .menu-da-conta > summary {
+    background: var(--destaque);
+    color: var(--sobre-destaque);
   }
 
   .abas {
@@ -223,27 +589,81 @@ h2 {
     inset: auto;
     align-self: start;
     flex-direction: column;
-    height: 100dvh;
-    padding: 0.5rem;
+    gap: 2px;
+    height: auto;
+    padding: var(--espaco-4) var(--espaco-3);
     border-top: 0;
-    border-right: 1px solid var(--borda);
+    border-right: 1px solid var(--linha);
+    background: transparent;
   }
 
   .abas a {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    font-size: 1rem;
-    border-radius: 0.5rem;
+    flex: none;
+    flex-direction: row;
+    gap: var(--espaco-3);
+    padding: 0.625rem var(--espaco-3);
+    font-size: var(--texto-m);
+    border-radius: var(--raio-campo);
+  }
+
+  .abas a:hover {
+    background: var(--superficie);
+    text-decoration: none;
   }
 
   .abas a[aria-current="page"] {
+    background: var(--destaque-suave);
+  }
+
+  .abas a.novo {
+    order: -2;
+    margin-bottom: var(--espaco-3);
+    padding: 0.6875rem var(--espaco-3);
+    border-radius: var(--raio-pilula);
+    background: var(--destaque);
+    color: var(--sobre-destaque);
+  }
+
+  .abas a.novo:hover {
+    background: var(--destaque);
+  }
+
+  .abas a.novo span {
+    width: auto;
+    height: auto;
+    margin: 0;
+    border: 0;
+    background: transparent;
     box-shadow: none;
-    background: var(--fundo);
+  }
+
+  .abas a.novo svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .abas a.novo .nome-da-aba {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
   }
 
   .casca > main {
-    max-width: 60rem;
-    padding-block: 1rem 2rem;
+    max-width: 62rem;
+    padding: var(--espaco-5) var(--espaco-6) var(--espaco-6);
+  }
+
+  .faixa {
+    margin: 0;
+    padding: var(--espaco-5) 1.75rem;
+    border-radius: 1.25rem;
+  }
+
+  .pilulas {
+    margin-right: 0;
+    padding-right: 0;
+    flex-wrap: wrap;
   }
 }
 
@@ -340,8 +760,16 @@ h2 {
 
 .lista .acoes {
   display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.5rem;
+  margin: 0.625rem 0 0;
+}
+
+.lista .acoes > button,
+.lista .acoes > a.botao {
+  padding: 0.4375rem 0.9375rem;
+  font-size: 0.875rem;
 }
 
 a.botao.secundario {
@@ -364,9 +792,95 @@ select {
   opacity: 0.6;
 }
 
-.configuracoes h3 {
-  margin: 0.5rem 0;
+.configuracoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  max-width: 36rem;
+}
+
+.configuracoes h2 {
+  margin: 0;
+}
+
+.configuracoes > section:not(.cartao) > h3 {
+  margin: 0 0 var(--espaco-2) var(--espaco-1);
+  font-size: var(--texto-p);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.configuracoes .acoes {
+  margin: 0;
+}
+
+/* Interruptor: o texto à esquerda, a chave à direita. */
+label.interruptor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-4);
+  color: var(--texto);
   font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+label.interruptor > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+label.interruptor small {
+  color: var(--texto-suave);
+  font-size: var(--texto-p);
+  font-weight: 400;
+}
+
+label.interruptor input {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 3rem;
+  height: 1.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: var(--borda);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+label.interruptor input::after {
+  content: "";
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s;
+}
+
+label.interruptor input:checked {
+  background: var(--destaque);
+}
+
+label.interruptor input:checked::after {
+  transform: translateX(1.25rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  label.interruptor input,
+  label.interruptor input::after {
+    transition: none;
+  }
 }
 
 .acoes {
@@ -391,28 +905,15 @@ fieldset.sem-moldura {
 }
 
 /* Contas da semana: o atrasado leva um selo de aviso; o ajuste abre dentro da linha. */
-.contas-da-semana {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-block: 1rem;
-  max-width: 26rem;
-}
-
-.contas-da-semana h3 {
-  margin: 0;
-  font-size: 1.125rem;
-}
-
 .selo-atrasado {
   display: inline-block;
   margin-right: 0.5rem;
   padding: 0 0.5rem;
-  border-radius: 0.25rem;
-  background: var(--aviso-fundo);
+  border-radius: var(--raio-pilula);
+  background: var(--erro-suave);
   color: var(--erro);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--texto-pp);
+  font-weight: 700;
 }
 
 .ajuste {
@@ -822,36 +1323,168 @@ button.linha-que-abre {
   margin-bottom: 0;
 }
 
-/* Hoje: o "ainda dá para gastar" em destaque e os blocos de cada aviso. */
-.destaque-da-hoje {
-  padding: 1rem;
-  border-radius: 0.5rem;
-  background: var(--aviso-fundo);
-  max-width: 26rem;
-}
-
-.destaque-da-hoje h3,
-.bloco-da-hoje h3 {
-  margin: 0;
-  font-size: 1.125rem;
-}
-
-.destaque-da-hoje .valor {
-  margin: 0.25rem 0;
-  font-size: 2rem;
-  font-weight: 700;
-}
-
-.bloco-da-hoje {
+/* Hoje: a faixa verde no alto e cada aviso num cartão; na tela larga, os cartões em duas colunas. */
+.tela-hoje {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-block: 1rem;
-  max-width: 26rem;
+  gap: var(--espaco-4);
 }
 
-.bloco-da-hoje progress {
+.bloco-da-hoje,
+.contas-da-semana {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.bloco-da-hoje h3,
+.contas-da-semana h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tela-hoje > .aviso {
+  margin: 0;
+  border: 0;
+  background: var(--erro-suave);
+}
+
+.tela-hoje > .aviso strong {
+  color: var(--erro);
+}
+
+.bloco-da-hoje .lista,
+.contas-da-semana .lista {
+  gap: 0;
+}
+
+.bloco-da-hoje .lista > li,
+.contas-da-semana .lista > li {
+  padding-block: var(--espaco-3);
+}
+
+.bloco-da-hoje .lista > li + li,
+.contas-da-semana .lista > li + li {
+  border-top: 1px solid var(--linha);
+}
+
+.bloco-da-hoje .lista > li:first-child,
+.contas-da-semana .lista > li:first-child {
+  padding-top: 0;
+}
+
+.bloco-da-hoje .lista > li:last-child,
+.contas-da-semana .lista > li:last-child {
+  padding-bottom: 0;
+}
+
+.bloco-da-hoje .vazio,
+.contas-da-semana .vazio {
+  font-size: 0.875rem;
+}
+
+.bloco-da-hoje a.botao.secundario {
+  display: inline-block;
+  margin-top: var(--espaco-2);
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+}
+
+/* Barra de progresso: trilho claro e o preenchido na cor do app (vermelho se passou do planejado). */
+progress {
+  appearance: none;
   width: 100%;
+  height: 0.5rem;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: var(--linha);
+  color: var(--destaque);
+  accent-color: var(--destaque);
+  overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+  background: var(--linha);
+  border-radius: var(--raio-pilula);
+}
+
+progress::-webkit-progress-value {
+  background: var(--destaque);
+  border-radius: var(--raio-pilula);
+}
+
+progress::-moz-progress-bar {
+  background: var(--destaque);
+  border-radius: var(--raio-pilula);
+}
+
+progress[value="100"]::-webkit-progress-value {
+  background: var(--erro);
+}
+
+progress[value="100"]::-moz-progress-bar {
+  background: var(--erro);
+}
+
+/* O estado da API, discreto, no fim da Hoje. */
+.estado-da-api {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espaco-1) var(--espaco-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-p);
+}
+
+.estado-da-api span::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.375rem;
+  border-radius: 50%;
+  background: var(--texto-suave);
+}
+
+.estado-da-api span[data-estado="no ar"]::before {
+  background: var(--destaque);
+}
+
+.estado-da-api span[data-estado="sem conexão"]::before {
+  background: var(--erro);
+}
+
+.estado-da-api button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--destaque);
+  font-size: inherit;
+}
+
+@media (min-width: 900px) {
+  .tela-hoje {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--espaco-5);
+  }
+
+  .tela-hoje > .faixa,
+  .tela-hoje > .aviso,
+  .tela-hoje > .estado-da-api,
+  .tela-hoje > p,
+  .tela-hoje > [role="alert"],
+  .tela-hoje > [data-testid="nao-enviados"] {
+    grid-column: 1 / -1;
+  }
 }
 
 .limite summary {
@@ -889,10 +1522,9 @@ label.caixa > input {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
-  padding: 0.75rem;
-  border: 1px solid var(--borda);
-  border-radius: 0.75rem;
-  background: var(--superficie);
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--raio-campo);
+  background: var(--fundo);
   color: var(--texto);
   text-decoration: none;
 }
@@ -1180,10 +1812,6 @@ label.caixa > input {
   margin-top: 0.5rem;
   padding-left: 1rem;
   border-left: 2px solid var(--borda);
-}
-.lupa {
-  font-size: 1.25rem;
-  text-decoration: none;
 }
 
 /* Aviso de planejamento ao lançar: o item antes e depois, numa barra do planejado. */

@@ -149,7 +149,7 @@ await page.goto("/#/historico");
 await page.getByLabel("E-mail").fill("flavio@teste.com");
 await page.getByLabel("Senha").fill("uma senha qualquer");
 await page.getByRole("button", { name: "Entrar" }).click();
-await page.getByRole("button", { name: "Sair" }).waitFor();
+await page.getByLabel(/^Conta de /).waitFor();
 const comToken = page.waitForRequest((r) => r.url().includes("/api/") && !!r.headers().authorization);
 await page.reload();
 const headers = { authorization: (await comToken).headers().authorization };

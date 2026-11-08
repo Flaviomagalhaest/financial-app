@@ -23,7 +23,7 @@ test("o manifesto deixa o app instalável e traz o atalho Novo lançamento", asy
 test("a casca abre sem internet depois de instalada", async ({ page, context }) => {
   await page.goto("/");
   await entrar(page);
-  await expect(page.getByText("Entrou como flavio@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de flavio@teste.com")).toBeVisible();
   await page.evaluate(() => navigator.serviceWorker.ready);
   // O service worker só passa a controlar a página na próxima abertura.
   await page.reload();
@@ -50,7 +50,7 @@ test("navega entre as abas e abre o novo lançamento pelo botão e pelo atalho",
   }
 
   await abas.getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await expect(page.getByRole("heading", { name: "Novo lançamento", level: 2 })).toBeVisible();
 
   await page.goto("/#/hoje");
@@ -63,15 +63,17 @@ test("celular tem as abas embaixo e tela larga tem as abas ao lado", async ({ pa
   await entrar(page);
   const abas = page.getByRole("navigation", { name: "Telas" });
   const conteudo = page.getByRole("main");
-  const novo = page.getByRole("link", { name: "+ Novo lançamento" });
+  const novo = page.getByRole("link", { name: "Novo lançamento" });
 
   await page.setViewportSize({ width: 390, height: 800 });
   const celular = (await abas.boundingBox())!;
   expect(celular.y + celular.height).toBeCloseTo(800, 0);
   expect(celular.width).toBeCloseTo(390, 0);
   await expect(novo).toBeVisible();
-  // O conteúdo termina acima das abas fixas.
-  expect((await novo.boundingBox())!.y + (await novo.boundingBox())!.height).toBeLessThan(celular.y);
+  // O botão + fica no meio da barra de baixo (ticket 204).
+  const mais = (await novo.boundingBox())!;
+  expect(Math.abs(mais.x + mais.width / 2 - 195)).toBeLessThan(40);
+  expect(mais.y + mais.height).toBeLessThanOrEqual(800);
 
   await page.setViewportSize({ width: 1280, height: 800 });
   const larga = (await abas.boundingBox())!;
@@ -79,5 +81,7 @@ test("celular tem as abas embaixo e tela larga tem as abas ao lado", async ({ pa
   expect(larga.x).toBe(0);
   expect(larga.width).toBeLessThan(300);
   expect(principal.x).toBeGreaterThanOrEqual(larga.x + larga.width);
+  // Na tela larga, o Novo lançamento é o primeiro botão da barra lateral.
   await expect(novo).toBeVisible();
+  expect((await novo.boundingBox())!.x + (await novo.boundingBox())!.width).toBeLessThanOrEqual(larga.x + larga.width);
 });

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { desconectar, renovacoes } from "./cognito-falso";
 import { entrar } from "./entrar";
+import { peloMenuDaConta } from "./conta";
 
 const verificar = (page: Page) => page.getByRole("button", { name: "Verificar de novo" }).click();
 
@@ -8,11 +9,11 @@ test("entra com e-mail e senha no próprio app e continua logado ao abrir de nov
   await page.goto("/");
   await entrar(page, "flavio@teste.com");
 
-  await expect(page.getByText("Entrou como flavio@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de flavio@teste.com")).toBeVisible();
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
 
   await page.reload();
-  await expect(page.getByText("Entrou como flavio@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de flavio@teste.com")).toBeVisible();
   await expect(page.getByLabel("Senha")).toHaveCount(0);
 });
 
@@ -39,7 +40,7 @@ test("sem internet e com o acesso vencido o app segue logado e renova quando a r
   await page.clock.fastForward("16:00");
   await verificar(page);
   await expect(page.getByTestId("estado-da-api")).toHaveText("Sem conexão");
-  await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de esposa@teste.com")).toBeVisible();
 
   await context.setOffline(false);
   await verificar(page);
@@ -70,9 +71,9 @@ test("sessões desconectadas pelo dono pedem o login de novo", async ({ page }) 
 test("sair volta ao formulário e não deixa a sessão no aparelho", async ({ page }) => {
   await page.goto("/");
   await entrar(page, "flavio@teste.com");
-  await expect(page.getByText("Entrou como flavio@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de flavio@teste.com")).toBeVisible();
 
-  await page.getByRole("button", { name: "Sair" }).click();
+  await peloMenuDaConta(page, "Sair");
   await expect(page.getByLabel("Senha")).toBeVisible();
 
   await page.reload();

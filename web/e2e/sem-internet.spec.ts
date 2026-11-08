@@ -6,6 +6,7 @@ import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
 import { esperarFilaVazia } from "./fila";
 import { soltarRotas } from "./rotas";
+import { peloMenuDaConta } from "./conta";
 
 test.afterEach(async ({ page }) => {
   await soltarRotas(page);
@@ -216,17 +217,17 @@ test("sair com lançamentos não enviados pede confirmação e, confirmado, apag
     mensagem = dialogo.message();
     void dialogo.dismiss();
   });
-  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await peloMenuDaConta(page, "Sair");
   await expect.poll(() => mensagem).toContain("1 lançamento ainda não foi enviado");
-  await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de esposa@teste.com")).toBeVisible();
 
   page.once("dialog", (dialogo) => void dialogo.accept());
-  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await peloMenuDaConta(page, "Sair");
   await expect(page.getByLabel("Senha")).toBeVisible();
 
   await context.setOffline(false);
   await entrar(page, "esposa@teste.com");
-  await expect(page.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await expect(page.getByLabel("Conta de esposa@teste.com")).toBeVisible();
   await aba(page, "Hoje");
   await expect(page.getByTestId("estado-da-api")).toHaveText("API no ar");
   await esperarFilaVazia(page);
@@ -296,7 +297,7 @@ test("no Android, o service worker sobe a fila em segundo plano, sem o app abert
   const esposa = await outro.newPage();
   await esposa.goto("/#/historico");
   await entrar(esposa, "esposa@teste.com");
-  await expect(esposa.getByText("Entrou como esposa@teste.com")).toBeVisible();
+  await expect(esposa.getByLabel("Conta de esposa@teste.com")).toBeVisible();
   const linha = esposa.getByRole("listitem").filter({ hasText: `Segundo plano ${s}` });
   await expect(async () => {
     await esposa.reload();
@@ -360,7 +361,7 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
   const saldo = () => page.getByRole("listitem").filter({ hasText: conta });
   const verSaldo = async () => {
     await aba(page, "Hoje");
-    await page.getByRole("link", { name: "Contas e categorias" }).click();
+    await peloMenuDaConta(page, "Contas e categorias");
   };
   await verSaldo();
   await expect(saldo()).toContainText("-R$ 1,00");
@@ -409,7 +410,7 @@ test("a rede cai logo depois do envio, antes de o saldo ser lido de novo: o sald
   await context.setOffline(true);
   await page.unroute("**/api/contas**");
   await aba(page, "Hoje");
-  await page.getByRole("link", { name: "Contas e categorias" }).click();
+  await peloMenuDaConta(page, "Contas e categorias");
   await expect(saldo).toContainText("-R$ 1,00");
   await expect(saldo).not.toContainText("⏳");
 

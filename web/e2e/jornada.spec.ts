@@ -28,7 +28,7 @@ async function prepararCasal(page: Page) {
 test("a folha de detalhes completa o lançamento e o resumo fica numa linha embaixo do valor", async ({ page }) => {
   const { s, conta, mercado, viagem } = await prepararCasal(page);
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
 
   await digitar(page, "8", "9", "9", "0");
   await page.getByRole("button", { name: conta }).click();
@@ -67,7 +67,7 @@ test("a folha de detalhes completa o lançamento e o resumo fica numa linha emba
 
   // A tag criada vira opção do próximo lançamento, e a data futura nasce prevista, trocável à mão.
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, "1", "00");
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: mercado }).click();
@@ -82,7 +82,7 @@ test("a folha de detalhes completa o lançamento e o resumo fica numa linha emba
   await expect(linha(page, `IPVA ${s}`)).toContainText("previsto");
 
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await digitar(page, "2", "00");
   await page.getByRole("button", { name: conta }).click();
   await page.getByRole("button", { name: mercado }).click();
@@ -115,7 +115,7 @@ test("'Repetir último' aparece enquanto o lançamento está vazio e lança de n
   await expect(linha(page, `Pedágio ${s}`)).toHaveCount(1);
 
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   const repetir = page.getByRole("button", { name: /^Repetir último/ });
   await expect(repetir).toHaveText(`Repetir último: Pedágio ${s}, R$ 45,00 · ${viagem} · ${cartao}`);
   // Com o lançamento começado, some.
@@ -152,7 +152,7 @@ test("transferência entre duas contas, com categoria opcional, move o saldo e p
   await cadastrar(page, "Nova categoria", reserva, "transferencia");
 
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await page.getByRole("group", { name: "Tipo" }).getByRole("button", { name: "Transferência" }).click();
   await expect(page.getByRole("heading", { name: "Nova transferência", level: 2 })).toBeVisible();
   const salvar = page.getByRole("button", { name: "Salvar" });
@@ -178,7 +178,7 @@ test("transferência entre duas contas, com categoria opcional, move o saldo e p
   // Sem internet, a tela avisa e não salva (ADR 0011: só lançamentos funcionam sem internet).
   await context.setOffline(true);
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await page.getByRole("group", { name: "Tipo" }).getByRole("button", { name: "Transferência" }).click();
   await expect(page.getByText("Sem internet: a transferência precisa de internet.")).toBeVisible();
   await digitar(page, "1", "00");
@@ -223,7 +223,7 @@ test("sem internet, o atalho do ícone abre o novo lançamento e a jornada intei
 
   // O não enviado também é o último para repetir, e a tag criada sem internet já é opção.
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   await page.getByRole("button", { name: /^Repetir último/ }).click();
   await expect(page.getByTestId("valor")).toHaveText("R$ 18,50");
   await page.getByRole("button", { name: /^Detalhes/ }).click();
@@ -259,7 +259,7 @@ test("o cartão entra na fileira de contas e a fatura da compra se troca à mão
   expect(criado.ok()).toBe(true);
 
   await page.goto("/#/hoje");
-  await page.getByRole("link", { name: "+ Novo lançamento" }).click();
+  await page.getByRole("link", { name: "Novo lançamento" }).click();
   const fichaDoCartao = page.getByRole("button", { name: visa, exact: true });
   await expect(fichaDoCartao).toContainText("💳");
   await digitar(page, "3", "00");

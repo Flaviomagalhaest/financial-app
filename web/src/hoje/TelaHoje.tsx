@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { atualizadoAs, salvarLancamento, useCadastro, useContasDaSemana, useFila, useHoje, useLancamentos, type LancamentoNaTela, type LeituraDaHoje } from "../dados";
+import { FaixaDaHoje } from "./FaixaDaHoje";
 import { GradeDeFavoritos } from "./GradeDeFavoritos";
+import { useAtalhosDaFaixa } from "./atalhosDaFaixa";
 import { AvisoDaFila } from "../lancamentos/AvisoDaFila";
 import { ContasDaSemana } from "../lancamentos/ContasDaSemana";
 import { eEstorno, nomePorId, plural, tituloDoLancamento } from "../lancamentos/apresentacao";
@@ -144,9 +146,12 @@ export function TelaHoje() {
   // O que se confirmou aqui e ainda não subiu já não é conta da semana.
   const contasDaSemana = useContasDaSemana(dados?.contas_da_semana ?? null);
   const atrasados = (contasDaSemana?.filter((l) => l.atrasado).length ?? 0) + (dados?.transferencias_da_semana.filter((t) => t.atrasado).length ?? 0);
+  // Com os atalhos ligados, os favoritos estão nas pílulas da faixa e a grade sai do corpo.
+  const atalhos = useAtalhosDaFaixa();
 
   return (
     <>
+      {dados && <FaixaDaHoje hoje={dados} />}
       <AvisoDaFila />
       {atualizadoEm && (
         <p className="vazio" data-testid="atualizado-em">
@@ -160,22 +165,9 @@ export function TelaHoje() {
       )}
       {dados && (
         <>
-          <section aria-labelledby="ainda-da-para-gastar" className="destaque-da-hoje">
-            <h3 id="ainda-da-para-gastar">Ainda dá para gastar este mês</h3>
-            <p className="valor" data-testid="ainda-da-para-gastar">
-              {dados.ainda_da_para_gastar_centavos < 0
-                ? `passou ${formatarCentavos(-dados.ainda_da_para_gastar_centavos)}`
-                : formatarCentavos(dados.ainda_da_para_gastar_centavos)}
-            </p>
-            <p className="vazio">
-              {dados.planejado_centavos > 0
-                ? `de ${formatarCentavos(dados.planejado_centavos)} planejados`
-                : "Nenhum item planejado para este mês."}
-            </p>
-          </section>
           {atrasados > 0 && (
             <p className="aviso" role="status" data-testid="atrasados">
-              ⚠ {plural(atrasados, "conta atrasada", "contas atrasadas")}: confirme abaixo.
+              <strong>{plural(atrasados, "conta atrasada", "contas atrasadas")}.</strong> Confirme em Contas da semana.
             </p>
           )}
           <AEscolher hoje={dados} />
@@ -183,7 +175,7 @@ export function TelaHoje() {
           <ItensEmDestaque itens={dados.itens_em_destaque} />
         </>
       )}
-      <GradeDeFavoritos />
+      <GradeDeFavoritos semGrade={atalhos} />
       <ContasDaSemana lancamentos={contasDaSemana} transferencias={dados ? dados.transferencias_da_semana : null} />
     </>
   );
