@@ -180,7 +180,9 @@ def main() -> None:
         ("correção do longo", corrigir_o_longo, repeticoes, (longo,)),
     ):
         with_ = mediana(medida, vezes, *args)
-        with mock.patch.object(cartoes, "protegida", lambda trabalho, corrigida=None: trabalho):
+        with mock.patch.object(
+            cartoes, "protegida", lambda trabalho, corrigida=None, tocados=None: trabalho
+        ):
             sem = mediana(medida, vezes, *args)
         print(
             f"{rotulo:18} com proteção {with_:8.0f} ms | sem {sem:8.0f} ms | custo {with_ - sem:8.0f} ms"
