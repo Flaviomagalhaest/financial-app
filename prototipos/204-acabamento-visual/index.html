@@ -1,0 +1,629 @@
+<title>Acabamento visual do Financial App</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* PROTÓTIPO DESCARTÁVEL — ticket 204. Página de comparação: o dono combina direção, fonte, topo e ícones e vê Hoje e Mês no celular e na tela larga.
+   Layout: coluna de leitura com o painel de escolhas em cima e as molduras dos aparelhos embaixo. */
+:root {
+  --p-fundo: #eef1ee;
+  --p-sup: #ffffff;
+  --p-texto: #18201b;
+  --p-suave: #56625a;
+  --p-borda: #cdd6cf;
+  --p-acento: #1f6b4f;
+  --p-sobre-acento: #ffffff;
+  --p-acento-suave: #dcebe2;
+  --p-barra: #18201b;
+  --p-sobre-barra: #f2f5f2;
+  --p-fonte: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --p-fundo: #0f1311; --p-sup: #181e1a; --p-texto: #e6ebe7; --p-suave: #9eaaa2; --p-borda: #313b34;
+    --p-acento: #5fbf95; --p-sobre-acento: #0d1a14; --p-acento-suave: #1d3328; --p-barra: #e6ebe7; --p-sobre-barra: #121614;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --p-fundo: #0f1311; --p-sup: #181e1a; --p-texto: #e6ebe7; --p-suave: #9eaaa2; --p-borda: #313b34;
+  --p-acento: #5fbf95; --p-sobre-acento: #0d1a14; --p-acento-suave: #1d3328; --p-barra: #e6ebe7; --p-sobre-barra: #121614;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--p-fundo); color: var(--p-texto); font: 15px/1.5 var(--p-fonte); margin: 0; }
+.pagina {
+  max-width: 84rem; margin: 0 auto;
+  padding-block: 1.5rem 6rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 1.25rem;
+}
+.p-cabeca h1 { margin: 0 0 .25rem; font-size: 1.6rem; letter-spacing: -.01em; text-wrap: balance; }
+.p-cabeca p { margin: 0; color: var(--p-suave); max-width: 46rem; }
+.p-cabeca .etiqueta { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--p-acento); margin-bottom: .35rem; }
+
+.escolhas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: .75rem; }
+.grupo { background: var(--p-sup); border: 1px solid var(--p-borda); border-radius: 12px; padding: .9rem 1rem 1rem; display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
+.grupo.foco { border-color: var(--p-acento); box-shadow: 0 0 0 1px var(--p-acento); }
+.grupo h2 { margin: 0; font-size: .95rem; display: flex; gap: .5rem; align-items: baseline; }
+.grupo h2 small { font-size: .72rem; font-weight: 700; color: var(--p-suave); letter-spacing: .06em; }
+.opcoes { display: flex; flex-wrap: wrap; gap: .35rem; }
+.opcoes button, .alternar button {
+  font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--p-borda); background: transparent; color: var(--p-texto);
+  border-radius: 999px; padding: .3rem .75rem;
+}
+.opcoes button[aria-pressed="true"], .alternar button[aria-pressed="true"] { background: var(--p-acento); border-color: var(--p-acento); color: var(--p-sobre-acento); }
+.opcoes button .rec { font-size: .7rem; opacity: .8; margin-left: .25rem; }
+.grupo .nota { margin: 0; font-size: .85rem; color: var(--p-suave); min-height: 3.8em; }
+
+.barra-vista { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; }
+.alternar { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+.alternar > span { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--p-suave); margin-right: .15rem; }
+
+.molduras { display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-start; }
+.moldura { min-width: 0; display: flex; flex-direction: column; gap: .4rem; }
+.moldura.celular { flex: 0 1 390px; }
+.moldura.larga { flex: 1 1 36rem; }
+.moldura > p { margin: 0; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--p-suave); }
+.escala { position: relative; overflow: hidden; width: 100%; border-radius: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 8px 30px rgba(0,0,0,.10); }
+.escala > .aparelho { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+.resumo { font-size: .85rem; color: var(--p-suave); }
+.resumo b { color: var(--p-texto); }
+
+/* Barra flutuante do protótipo (não faz parte do design avaliado). */
+.flutuante {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: .25rem;
+  background: var(--p-barra); color: var(--p-sobre-barra);
+  border-radius: 999px; padding: .3rem; box-shadow: 0 6px 24px rgba(0,0,0,.3); z-index: 20;
+  max-width: calc(100vw - 32px);
+}
+.flutuante button { font: inherit; background: transparent; color: inherit; border: 0; border-radius: 999px; cursor: pointer; padding: .45rem .7rem; font-weight: 700; }
+.flutuante button:hover { background: color-mix(in srgb, var(--p-sobre-barra) 15%, transparent); }
+.flutuante .rotulo { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; padding: 0 .4rem; }
+:focus-visible { outline: 3px solid var(--p-acento); outline-offset: 2px; }
+
+/* ================= MOCK DO APP ================= */
+.mock {
+  --m-fundo: #f3f5f2; --m-sup: #ffffff; --m-texto: #1d231f; --m-suave: #5b665f; --m-borda: #d3dbd5; --m-linha: #e7ece8;
+  --m-destaque: #1f6b4f; --m-destaque-suave: #e2efe7; --m-sobre: #ffffff; --m-erro: #a3271d; --m-erro-suave: #fbe9e6;
+  --m-aviso: #fbf1d9; --m-faixa: #1f6b4f; --m-sobre-faixa: #ffffff; --m-sombra: 0 1px 2px rgba(20,40,30,.06), 0 2px 8px rgba(20,40,30,.05);
+  --m-fonte: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --r: 14px;
+  background: var(--m-fundo); color: var(--m-texto);
+  font-family: var(--m-fonte); font-size: 16px; line-height: 1.45;
+  display: flex; flex-direction: column; overflow: hidden;
+  color-scheme: light;
+}
+.mock.escuro {
+  --m-fundo: #111513; --m-sup: #1b211d; --m-texto: #e7ece8; --m-suave: #a3aea6; --m-borda: #343e37; --m-linha: #262e29;
+  --m-destaque: #5fbf95; --m-destaque-suave: #1e3529; --m-sobre: #0d1a14; --m-erro: #ff8a7f; --m-erro-suave: #3a2220;
+  --m-aviso: #3a3220; --m-faixa: #174c38; --m-sobre-faixa: #f0f6f2; --m-sombra: 0 1px 2px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+.mock * { box-sizing: border-box; }
+.mock h2, .mock h3, .mock p { margin: 0; }
+.mock button { font: inherit; cursor: pointer; }
+.mock .num { font-variant-numeric: tabular-nums; }
+.mock svg.ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.f-sistema { --m-fonte: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.f-inter { --m-fonte: "Inter", system-ui, sans-serif; }
+.f-manrope { --m-fonte: "Manrope", system-ui, sans-serif; }
+.f-plex { --m-fonte: "IBM Plex Sans", system-ui, sans-serif; }
+.f-nunito { --m-fonte: "Nunito Sans", system-ui, sans-serif; }
+.f-source { --m-fonte: "Source Sans 3", system-ui, sans-serif; }
+
+/* Estrutura: celular = topo + rolagem + abas embaixo; larga = topo em cima, barra lateral e conteúdo. */
+.mock.celular { width: 390px; height: 780px; }
+.mock.larga { width: 1200px; height: 760px; }
+.mock .corpo { flex: 1; min-height: 0; display: flex; }
+.mock .rolagem { flex: 1; min-width: 0; overflow-y: auto; }
+.mock.celular .corpo { flex-direction: column; }
+.mock .conteudo { padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 16px; }
+.mock.larga .conteudo { padding: 24px 32px 40px; max-width: 980px; }
+
+/* ---- Topo ---- */
+.mock .topo { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; background: var(--m-fundo); }
+.mock.larga .topo { padding: 14px 24px; border-bottom: 1px solid var(--m-linha); background: var(--m-sup); }
+.mock .topo .marca { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; }
+.mock .topo .titulo-tela { font-weight: 700; font-size: 1.5rem; letter-spacing: -.015em; }
+.mock .topo .espaco { flex: 1; }
+.mock .icone-topo { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 999px; border: 0; background: transparent; color: var(--m-texto); }
+.mock .icone-topo:hover { background: var(--m-destaque-suave); }
+.mock .avatar { width: 34px; height: 34px; border-radius: 999px; background: var(--m-destaque); color: var(--m-sobre); font-weight: 700; display: grid; place-items: center; border: 0; position: relative; }
+.mock .menu-avatar { position: absolute; right: 0; top: 42px; background: var(--m-sup); color: var(--m-texto); border: 1px solid var(--m-borda); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; width: 220px; text-align: left; font-weight: 400; z-index: 5; }
+.mock .menu-avatar p { font-size: .8rem; color: var(--m-suave); padding: 6px 10px; }
+.mock .menu-avatar span { display: block; padding: 8px 10px; border-radius: 8px; font-size: .95rem; }
+.mock .menu-avatar span:hover { background: var(--m-fundo); }
+/* topo "atual": o que existe hoje, de propósito com o link do navegador */
+.mock .topo.atual { flex-wrap: wrap; background: var(--m-fundo); border-bottom: 0; }
+.mock .topo.atual .marca { font-size: 1.5rem; }
+.mock.celular .topo.atual .marca { flex-basis: 100%; }
+.mock .topo.atual .email { color: var(--m-suave); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mock .topo.atual a.cru { color: #0000ee; text-decoration: underline; }
+.mock.escuro .topo.atual a.cru { color: #9e9eff; }
+.mock .topo.atual .sair { font-weight: 600; padding: 10px 16px; border: 1px solid var(--m-destaque); border-radius: 8px; color: var(--m-destaque); background: transparent; }
+
+/* ---- Abas ---- */
+.mock .abas { display: flex; background: var(--m-sup); border-top: 1px solid var(--m-linha); position: relative; }
+.mock .abas .aba { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px 10px; font-size: .72rem; font-weight: 600; color: var(--m-suave); border: 0; background: transparent; }
+.mock .abas .aba .pilula { display: grid; place-items: center; }
+.mock .abas .aba[aria-current="page"] { color: var(--m-destaque); }
+.mock.celular.i-texto .abas .aba { font-size: .85rem; padding: 14px 2px; }
+.mock.celular.i-texto .abas .aba[aria-current="page"] { box-shadow: inset 0 3px 0 var(--m-destaque); }
+.mock.i-texto .abas .aba svg { display: none; }
+.mock.i-preenchido .abas .aba .pilula { width: 56px; height: 30px; border-radius: 999px; }
+.mock.i-preenchido .abas .aba[aria-current="page"] .pilula { background: var(--m-destaque-suave); }
+.mock.i-preenchido .abas .aba[aria-current="page"] svg { fill: currentColor; fill-opacity: .18; stroke-width: 2.1; }
+.mock.i-preenchido .abas .aba[aria-current="page"] { color: var(--m-texto); }
+.mock.i-preenchido .abas .aba[aria-current="page"] .pilula { color: var(--m-destaque); }
+.mock.celular.i-so-icone .abas .aba:not([aria-current="page"]) .nome { display: none; }
+.mock.celular.i-so-icone .abas .aba { justify-content: center; padding: 12px 2px; }
+.mock.celular.i-so-icone .abas .aba[aria-current="page"] { flex-direction: row; gap: 6px; }
+.mock.celular.i-so-icone .abas .aba[aria-current="page"] .pilula { }
+.mock.celular.i-so-icone .abas .aba[aria-current="page"] { background: var(--m-destaque-suave); border-radius: 999px; margin: 6px 4px; padding: 6px 10px; flex: 1.6; font-size: .8rem; }
+.mock .abas .fab { display: none; border: 0; background: transparent; padding: 0; }
+.mock .abas .marca-lateral, .mock .abas .novo-lateral { display: none; }
+.mock.celular.i-fab .abas .fab { display: grid; flex: 1; place-items: center; }
+.mock.celular.i-fab .abas .fab span { width: 54px; height: 54px; border-radius: 999px; background: var(--m-destaque); color: var(--m-sobre); display: grid; place-items: center; margin-top: -22px; box-shadow: 0 4px 14px rgba(31,107,79,.35); border: 4px solid var(--m-fundo); }
+.mock.celular.i-fab .abas .fab svg { width: 26px; height: 26px; stroke-width: 2.4; }
+
+/* barra lateral (larga) */
+.mock.larga .corpo { flex-direction: row; }
+.mock.larga .abas { flex-direction: column; width: 232px; flex: none; border-top: 0; border-right: 1px solid var(--m-linha); padding: 16px 12px; gap: 2px; }
+.mock.larga .abas .aba { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 12px; font-size: .95rem; border-radius: 10px; text-align: left; }
+.mock.larga .abas .aba .pilula { width: auto; height: auto; }
+.mock.larga .abas .aba:hover { background: var(--m-fundo); }
+.mock.larga .abas .aba[aria-current="page"] { background: var(--m-destaque-suave); color: var(--m-destaque); }
+.mock.larga.i-preenchido .abas .aba[aria-current="page"] .pilula { background: transparent; }
+.mock.larga .abas .novo-lateral { display: none; }
+.mock.larga.i-fab .abas .novo-lateral { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; padding: 11px 12px; border-radius: 12px; background: var(--m-destaque); color: var(--m-sobre); font-weight: 700; border: 0; }
+.mock.larga .abas .marca-lateral { display: none; font-weight: 800; font-size: 1.1rem; padding: 4px 12px 16px; letter-spacing: -.01em; }
+.mock.larga.t-titulo .abas .marca-lateral { display: block; }
+.mock .abas .pe { display: none; }
+.mock.larga.t-enxuto .abas .pe, .mock.larga.t-titulo .abas .pe { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding: 12px; border-top: 1px solid var(--m-linha); font-size: .82rem; color: var(--m-suave); }
+.mock .abas .pe button { align-self: flex-start; background: transparent; border: 0; padding: 0; color: var(--m-destaque); font-weight: 600; }
+.mock.larga.t-titulo .topo { display: none; }
+
+/* ---- Componentes comuns ---- */
+.mock .botao { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 650; border-radius: 10px; padding: 10px 16px; border: 1px solid var(--m-destaque); background: var(--m-destaque); color: var(--m-sobre); font-size: .95rem; }
+.mock .botao.sec { background: transparent; color: var(--m-destaque); border-color: var(--m-borda); }
+.mock .botao.peq { padding: 6px 12px; font-size: .85rem; border-radius: 8px; }
+.mock .suave { color: var(--m-suave); }
+.mock .chip { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--m-erro-suave); color: var(--m-erro); vertical-align: 1px; }
+.mock .neg { color: var(--m-erro); }
+.mock h3.secao { font-size: 1rem; font-weight: 700; }
+.mock .cab-secao { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.mock .cab-secao a { color: var(--m-destaque); font-size: .85rem; font-weight: 600; text-decoration: none; }
+.mock .linha { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 2px 12px; padding: 12px 0; border-top: 1px solid var(--m-linha); align-items: center; }
+.mock .linha:first-of-type { border-top: 0; }
+.mock .linha .nome { font-weight: 600; }
+.mock .linha .sub { grid-column: 1; font-size: .85rem; color: var(--m-suave); }
+.mock .linha .valor { grid-row: 1; grid-column: 2; text-align: right; font-weight: 600; }
+.mock .linha .acoes { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 8px; }
+.mock.larga .linha .acoes { grid-column: 2; grid-row: 2; margin-top: 0; justify-content: flex-end; }
+.mock .linha .seta { color: var(--m-suave); }
+.mock .progresso { height: 8px; border-radius: 999px; background: var(--m-linha); overflow: hidden; }
+.mock .progresso span { display: block; height: 100%; background: var(--m-destaque); border-radius: 999px; }
+.mock .progresso.cheio span { background: var(--m-erro); }
+.mock .item-prog { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; }
+.mock .item-prog .l1 { display: flex; justify-content: space-between; font-weight: 600; }
+.mock .item-prog .l3 { font-size: .85rem; color: var(--m-suave); }
+.mock .menu-linhas { display: flex; flex-direction: column; background: var(--m-sup); border-radius: var(--r); overflow: hidden; }
+.mock .menu-linhas .item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--m-linha); color: var(--m-texto); font-weight: 500; }
+.mock .menu-linhas .item:first-child { border-top: 0; }
+.mock .menu-linhas .item .seta { margin-left: auto; color: var(--m-suave); }
+.mock .estado-api { font-size: .8rem; color: var(--m-suave); display: flex; align-items: center; gap: 8px; justify-content: center; }
+.mock .estado-api i { width: 8px; height: 8px; border-radius: 99px; background: var(--m-destaque); display: inline-block; }
+.mock .estado-api button { border: 0; background: transparent; color: var(--m-destaque); font-weight: 600; font-size: .8rem; padding: 0; }
+.mock .alerta { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 12px; background: var(--m-erro-suave); color: var(--m-texto); font-size: .92rem; }
+.mock .alerta b { color: var(--m-erro); }
+
+/* Hero de Hoje */
+.mock .hero { display: flex; flex-direction: column; gap: 6px; }
+.mock .hero .rot { font-size: .9rem; color: var(--m-suave); font-weight: 600; }
+.mock .hero .grande { font-size: 2.3rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.1; }
+.mock .hero .progresso { margin-top: 6px; }
+.mock .hero .atalhos { display: none; }
+.mock .grade-hoje { display: flex; flex-direction: column; gap: 16px; }
+.mock.larga .grade-hoje { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.mock.larga .grade-hoje > .largo { grid-column: 1 / -1; }
+
+/* Mês */
+.mock .nav-mes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mock .nav-mes .centro { text-align: center; }
+.mock .nav-mes .centro b { display: block; font-size: 1.15rem; }
+.mock .nav-mes .centro span { font-size: .8rem; color: var(--m-suave); }
+.mock .barra-plano { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--m-linha); }
+.mock .barra-plano .real { background: var(--m-destaque); }
+.mock .barra-plano .prev { background: repeating-linear-gradient(-45deg, var(--m-destaque) 0 3px, transparent 3px 7px); opacity: .55; }
+.mock .legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .8rem; color: var(--m-suave); margin-top: 8px; }
+.mock .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.mock .numeros { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.mock .numeros div { display: flex; flex-direction: column; }
+.mock .numeros span { font-size: .75rem; color: var(--m-suave); font-weight: 600; }
+.mock .numeros b { font-size: 1.05rem; }
+.mock table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.mock th { text-align: right; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--m-suave); padding: 6px 8px; border-bottom: 1px solid var(--m-linha); }
+.mock td:first-child { white-space: normal; }
+.mock th:first-child { text-align: left; padding-left: 0; }
+.mock td:first-child { text-align: left; padding-left: 0; }
+.mock td { white-space: nowrap; text-align: right; padding: 10px 8px; border-bottom: 1px solid var(--m-linha); font-variant-numeric: tabular-nums; }
+.mock tr:last-child td { border-bottom: 0; }
+.mock td.acao { width: 1%; white-space: nowrap; padding-right: 0; }
+.mock td .mais { border: 0; background: transparent; color: var(--m-suave); width: 32px; height: 32px; border-radius: 8px; font-weight: 800; letter-spacing: 1px; }
+.mock td .mais:hover { background: var(--m-fundo); }
+.mock td .inline { display: none; gap: 10px; }
+.mock td .inline button { border: 0; background: transparent; color: var(--m-destaque); font-weight: 600; font-size: .82rem; padding: 0; }
+.mock td .inline button.perigo { color: var(--m-erro); }
+.mock .pct { display: inline-flex; align-items: center; gap: 6px; }
+.mock .pct .mini { width: 36px; height: 5px; border-radius: 9px; background: var(--m-linha); overflow: hidden; }
+.mock .pct .mini span { display: block; height: 100%; background: var(--m-destaque); }
+.mock.celular .col-prev { display: none; }
+.mock.celular table { font-size: .85rem; }
+.mock.celular .pct .mini { display: none; }
+.mock.celular td, .mock.celular th { padding-left: 6px; padding-right: 6px; }
+.mock .adicionar { display: flex; gap: 8px; margin-top: 12px; }
+.mock .adicionar .campo { flex: 1; min-width: 0; border: 1px solid var(--m-borda); border-radius: 10px; padding: 9px 12px; color: var(--m-suave); background: var(--m-sup); font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mock .adicionar .campo.v { flex: 0 0 96px; text-align: right; }
+.mock.celular .adicionar { flex-wrap: wrap; }
+.mock.celular .adicionar .campo:first-child { flex-basis: 100%; }
+.mock .seg { display: flex; background: var(--m-fundo); border-radius: 10px; padding: 3px; gap: 3px; margin-bottom: 10px; }
+.mock .seg span { flex: 1; text-align: center; padding: 6px; font-size: .85rem; font-weight: 600; border-radius: 8px; color: var(--m-suave); }
+.mock .seg span.on { background: var(--m-sup); color: var(--m-texto); box-shadow: var(--m-sombra); }
+.mock .rank { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.mock .rank .l1 { display: flex; justify-content: space-between; font-size: .92rem; }
+.mock .rank .l1 b { font-variant-numeric: tabular-nums; }
+.mock .rank .progresso { height: 6px; }
+.mock.larga .grade-mes { display: grid; grid-template-columns: 1.45fr 1fr; gap: 20px; align-items: start; }
+.mock.larga .grade-mes > .largo { grid-column: 1 / -1; }
+.mock.celular .grade-mes { display: flex; flex-direction: column; gap: 16px; }
+.mock .tbl-rola { overflow-x: auto; }
+
+/* ================= DIREÇÕES ================= */
+/* A — Sóbrio com cartões */
+.mock.d-cartoes .bloco { background: var(--m-sup); border-radius: var(--r); padding: 16px; box-shadow: var(--m-sombra); border: 1px solid var(--m-linha); }
+.mock.d-cartoes .hero { background: var(--m-sup); border-radius: var(--r); padding: 18px; box-shadow: var(--m-sombra); border: 1px solid var(--m-linha); }
+.mock.d-cartoes .menu-linhas { border: 1px solid var(--m-linha); box-shadow: var(--m-sombra); }
+.mock.d-cartoes.larga .botao-novo { justify-self: start; }
+
+/* B — Minimalista plano: sem caixas, só tipografia, espaço e filetes. */
+.mock.d-plano { --m-fundo: var(--m-sup); }
+.mock.d-plano.larga .topo { border-bottom-color: var(--m-linha); }
+.mock.d-plano .abas { background: var(--m-sup); }
+.mock.d-plano .bloco { padding-top: 18px; border-top: 1px solid var(--m-texto); border-radius: 0; }
+.mock.d-plano .bloco h3.secao, .mock.d-plano .cab-secao h3 { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--m-suave); }
+.mock.d-plano .hero { padding: 6px 0 4px; }
+.mock.d-plano .hero .rot { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; }
+.mock.d-plano .hero .grande { font-size: 3.1rem; font-weight: 300; letter-spacing: -.04em; }
+.mock.d-plano .hero .progresso { height: 3px; }
+.mock.d-plano .botao { border-radius: 0; }
+.mock.d-plano .botao.sec { border-color: transparent; padding-left: 0; padding-right: 0; text-decoration: underline; text-underline-offset: 3px; }
+.mock.d-plano .alerta { border-radius: 0; background: transparent; border-left: 3px solid var(--m-erro); padding: 4px 12px; }
+.mock.d-plano .menu-linhas { border-radius: 0; border-top: 1px solid var(--m-texto); border-bottom: 1px solid var(--m-linha); }
+.mock.d-plano .menu-linhas .item { padding-left: 0; padding-right: 0; }
+.mock.d-plano .seg { background: transparent; border-bottom: 1px solid var(--m-linha); border-radius: 0; padding: 0; }
+.mock.d-plano .seg span { border-radius: 0; }
+.mock.d-plano .seg span.on { box-shadow: inset 0 -2px 0 var(--m-texto); background: transparent; }
+.mock.d-plano.larga .conteudo { max-width: 860px; }
+.mock.d-plano.larga .grade-hoje { column-gap: 48px; }
+.mock.d-plano.larga .grade-mes { column-gap: 48px; }
+.mock.d-plano td .mais { display: none; }
+.mock.d-plano td .seta-l { display: inline; }
+.mock .seta-l { display: none; color: var(--m-suave); }
+
+/* C — Painel de banco: faixa colorida com o número do mês e atalhos redondos. */
+.mock.d-banco .bloco { background: var(--m-sup); border-radius: 18px; padding: 16px; box-shadow: 0 2px 12px rgba(20,40,30,.08); }
+.mock.d-banco.escuro .bloco { box-shadow: none; }
+.mock.d-banco .hero { background: var(--m-faixa); color: var(--m-sobre-faixa); margin: -16px -16px 0; padding: 18px 16px 22px; border-radius: 0 0 24px 24px; gap: 4px; }
+.mock.d-banco.larga .hero { margin: 0; border-radius: 20px; padding: 24px 28px; }
+.mock.d-banco .hero .rot, .mock.d-banco .hero .suave { color: color-mix(in srgb, var(--m-sobre-faixa) 78%, transparent); }
+.mock.d-banco .hero .grande { font-size: 2.5rem; }
+.mock.d-banco .hero .progresso { background: color-mix(in srgb, var(--m-sobre-faixa) 25%, transparent); }
+.mock.d-banco .hero .progresso span { background: var(--m-sobre-faixa); }
+.mock.d-banco .hero .atalhos { display: flex; gap: 8px; margin-top: 16px; justify-content: space-between; }
+.mock.d-banco.larga .hero .atalhos { justify-content: flex-start; gap: 28px; }
+.mock.d-banco .hero .atalho { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: .75rem; font-weight: 600; width: 72px; text-align: center; }
+.mock.d-banco .hero .atalho span { width: 48px; height: 48px; border-radius: 999px; background: color-mix(in srgb, var(--m-sobre-faixa) 16%, transparent); display: grid; place-items: center; }
+.mock.d-banco .botao-novo { display: none; }
+.mock.d-banco .menu-linhas { border-radius: 18px; box-shadow: 0 2px 12px rgba(20,40,30,.08); }
+.mock.d-banco .botao { border-radius: 999px; }
+.mock.d-banco .alerta { border-radius: 14px; }
+.mock.d-banco.celular .topo { background: var(--m-faixa); color: var(--m-sobre-faixa); }
+.mock.d-banco.celular .topo .icone-topo { color: var(--m-sobre-faixa); }
+.mock.d-banco.celular .topo.atual { background: var(--m-faixa); color: var(--m-sobre-faixa); }
+
+/* D — Denso, tipo planilha: mais coisa por tela, letra menor, caixas retas. */
+.mock.d-denso { font-size: 14px; --r: 6px; }
+.mock.d-denso .conteudo { gap: 10px; }
+.mock.d-denso.larga .conteudo { max-width: none; }
+.mock.d-denso .bloco { background: var(--m-sup); border: 1px solid var(--m-borda); border-radius: 6px; padding: 10px 12px; }
+.mock.d-denso .hero { display: flex; background: var(--m-sup); border: 1px solid var(--m-borda); border-radius: 6px; padding: 10px 12px; }
+.mock.d-denso .hero-hoje { display: grid; grid-template-columns: 1fr auto; align-items: end; }
+.mock.d-denso .hero-hoje .grande { font-size: 1.6rem; grid-column: 2; grid-row: 1 / 3; text-align: right; }
+.mock.d-denso .hero-hoje .progresso { grid-column: 1 / -1; height: 5px; }
+.mock.d-denso .linha { padding: 6px 0; }
+.mock.d-denso .item-prog { padding: 5px 0; gap: 3px; }
+.mock.d-denso .botao { border-radius: 5px; padding: 6px 12px; font-size: .85rem; }
+.mock.d-denso .botao.peq { padding: 3px 9px; font-size: .78rem; }
+.mock.d-denso h3.secao, .mock.d-denso .cab-secao h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--m-suave); }
+.mock.d-denso td { padding: 5px 8px; }
+.mock.d-denso td .mais { display: none; }
+.mock.d-denso td .inline { display: inline-flex; }
+.mock.celular.d-denso td .inline { display: none; }
+.mock.celular.d-denso td .mais { display: inline; }
+.mock.larga.d-denso .grade-hoje { grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.mock.larga.d-denso .grade-mes { grid-template-columns: 1.7fr 1fr; gap: 10px; }
+.mock.d-denso .menu-linhas { border: 1px solid var(--m-borda); border-radius: 6px; }
+.mock.d-denso .menu-linhas .item { padding: 9px 12px; }
+.mock.d-denso .alerta { border-radius: 6px; padding: 7px 10px; }
+
+/* Atual: as capturas do app hoje */
+.mock.atual-img { display: block; overflow-y: auto; background: #f6f7f5; }
+.mock.atual-img img { display: block; width: 100%; height: auto; }
+</style>
+
+<div class="pagina">
+  <header class="p-cabeca">
+    <span class="etiqueta">Protótipo · ticket 204</span>
+    <h1>Acabamento visual do Financial App</h1>
+    <p>Escolha uma opção em cada grupo e veja Hoje e Mês com a combinação, no celular e na tela larga. Os números são os da base de teste. As abas Hoje e Mês dentro do aparelho funcionam. No computador, ← e → trocam a opção do último grupo em que você clicou.</p>
+  </header>
+
+  <section class="escolhas" id="escolhas" aria-label="Escolhas"></section>
+
+  <div class="barra-vista">
+    <div class="alternar" id="v-tela"><span>Tela</span></div>
+    <div class="alternar" id="v-aparelho"><span>Aparelho</span></div>
+    <div class="alternar" id="v-tema"><span>Tema do app</span></div>
+  </div>
+  <p class="resumo" id="resumo"></p>
+
+  <section class="molduras" id="molduras" aria-label="Pré-visualização"></section>
+</div>
+
+<div class="flutuante" role="toolbar" aria-label="Trocar opção">
+  <button id="ant" aria-label="Opção anterior">←</button>
+  <span class="rotulo" id="rotulo-flut"></span>
+  <button id="prox" aria-label="Próxima opção">→</button>
+</div>
+
+<script>
+const GRUPOS = [
+  { id: "direcao", q: "Q1", titulo: "Direção visual", opcoes: [
+    { id: "atual", nome: "Atual", nota: "Capturas do app como está hoje: link azul do navegador, barra lateral esticada, blocos sem ritmo." },
+    { id: "cartoes", nome: "A · Sóbrio com cartões", rec: true, nota: "Fundo levemente esverdeado, cada assunto num cartão branco com canto de 14px e sombra leve. O número do mês abre a tela. Ações da tabela num menu ⋯." },
+    { id: "plano", nome: "B · Minimalista plano", nota: "Sem caixas. Seções separadas por um filete escuro, títulos pequenos em caixa alta e o número do mês bem grande e fino. Linha da tabela abre ao tocar (›)." },
+    { id: "banco", nome: "C · Painel de banco", nota: "Faixa verde no alto com o número do mês e atalhos redondos (Novo, Buscar, Cartões, Mês). Cartões mais arredondados e botões em pílula." },
+    { id: "denso", nome: "D · Denso, tipo planilha", nota: "Letra menor, caixas retas e três colunas na tela larga. Cabe mais coisa por tela. Ações da tabela ficam visíveis na tela larga." },
+  ]},
+  { id: "fonte", q: "Q2", titulo: "Fonte", opcoes: [
+    { id: "sistema", nome: "Sistema", rec: true, nota: "A do aparelho: San Francisco no iPhone, Segoe no Windows, Roboto no Android. Zero download, funciona offline." },
+    { id: "inter", nome: "Inter", nota: "Neutra e muito legível em tamanho pequeno. Seria baixada com o app (cerca de 100 KB) para funcionar offline." },
+    { id: "manrope", nome: "Manrope", nota: "Geométrica e arredondada, números largos. Mais personalidade nos valores grandes." },
+    { id: "plex", nome: "IBM Plex Sans", nota: "Um pouco técnica, com cara de ferramenta. Combina com a direção densa." },
+    { id: "nunito", nome: "Nunito Sans", nota: "Suave e amigável, terminais arredondados." },
+    { id: "source", nome: "Source Sans 3", nota: "Estreita: cabe mais texto por linha, boa em tabelas." },
+  ]},
+  { id: "topo", q: "Q6", titulo: "Topo", opcoes: [
+    { id: "atual", nome: "Atual", nota: "Nome do app, \"Entrou como e-mail\", lupa, link Configurações e botão Sair, tudo no topo." },
+    { id: "enxuto", nome: "Enxuto", rec: true, nota: "Nome do app à esquerda, lupa e engrenagem à direita. E-mail e Sair vão para Configurações; na tela larga, para o pé da barra lateral." },
+    { id: "titulo", nome: "Título da tela", nota: "O topo mostra o nome da tela atual (Hoje, Mês), com lupa e engrenagem. Na tela larga, o nome do app vai para o alto da barra lateral e o topo some." },
+    { id: "avatar", nome: "Avatar com menu", nota: "Nome do app, lupa e um círculo com a inicial. Tocar no círculo abre um menu com o e-mail, Configurações e Sair." },
+  ]},
+  { id: "icones", q: "Q7", titulo: "Ícones das abas", opcoes: [
+    { id: "texto", nome: "Só texto", nota: "Como hoje, sem ícones; a aba ativa tem um traço verde em cima (celular) ou um fundo (lateral)." },
+    { id: "contorno", nome: "Contorno", rec: true, nota: "Ícone de linha acima do nome no celular e ao lado na barra lateral. A aba ativa fica verde." },
+    { id: "preenchido", nome: "Ativa preenchida", nota: "A aba ativa ganha uma pílula verde clara atrás do ícone, que fica preenchido." },
+    { id: "so-icone", nome: "Só ícone", nota: "No celular só os ícones; o nome aparece só na aba ativa, dentro de uma pílula." },
+    { id: "fab", nome: "Com botão +", nota: "Contorno, mais um botão redondo de Novo lançamento no meio da barra (no celular) e no alto da barra lateral. O botão grande de Hoje sai." },
+  ]},
+];
+const estado = { direcao: "cartoes", fonte: "sistema", topo: "enxuto", icones: "contorno", tela: "hoje", aparelho: "ambos", tema: "claro", grupo: "direcao", menuAvatar: false };
+
+const IC = {
+  hoje: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  mes: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  cartoes: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>',
+  historico: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5"/><path d="M12 7.5V12l3 2"/>',
+  futuro: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  lupa: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
+  engrenagem: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  mais: '<path d="M12 5v14M5 12h14"/>',
+  seta: '<path d="M9 6l6 6-6 6"/>',
+  esq: '<path d="M15 6l-6 6 6 6"/>',
+  pastas: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  alerta: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.01"/>',
+  estrela: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+};
+const ic = (n, cls = "ic") => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
+const ABAS = [["hoje","Hoje"],["mes","Mês"],["cartoes","Cartões"],["historico","Histórico"],["futuro","Futuro"]];
+
+function topo(larga) {
+  const t = estado.topo;
+  if (t === "atual") return `<header class="topo atual"><span class="marca">Financial App</span><span class="email">Entrou como flavio@teste.com</span><span>🔍</span><a class="cru">Configurações</a><button class="sair">Sair</button></header>`;
+  const titulo = estado.tela === "hoje" ? "Hoje" : "Mês";
+  const esquerda = t === "titulo" ? `<span class="titulo-tela">${titulo}</span>` : `<span class="marca">Financial App</span>`;
+  const direita = t === "avatar"
+    ? `<button class="icone-topo" aria-label="Buscar">${ic("lupa")}</button><button class="avatar" data-avatar>F${estado.menuAvatar ? `<div class="menu-avatar"><p>flavio@teste.com</p><span>Configurações</span><span>Sair</span></div>` : ""}</button>`
+    : `<button class="icone-topo" aria-label="Buscar">${ic("lupa")}</button><button class="icone-topo" aria-label="Configurações">${ic("engrenagem")}</button>`;
+  return `<header class="topo">${esquerda}<span class="espaco"></span>${direita}</header>`;
+}
+
+function abas(larga) {
+  const itens = ABAS.map(([id, nome], i) => {
+    const aba = `<button class="aba" data-ir="${id}" ${id === estado.tela ? 'aria-current="page"' : ""}><span class="pilula">${ic(id)}</span><span class="nome">${nome}</span></button>`;
+    return (i === 2 && !larga) ? `<button class="fab" aria-label="Novo lançamento"><span>${ic("mais")}</span></button>${aba}` : aba;
+  }).join("");
+  const pe = `<div class="pe"><span>flavio@teste.com</span><button>Sair</button></div>`;
+  return `<nav class="abas"><div class="marca-lateral">Financial App</div><button class="novo-lateral">${ic("mais")} Novo lançamento</button>${itens}${pe}</nav>`;
+}
+
+function hoje() {
+  return `<div class="grade-hoje">
+  <section class="hero hero-hoje largo">
+    <p class="rot">Ainda dá para gastar este mês</p>
+    <p class="grande num">R$ 2.609,20</p>
+    <div class="progresso"><span style="width:60%"></span></div>
+    <p class="suave">de R$ 6.500,00 planejados</p>
+    <div class="atalhos">
+      <div class="atalho"><span>${ic("mais")}</span>Novo</div>
+      <div class="atalho"><span>${ic("lupa")}</span>Buscar</div>
+      <div class="atalho"><span>${ic("cartoes")}</span>Cartões</div>
+      <div class="atalho"><span>${ic("mes")}</span>Mês</div>
+    </div>
+  </section>
+  ${estado.icones === "fab" ? "" : `<button class="botao botao-novo largo">${ic("mais")} Novo lançamento</button>`}
+  <div class="alerta largo">${ic("alerta")}<span><b>1 conta atrasada.</b> Confirme em Contas da semana.</span></div>
+  <section class="bloco">
+    <div class="cab-secao"><h3 class="secao">Contas da semana</h3><span class="suave" style="font-size:.85rem">2 para confirmar</span></div>
+    <div class="linha"><span class="nome">Internet</span><span class="sub"><span class="chip">atrasada</span> 05/11 · Itaú</span><span class="valor num neg">− R$ 120,00</span><div class="acoes"><button class="botao peq">Confirmar</button><button class="botao sec peq">Ajustar</button></div></div>
+    <div class="linha"><span class="nome">Aluguel</span><span class="sub">10/11 · Itaú</span><span class="valor num neg">− R$ 2.800,00</span><div class="acoes"><button class="botao peq">Confirmar</button><button class="botao sec peq">Ajustar</button></div></div>
+  </section>
+  <section class="bloco">
+    <h3 class="secao" style="margin-bottom:4px">Fatura que vence</h3>
+    <div class="linha"><span class="nome">Mastercard Nubank</span><span class="sub">vence em 10/11/2026</span><span class="valor num">R$ 145,50 <span class="seta">›</span></span></div>
+  </section>
+  <section class="bloco">
+    <h3 class="secao" style="margin-bottom:2px">Itens em destaque</h3>
+    <div class="item-prog"><div class="l1"><span>Moradia</span><span class="num">100%</span></div><div class="progresso cheio"><span style="width:100%"></span></div><span class="l3">ainda dá para gastar R$ 0,00 de R$ 2.800,00</span></div>
+    <div class="item-prog"><div class="l1"><span>Luz e água</span><span class="num">81%</span></div><div class="progresso"><span style="width:81%"></span></div><span class="l3">ainda dá para gastar R$ 57,60 de R$ 300,00</span></div>
+  </section>
+  <section class="bloco">
+    <h3 class="secao" style="margin-bottom:2px">Sugeridos</h3>
+    <p class="suave" style="font-size:.85rem">Você repete este lançamento com frequência.</p>
+    <div class="linha"><span class="nome">Geladeira</span><span class="sub">R$ 450,00 · 10 usos</span><div class="acoes"><button class="botao sec peq">${ic("estrela")} Favoritar</button><button class="botao sec peq">Dispensar</button></div></div>
+  </section>
+  <nav class="menu-linhas largo">
+    <a class="item">${ic("pastas")} Contas e categorias <span class="seta">›</span></a>
+  </nav>
+  <p class="estado-api largo"><i></i>API no ar · <button>Verificar de novo</button></p>
+</div>`;
+}
+
+const ITENS = [
+  ["Mercado","R$ 479,70","—","R$ 1.800,00",27],["Restaurante","R$ 228,00","—","R$ 600,00",38],
+  ["Moradia","R$ 0,00","R$ 2.800,00","R$ 2.800,00",100],["Luz e água","R$ 0,00","R$ 242,40","R$ 300,00",81],
+  ["Transporte","R$ 34,80","—","R$ 300,00",12],["Lazer","R$ 60,00","—","R$ 400,00",15],
+  ["Assinaturas","R$ 0,00","—","R$ 100,00",0],["Saúde","R$ 45,90","—","R$ 200,00",23],
+];
+function mes() {
+  const linhas = ITENS.map(([n,r,p,pl,pc]) => `<tr><td>${n}</td><td class="col-real">${r}</td><td class="col-prev">${p}</td><td>${pl}</td><td><span class="pct"><span class="mini"><span style="width:${pc}%"></span></span>${pc}%</span></td><td class="acao"><button class="mais" aria-label="Ações">···</button><span class="inline"><button>Mudar valor</button><button class="perigo">Excluir</button></span><span class="seta-l">›</span></td></tr>`).join("");
+  const comp = [["Moradia","R$ 2.800,00","= 0%"],["Casa","R$ 570,00","▲ 27%"],["Mercado","R$ 479,70","▼ 64%"],["Luz e água","R$ 242,40","▲ 6%"],["Restaurante","R$ 228,00","▲ 9%"]]
+    .map(([c,v,d]) => `<tr><td>${c}</td><td>${v}</td><td>${d}</td></tr>`).join("");
+  const rank = [["Moradia","R$ 2.800,00",100],["Casa","R$ 570,00",20],["Mercado","R$ 479,70",17],["Luz e água","R$ 242,40",9],["Restaurante","R$ 228,00",8]]
+    .map(([c,v,w]) => `<div class="rank"><div class="l1"><span>${c}</span><b>${v}</b></div><div class="progresso"><span style="width:${w}%"></span></div></div>`).join("");
+  return `<div class="grade-mes">
+  <div class="nav-mes largo"><button class="botao sec peq" aria-label="Mês anterior">${ic("esq")}</button><div class="centro"><b>Novembro de 2026</b><span>mês atual</span></div><button class="botao sec peq" aria-label="Próximo mês">${ic("seta")}</button></div>
+  <section class="hero largo">
+    <p class="rot">Despesas × planejamento</p>
+    <div class="barra-plano"><span class="real" style="width:20%"></span><span class="prev" style="width:48.6%"></span></div>
+    <div class="legenda"><span><i style="background:var(--m-destaque)"></i>realizado</span><span><i style="background:repeating-linear-gradient(-45deg,var(--m-destaque) 0 2px,transparent 2px 4px)"></i>previsto</span><span><i style="background:var(--m-linha)"></i>livre</span></div>
+    <div class="numeros num"><div><span>Realizado</span><b>R$ 1.298,40</b></div><div><span>Previsto</span><b>R$ 3.162,40</b></div><div><span>Livre</span><b>R$ 2.039,20</b></div></div>
+    <p class="suave" style="font-size:.85rem;margin-top:8px">De R$ 6.500,00 planejados · Receitas: R$ 14.700,00 recebidas</p>
+  </section>
+  <section class="bloco">
+    <div class="cab-secao"><h3 class="secao">Itens do planejamento</h3><a>Modelo padrão ›</a></div>
+    <div class="tbl-rola"><table><thead><tr><th>Item</th><th class="col-real">Realizado</th><th class="col-prev">Previsto</th><th>Planejado</th><th>%</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
+    <div class="adicionar"><span class="campo">Escolha a categoria ▾</span><span class="campo v">0,00</span><button class="botao peq">Adicionar</button></div>
+  </section>
+  <section class="bloco">
+    <h3 class="secao" style="margin-bottom:6px">Ranking</h3>
+    <div class="seg"><span class="on">Categoria</span><span>Tag</span><span>Pessoa</span></div>
+    ${rank}
+  </section>
+  <section class="bloco">
+    <h3 class="secao" style="margin-bottom:6px">Comparação</h3>
+    <table><thead><tr><th>Categoria</th><th>nov/26</th><th>× out/26</th></tr></thead><tbody>${comp}<tr><td><b>Total de despesas</b></td><td><b>R$ 4.460,80</b></td><td><b>▼ 17%</b></td></tr></tbody></table>
+  </section>
+</div>`;
+}
+
+function aparelho(tipo) {
+  if (estado.direcao === "atual") {
+    const src = `atual/${estado.tela}-${tipo}.jpg`;
+    return `<div class="mock ${tipo} atual-img"><img src="${src}" alt="Captura atual da tela ${estado.tela === "hoje" ? "Hoje" : "Mês"} (${tipo === "celular" ? "celular" : "tela larga"})"></div>`;
+  }
+  const larga = tipo === "larga";
+  const cls = ["mock", tipo, "d-" + estado.direcao, "f-" + estado.fonte, "t-" + estado.topo, "i-" + estado.icones, estado.tema === "escuro" ? "escuro" : ""].join(" ");
+  const tela = `<div class="conteudo">${estado.tela === "hoje" ? hoje() : mes()}</div>`;
+  if (larga) return `<div class="${cls}">${topo(true)}<div class="corpo">${abas(true)}<div class="rolagem">${tela}</div></div></div>`;
+  return `<div class="${cls}"><div class="corpo"><div class="rolagem">${topo(false)}${tela}</div>${abas(false)}</div></div>`;
+}
+
+const DIM = { celular: [390, 780], larga: [1200, 760] };
+function desenhar() {
+  const alvo = document.getElementById("molduras");
+  const tipos = estado.aparelho === "ambos" ? ["celular", "larga"] : [estado.aparelho];
+  // guarda a rolagem de cada aparelho para não pular ao trocar uma opção
+  const rol = {};
+  alvo.querySelectorAll(".moldura").forEach(m => { const r = m.querySelector(".rolagem, .atual-img"); if (r) rol[m.dataset.tipo] = r.scrollTop; });
+  alvo.innerHTML = tipos.map(t => `<div class="moldura ${t}" data-tipo="${t}"><p>${t === "celular" ? "Celular · 390 px" : "Tela larga · 1200 px"}</p><div class="escala"><div class="aparelho">${aparelho(t)}</div></div></div>`).join("");
+  alvo.querySelectorAll(".moldura").forEach(m => { const r = m.querySelector(".rolagem, .atual-img"); if (r && rol[m.dataset.tipo]) r.scrollTop = rol[m.dataset.tipo]; });
+  ajustar();
+  desenharEscolhas();
+}
+function ajustar() {
+  document.querySelectorAll(".moldura").forEach(m => {
+    const [w, h] = DIM[m.dataset.tipo];
+    const esc = m.querySelector(".escala");
+    const s = Math.min(1, esc.clientWidth / w);
+    esc.querySelector(".aparelho").style.transform = `scale(${s})`;
+    esc.style.height = (h * s) + "px";
+    if (m.dataset.tipo === "celular") esc.style.maxWidth = w + "px";
+  });
+}
+new ResizeObserver(ajustar).observe(document.getElementById("molduras"));
+
+function desenharEscolhas() {
+  const alvo = document.getElementById("escolhas");
+  alvo.innerHTML = GRUPOS.map(g => {
+    const sel = g.opcoes.find(o => o.id === estado[g.id]);
+    const travado = estado.direcao === "atual" && g.id !== "direcao";
+    return `<div class="grupo ${estado.grupo === g.id ? "foco" : ""}" data-grupo="${g.id}">
+      <h2><small>${g.q}</small>${g.titulo}</h2>
+      <div class="opcoes">${g.opcoes.map(o => `<button data-g="${g.id}" data-o="${o.id}" aria-pressed="${o.id === estado[g.id]}">${o.nome}${o.rec ? '<span class="rec">· recomendado</span>' : ""}</button>`).join("")}</div>
+      <p class="nota">${travado ? "Com a direção Atual, as capturas mostram o app como está; escolha outra direção para combinar." : sel.nota}</p>
+    </div>`;
+  }).join("");
+  const nomes = g => GRUPOS.find(x => x.id === g).opcoes.find(o => o.id === estado[g]).nome;
+  document.getElementById("resumo").innerHTML = estado.direcao === "atual"
+    ? "Mostrando: <b>o app hoje</b> (capturas)."
+    : `Mostrando: <b>${nomes("direcao")}</b> · fonte <b>${nomes("fonte")}</b> · topo <b>${nomes("topo")}</b> · ícones <b>${nomes("icones")}</b> · tema <b>${estado.tema}</b>.`;
+  const g = GRUPOS.find(x => x.id === estado.grupo);
+  document.getElementById("rotulo-flut").textContent = `${g.q} ${g.titulo}: ${nomes(g.id)}`;
+  for (const [id, chave, ops] of [["v-tela","tela",[["hoje","Hoje"],["mes","Mês"]]],["v-aparelho","aparelho",[["ambos","Os dois"],["celular","Celular"],["larga","Larga"]]],["v-tema","tema",[["claro","Claro"],["escuro","Escuro"]]]]) {
+    const el = document.getElementById(id);
+    el.innerHTML = el.firstElementChild.outerHTML + ops.map(([v, n]) => `<button data-v="${chave}" data-o="${v}" aria-pressed="${estado[chave] === v}">${n}</button>`).join("");
+  }
+}
+
+function girar(passo) {
+  const g = GRUPOS.find(x => x.id === estado.grupo);
+  const i = g.opcoes.findIndex(o => o.id === estado[g.id]);
+  estado[g.id] = g.opcoes[(i + passo + g.opcoes.length) % g.opcoes.length].id;
+  desenhar();
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button, [data-ir]");
+  if (!b) { if (estado.menuAvatar) { estado.menuAvatar = false; desenhar(); } return; }
+  if (b.dataset.g) { estado[b.dataset.g] = b.dataset.o; estado.grupo = b.dataset.g; desenhar(); return; }
+  if (b.dataset.v) { estado[b.dataset.v] = b.dataset.o; desenhar(); return; }
+  if (b.dataset.ir === "hoje" || b.dataset.ir === "mes") { estado.tela = b.dataset.ir; desenhar(); return; }
+  if (b.hasAttribute("data-avatar")) { estado.menuAvatar = !estado.menuAvatar; desenhar(); return; }
+  if (b.id === "ant") girar(-1);
+  if (b.id === "prox") girar(1);
+});
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea, [contenteditable]")) return;
+  if (e.key === "ArrowLeft") { girar(-1); e.preventDefault(); }
+  if (e.key === "ArrowRight") { girar(1); e.preventDefault(); }
+});
+desenhar();
+</script>
