@@ -25,7 +25,7 @@ O dono roda o importador sobre `data/historic/` (fora do git) e cola aqui **só 
 - [x] A Conferência termina no último mês com lançamento pago: confirmar que é o mês do export (a virada) e que os meses seguintes, só de previstos, podem ficar de fora. O mesmo mês decide os pendentes avulsos descartados (ticket 68): se o export sair num dia em que o mês corrente ainda não tem nada pago, os pendentes desse mês entram como previstos
 - [ ] Parcelas (ticket 68): contar as sequências quebradas, que entram como lançamentos avulsos, sem parcelamento e sem gerar as que faltam (o limite não conta as previstas delas como parcelas futuras); as parcelas de um parcelamento de cartão sem fatura em mês já exportado, que ficam na conta enquanto o parcelamento fica no cartão; e se o centavo da divisão aparece (a parcela gerada copia o valor da última que veio)
 - [x] Ajustes sem cartão (ticket 68): se aparecem e se há dois reajustes iguais no mesmo mês, que dividem a escolha do cartão
-- [ ] Dono preenche a coluna Mobills da Conferência e das Faturas em alguns meses, roda de novo e confere a diferença e o "Por quê"
+- [ ] Dono preenche a coluna Mobills da Conferência (feito, 13 meses) e das Faturas (falta) em alguns meses, roda de novo e confere a diferença e o "Por quê"
 - [ ] Dono diz se as abas Grupos ambíguos e Parcelas quebradas bastam como informação ou se precisam de uma coluna de decisão (hoje só informam: o ticket 18 manda o grupo e a sequência "para a revisão" sem dizer o que o dono decide); se precisar, vira ticket
 - [x] Contagens e respostas gravadas em `## Answer`
 
@@ -42,8 +42,14 @@ Rodado em 2026-11-08 pelo agente, na máquina do dono, sobre `data/historic/` (f
 - **Ajustes sem cartão**: **0**; logo não há dois reajustes iguais no mesmo mês. Os 10 ajustes de fatura que o importador conta têm cartão.
 - **Centavo da divisão**: não verificado (exige comparar a parcela gerada com a do Mobills, que só o dono tem).
 
+### Conferência contra o Mobills (dono preencheu 13 meses da Conferência)
+
+- 11 dos 13 meses fecham com diferença 0.
+- **2022-11, diferença -50,00**: um dos dois lançamentos de 50,00 do mês é uma "transação ignorada" no Mobills, que o export não distingue (vem como `Paga`). Decisão do dono: fica fora da conta. Vira o [ticket 215](215-importador-do-mobills-deixar-de-fora-os-lancamentos-ignorados.md).
+- **2023-11, diferença -196,30** (nosso 154,35, Mobills 350,65): o "Por quê" lista 6 linhas de fatura sem par (-192,66), e as duas compras do cartão sem par somam exatamente 196,30. Sobram 3,64, o valor de quatro estornos sem par. O Mobills do dono não tem compra de 196,30 no mês. A causa exata dos 3,64 não foi fechada; a pergunta é se essas linhas de fatura sem par devem ou não entrar (o ticket 18 já mandava as sem par entrarem).
+
 ### Falta o dono
 
-- Preencher a coluna Mobills da Conferência (93 meses) e das Faturas (238 linhas) em alguns meses, rodar de novo e conferir a diferença e o "Por quê".
+- Preencher a coluna Mobills da aba Faturas em alguns meses (a da Conferência já foi) e conferir a diferença e o "Por quê".
 - Dizer se as abas Grupos ambíguos (26 linhas) e Parcelas quebradas (342) bastam como informação ou precisam de uma coluna de decisão; com 342, é provável que precisem.
 - Dizer se os 342 de parcelas quebradas são esperados (compras avulsas lançadas como parcelas em meses fora dos exports) ou sinal de problema em `parcelas.py`.
