@@ -1,7 +1,7 @@
 # Barra de baixo com 2 abas, +, 2 abas e uma tela de funcionalidades (decisão)
 
 Type: prototype
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grill-with-docs` (`grilling`, `domain-modeling`), `prototype`, `artifact-design`. HITL: o desenho e os nomes são decisão do dono.
 Modelo recomendado: Opus
