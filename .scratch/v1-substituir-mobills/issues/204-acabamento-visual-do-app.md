@@ -1,7 +1,7 @@
 # Acabamento visual do app: links, barra lateral, tipografia e espaçamento
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `prototype`, `grilling`, `artifact-design`; apoio: `implement`, `run`. HITL: o visual depende de decisão do dono.
 Modelo recomendado: Opus
