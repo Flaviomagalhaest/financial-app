@@ -1,10 +1,15 @@
 """Favoritos (ticket 62): lançamentos-modelo que o casal lança com um toque. O valor padrão é o
 do último lançamento feito com eles; os mais repetidos viram sugeridos."""
 
+from datetime import date
 from uuid import uuid4
 
+import pytest
+
+from app import favoritos, lancamentos
 from tests.conftest import Casal
 from tests.test_lancamentos import lancamento
+from tests.test_parcelamentos import parcelamento
 
 
 def lancar(casal: Casal, conta: str, categorias: list[str], **campos) -> dict:
@@ -118,6 +123,32 @@ def test_sugere_so_os_tres_mais_repetidos_com_cinco_usos_ou_mais(casal: Casal):
         "valor_centavos": 2000,
         "usos": 8,
     }
+
+
+def test_as_parcelas_de_uma_compra_parcelada_contam_um_uso_so(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    """Ticket 206: a geladeira em 10 parcelas é um lançamento só para quem lança."""
+    conta, casa = casal.conta(), casal.categoria("Casa")
+    monkeypatch.setattr(favoritos, "hoje", lambda: date(2026, 11, 8))
+
+    def parcelar() -> None:
+        # Com parcelas de antes de hoje, como na base de teste: o parcelamento já vem realizado.
+        novo = parcelamento(
+            conta, [casa], descricao="Geladeira", data="2026-01-10", parcelas=10, automatico=True
+        )
+        with pytest.MonkeyPatch.context() as naquele_dia:
+            naquele_dia.setattr(lancamentos, "hoje", lambda: date(2026, 1, 10))
+            assert casal.pedir("flavio", "POST", "/api/parcelamentos", json=novo).status_code == 201
+
+    parcelar()
+    assert listar(casal)["sugeridos"] == []
+
+    # Cinco compras parceladas iguais são cinco usos, não cinquenta.
+    for _ in range(4):
+        parcelar()
+    [sugerido] = listar(casal)["sugeridos"]
+    assert sugerido["usos"] == 5
 
 
 def test_quem_ja_e_favorito_nao_e_sugerido_e_promover_tira_da_lista(casal: Casal):

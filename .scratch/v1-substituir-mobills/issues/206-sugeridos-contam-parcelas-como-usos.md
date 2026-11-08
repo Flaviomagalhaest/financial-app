@@ -1,7 +1,7 @@
 # Sugeridos conta as parcelas de uma compra parcelada como usos
 
 Type: bug
-Status: needs-triage
+Status: resolved
 Blocked by: —
 Skills: `triage`, `diagnosing-bugs`, `tdd`
 Modelo recomendado: Sonnet
@@ -17,6 +17,6 @@ O mesmo pode valer para lançamentos gerados por recorrência; confirmar na tria
 
 ## Checklist
 
-- [ ] Reproduzir num teste: uma compra em 10 parcelas não gera sugestão
-- [ ] Decidir se recorrências contam como usos (se precisar do dono, registrar aqui)
-- [ ] Corrigir a contagem; specs e verificações verdes; PR para `main`
+- [x] Reproduzir num teste: uma compra em 10 parcelas não gera sugestão
+- [x] Decidir se recorrências contam como usos: precisa do dono, registrado no [ticket 212](212-recorrencias-contam-como-usos-do-sugerido.md); a contagem de recorrência não mudou
+- [x] Corrigir a contagem (`_grupos` conta um uso por parcelamento); specs e verificações verdes; PR para `main`
