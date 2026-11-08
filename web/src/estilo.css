@@ -2240,6 +2240,9 @@ label.caixa > input {
 
 .detalhe-da-fatura > summary {
   cursor: pointer;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
   color: var(--texto-suave);
   font-size: var(--texto-p);
   padding: var(--espaco-2) 0;

@@ -268,8 +268,7 @@ test("a compra com estorno não se exclui: o Excluir segue ativo, explica o porq
   // Excluído o estorno, a compra se exclui.
   const doEstorno = page.getByRole("listitem").filter({ hasText: `estorno de ${p.compraNome}` });
   page.once("dialog", (dialogo) => void dialogo.accept());
-  await doEstorno.getByLabel(`Mais ações Estorno ${p.compraNome}`).click();
-  await doEstorno.getByRole("button", { name: `Excluir Estorno ${p.compraNome}` }).click();
+  await pelaLinha(doEstorno, `Estorno ${p.compraNome}`, `Excluir Estorno ${p.compraNome}`);
   await expect(doEstorno).toHaveCount(0);
   const compra = page.getByRole("listitem").filter({ hasText: p.compraNome });
   page.once("dialog", (dialogo) => void dialogo.accept());

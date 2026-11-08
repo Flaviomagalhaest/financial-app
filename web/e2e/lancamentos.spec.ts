@@ -73,8 +73,7 @@ test("cria, edita e exclui um lançamento simples e o vê na lista", async ({ pa
 
   // Exclui pela lista, com confirmação.
   page.once("dialog", (dialogo) => void dialogo.accept());
-  await linha.getByLabel(`Mais ações Jantar ${s}`).click();
-  await linha.getByRole("button", { name: `Excluir Jantar ${s}` }).click();
+  await pelaLinha(linha, `Jantar ${s}`, `Excluir Jantar ${s}`);
   await expect(linha).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Histórico", level: 2 })).toBeVisible();

@@ -6,7 +6,7 @@ import { entrar } from "./entrar";
 import { cadastrar, lancar } from "./lancar";
 import { esperarFilaVazia } from "./fila";
 import { soltarRotas } from "./rotas";
-import { peloMenuDaConta } from "./conta";
+import { peloMenuDaConta, pelaLinha } from "./conta";
 
 test.afterEach(async ({ page }) => {
   await soltarRotas(page);
@@ -63,8 +63,7 @@ test("edita e exclui sem internet e, se a resposta do envio se perde, reenviar n
   await expect(feira).toContainText("− R$ 10,07");
   await expect(feira).toContainText("⏳ não enviado");
   page.once("dialog", (dialogo) => void dialogo.accept());
-  await farmacia.getByLabel(`Mais ações Farmácia ${s}`).click();
-  await farmacia.getByRole("button", { name: `Excluir Farmácia ${s}` }).click();
+  await pelaLinha(farmacia, `Farmácia ${s}`, `Excluir Farmácia ${s}`);
   await expect(farmacia).toHaveCount(0);
   await lancar(page, { teclas: ["3", "00"], conta, categoria: mercado, descricao: `Açougue ${s}` });
   await aba(page, "Hoje");
@@ -119,8 +118,7 @@ test("recusado pelo servidor fica 'não enviado: <motivo>' para corrigir ou desc
   await expect(page.getByTestId("nao-enviados")).toContainText("2 lançamentos não enviados (2 recusados");
 
   await aba(page, "Histórico");
-  await descartar.getByLabel(`Mais ações Descartar ${s}`).click();
-  await descartar.getByRole("button", { name: `Descartar Descartar ${s}` }).click();
+  await pelaLinha(descartar, `Descartar ${s}`, `Descartar Descartar ${s}`);
   await expect(descartar).toHaveCount(0);
   await corrigir.getByRole("link", { name: `Corrigir Corrigir ${s}` }).click();
   await page.getByRole("button", { name: conta }).click();
@@ -346,8 +344,7 @@ test("criado com a resposta perdida e depois editado ou excluído sem internet: 
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(editado).toContainText("− R$ 0,19");
   page.once("dialog", (dialogo) => void dialogo.accept());
-  await excluido.getByLabel(`Mais ações Excluído ${s}`).click();
-  await excluido.getByRole("button", { name: `Excluir Excluído ${s}` }).click();
+  await pelaLinha(excluido, `Excluído ${s}`, `Excluir Excluído ${s}`);
   await expect(excluido).toHaveCount(0);
 
   comRede = true;
@@ -380,8 +377,7 @@ test("o saldo da conta conta os não enviados do aparelho (criar e excluir) com 
 
   await aba(page, "Histórico");
   page.once("dialog", (dialogo) => void dialogo.accept());
-  await page.getByLabel(`Mais ações Enviado ${s}`).click();
-  await page.getByRole("button", { name: `Excluir Enviado ${s}` }).click();
+  await pelaLinha(page, `Enviado ${s}`, `Excluir Enviado ${s}`);
   await verSaldo();
   await expect(saldo()).toContainText("-R$ 45,00");
 
