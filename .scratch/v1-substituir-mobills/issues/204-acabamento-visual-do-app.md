@@ -67,3 +67,12 @@ Em aberto: Q11, atalhos da faixa em Hoje. O dono pediu para ver as opções; o p
 ### 08/11: grilling, rodada 3
 
 Q11: **pílulas com informação** na faixa de Hoje, com uma opção em Configurações para desligar (aí a faixa fica sem atalhos). Hoje já tem a grade de Favoritos (`web/src/hoje/GradeDeFavoritos.tsx`), então o protótipo (versão 3) compara a escolha com "pílulas com os favoritos" (cada favorito vira pílula e a grade sai). Em aberto: Q17 a Q20 (onde guardar a preferência, o controle em Configurações, qual das duas pílulas, o dado da pílula de contas).
+
+Respostas (todas aceitas):
+
+- **Q17**: a preferência dos atalhos fica **neste aparelho** (armazenamento do navegador/PWA), sem backend. Sincronizar entre aparelhos, se um dia quiser, é outro ticket.
+- **Q18**: Configurações ganha a seção **"Tela Hoje"** com o interruptor **"Atalhos na faixa verde"**, ligado por padrão.
+- **Q19**: **pílulas com os favoritos**: cada favorito é uma pílula na faixa (título e valor; tocar abre o lançamento preenchido), seguida de "Fatura" (valor, cartão e vencimento da fatura que vence; sem fatura, "Cartões") e "Contas e categorias". A grade de Favoritos sai do corpo de Hoje enquanto os atalhos estiverem ligados e volta quando desligados.
+- **Q20**: a pílula de contas mostra **"N contas"**.
+
+Protótipo aprovado nesta forma (versão 3). Próximo passo: implementar.
