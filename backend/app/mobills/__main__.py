@@ -54,6 +54,8 @@ def main(argumentos: list[str] | None = None) -> int:
         f" ajustes de fatura: {len(importacao.ajustes)}"
     )
     print(f"planilha de revisão em {opcoes.revisao}")
+    for aviso in importacao.avisos:
+        print(f"aviso: {aviso}")
     for impedimento in importacao.impedimentos:
         print(f"impede gravar: {impedimento}", file=sys.stderr)
     if opcoes.backup and importacao.impedimentos:

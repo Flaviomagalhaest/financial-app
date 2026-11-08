@@ -207,7 +207,10 @@ def test_linha_de_comando_grava_o_backup_so_sem_impedimentos(exports, client, da
 
     assert main([str(geral), str(faturas), str(revisao), "--backup", str(backup)]) == 0
 
-    assert f"backup em {backup}" in capsys.readouterr().out
+    saida = capsys.readouterr().out
+    assert f"backup em {backup}" in saida
+    # Os exports fictícios não trazem as ignoradas do ticket 215: aviso, sem impedir gravar.
+    assert "aviso: ignorada não achada no geral: 'Sem parar'" in saida
     with psycopg.connect(database_url, autocommit=True) as conn:
         restaurar_backup(conn, backup.read_bytes())
 
