@@ -1,7 +1,7 @@
 # Importador do Mobills: linha de fatura duplicada pelo Mobills
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: o dono decide entre descartar sozinho ou pedir a decisão na planilha); depois `implement`, `tdd`
 Modelo recomendado: Sonnet
