@@ -407,7 +407,7 @@ export function TelaDaRecorrencia({ id }: { id: string }) {
           Encerrar depois desta vez
         </button>
       </div>
-      <div className="linha">
+      <div className="linha quebra">
         <label htmlFor="ate-da-recorrencia">Última data</label>
         <input id="ate-da-recorrencia" type="date" min={regra.inicio} value={form.ate} onChange={(e) => mudar({ ate: e.target.value })} />
         <button type="button" className="secundario" onClick={() => encerrar("data")}>

@@ -75,7 +75,7 @@ export function FiltrosSalvos({ criterios, onAplicar }: { criterios: Criterios; 
       )}
       {aberto && (
         <form
-          className="linha"
+          className="linha quebra"
           aria-label={`Filtro ${aberto.nome}`}
           onSubmit={(e) => {
             e.preventDefault();
@@ -97,7 +97,7 @@ export function FiltrosSalvos({ criterios, onAplicar }: { criterios: Criterios; 
       )}
       {salvando ? (
         <form
-          className="linha"
+          className="linha quebra"
           aria-label="Salvar esta busca"
           onSubmit={(e) => {
             e.preventDefault();

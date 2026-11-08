@@ -1,7 +1,7 @@
 # Mês no celular fica mais largo que a tela e desloca a barra de baixo
 
 Type: bug
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Skills: `tdd`, `implement`; apoio: `run`, `diagnosing-bugs` se a correção não bastar no aparelho
 Modelo recomendado: Sonnet
@@ -33,8 +33,8 @@ A mesma fileira (`select` + `input` + botão) aparece em `web/src/mes/TelaDoMode
 
 ## Checklist
 
-- [ ] Teste e2e de largura vermelho no Mês antes da correção
-- [ ] Fileira de novo item do Mês e do Modelo padrão cabendo a 360 px, com fonte 100% e 130%
-- [ ] Recorrência e Filtros salvos conferidos (corrigidos se estouram)
-- [ ] Captura do Mês no celular antes e depois
-- [ ] Specs e verificações do projeto verdes; PR para `main`
+- [x] Teste e2e de largura vermelho no Mês antes da correção (`web/e2e/largura-no-celular.spec.ts`: 882 px numa tela de 360 px)
+- [x] Fileira de novo item do Mês e do Modelo padrão cabendo a 360 px, com fonte 100% e 130%
+- [x] Recorrência e Filtros salvos conferidos (a fileira "Última data" da recorrência e os dois formulários de filtros salvos passaram a quebrar; Filtros salvos entra no e2e)
+- [x] Captura do Mês no celular antes e depois (a captura da tela do celular só mostra o topo; a fileira fica abaixo da dobra, então a prova é a medida de largura do e2e)
+- [x] Specs e verificações do projeto verdes; PR para `main`
