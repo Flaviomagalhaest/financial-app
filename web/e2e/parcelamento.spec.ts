@@ -5,6 +5,7 @@ import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
 import { esperarFilaVazia, filaDoAparelho } from "./fila";
 import { soltarRotas } from "./rotas";
+import { pelaLinha } from "./conta";
 
 test.afterEach(async ({ page }) => {
   await soltarRotas(page);
@@ -219,8 +220,7 @@ test("corrige o parcelamento pela tela e confirma antes de mudar as parcelas rea
   const parcela = (n: string) => page.getByRole("listitem").filter({ hasText: `${descricao} ${n}` });
   await expect(parcela("06/06")).toContainText("alterada à mão");
   await expect(parcela("05/06")).not.toContainText("alterada à mão");
-  await parcela("05/06").getByLabel(`Mais ações ${descricao}`).click();
-  await parcela("05/06").getByRole("link", { name: `Parcelamento ${descricao}` }).click();
+  await pelaLinha(parcela("05/06"), descricao, `Parcelamento ${descricao}`, "link");
 
   await expect(page.getByRole("heading", { name: "Parcelamento", level: 2 })).toBeVisible();
   await expect(page.getByLabel("Descrição")).toHaveValue(descricao);

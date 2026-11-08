@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar } from "./lancar";
+import { pelaLinha } from "./conta";
 
 // Ticket 97: arquivar não mexe na recorrência; o app avisa antes e lembra depois, enquanto ela gerar ali.
 test.use({ timezoneId: "America/Sao_Paulo" });
@@ -42,13 +43,11 @@ test("arquivar conta, cartão ou categoria com recorrência ativa avisa antes e 
   await page.reload();
 
   // Sem recorrência, o arquivamento segue direto, como antes.
-  await page.getByLabel(`Mais ações ${sem}`).click();
-  await page.getByRole("button", { name: `Arquivar conta ${sem}` }).click();
+  await pelaLinha(page, sem, `Arquivar conta ${sem}`);
   await expect(linha(page, sem)).toContainText("(arquivada)");
 
   // Com recorrência ativa, vem o aviso; cancelar não arquiva.
-  await page.getByLabel(`Mais ações ${itau}`).click();
-  await page.getByRole("button", { name: `Arquivar conta ${itau}` }).click();
+  await pelaLinha(page, itau, `Arquivar conta ${itau}`);
   const aviso = page.getByRole("group", { name: `Arquivar ${itau}` });
   await expect(aviso).toContainText(`1 recorrência ativa usa a conta ${itau}`);
   await expect(aviso.getByRole("link", { name: `${luz}, próxima em ${porExtenso(daquiA(5))}` })).toBeVisible();
@@ -57,8 +56,7 @@ test("arquivar conta, cartão ou categoria com recorrência ativa avisa antes e 
   await expect(linha(page, itau)).not.toContainText("(arquivada)");
 
   // Arquivar mesmo assim: a linha da conta lembra a recorrência, que abre pela tela dela.
-  await page.getByLabel(`Mais ações ${itau}`).click();
-  await page.getByRole("button", { name: `Arquivar conta ${itau}` }).click();
+  await pelaLinha(page, itau, `Arquivar conta ${itau}`);
   await aviso.getByRole("button", { name: "Arquivar mesmo assim" }).click();
   await expect(linha(page, itau)).toContainText("(arquivada)");
   const lembrete = page.getByRole("group", { name: `Recorrências ativas em ${itau}` });
@@ -69,13 +67,11 @@ test("arquivar conta, cartão ou categoria com recorrência ativa avisa antes e 
 
   // A categoria avisa pelas duas regras; o cartão, pela dele.
   await page.goto("/#/contas-e-categorias");
-  await page.getByLabel(`Mais ações ${casa}`).click();
-  await page.getByRole("button", { name: `Arquivar ${casa}` }).click();
+  await pelaLinha(page, casa, `Arquivar ${casa}`);
   await expect(page.getByRole("group", { name: `Arquivar ${casa}` })).toContainText(`2 recorrências ativas usam a categoria ${casa}`);
   await page.getByRole("group", { name: `Arquivar ${casa}` }).getByRole("button", { name: "Arquivar mesmo assim" }).click();
   await expect(page.getByRole("group", { name: `Recorrências ativas em ${casa}` })).toContainText("2 recorrências ativas seguem gerando previstos aqui");
-  await page.getByLabel(`Mais ações ${cartao}`).click();
-  await page.getByRole("button", { name: `Arquivar cartão ${cartao}` }).click();
+  await pelaLinha(page, cartao, `Arquivar cartão ${cartao}`);
   await expect(page.getByRole("group", { name: `Arquivar ${cartao}` })).toContainText(`1 recorrência ativa usa o cartão ${cartao}`);
   await page.getByRole("group", { name: `Arquivar ${cartao}` }).getByRole("button", { name: "Arquivar mesmo assim" }).click();
   await expect(linha(page, cartao)).toContainText("(arquivado)");
@@ -91,8 +87,7 @@ test("arquivar conta, cartão ou categoria com recorrência ativa avisa antes e 
   await page.reload();
   await expect(linha(page, itau)).toContainText("(arquivada)");
   await expect(page.getByRole("group", { name: `Recorrências ativas em ${itau}` })).toHaveCount(0);
-  await page.getByLabel(`Mais ações ${itau}`).click();
-  await page.getByRole("button", { name: `Desarquivar conta ${itau}` }).click();
+  await pelaLinha(page, itau, `Desarquivar conta ${itau}`);
   await expect(linha(page, itau)).not.toContainText("(arquivada)");
   expect((await api.ler("/api/recorrencias")).find((r: { id: string }) => r.id === regraDaLuz.id).conta_id).toBe(await contaId(nubank));
 });

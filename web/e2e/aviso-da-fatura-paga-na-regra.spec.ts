@@ -3,6 +3,7 @@ import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar } from "./lancar";
 import { soltarRotas } from "./rotas";
+import { pelaLinha } from "./conta";
 
 test.afterEach(async ({ page }) => {
   await soltarRotas(page);
@@ -43,8 +44,7 @@ async function prepararRegra(page: Page) {
 async function abrirRegra(page: Page, descricao: string) {
   await page.getByRole("navigation", { name: "Telas" }).getByRole("link", { name: "Histórico" }).click();
   const l = page.getByRole("listitem").filter({ hasText: descricao }).filter({ hasText: "R$" }).first();
-  await l.getByLabel(`Mais ações ${descricao}`).click();
-  await l.getByRole("link", { name: `Recorrência ${descricao}` }).click();
+  await pelaLinha(l, descricao, `Recorrência ${descricao}`, "link");
   await expect(page.getByRole("heading", { name: "Recorrência", level: 2 })).toBeVisible();
 }
 

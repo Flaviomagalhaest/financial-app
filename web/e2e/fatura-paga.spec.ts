@@ -47,7 +47,7 @@ test("o pagamento em parte deixa a fatura paga, a sobra vai para a seguinte e a 
 
   await page.goto(`/#/cartoes/${cartao.id}/${antiga.mes}`);
   const resumo = page.getByLabel("Resumo da fatura");
-  await expect(resumo).toContainText("Paga");
+  await expect(page.locator(".faixa")).toContainText("Paga");
   await expect(resumo).toContainText("R$ 400,00");
   await page.getByRole("button", { name: "Corrigir fatura" }).click();
   const correcao = page.getByRole("form", { name: "Corrigir fatura" });

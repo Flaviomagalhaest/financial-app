@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { cadastrar, digitar, lancar } from "./lancar";
+import { pelaLinha } from "./conta";
 
 // A edição chega ao servidor, mas a resposta não volta ao aparelho, e a pessoa reabre o app (ticket 169).
 
@@ -67,8 +68,7 @@ for (const perder of ["resposta", "recarga"] as const) {
   test(`excluir ao reabrir, sobre a edição sem ${perder}, não vira conflito`, async ({ page }) => {
     const { linha, descricao, soltar, api } = await editarSemResposta(page, perder);
     page.once("dialog", (dialogo) => void dialogo.accept());
-    await linha.getByLabel(`Mais ações ${descricao}`).click();
-    await linha.getByRole("button", { name: `Excluir ${descricao}` }).click();
+    await pelaLinha(linha, descricao, `Excluir ${descricao}`);
     await expect(linha).toHaveCount(0);
     await soltar();
 
@@ -141,8 +141,7 @@ for (const sair of ["recarga", "aba fechada"] as const) {
     expect(await noServidor()).toBe(true);
 
     page.once("dialog", (dialogo) => void dialogo.accept());
-    await linha.getByLabel(`Mais ações ${descricao}`).click();
-    await linha.getByRole("button", { name: `Excluir ${descricao}` }).click();
+    await pelaLinha(linha, descricao, `Excluir ${descricao}`);
     await expect(linha).toHaveCount(0);
     await soltar();
 

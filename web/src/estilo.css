@@ -50,6 +50,16 @@
   --raio-cartao: 1.125rem;
   --raio-campo: 0.625rem;
   --raio-pilula: 999px;
+  --raio-1: 0.125rem;
+  --raio-2: 0.1875rem;
+  --raio-3: 0.25rem;
+  --raio-4: 0.375rem;
+  --raio-5: 0.5rem;
+  --raio-6: 0.5625rem;
+  --raio-7: 0.75rem;
+  --raio-8: 0.875rem;
+  --raio-9: 1.25rem;
+  --raio-10: 1.5rem;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -284,7 +294,7 @@ svg.icone {
   gap: var(--espaco-1);
   margin: calc(-1 * var(--espaco-4)) calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
   padding: var(--espaco-2) max(16px, env(safe-area-inset-right, 0px)) 1.375rem max(16px, env(safe-area-inset-left, 0px));
-  border-radius: 0 0 1.5rem 1.5rem;
+  border-radius: 0 0 var(--raio-10) var(--raio-10);
   background: var(--faixa);
   color: var(--sobre-faixa);
 }
@@ -347,7 +357,7 @@ svg.icone {
   align-items: center;
   gap: 0.625rem;
   padding: 0.625rem 0.875rem 0.625rem var(--espaco-3);
-  border-radius: 0.875rem;
+  border-radius: var(--raio-8);
   background: var(--vidro);
   color: var(--sobre-faixa);
   text-decoration: none;
@@ -631,7 +641,7 @@ svg.icone {
   .faixa {
     margin: 0;
     padding: var(--espaco-5) 1.75rem;
-    border-radius: 1.25rem;
+    border-radius: var(--raio-9);
   }
 
   .pilulas {
@@ -661,14 +671,14 @@ svg.icone {
   grid-template-columns: 1fr 1fr;
   gap: 3px;
   padding: 3px;
-  border-radius: 0.75rem;
+  border-radius: var(--raio-7);
   background: var(--linha);
 }
 
 .alternancia > button {
   padding: 0.5rem 0.5rem;
   border: 0;
-  border-radius: 0.5625rem;
+  border-radius: var(--raio-6);
   background: var(--superficie);
   color: var(--texto);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
@@ -951,7 +961,7 @@ fieldset.sem-moldura {
 
 .aviso {
   border: 1px solid var(--erro);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-5);
   padding: 0.5rem 0.75rem;
   margin-top: 0.5rem;
 }
@@ -1004,7 +1014,7 @@ fieldset.sem-moldura {
   display: block;
   padding: 0.625rem 0.75rem;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: var(--raio-5);
   background: transparent;
   color: var(--texto);
   font-weight: 500;
@@ -1179,7 +1189,7 @@ dialog.folha {
   margin: auto auto 0;
   padding: 1rem max(16px, env(safe-area-inset-right, 0px)) max(1rem, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   border: 0;
-  border-radius: 1.25rem 1.25rem 0 0;
+  border-radius: var(--raio-9) var(--raio-9) 0 0;
   background: var(--superficie);
   color: var(--texto);
   overflow-y: auto;
@@ -1372,7 +1382,7 @@ dialog.folha > input {
   position: relative;
   display: flex;
   height: 1.25rem;
-  border-radius: 0.375rem;
+  border-radius: var(--raio-4);
   background: var(--superficie);
   box-shadow: inset 0 0 0 1px var(--borda);
   overflow: hidden;
@@ -1406,7 +1416,7 @@ dialog.folha > input {
   display: inline-block;
   width: 0.75rem;
   height: 0.75rem;
-  border-radius: 0.125rem;
+  border-radius: var(--raio-1);
   vertical-align: -0.0625rem;
 }
 .legenda .livre {
@@ -1429,28 +1439,6 @@ dialog.folha > input {
 .rolagem {
   position: relative;
   overflow-x: auto;
-}
-.tabela {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.875rem;
-}
-.tabela th,
-.tabela td {
-  padding: 0.5rem;
-  border-bottom: 1px solid var(--linha);
-  text-align: right;
-  white-space: nowrap;
-}
-.tabela th:first-child,
-.tabela td:first-child {
-  text-align: left;
-  white-space: normal;
-}
-.tabela th {
-  color: var(--texto-suave);
-  font-weight: 600;
 }
 .tabela .total td {
   font-weight: 700;
@@ -1500,7 +1488,7 @@ button.linha-que-abre {
 .ranking .trilho {
   grid-column: 1 / -1;
   height: 0.375rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--raio-2);
   background: var(--linha);
 }
 .ranking .trilho span {
@@ -1793,7 +1781,7 @@ label.caixa > input {
   min-width: 0;
   background: var(--superficie);
   border: 1px solid var(--borda);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-5);
 }
 .grafico svg {
   display: block;
@@ -1903,6 +1891,15 @@ label.caixa > input {
   text-align: left;
   font-weight: 600;
 }
+.tabela th:first-child,
+.tabela td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+.tabela th {
+  color: var(--texto-suave);
+  font-weight: 600;
+}
 .tabela thead th {
   font-size: 0.75rem;
   color: var(--texto-suave);
@@ -1971,7 +1968,7 @@ label.caixa > input {
 .evolucao .barra {
   display: block;
   height: 0.375rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--raio-2);
   background: var(--destaque);
 }
 .evolucao .barra.anterior {
@@ -2021,7 +2018,7 @@ label.caixa > input {
   gap: 0.375rem;
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--borda);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-5);
   background: var(--superficie);
   font-variant-numeric: tabular-nums;
 }
@@ -2039,7 +2036,7 @@ label.caixa > input {
 .medidor {
   display: flex;
   height: 0.5rem;
-  border-radius: 0.25rem;
+  border-radius: var(--raio-3);
   background: var(--fundo);
   box-shadow: inset 0 0 0 1px var(--borda);
   overflow: hidden;
@@ -2079,7 +2076,7 @@ label.caixa > input {
   gap: 0.375rem;
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--borda);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-5);
   background: var(--superficie);
   font-variant-numeric: tabular-nums;
 }
@@ -2106,7 +2103,7 @@ label.caixa > input {
   gap: 0.5rem;
   padding: 0.75rem;
   border: 1px solid var(--borda);
-  border-radius: 0.75rem;
+  border-radius: var(--raio-7);
   background: var(--superficie);
 }
 
@@ -2239,6 +2236,13 @@ label.caixa > input {
 .resumo-da-fatura dt:first-of-type,
 .resumo-da-fatura dt:first-of-type + dd {
   border-top: 0;
+}
+
+.detalhe-da-fatura > summary {
+  cursor: pointer;
+  color: var(--texto-suave);
+  font-size: var(--texto-p);
+  padding: var(--espaco-2) 0;
 }
 
 .acoes-da-fatura {
@@ -2482,7 +2486,7 @@ label.caixa > input {
 .abas-internas {
   gap: 3px;
   padding: 3px;
-  border-radius: 0.75rem;
+  border-radius: var(--raio-7);
   background: var(--linha);
   align-self: flex-start;
 }
@@ -2491,7 +2495,7 @@ label.caixa > input {
 .abas-internas button.secundario {
   padding: 0.375rem 0.875rem;
   border: 0;
-  border-radius: 0.5625rem;
+  border-radius: var(--raio-6);
   background: transparent;
   color: var(--texto-suave);
   font-size: 0.875rem;
@@ -2529,7 +2533,7 @@ main.login h1 {
   main.login {
     margin-top: 12vh;
     padding: var(--espaco-6);
-    border-radius: 1.25rem;
+    border-radius: var(--raio-9);
     background: var(--superficie);
     box-shadow: var(--sombra);
   }

@@ -170,49 +170,48 @@ export function TelaDaFatura({ cartaoId, mes }: { cartaoId: string; mes: string 
         )}
       </div>
       {fatura && (
-        <dl className="informacoes resumo-da-fatura cartao" aria-label="Resumo da fatura">
-          <dt>Situação</dt>
-          <dd>{SITUACAO[fatura.situacao]}</dd>
-          {fatura.fechamento && (
-            <>
-              <dt>Fechamento</dt>
-              <dd>{dataPorExtenso(fatura.fechamento)}</dd>
-            </>
-          )}
-          {fatura.vencimento && (
-            <>
-              <dt>Vencimento</dt>
-              <dd>{dataPorExtenso(fatura.vencimento)}</dd>
-            </>
-          )}
-          <dt>Compras</dt>
-          <dd>{formatarCentavos(fatura.compras_centavos + estornosCentavos)}</dd>
-          <dt>Estornos</dt>
-          <dd>{estornosCentavos > 0 ? `− ${formatarCentavos(estornosCentavos)}` : formatarCentavos(0)}</dd>
-          <dt>Ajuste</dt>
-          <dd>{comSinal(fatura.ajuste_centavos)}</dd>
-          <dt>Total</dt>
-          <dd>{formatarCentavos(fatura.total_centavos)}</dd>
-          {fatura.saldo_anterior_centavos > 0 && (
-            <>
-              <dt>Saldo anterior</dt>
-              <dd>{formatarCentavos(fatura.saldo_anterior_centavos)}</dd>
-            </>
-          )}
-          <dt>Pago</dt>
-          <dd>{formatarCentavos(fatura.pago_centavos)}</dd>
-          {pagaPeloPagamento(fatura) ? (
-            <>
-              <dt>Passou para a seguinte</dt>
-              <dd>{formatarCentavos(saldoQuePassou(fatura))}</dd>
-            </>
-          ) : (
-            <>
-              <dt>A pagar</dt>
-              <dd>{formatarCentavos(fatura.a_pagar_centavos)}</dd>
-            </>
-          )}
-        </dl>
+        <details className="detalhe-da-fatura">
+          <summary>Ver o detalhe da fatura</summary>
+          <dl className="informacoes resumo-da-fatura cartao" aria-label="Resumo da fatura">
+            {fatura.fechamento && (
+              <>
+                <dt>Fechamento</dt>
+                <dd>{dataPorExtenso(fatura.fechamento)}</dd>
+              </>
+            )}
+            {fatura.vencimento && (
+              <>
+                <dt>Vencimento</dt>
+                <dd>{dataPorExtenso(fatura.vencimento)}</dd>
+              </>
+            )}
+            <dt>Compras</dt>
+            <dd>{formatarCentavos(fatura.compras_centavos + estornosCentavos)}</dd>
+            <dt>Estornos</dt>
+            <dd>{estornosCentavos > 0 ? `− ${formatarCentavos(estornosCentavos)}` : formatarCentavos(0)}</dd>
+            <dt>Ajuste</dt>
+            <dd>{comSinal(fatura.ajuste_centavos)}</dd>
+            {fatura.saldo_anterior_centavos > 0 && (
+              <>
+                <dt>Saldo anterior</dt>
+                <dd>{formatarCentavos(fatura.saldo_anterior_centavos)}</dd>
+              </>
+            )}
+            <dt>Pago</dt>
+            <dd>{formatarCentavos(fatura.pago_centavos)}</dd>
+            {pagaPeloPagamento(fatura) ? (
+              <>
+                <dt>Passou para a seguinte</dt>
+                <dd>{formatarCentavos(saldoQuePassou(fatura))}</dd>
+              </>
+            ) : (
+              <>
+                <dt>A pagar</dt>
+                <dd>{formatarCentavos(fatura.a_pagar_centavos)}</dd>
+              </>
+            )}
+          </dl>
+        </details>
       )}
       <div className="acoes-da-fatura">
         {fatura && paga && !corrigindo && (

@@ -4,6 +4,7 @@ import { entrar } from "./entrar";
 import { cadastrar, digitar } from "./lancar";
 import { esperarFilaVazia } from "./fila";
 import { soltarRotas } from "./rotas";
+import { pelaLinha } from "./conta";
 
 test.afterEach(async ({ page }) => {
   await soltarRotas(page);
@@ -53,8 +54,7 @@ async function prepararRegra(page: Page, vezes: number) {
 
 /** Pelo "⋯" de um lançamento da recorrência, abre a tela dela a partir dele. */
 async function abrirRecorrencia(page: Page, lancamento: Locator, descricao: string) {
-  await lancamento.getByLabel(`Mais ações ${descricao}`).click();
-  await lancamento.getByRole("link", { name: `Recorrência ${descricao}` }).click();
+  await pelaLinha(lancamento, descricao, `Recorrência ${descricao}`, "link");
   await expect(page.getByRole("heading", { name: "Recorrência", level: 2 })).toBeVisible();
 }
 

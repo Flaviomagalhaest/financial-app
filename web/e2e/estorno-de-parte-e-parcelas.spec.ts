@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
+import { pelaLinha } from "./conta";
 
 // O dia do casal é o de São Paulo, como na API.
 test.use({ timezoneId: "America/Sao_Paulo" });
@@ -39,8 +40,7 @@ test("estorna uma parte da compra: escolhe a parte, herda as categorias dela e v
   });
   await page.reload();
 
-  await page.getByRole("listitem").filter({ hasText: compra }).getByLabel(`Mais ações ${compra}`).click();
-  await page.getByRole("listitem").filter({ hasText: compra }).getByRole("link", { name: `Estornar ${compra}` }).click();
+  await pelaLinha(page.getByRole("listitem").filter({ hasText: compra }), compra, `Estornar ${compra}`, "link");
 
   // A primeira parte já vem escolhida, com o valor e as categorias dela.
   await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
@@ -69,8 +69,7 @@ test("estorna uma parte da compra: escolhe a parte, herda as categorias dela e v
     .toMatchObject({ valor_centavos: 4000, categoria_ids: [casa.id] });
 
   // A parte toda devolvida não se escolhe de novo; a outra, sim.
-  await page.getByRole("listitem").filter({ hasText: compra }).filter({ hasText: "estornada em" }).getByLabel(`Mais ações ${compra}`).click();
-  await page.getByRole("listitem").filter({ hasText: compra }).filter({ hasText: "estornada em" }).getByRole("link", { name: `Estornar ${compra}` }).click();
+  await pelaLinha(page.getByRole("listitem").filter({ hasText: compra }).filter({ hasText: "estornada em" }), compra, `Estornar ${compra}`, "link");
   await expect(partes.getByRole("radio", { name: /^Cortina/ })).toBeDisabled();
   await expect(partes.getByRole("radio", { name: /^Vestido/ })).toBeChecked();
 });
@@ -91,8 +90,7 @@ test("estorna todas as parcelas num estorno só, ligado ao parcelamento, que con
   });
   await page.reload();
 
-  await page.getByRole("listitem").filter({ hasText: compra }).first().getByLabel(`Mais ações ${compra}`).click();
-  await page.getByRole("listitem").filter({ hasText: compra }).first().getByRole("link", { name: `Estornar ${compra}` }).click();
+  await pelaLinha(page.getByRole("listitem").filter({ hasText: compra }).first(), compra, `Estornar ${compra}`, "link");
   await expect(page.getByRole("heading", { name: "Estornar compra", level: 2 })).toBeVisible();
   // "Só esta parcela" é o começo: R$ 100,00.
   await expect(page.getByRole("radio", { name: /^Só esta parcela/ })).toBeChecked();

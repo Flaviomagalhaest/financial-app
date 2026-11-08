@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { apiDaPagina, tokenDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { digitar } from "./lancar";
+import { pelaLinha } from "./conta";
 
 // Partes na recorrência (ticket 140, ADR 0022): o combo de celular e internet numa conta só.
 test.use({ timezoneId: "America/Sao_Paulo", serviceWorkers: "block" });
@@ -43,8 +44,7 @@ async function previstos(api: Awaited<ReturnType<typeof apiDaPagina>>, descricao
 
 /** Pelo "⋯" de um lançamento da recorrência, abre a tela dela a partir dele. */
 async function abrirRecorrencia(page: Page, lancamento: Locator, descricao: string) {
-  await lancamento.getByLabel(`Mais ações ${descricao}`).click();
-  await lancamento.getByRole("link", { name: `Recorrência ${descricao}` }).click();
+  await pelaLinha(lancamento, descricao, `Recorrência ${descricao}`, "link");
   await expect(page.getByRole("heading", { name: "Recorrência", level: 2 })).toBeVisible();
 }
 
