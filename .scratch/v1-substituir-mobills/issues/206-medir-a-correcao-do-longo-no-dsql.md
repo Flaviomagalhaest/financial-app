@@ -1,7 +1,7 @@
 # Medir a correção do parcelamento longo no DSQL
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: [203](203-simulacao-da-correcao-usa-savepoint-no-dsql.md)
 Skills: `run`; HITL (precisa de acesso ao DSQL)
 Modelo recomendado: Sonnet
