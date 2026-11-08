@@ -329,6 +329,14 @@ body { background: var(--p-fundo); color: var(--p-texto); font: 15px/1.5 var(--p
 .mock.d-banco .hero .progresso span { background: var(--m-sobre-faixa); }
 .mock.d-banco .hero .atalhos { display: flex; gap: 8px; margin-top: 16px; justify-content: space-between; }
 .mock.d-banco.larga .hero .atalhos { justify-content: flex-start; gap: 28px; }
+.mock.d-banco .hero .atalhos.redondos { justify-content: space-around; }
+.mock.d-banco.larga .hero .atalhos.redondos { justify-content: flex-start; }
+.mock.d-banco .hero .atalhos.pilulas { justify-content: flex-start; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; }
+.mock.d-banco.larga .hero .atalhos.pilulas { margin-right: 0; gap: 10px; }
+.mock.d-banco .hero .pil { flex: none; display: flex; align-items: center; gap: 10px; border: 0; border-radius: 14px; padding: 10px 14px 10px 12px; text-align: left; color: var(--m-sobre-faixa); background: color-mix(in srgb, var(--m-sobre-faixa) 16%, transparent); }
+.mock.d-banco .hero .pil span { display: flex; flex-direction: column; line-height: 1.25; }
+.mock.d-banco .hero .pil b { font-size: .85rem; white-space: nowrap; }
+.mock.d-banco .hero .pil small { font-size: .72rem; opacity: .8; white-space: nowrap; }
 .mock.d-banco .hero .atalho { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: .75rem; font-weight: 600; width: 72px; text-align: center; }
 .mock.d-banco .hero .atalho span { width: 48px; height: 48px; border-radius: 999px; background: color-mix(in srgb, var(--m-sobre-faixa) 16%, transparent); display: grid; place-items: center; }
 .mock.d-banco .botao-novo { display: none; }
@@ -373,7 +381,7 @@ body { background: var(--p-fundo); color: var(--p-texto); font: 15px/1.5 var(--p
   <header class="p-cabeca">
     <span class="etiqueta">Protótipo · ticket 204</span>
     <h1>Acabamento visual do Financial App</h1>
-    <p>Escolha uma opção em cada grupo e veja Hoje e Mês com a combinação, no celular e na tela larga. Os números são os da base de teste. As abas Hoje e Mês dentro do aparelho funcionam. No computador, ← e → trocam a opção do último grupo em que você clicou.</p>
+    <p><b>Rodada 2.</b> Já abre com o que você escolheu: painel de banco, Inter, avatar com menu (toque no "F") e botão +. Falta a Q11: os atalhos da faixa verde em Hoje. Os outros grupos continuam aí para comparar. Escolha uma opção em cada grupo e veja Hoje e Mês com a combinação, no celular e na tela larga. Os números são os da base de teste. As abas Hoje e Mês dentro do aparelho funcionam. No computador, ← e → trocam a opção do último grupo em que você clicou.</p>
   </header>
 
   <section class="escolhas" id="escolhas" aria-label="Escolhas"></section>
@@ -396,16 +404,22 @@ body { background: var(--p-fundo); color: var(--p-texto); font: 15px/1.5 var(--p
 
 <script>
 const GRUPOS = [
+  { id: "atalhos", q: "Q11", titulo: "Atalhos da faixa em Hoje", opcoes: [
+    { id: "redondos", nome: "Redondos", rec: true, nota: "Três botões redondos na faixa: Favoritos, Fatura (abre a que vence; sem fatura, vira Cartões) e Contas e categorias. Nada repete o botão +, a lupa ou as abas." },
+    { id: "pilulas", nome: "Pílulas com informação", nota: "Os mesmos três atalhos como pílulas que já trazem um dado: quantos favoritos, o valor e o vencimento da fatura. A fileira rola de lado se não couber." },
+    { id: "original", nome: "Como no 1º protótipo", nota: "Novo, Buscar, Cartões e Mês: todos repetem algo que já está na tela (botão +, lupa, abas)." },
+    { id: "nenhum", nome: "Sem atalhos", nota: "A faixa fica só com o número do mês. Favoritos e Contas e categorias continuam no menu do avatar." },
+  ]},
   { id: "direcao", q: "Q1", titulo: "Direção visual", opcoes: [
     { id: "atual", nome: "Atual", nota: "Capturas do app como está hoje: link azul do navegador, barra lateral esticada, blocos sem ritmo." },
-    { id: "cartoes", nome: "A · Sóbrio com cartões", rec: true, nota: "Fundo levemente esverdeado, cada assunto num cartão branco com canto de 14px e sombra leve. O número do mês abre a tela. Ações da tabela num menu ⋯." },
+    { id: "cartoes", nome: "A · Sóbrio com cartões", nota: "Fundo levemente esverdeado, cada assunto num cartão branco com canto de 14px e sombra leve. O número do mês abre a tela. Ações da tabela num menu ⋯." },
     { id: "plano", nome: "B · Minimalista plano", nota: "Sem caixas. Seções separadas por um filete escuro, títulos pequenos em caixa alta e o número do mês bem grande e fino. Linha da tabela abre ao tocar (›)." },
-    { id: "banco", nome: "C · Painel de banco", nota: "Faixa verde no alto com o número do mês e atalhos redondos (Novo, Buscar, Cartões, Mês). Cartões mais arredondados e botões em pílula." },
+    { id: "banco", nome: "C · Painel de banco", esc: true, nota: "Faixa verde no alto com o número do mês e atalhos redondos (Novo, Buscar, Cartões, Mês). Cartões mais arredondados e botões em pílula." },
     { id: "denso", nome: "D · Denso, tipo planilha", nota: "Letra menor, caixas retas e três colunas na tela larga. Cabe mais coisa por tela. Ações da tabela ficam visíveis na tela larga." },
   ]},
   { id: "fonte", q: "Q2", titulo: "Fonte", opcoes: [
-    { id: "sistema", nome: "Sistema", rec: true, nota: "A do aparelho: San Francisco no iPhone, Segoe no Windows, Roboto no Android. Zero download, funciona offline." },
-    { id: "inter", nome: "Inter", nota: "Neutra e muito legível em tamanho pequeno. Seria baixada com o app (cerca de 100 KB) para funcionar offline." },
+    { id: "sistema", nome: "Sistema", nota: "A do aparelho: San Francisco no iPhone, Segoe no Windows, Roboto no Android. Zero download, funciona offline." },
+    { id: "inter", nome: "Inter", esc: true, nota: "Neutra e muito legível em tamanho pequeno. Seria baixada com o app (cerca de 100 KB) para funcionar offline." },
     { id: "manrope", nome: "Manrope", nota: "Geométrica e arredondada, números largos. Mais personalidade nos valores grandes." },
     { id: "plex", nome: "IBM Plex Sans", nota: "Um pouco técnica, com cara de ferramenta. Combina com a direção densa." },
     { id: "nunito", nome: "Nunito Sans", nota: "Suave e amigável, terminais arredondados." },
@@ -413,19 +427,19 @@ const GRUPOS = [
   ]},
   { id: "topo", q: "Q6", titulo: "Topo", opcoes: [
     { id: "atual", nome: "Atual", nota: "Nome do app, \"Entrou como e-mail\", lupa, link Configurações e botão Sair, tudo no topo." },
-    { id: "enxuto", nome: "Enxuto", rec: true, nota: "Nome do app à esquerda, lupa e engrenagem à direita. E-mail e Sair vão para Configurações; na tela larga, para o pé da barra lateral." },
+    { id: "enxuto", nome: "Enxuto", nota: "Nome do app à esquerda, lupa e engrenagem à direita. E-mail e Sair vão para Configurações; na tela larga, para o pé da barra lateral." },
     { id: "titulo", nome: "Título da tela", nota: "O topo mostra o nome da tela atual (Hoje, Mês), com lupa e engrenagem. Na tela larga, o nome do app vai para o alto da barra lateral e o topo some." },
-    { id: "avatar", nome: "Avatar com menu", nota: "Nome do app, lupa e um círculo com a inicial. Tocar no círculo abre um menu com o e-mail, Configurações e Sair." },
+    { id: "avatar", nome: "Avatar com menu", esc: true, nota: "Nome do app, lupa e um círculo com a inicial, também na tela larga. Tocar no círculo abre o menu: e-mail, Configurações, Contas e categorias, Favoritos e Sair." },
   ]},
   { id: "icones", q: "Q7", titulo: "Ícones das abas", opcoes: [
     { id: "texto", nome: "Só texto", nota: "Como hoje, sem ícones; a aba ativa tem um traço verde em cima (celular) ou um fundo (lateral)." },
-    { id: "contorno", nome: "Contorno", rec: true, nota: "Ícone de linha acima do nome no celular e ao lado na barra lateral. A aba ativa fica verde." },
+    { id: "contorno", nome: "Contorno", nota: "Ícone de linha acima do nome no celular e ao lado na barra lateral. A aba ativa fica verde." },
     { id: "preenchido", nome: "Ativa preenchida", nota: "A aba ativa ganha uma pílula verde clara atrás do ícone, que fica preenchido." },
     { id: "so-icone", nome: "Só ícone", nota: "No celular só os ícones; o nome aparece só na aba ativa, dentro de uma pílula." },
-    { id: "fab", nome: "Com botão +", nota: "Contorno, mais um botão redondo de Novo lançamento no meio da barra (no celular) e no alto da barra lateral. O botão grande de Hoje sai." },
+    { id: "fab", nome: "Com botão +", esc: true, nota: "Contorno, mais um botão redondo de Novo lançamento no meio da barra (no celular) e no alto da barra lateral. O botão grande de Hoje sai." },
   ]},
 ];
-const estado = { direcao: "cartoes", fonte: "sistema", topo: "enxuto", icones: "contorno", tela: "hoje", aparelho: "ambos", tema: "claro", grupo: "direcao", menuAvatar: false };
+const estado = { atalhos: "redondos", direcao: "banco", fonte: "inter", topo: "avatar", icones: "fab", tela: "hoje", aparelho: "ambos", tema: "claro", grupo: "atalhos", menuAvatar: false };
 
 const IC = {
   hoje: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
@@ -451,7 +465,7 @@ function topo(larga) {
   const titulo = estado.tela === "hoje" ? "Hoje" : "Mês";
   const esquerda = t === "titulo" ? `<span class="titulo-tela">${titulo}</span>` : `<span class="marca">Financial App</span>`;
   const direita = t === "avatar"
-    ? `<button class="icone-topo" aria-label="Buscar">${ic("lupa")}</button><button class="avatar" data-avatar>F${estado.menuAvatar ? `<div class="menu-avatar"><p>flavio@teste.com</p><span>Configurações</span><span>Sair</span></div>` : ""}</button>`
+    ? `<button class="icone-topo" aria-label="Buscar">${ic("lupa")}</button><button class="avatar" data-avatar>F${estado.menuAvatar ? `<div class="menu-avatar"><p>flavio@teste.com</p><span>Configurações</span><span>Contas e categorias</span><span>Favoritos</span><span>Sair</span></div>` : ""}</button>`
     : `<button class="icone-topo" aria-label="Buscar">${ic("lupa")}</button><button class="icone-topo" aria-label="Configurações">${ic("engrenagem")}</button>`;
   return `<header class="topo">${esquerda}<span class="espaco"></span>${direita}</header>`;
 }
@@ -465,6 +479,27 @@ function abas(larga) {
   return `<nav class="abas"><div class="marca-lateral">Financial App</div><button class="novo-lateral">${ic("mais")} Novo lançamento</button>${itens}${pe}</nav>`;
 }
 
+function atalhos() {
+  const a = estado.atalhos;
+  if (a === "nenhum") return "";
+  if (a === "original") return `<div class="atalhos">
+      <div class="atalho"><span>${ic("mais")}</span>Novo</div>
+      <div class="atalho"><span>${ic("lupa")}</span>Buscar</div>
+      <div class="atalho"><span>${ic("cartoes")}</span>Cartões</div>
+      <div class="atalho"><span>${ic("mes")}</span>Mês</div>
+    </div>`;
+  if (a === "pilulas") return `<div class="atalhos pilulas">
+      <button class="pil">${ic("estrela")}<span><b>Favoritos</b><small>3 salvos</small></span></button>
+      <button class="pil">${ic("cartoes")}<span><b>Fatura R$ 145,50</b><small>Nubank · vence 10/11</small></span></button>
+      <button class="pil">${ic("pastas")}<span><b>Contas e categorias</b><small>4 contas</small></span></button>
+    </div>`;
+  return `<div class="atalhos redondos">
+      <div class="atalho"><span>${ic("estrela")}</span>Favoritos</div>
+      <div class="atalho"><span>${ic("cartoes")}</span>Fatura</div>
+      <div class="atalho"><span>${ic("pastas")}</span>Contas e categorias</div>
+    </div>`;
+}
+
 function hoje() {
   return `<div class="grade-hoje">
   <section class="hero hero-hoje largo">
@@ -472,12 +507,7 @@ function hoje() {
     <p class="grande num">R$ 2.609,20</p>
     <div class="progresso"><span style="width:60%"></span></div>
     <p class="suave">de R$ 6.500,00 planejados</p>
-    <div class="atalhos">
-      <div class="atalho"><span>${ic("mais")}</span>Novo</div>
-      <div class="atalho"><span>${ic("lupa")}</span>Buscar</div>
-      <div class="atalho"><span>${ic("cartoes")}</span>Cartões</div>
-      <div class="atalho"><span>${ic("mes")}</span>Mês</div>
-    </div>
+    ${atalhos()}
   </section>
   ${estado.icones === "fab" ? "" : `<button class="botao botao-novo largo">${ic("mais")} Novo lançamento</button>`}
   <div class="alerta largo">${ic("alerta")}<span><b>1 conta atrasada.</b> Confirme em Contas da semana.</span></div>
@@ -500,9 +530,9 @@ function hoje() {
     <p class="suave" style="font-size:.85rem">Você repete este lançamento com frequência.</p>
     <div class="linha"><span class="nome">Geladeira</span><span class="sub">R$ 450,00 · 10 usos</span><div class="acoes"><button class="botao sec peq">${ic("estrela")} Favoritar</button><button class="botao sec peq">Dispensar</button></div></div>
   </section>
-  <nav class="menu-linhas largo">
+  ${estado.direcao === "banco" && estado.atalhos !== "nenhum" && estado.atalhos !== "original" ? "" : `<nav class="menu-linhas largo">
     <a class="item">${ic("pastas")} Contas e categorias <span class="seta">›</span></a>
-  </nav>
+  </nav>`}
   <p class="estado-api largo"><i></i>API no ar · <button>Verificar de novo</button></p>
 </div>`;
 }
@@ -586,16 +616,17 @@ function desenharEscolhas() {
   alvo.innerHTML = GRUPOS.map(g => {
     const sel = g.opcoes.find(o => o.id === estado[g.id]);
     const travado = estado.direcao === "atual" && g.id !== "direcao";
+    const soBanco = g.id === "atalhos" && estado.direcao !== "banco" && estado.direcao !== "atual";
     return `<div class="grupo ${estado.grupo === g.id ? "foco" : ""}" data-grupo="${g.id}">
       <h2><small>${g.q}</small>${g.titulo}</h2>
-      <div class="opcoes">${g.opcoes.map(o => `<button data-g="${g.id}" data-o="${o.id}" aria-pressed="${o.id === estado[g.id]}">${o.nome}${o.rec ? '<span class="rec">· recomendado</span>' : ""}</button>`).join("")}</div>
-      <p class="nota">${travado ? "Com a direção Atual, as capturas mostram o app como está; escolha outra direção para combinar." : sel.nota}</p>
+      <div class="opcoes">${g.opcoes.map(o => `<button data-g="${g.id}" data-o="${o.id}" aria-pressed="${o.id === estado[g.id]}">${o.nome}${o.esc ? '<span class="rec">· escolhido</span>' : o.rec ? '<span class="rec">· recomendado</span>' : ""}</button>`).join("")}</div>
+      <p class="nota">${travado ? "Com a direção Atual, as capturas mostram o app como está; escolha outra direção para combinar." : soBanco ? "Os atalhos só existem na direção C · Painel de banco." : sel.nota}</p>
     </div>`;
   }).join("");
   const nomes = g => GRUPOS.find(x => x.id === g).opcoes.find(o => o.id === estado[g]).nome;
   document.getElementById("resumo").innerHTML = estado.direcao === "atual"
     ? "Mostrando: <b>o app hoje</b> (capturas)."
-    : `Mostrando: <b>${nomes("direcao")}</b> · fonte <b>${nomes("fonte")}</b> · topo <b>${nomes("topo")}</b> · ícones <b>${nomes("icones")}</b> · tema <b>${estado.tema}</b>.`;
+    : `Mostrando: <b>${nomes("direcao")}</b> · atalhos <b>${nomes("atalhos")}</b> · fonte <b>${nomes("fonte")}</b> · topo <b>${nomes("topo")}</b> · ícones <b>${nomes("icones")}</b> · tema <b>${estado.tema}</b>.`;
   const g = GRUPOS.find(x => x.id === estado.grupo);
   document.getElementById("rotulo-flut").textContent = `${g.q} ${g.titulo}: ${nomes(g.id)}`;
   for (const [id, chave, ops] of [["v-tela","tela",[["hoje","Hoje"],["mes","Mês"]]],["v-aparelho","aparelho",[["ambos","Os dois"],["celular","Celular"],["larga","Larga"]]],["v-tema","tema",[["claro","Claro"],["escuro","Escuro"]]]]) {
