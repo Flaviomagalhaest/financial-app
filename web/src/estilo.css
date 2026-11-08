@@ -1165,6 +1165,24 @@ a.abre-a-linha:hover strong {
   margin-bottom: 0;
 }
 
+.linha > select {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* Fileira que quebra: no celular os campos descem para a linha de baixo em vez de empurrar a página para a direita (ticket 209). */
+.linha.quebra {
+  flex-wrap: wrap;
+}
+
+.linha.quebra > select {
+  flex: 1 1 100%;
+}
+
+.linha.quebra > input {
+  flex: 1 1 6rem;
+}
+
 .alternancia.tres {
   grid-template-columns: repeat(3, 1fr);
 }

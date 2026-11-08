@@ -234,7 +234,7 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
         </>
       )}
       {disponiveis.length > 0 && (
-        <div className="linha">
+        <div className="linha quebra">
           <select aria-label="Categoria do novo item" value={novo.categoria_id} onChange={(e) => setNovo({ ...novo, categoria_id: e.target.value })}>
             <option value="">Escolha a categoria</option>
             {disponiveis.map((c) => (
