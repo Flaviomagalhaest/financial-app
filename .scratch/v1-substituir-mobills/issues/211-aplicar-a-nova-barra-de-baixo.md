@@ -1,7 +1,7 @@
 # Aplicar a nova barra de baixo e a tela de funcionalidades no celular
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 210
 Skills: `implement`, `tdd`, `run`; apoio: `code-review`
 Modelo recomendado: Sonnet
