@@ -1,7 +1,7 @@
 # Indicador da API diz "Sem conexão" para qualquer falha e não verifica de novo sozinho
 
 Type: bug
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`, `implement`
 Modelo recomendado: Sonnet
@@ -26,7 +26,7 @@ Causa provável do relato: aba da web com falha passageira ou token vencido, sem
 
 ## Checklist
 
-- [ ] Teste e2e que reproduz: `/api/eu` responde 401 ou 503 e a tela não diz "Sem conexão"
-- [ ] Teste e2e: aba volta a ficar visível ou a rede volta e o estado se atualiza sem clicar
-- [ ] Estados separados com texto próprio
-- [ ] Specs e verificações do projeto verdes; PR para `main`
+- [x] Teste e2e que reproduz: `/api/eu` responde 401 ou 503 e a tela não diz "Sem conexão"
+- [x] Teste e2e: aba volta a ficar visível ou a rede volta e o estado se atualiza sem clicar
+- [x] Estados separados com texto próprio
+- [x] Specs e verificações do projeto verdes; PR para `main`

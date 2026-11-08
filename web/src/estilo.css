@@ -1661,7 +1661,9 @@ progress[value="100"]::-moz-progress-bar {
   background: var(--destaque);
 }
 
-.estado-da-api span[data-estado="sem conexão"]::before {
+.estado-da-api span[data-estado="sem conexão"]::before,
+.estado-da-api span[data-estado="sessão vencida"]::before,
+.estado-da-api span[data-estado="api fora"]::before {
   background: var(--erro);
 }
 
