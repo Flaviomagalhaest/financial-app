@@ -1,7 +1,7 @@
 # Importador do Mobills: parcela com outro valor ou sem `(n/total)` continua a sequência
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `tdd`, `implement`; `grilling` curto para a parcela gerada em mês já exportado (HITL: decisão do dono); `run` para rodar de novo nos exports reais (os exports ficam na máquina do dono, em `data/historic/`)
 Modelo recomendado: Opus
