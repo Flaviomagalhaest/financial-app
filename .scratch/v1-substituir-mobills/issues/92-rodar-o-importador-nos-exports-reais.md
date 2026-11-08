@@ -26,7 +26,7 @@ O dono roda o importador sobre `data/historic/` (fora do git) e cola aqui **só 
 - [ ] Parcelas (ticket 68): contar as sequências quebradas, que entram como lançamentos avulsos, sem parcelamento e sem gerar as que faltam (o limite não conta as previstas delas como parcelas futuras); as parcelas de um parcelamento de cartão sem fatura em mês já exportado, que ficam na conta enquanto o parcelamento fica no cartão; e se o centavo da divisão aparece (a parcela gerada copia o valor da última que veio)
 - [x] Ajustes sem cartão (ticket 68): se aparecem e se há dois reajustes iguais no mesmo mês, que dividem a escolha do cartão
 - [ ] Dono preenche a coluna Mobills da Conferência (feito, 13 meses) e das Faturas (falta) em alguns meses, roda de novo e confere a diferença e o "Por quê"
-- [ ] Dono diz se as abas Grupos ambíguos e Parcelas quebradas bastam como informação ou se precisam de uma coluna de decisão (hoje só informam: o ticket 18 manda o grupo e a sequência "para a revisão" sem dizer o que o dono decide); se precisar, vira ticket
+- [x] Dono diz se as abas Grupos ambíguos e Parcelas quebradas bastam como informação ou se precisam de uma coluna de decisão (hoje só informam: o ticket 18 manda o grupo e a sequência "para a revisão" sem dizer o que o dono decide); se precisar, vira ticket
 - [x] Contagens e respostas gravadas em `## Answer`
 
 ## Answer
@@ -51,5 +51,5 @@ Rodado em 2026-11-08 pelo agente, na máquina do dono, sobre `data/historic/` (f
 ### Falta o dono
 
 - Preencher a coluna Mobills da aba Faturas em alguns meses (a da Conferência já foi) e conferir a diferença e o "Por quê".
-- Dizer se as abas Grupos ambíguos (26 linhas) e Parcelas quebradas (342) bastam como informação ou precisam de uma coluna de decisão; com 342, é provável que precisem.
+- ~~Dizer se as abas bastam~~: o dono disse que **precisam de decisão**; vira o [ticket 216](216-importador-do-mobills-decisao-para-grupos-ambiguos-e-parcelas-quebradas.md).
 - Dizer se os 342 de parcelas quebradas são esperados (compras avulsas lançadas como parcelas em meses fora dos exports) ou sinal de problema em `parcelas.py`.
