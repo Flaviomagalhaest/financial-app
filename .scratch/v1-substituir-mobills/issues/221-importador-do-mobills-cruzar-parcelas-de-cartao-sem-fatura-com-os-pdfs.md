@@ -1,7 +1,7 @@
 # Importador do Mobills: cruzar as parcelas de cartão sem fatura com os PDFs
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; `run` para rodar nos dados reais
 Modelo recomendado: Opus

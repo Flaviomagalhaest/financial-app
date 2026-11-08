@@ -1,7 +1,7 @@
 # Importador do Mobills: conferir o total de cada fatura pelo PDF do banco
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `grilling` (HITL: o dono diz como a coluna do PDF entra na aba `Faturas` e o que fazer com cartão sem PDF), `prototype` para ler os PDFs de um banco; depois `implement`, `tdd`
 Modelo recomendado: Opus
