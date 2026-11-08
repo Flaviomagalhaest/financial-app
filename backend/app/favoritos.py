@@ -151,9 +151,10 @@ def _grupos(conn) -> dict[str, _Grupo]:
     # Uma compra parcelada é um lançamento só para quem lança: as parcelas de um parcelamento
     # contam um uso, o da mais recente (ticket 206).
     parcelamentos_vistos: set[UUID] = set()
+    # O que uma regra de recorrência gera sozinho não é a pessoa repetindo: não conta (ticket 212).
     for id, descricao, tipo, conta_id, pessoa, valor, parcelamento_id in conn.execute(
         "SELECT id, descricao, tipo, conta_id, pessoa, valor_centavos, parcelamento_id FROM lancamentos"
-        " WHERE excluido_em IS NULL AND data <= %s AND valor_centavos > 0"
+        " WHERE excluido_em IS NULL AND recorrencia_id IS NULL AND data <= %s AND valor_centavos > 0"
         " ORDER BY data DESC, criado_em DESC, id",
         (hoje(),),
     ):

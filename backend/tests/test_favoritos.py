@@ -10,6 +10,7 @@ from app import favoritos, lancamentos
 from tests.conftest import Casal
 from tests.test_lancamentos import lancamento
 from tests.test_parcelamentos import parcelamento
+from tests.test_recorrencias import recorrencia
 
 
 def lancar(casal: Casal, conta: str, categorias: list[str], **campos) -> dict:
@@ -147,6 +148,24 @@ def test_as_parcelas_de_uma_compra_parcelada_contam_um_uso_so(
     # Cinco compras parceladas iguais são cinco usos, não cinquenta.
     for _ in range(4):
         parcelar()
+    [sugerido] = listar(casal)["sugeridos"]
+    assert sugerido["usos"] == 5
+
+
+def test_o_que_a_recorrencia_gera_nao_conta_como_uso(casal: Casal, monkeypatch: pytest.MonkeyPatch):
+    """Ticket 212: cinco meses de aluguel gerados sozinhos não sugerem favoritar o Aluguel."""
+    conta, aluguel = casal.conta(), casal.categoria("Aluguel")
+    monkeypatch.setattr(favoritos, "hoje", lambda: date(2026, 11, 8))
+    with monkeypatch.context() as naquele_dia:
+        naquele_dia.setattr(lancamentos, "hoje", lambda: date(2026, 1, 1))
+        nova = recorrencia(
+            conta, [aluguel], descricao="Aluguel", inicio="2026-01-05"
+        )
+        assert casal.pedir("flavio", "POST", "/api/recorrencias", json=nova).status_code == 201
+    assert listar(casal)["sugeridos"] == []
+
+    # O que a pessoa lança à mão continua contando.
+    repetir(casal, 5, conta, [aluguel], descricao="Aluguel", valor_centavos=18990)
     [sugerido] = listar(casal)["sugeridos"]
     assert sugerido["usos"] == 5
 
