@@ -436,7 +436,8 @@ def _partes_do_parcelamento_achadas(
     """As partes do parcelamento que a busca achou numa parcela. A parcela com partes refeitas
     "só esta" (ids que não vêm de `id_na_parcela`) vale pela posição, se tem tantas partes quanto o
     parcelamento."""
-    if all(id_na_parcela(parcela.id, p.id) in {q.id for q in parcela.partes} for p in partes):
+    das_partes = {q.id for q in parcela.partes}
+    if all(id_na_parcela(parcela.id, p.id) in das_partes for p in partes):
         return [p for p in partes if id_na_parcela(parcela.id, p.id) in achadas]
     if len(parcela.partes) != len(partes):
         return []
