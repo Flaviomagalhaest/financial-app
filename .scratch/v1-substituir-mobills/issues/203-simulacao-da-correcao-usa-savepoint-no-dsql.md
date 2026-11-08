@@ -1,7 +1,7 @@
 # Simulação da correção do parcelamento usa SAVEPOINT, que o DSQL não suporta
 
 Type: bug
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`, `implement`
 Modelo recomendado: Sonnet
@@ -15,6 +15,6 @@ A simulação do cartão novo grava a correção inteira e desfaz com `Rollback`
 
 ## Checklist
 
-- [ ] Teste que reproduz sem DSQL (conexão que recusa `SAVEPOINT`)
-- [ ] Simular sem savepoint (calcular sem gravar, ou conexão própria com `ROLLBACK`)
-- [ ] Conferir se `backup.py` (`_gravar`, `esvaziar_banco`), `restauracao.py` e `exportacao.py` abrem `conn.transaction()` com transação já aberta (leitura antes, sem autocommit), o que também vira SAVEPOINT
+- [x] Teste que reproduz sem DSQL (conexão que recusa `SAVEPOINT`): `test_simular_o_cartao_novo_nao_usa_savepoint_e_nao_deixa_rastro`
+- [x] Simular sem savepoint: `gravar_correcao(so_conferir=True)` para antes de gravar o parcelamento, e `_desfazer_o_cartao_novo` devolve o que `_por_no_cartao_novo` mudou (conta do parcelamento, `conta_id`/`mes` das parcelas, marcas `conta_id`/`fatura_mes`)
+- [x] (nenhum vira SAVEPOINT: `restauracao.py` usa conexão `autocommit=True`, então `_gravar`/`esvaziar_banco` abrem BEGIN; `exportacao.py` e `backup_diario.py` abrem `transaction()` como primeira operação da conexão, sem leitura antes) Conferir se `backup.py` (`_gravar`, `esvaziar_banco`), `restauracao.py` e `exportacao.py` abrem `conn.transaction()` com transação já aberta (leitura antes, sem autocommit), o que também vira SAVEPOINT
