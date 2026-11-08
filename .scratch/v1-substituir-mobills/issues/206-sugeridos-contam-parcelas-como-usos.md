@@ -1,7 +1,7 @@
 # Sugeridos conta as parcelas de uma compra parcelada como usos
 
 Type: bug
-Status: needs-triage
+Status: claimed
 Blocked by: —
 Skills: `triage`, `diagnosing-bugs`, `tdd`
 Modelo recomendado: Sonnet
