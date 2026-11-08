@@ -1,7 +1,7 @@
 # Lote de ações confere só os titulares tocados pela gravação
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
