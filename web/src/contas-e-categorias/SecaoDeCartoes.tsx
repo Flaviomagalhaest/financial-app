@@ -78,6 +78,7 @@ export function SecaoDeCartoes({
         ))}
       </ul>
       <form aria-label="Novo cartão" onSubmit={(e) => void criar(e)}>
+        <h4>Novo cartão</h4>
         <label htmlFor="cartao-nome">Nome</label>
         <input id="cartao-nome" name="nome" required pattern=".*\S.*" />
         <label htmlFor="cartao-titular">Titular</label>

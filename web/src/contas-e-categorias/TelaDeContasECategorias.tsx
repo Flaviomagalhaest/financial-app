@@ -112,7 +112,7 @@ export function TelaDeContasECategorias() {
   }
 
   return (
-    <section>
+    <section className="contas-e-categorias">
       <h2>Contas e categorias</h2>
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {erro && (
@@ -145,6 +145,7 @@ export function TelaDeContasECategorias() {
           })
         }
       >
+        <h4>Nova conta</h4>
         <label htmlFor="conta-nome">Nome</label>
         <input id="conta-nome" name="nome" required />
         <label htmlFor="conta-tipo">Tipo</label>
@@ -191,6 +192,7 @@ export function TelaDeContasECategorias() {
           )
         }
       >
+        <h4>Nova categoria</h4>
         <label htmlFor="categoria-nome">Nome</label>
         <input id="categoria-nome" name="nome" required />
         <label htmlFor="categoria-tipo">Tipo</label>
@@ -211,13 +213,13 @@ export function TelaDeContasECategorias() {
           ))}
         </ul>
         <form aria-label="Nova tag" onSubmit={(e) => void criarTag(e)}>
+          <h4>Nova tag</h4>
           <label htmlFor="tag-nome">Nome da nova tag</label>
           <input id="tag-nome" name="nome" required pattern=".*\S.*" />
           <button type="submit">Criar tag</button>
         </form>
       </section>
       </fieldset>
-      <a href="#/hoje">Voltar</a>
     </section>
   );
 }

@@ -343,7 +343,7 @@ export function ListaDeLancamentos({ topo }: { topo?: ReactNode }) {
   }, [lancamentos, historico.acabou, historico.semInternet, historico.falhou, historico.depoisDe, historico.chegouAoFim]);
 
   return (
-    <section>
+    <section className="lista-do-historico">
       <h2>Histórico</h2>
       {topo}
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}

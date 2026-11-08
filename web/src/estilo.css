@@ -1920,10 +1920,6 @@ label.caixa > input {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-.abas-internas button[aria-pressed="true"] {
-  background: var(--destaque);
-  color: var(--sobre-destaque);
-}
 .evolucao {
   display: flex;
   flex-direction: column;
@@ -2319,5 +2315,234 @@ select {
   .resumo-da-fatura dt:nth-of-type(2),
   .resumo-da-fatura dt:nth-of-type(2) + dd {
     border-top: 0;
+  }
+}
+
+/* Contas e categorias (ticket 204): cada lista num cartão com filetes, o cadastro novo num cartão com título. */
+.contas-e-categorias {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  max-width: 40rem;
+}
+
+.contas-e-categorias h2 {
+  margin: 0;
+}
+
+.contas-e-categorias fieldset.sem-moldura,
+.contas-e-categorias fieldset.sem-moldura > section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.contas-e-categorias h3 {
+  margin: var(--espaco-4) 0 0 var(--espaco-1);
+  font-size: var(--texto-p);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.contas-e-categorias h4 {
+  margin: var(--espaco-2) 0 var(--espaco-2) var(--espaco-1);
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.contas-e-categorias .lista {
+  gap: 0;
+  padding: 0 var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.contas-e-categorias .lista:empty {
+  display: none;
+}
+
+.contas-e-categorias .lista > li {
+  padding-block: var(--espaco-2);
+}
+
+.contas-e-categorias .lista > li + li {
+  border-top: 1px solid var(--linha);
+}
+
+.contas-e-categorias .lista > li > div:first-child {
+  min-height: 2.5rem;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.contas-e-categorias form[aria-label^="Nov"] {
+  gap: var(--espaco-1);
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.contas-e-categorias form[aria-label^="Nov"] h4 {
+  margin: 0 0 var(--espaco-2);
+  color: var(--texto);
+  font-size: 1rem;
+}
+
+.contas-e-categorias form[aria-label^="Nov"] button[type="submit"] {
+  align-self: flex-start;
+}
+
+.contas-e-categorias form input,
+.contas-e-categorias form select {
+  margin-bottom: var(--espaco-2);
+}
+
+/* Histórico e busca: cada mês num cartão, com as linhas separadas por filete. */
+.lista-do-historico > section > h3 {
+  margin: var(--espaco-4) 0 var(--espaco-2) var(--espaco-1);
+  font-size: var(--texto-p);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.lista-do-historico > section > .lista {
+  gap: 0;
+  padding: 0 var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.lista-do-historico > section > .lista > li {
+  padding-block: var(--espaco-3);
+}
+
+.lista-do-historico > section > .lista > li + li {
+  border-top: 1px solid var(--linha);
+}
+
+.lista .vazio {
+  font-size: 0.875rem;
+}
+
+/* Futuro e evolução do Histórico: cada bloco num cartão; períodos num controle segmentado. */
+.tela-do-futuro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.tela-do-futuro h2 {
+  margin: 0;
+}
+
+.tela-do-futuro > section,
+.evolucao-da-aba {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-cartao);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.tela-do-futuro h3,
+.evolucao-da-aba h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tela-do-futuro .grafico {
+  border: 0;
+  background: transparent;
+}
+
+/* A tabela que rola de lado avisa que há mais à direita com uma sombra na borda. */
+.rolavel-de-lado,
+.rolagem {
+  background:
+    linear-gradient(to right, var(--superficie) 30%, transparent) left / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--superficie) 30%, transparent) right / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.14), transparent) left / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.14), transparent) right / 0.75rem 100% no-repeat scroll;
+}
+
+.evolucao {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.abas-internas {
+  gap: 3px;
+  padding: 3px;
+  border-radius: 0.75rem;
+  background: var(--linha);
+  align-self: flex-start;
+}
+
+.abas-internas button,
+.abas-internas button.secundario {
+  padding: 0.375rem 0.875rem;
+  border: 0;
+  border-radius: 0.5625rem;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.abas-internas button[aria-pressed="true"] {
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+
+.lista-do-historico {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.lista-do-historico > h2 {
+  margin: 0;
+}
+
+/* Lançamento: teclas com canto de campo; a fileira de fichas some na borda para mostrar que rola. */
+.tecla {
+  border-radius: var(--raio-campo);
+  font-weight: 500;
+}
+
+.fileira.rolavel {
+  mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  padding-right: 2rem;
+}
+
+.contas-e-categorias .lista > li.linha-com-menu > .menu {
+  margin-top: 0;
+  align-self: center;
+}
+
+/* Login: no celular, a coluna; na tela larga, um cartão no alto da página. */
+main.login h1 {
+  margin-bottom: var(--espaco-2);
+  color: var(--destaque);
+}
+
+@media (min-width: 600px) {
+  main.login {
+    margin-top: 12vh;
+    padding: var(--espaco-6);
+    border-radius: 1.25rem;
+    background: var(--superficie);
+    box-shadow: var(--sombra);
   }
 }

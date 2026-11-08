@@ -3,10 +3,14 @@ import type { Futuro } from "../dados";
 const NOMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 export const POR_EXTENSO = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
-/** `2026-04-01` vira `abr`; em janeiro, com o ano (`jan/27`), para a virada se ler no eixo. */
-export function mesCurto(mes: string): string {
+/**
+ * `2026-04-01` vira `abr`; em janeiro, com o ano (`jan/27`), para a virada se ler no eixo. `comAno`
+ * põe o ano em qualquer mês (`nov/26`): o eixo o usa no primeiro rótulo e quando o ano muda entre dois
+ * rótulos que não caem em janeiro.
+ */
+export function mesCurto(mes: string, comAno = false): string {
   const numero = Number(mes.slice(5, 7));
-  return numero === 1 ? `jan/${mes.slice(2, 4)}` : NOMES[numero - 1];
+  return numero === 1 || comAno ? `${NOMES[numero - 1]}/${mes.slice(2, 4)}` : NOMES[numero - 1];
 }
 
 /** `2026-04-01` vira `abril de 2026`. */
