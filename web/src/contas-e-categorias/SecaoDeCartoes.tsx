@@ -149,6 +149,14 @@ function LinhaDeCartao({
     alternar: (arquivado) => aoSalvar(cartao, { arquivado }),
   });
   const adicional = !!cartao.titular_id;
+  const abrirEdicao = () => {
+    setNome(cartao.nome);
+    setFechamento(cartao.dia_fechamento == null ? "" : String(cartao.dia_fechamento));
+    setVencimento(cartao.dia_vencimento == null ? "" : String(cartao.dia_vencimento));
+    setLimite(cartao.limite_centavos == null ? "" : String(cartao.limite_centavos / 100).replace(".", ","));
+    setMesAnterior(cartao.mes_anterior_ao_fechamento);
+    setEditando(true);
+  };
 
   if (acertando) {
     return (
@@ -205,26 +213,19 @@ function LinhaDeCartao({
   }
   return (
     <li className={`linha-com-menu${cartao.arquivado ? " arquivada" : ""}`}>
-      <div>
+      <button type="button" className="abre-a-linha" onClick={abrirEdicao}>
         <span>
           {cartao.nome}
           {cartao.arquivado && " (arquivado)"}
         </span>
         <span>{adicional ? `adicional de ${titular}` : resumoDoTitular(cartao)}</span>
-      </div>
+      </button>
       <MenuDeAcoes rotulo={`Mais ações ${cartao.nome}`}>
         <button
           type="button"
           className="secundario"
           aria-label={`Editar cartão ${cartao.nome}`}
-          onClick={() => {
-            setNome(cartao.nome);
-            setFechamento(cartao.dia_fechamento == null ? "" : String(cartao.dia_fechamento));
-            setVencimento(cartao.dia_vencimento == null ? "" : String(cartao.dia_vencimento));
-            setLimite(cartao.limite_centavos == null ? "" : String(cartao.limite_centavos / 100).replace(".", ","));
-            setMesAnterior(cartao.mes_anterior_ao_fechamento);
-            setEditando(true);
-          }}
+          onClick={abrirEdicao}
         >
           Editar
         </button>

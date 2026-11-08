@@ -246,6 +246,14 @@ function LinhaDeConta({
   const [saldo, setSaldo] = useState("");
   const [data, setData] = useState(conta.data_abertura ?? "");
 
+  const abrirEdicao = () => {
+    setNome(conta.nome);
+    setTipo(conta.tipo);
+    setSaldo(conta.saldo_abertura_centavos == null ? "" : String(conta.saldo_abertura_centavos / 100).replace(".", ","));
+    setData(conta.data_abertura ?? "");
+    setEditando(true);
+  };
+
   if (editando) {
     return (
       <li>
@@ -284,7 +292,8 @@ function LinhaDeConta({
   }
   return (
     <li className={`linha-com-menu${conta.arquivada ? " arquivada" : ""}`}>
-      <div>
+      {/* Tocar na linha abre a edição (ticket 204); o ⋯ tem o resto. */}
+      <button type="button" className="abre-a-linha" onClick={abrirEdicao}>
         <span>
           {conta.nome}
           {conta.arquivada && " (arquivada)"}
@@ -293,19 +302,13 @@ function LinhaDeConta({
           {formatarCentavos(conta.saldo_centavos)}
           {conta.saldoNaoEnviado && " ⏳"}
         </span>
-      </div>
+      </button>
       <MenuDeAcoes rotulo={`Mais ações ${conta.nome}`}>
         <button
           type="button"
           className="secundario"
           aria-label={`Editar ${conta.nome}`}
-          onClick={() => {
-            setNome(conta.nome);
-            setTipo(conta.tipo);
-            setSaldo(conta.saldo_abertura_centavos == null ? "" : String(conta.saldo_abertura_centavos / 100).replace(".", ","));
-            setData(conta.data_abertura ?? "");
-            setEditando(true);
-          }}
+          onClick={abrirEdicao}
         >
           Editar
         </button>
@@ -371,10 +374,17 @@ function LinhaDeItem({
   }
   return (
     <li className={`linha-com-menu${item.arquivada ? " arquivada" : ""}`}>
-      <div>
+      <button
+        type="button"
+        className="abre-a-linha"
+        onClick={() => {
+          setNome(item.nome);
+          setEditando(true);
+        }}
+      >
         {item.nome}
         {item.arquivada && " (arquivada)"}
-      </div>
+      </button>
       <MenuDeAcoes rotulo={`Mais ações ${item.nome}`}>
         <button
           type="button"

@@ -1,6 +1,7 @@
 import { atualizadoAs, useCadastro, useFaturas, useLimite, type Cartao, type LimiteDoCartao } from "../dados";
 import { mesPorExtenso } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
+import { TrilhoDaFaixa } from "../casca/TrilhoDaFaixa";
 import { faturasDaLinha, SITUACAO, saldoQuePassou } from "./apresentacao";
 
 /** A barra do comprometido e, ao tocar, as três partes, os parcelamentos e os próximos 12 meses. */
@@ -116,7 +117,6 @@ function CartaoComFaturas({ cartao }: { cartao: Cartao }) {
 function LimiteNaFaixa({ cartao }: { cartao: Cartao }) {
   const limite = useLimite(cartao.id).dados;
   if (!limite || limite.limite_centavos == null) return null;
-  const parte = Math.min(100, Math.max(0, (limite.comprometido_centavos / limite.limite_centavos) * 100));
   return (
     <li>
       <div>
@@ -125,9 +125,7 @@ function LimiteNaFaixa({ cartao }: { cartao: Cartao }) {
           {formatarCentavos(limite.comprometido_centavos)} de {formatarCentavos(limite.limite_centavos)}
         </span>
       </div>
-      <div className="trilho-da-faixa" aria-hidden="true">
-        <span style={{ width: `${parte}%` }} />
-      </div>
+      <TrilhoDaFaixa usado={limite.comprometido_centavos} total={limite.limite_centavos} />
     </li>
   );
 }

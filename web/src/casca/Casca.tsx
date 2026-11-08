@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Configuracoes } from "../configuracoes/Configuracoes";
 import { TelaDeFavoritos } from "../configuracoes/TelaDeFavoritos";
 import { OfertaDeFavoritar } from "../lancamentos/OfertaDeFavoritar";
@@ -19,6 +19,7 @@ import { TelaDoModelo } from "../mes/TelaDoModelo";
 import { TelaDaBusca } from "../busca/TelaDaBusca";
 import { TelaDasEdicoesEmLote } from "../busca/TelaDasEdicoesEmLote";
 import { Icone } from "./icones";
+import { MenuDeAcoes } from "./MenuDeAcoes";
 import { ABAS, useRota, type Rota } from "./rota";
 
 type Props = { email: string; onSair: () => void; hoje: ReactNode };
@@ -26,41 +27,18 @@ type Props = { email: string; onSair: () => void; hoje: ReactNode };
 /** As telas de lançar: nelas o botão + some (ticket 204). */
 const TELAS_DE_LANCAR: Rota[] = ["novo", "estornar", "credito", "favorito"];
 
-/**
- * O círculo com a inicial abre o e-mail, Configurações, os cadastros e Sair (ticket 204). Fecha ao
- * escolher, ao tocar fora, com Esc e quando a rota muda. Fechado, os itens nem estão na página.
- */
+/** O círculo com a inicial abre o e-mail, Configurações, os cadastros e Sair (ticket 204). */
 function MenuDaConta({ email, onSair }: { email: string; onSair: () => void }) {
-  const menu = useRef<HTMLDetailsElement>(null);
-  const [aberto, setAberto] = useState(false);
-  useEffect(() => {
-    const fechar = () => setAberto(false);
-    const fora = (e: PointerEvent) => !menu.current?.contains(e.target as Node) && fechar();
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && fechar();
-    window.addEventListener("hashchange", fechar);
-    document.addEventListener("pointerdown", fora);
-    document.addEventListener("keydown", esc);
-    return () => {
-      window.removeEventListener("hashchange", fechar);
-      document.removeEventListener("pointerdown", fora);
-      document.removeEventListener("keydown", esc);
-    };
-  }, []);
   return (
-    <details className="menu-da-conta" ref={menu} open={aberto} onToggle={(e) => setAberto(e.currentTarget.open)}>
-      <summary aria-label={`Conta de ${email}`}>{email.charAt(0).toUpperCase()}</summary>
-      {aberto && (
-        <div onClick={() => setAberto(false)}>
-          <p>Entrou como {email}</p>
-          <a href="#/configuracoes">Configurações</a>
-          <a href="#/contas-e-categorias">Contas e categorias</a>
-          <a href="#/favoritos">Favoritos</a>
-          <button type="button" onClick={onSair}>
-            Sair
-          </button>
-        </div>
-      )}
-    </details>
+    <MenuDeAcoes classe="menu-da-conta" rotulo={`Conta de ${email}`} botao={email.charAt(0).toUpperCase()} nomeDosItens="Menu da conta">
+      <p>Entrou como {email}</p>
+      <a href="#/configuracoes">Configurações</a>
+      <a href="#/contas-e-categorias">Contas e categorias</a>
+      <a href="#/favoritos">Favoritos</a>
+      <button type="button" onClick={onSair}>
+        Sair
+      </button>
+    </MenuDeAcoes>
   );
 }
 

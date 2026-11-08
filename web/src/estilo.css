@@ -437,45 +437,19 @@ svg.icone {
   display: none;
 }
 
-.menu-da-conta > div {
-  position: absolute;
+/* O painel é o mesmo do ⋯ (.itens-do-menu); aqui, mais largo e com o e-mail no alto. */
+.menu-da-conta .itens-do-menu {
   z-index: 20;
   top: calc(100% + 0.5rem);
-  right: 0;
-  display: flex;
-  flex-direction: column;
   width: 15rem;
-  padding: 0.375rem;
-  border: 1px solid var(--borda);
-  border-radius: 0.875rem;
-  background: var(--superficie);
   color: var(--texto);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
 }
 
-.menu-da-conta p {
-  padding: var(--espaco-2) 0.625rem;
+.menu-da-conta .itens-do-menu p {
+  padding: var(--espaco-2) var(--espaco-3);
   color: var(--texto-suave);
   font-size: var(--texto-p);
   overflow-wrap: anywhere;
-}
-
-.menu-da-conta a,
-.menu-da-conta button {
-  display: block;
-  padding: 0.625rem;
-  border: 0;
-  border-radius: var(--espaco-2);
-  background: transparent;
-  color: var(--texto);
-  font-weight: 500;
-  text-align: left;
-  text-decoration: none;
-}
-
-.menu-da-conta a:hover,
-.menu-da-conta button:hover {
-  background: var(--fundo);
 }
 
 .casca > main {
@@ -532,7 +506,7 @@ svg.icone {
   border-radius: var(--raio-pilula);
   background: var(--destaque);
   color: var(--sobre-destaque);
-  box-shadow: 0 4px 14px rgb(31 107 79 / 0.35);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--destaque) 35%, transparent);
 }
 
 .abas a.novo svg {
@@ -724,6 +698,8 @@ svg.icone {
 .tecla {
   padding: 0.875rem 0;
   font-size: 1.25rem;
+  font-weight: 500;
+  border-radius: var(--raio-campo);
   background: var(--superficie);
   color: var(--texto);
   border-color: var(--borda);
@@ -803,7 +779,7 @@ select {
   padding: 0.75rem;
   margin-bottom: 0.625rem;
   border: 1px solid var(--borda);
-  border-radius: 0.5rem;
+  border-radius: var(--raio-campo);
   background: var(--superficie);
   color: var(--texto);
 }
@@ -1011,13 +987,13 @@ fieldset.sem-moldura {
   min-width: 12rem;
   padding: 0.375rem;
   border: 1px solid var(--borda);
-  border-radius: 0.875rem;
+  border-radius: var(--raio-campo);
   background: var(--superficie);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
 }
 
 .itens-do-menu > button,
-.itens-do-menu > a.botao {
+.itens-do-menu > a {
   display: block;
   padding: 0.625rem 0.75rem;
   border: 0;
@@ -1030,7 +1006,7 @@ fieldset.sem-moldura {
 }
 
 .itens-do-menu > button:hover,
-.itens-do-menu > a.botao:hover {
+.itens-do-menu > a:hover {
   background: var(--fundo);
   text-decoration: none;
 }
@@ -1128,6 +1104,25 @@ a.abre-a-linha:hover strong {
 .fileira.rolavel .ficha {
   flex: none;
   white-space: nowrap;
+}
+
+/* Enquanto houver mais à direita, a fileira some na borda (só onde o navegador liga a animação à rolagem). */
+@supports (animation-timeline: scroll()) {
+  .fileira.rolavel {
+    animation: fileira-com-mais linear both;
+    animation-timeline: scroll(self inline);
+  }
+
+  @keyframes fileira-com-mais {
+    0%,
+    95% {
+      mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+    }
+
+    100% {
+      mask-image: none;
+    }
+  }
 }
 
 /* O resumo dos detalhes, numa linha embaixo do valor; tocar abre a folha. */
@@ -2291,10 +2286,6 @@ label.caixa > input {
   border-top: 1px solid var(--linha);
 }
 
-select {
-  border-radius: var(--raio-campo);
-}
-
 @media (min-width: 900px) {
   .aba-mes {
     display: grid;
@@ -2515,16 +2506,6 @@ select {
   margin: 0;
 }
 
-/* Lançamento: teclas com canto de campo; a fileira de fichas some na borda para mostrar que rola. */
-.tecla {
-  border-radius: var(--raio-campo);
-  font-weight: 500;
-}
-
-.fileira.rolavel {
-  mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
-  padding-right: 2rem;
-}
 
 .contas-e-categorias .lista > li.linha-com-menu > .menu {
   margin-top: 0;
@@ -2545,4 +2526,44 @@ main.login h1 {
     background: var(--superficie);
     box-shadow: var(--sombra);
   }
+}
+
+/* O mês passado: o fechamento vai na faixa, no lugar da barra. */
+.faixa .fechamento {
+  margin-top: var(--espaco-3);
+  color: var(--sobre-faixa);
+}
+
+.faixa .fechamento h3 {
+  color: var(--sobre-faixa-suave);
+  font-size: var(--texto-m);
+}
+
+.faixa .fechamento p {
+  color: var(--sobre-faixa);
+}
+
+/* A linha que abre ao tocar quando é um botão (contas, categorias, tags, cartões, itens do Mês). */
+button.abre-a-linha {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+}
+
+.contas-e-categorias .lista > li > button.abre-a-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  min-height: 2.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabela button.abre-a-linha {
+  color: var(--texto);
+  font-weight: 600;
 }

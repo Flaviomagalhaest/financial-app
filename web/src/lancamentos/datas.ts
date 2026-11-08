@@ -25,6 +25,9 @@ export function dataPorExtenso(iso: string): string {
 /** `2026-11-01` vira `11/2026`. */
 export const mesPorExtenso = (mes: string) => `${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
 
+/** `2026-11-10` vira `10/11`: o dia e o mês, onde o ano é óbvio (o vencimento na faixa da Hoje). */
+export const diaEMes = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
 /** `2026-11-01` vira "fatura de 11/2026". */
 export function rotuloDaFatura(mes: string): string {
   return `fatura de ${mesPorExtenso(mes)}`;

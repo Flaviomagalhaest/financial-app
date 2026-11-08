@@ -172,7 +172,12 @@ function Itens({ leitura, categorias, aoMudar }: { leitura: LeituraDoMes; catego
               <tbody>
                 {itens.map((i) => (
                   <tr key={i.id}>
-                    <td>{nomePorId(categorias, i.categoria_id)}</td>
+                    <td>
+                      {/* Tocar no item abre a mudança de valor (ticket 204). */}
+                      <button type="button" className="abre-a-linha" onClick={() => setEditando({ id: i.id, reais: comoReais(i.planejado_centavos) })}>
+                        {nomePorId(categorias, i.categoria_id)}
+                      </button>
+                    </td>
                     <td>{formatarCentavos(i.realizado_centavos)}</td>
                     <td className="vazio">{i.previsto_centavos ? formatarCentavos(i.previsto_centavos) : "—"}</td>
                     <td>{formatarCentavos(i.planejado_centavos)}</td>
@@ -451,7 +456,7 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
             ›
           </a>
         </nav>
-        {leitura && leitura.situacao !== "passado" && <BarraDoMes leitura={leitura} />}
+        {leitura && (leitura.situacao === "passado" ? <Fechamento leitura={leitura} categorias={categorias} /> : <BarraDoMes leitura={leitura} />)}
       </div>
       {atualizadoEm && <p className="vazio">Sem internet: {atualizadoAs(atualizadoEm)}</p>}
       {semDados && (
@@ -467,7 +472,6 @@ export function TelaDoMes({ mes = hoje().slice(0, 7) }: { mes?: string }) {
       />
       {leitura && (
         <>
-          {leitura.situacao === "passado" && <Fechamento leitura={leitura} categorias={categorias} />}
           <AEscolher leitura={leitura} categorias={categorias} lancamentos={lancamentos ?? []} aoEscolher={() => void buscar()} />
           <Itens leitura={leitura} categorias={categorias} aoMudar={() => void buscar()} />
           <Comparacao leitura={leitura} categorias={categorias} />

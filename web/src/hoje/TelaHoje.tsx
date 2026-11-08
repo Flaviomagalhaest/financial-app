@@ -146,12 +146,14 @@ export function TelaHoje() {
   // O que se confirmou aqui e ainda não subiu já não é conta da semana.
   const contasDaSemana = useContasDaSemana(dados?.contas_da_semana ?? null);
   const atrasados = (contasDaSemana?.filter((l) => l.atrasado).length ?? 0) + (dados?.transferencias_da_semana.filter((t) => t.atrasado).length ?? 0);
-  // Com os atalhos ligados, os favoritos estão nas pílulas da faixa e a grade sai do corpo.
+  // Com os atalhos ligados, os favoritos estão nas pílulas da faixa e a grade sai do corpo; sem a
+  // leitura da Hoje não há faixa, e a grade fica.
   const atalhos = useAtalhosDaFaixa();
+  const favoritosNaFaixa = atalhos && !!dados;
 
   return (
     <>
-      {dados && <FaixaDaHoje hoje={dados} />}
+      {dados && <FaixaDaHoje hoje={dados} atalhos={atalhos} />}
       <AvisoDaFila />
       {atualizadoEm && (
         <p className="vazio" data-testid="atualizado-em">
@@ -175,7 +177,7 @@ export function TelaHoje() {
           <ItensEmDestaque itens={dados.itens_em_destaque} />
         </>
       )}
-      <GradeDeFavoritos semGrade={atalhos} />
+      <GradeDeFavoritos favoritosNaFaixa={favoritosNaFaixa} />
       <ContasDaSemana lancamentos={contasDaSemana} transferencias={dados ? dados.transferencias_da_semana : null} />
     </>
   );

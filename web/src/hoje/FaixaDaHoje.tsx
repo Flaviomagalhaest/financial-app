@@ -1,11 +1,9 @@
 import { useCadastro, useFavoritos, type LeituraDaHoje } from "../dados";
 import { Icone } from "../casca/icones";
+import { TrilhoDaFaixa } from "../casca/TrilhoDaFaixa";
 import { nomePorId, plural, tituloDoFavorito } from "../lancamentos/apresentacao";
+import { diaEMes } from "../lancamentos/datas";
 import { formatarCentavos } from "../lancamentos/dinheiro";
-import { useAtalhosDaFaixa } from "./atalhosDaFaixa";
-
-/** Dia e mês curtos ("10/11") a partir de AAAA-MM-DD. */
-const diaEMes = (data: string) => `${data.slice(8, 10)}/${data.slice(5, 7)}`;
 
 /**
  * As pílulas da faixa (ticket 204): cada favorito com o valor (tocar abre o lançamento preenchido),
@@ -64,21 +62,15 @@ function Atalhos({ hoje }: { hoje: LeituraDaHoje }) {
   );
 }
 
-/** A faixa verde da Hoje: quanto ainda dá para gastar no mês, a parte já usada do planejado e os atalhos. */
-export function FaixaDaHoje({ hoje }: { hoje: LeituraDaHoje }) {
-  const atalhos = useAtalhosDaFaixa();
-  const usado = hoje.planejado_centavos > 0 ? Math.min(100, Math.max(0, 100 - (hoje.ainda_da_para_gastar_centavos / hoje.planejado_centavos) * 100)) : null;
+/** A faixa verde da Hoje: quanto ainda dá para gastar no mês, a parte já usada do planejado e, se ligados, os atalhos. */
+export function FaixaDaHoje({ hoje, atalhos }: { hoje: LeituraDaHoje; atalhos: boolean }) {
   return (
     <section aria-labelledby="ainda-da-para-gastar" className="faixa">
       <h3 id="ainda-da-para-gastar">Ainda dá para gastar este mês</h3>
       <p className="valor-da-faixa" data-testid="ainda-da-para-gastar">
         {hoje.ainda_da_para_gastar_centavos < 0 ? `passou ${formatarCentavos(-hoje.ainda_da_para_gastar_centavos)}` : formatarCentavos(hoje.ainda_da_para_gastar_centavos)}
       </p>
-      {usado !== null && (
-        <div className="trilho-da-faixa" aria-hidden="true">
-          <span style={{ width: `${usado}%` }} />
-        </div>
-      )}
+      {hoje.planejado_centavos > 0 && <TrilhoDaFaixa usado={hoje.planejado_centavos - hoje.ainda_da_para_gastar_centavos} total={hoje.planejado_centavos} />}
       <p className="vazio">{hoje.planejado_centavos > 0 ? `de ${formatarCentavos(hoje.planejado_centavos)} planejados` : "Nenhum item planejado para este mês."}</p>
       {atalhos && <Atalhos hoje={hoje} />}
     </section>
