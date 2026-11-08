@@ -1,7 +1,7 @@
 # Indicador da API diz "Sem conexão" para qualquer falha e não verifica de novo sozinho
 
 Type: bug
-Status: ready-for-agent
+Status: claimed
 Blocked by: —
 Skills: `diagnosing-bugs`, `tdd`, `implement`
 Modelo recomendado: Sonnet
