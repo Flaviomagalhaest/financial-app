@@ -301,12 +301,12 @@ def faturas_do_titular(
     return resultado
 
 
-def _todas(conn, so: set[UUID] | None = None) -> dict[tuple[UUID, date], Fatura]:
-    """As faturas de todos os titulares, ou só dos de `so`."""
+def _todas(conn, apenas: set[UUID] | None = None) -> dict[tuple[UUID, date], Fatura]:
+    """As faturas de todos os titulares, ou só dos de `apenas`."""
     return {
         k: f
         for t in titulares(conn)
-        if so is None or t in so
+        if apenas is None or t in apenas
         for k, f in _por_chave(faturas_do_titular(conn, t)).items()
     }
 
@@ -377,11 +377,11 @@ def _conferir_faturas(
     conn,
     antes: dict[tuple[UUID, date], Fatura],
     corrigida: tuple[UUID, date] | None,
-    so: set[UUID] | None = None,
+    apenas: set[UUID] | None = None,
 ) -> None:
-    depois_de_tudo = _todas(conn, so)
+    depois_de_tudo = _todas(conn, apenas)
     if _garantir_a_seguinte(conn, depois_de_tudo):
-        depois_de_tudo = _todas(conn, so)
+        depois_de_tudo = _todas(conn, apenas)
     _conferir_o_que_mudou(conn, antes, depois_de_tudo, corrigida)
 
 
@@ -423,10 +423,10 @@ def protegida[T](
     no lote, ler as de todos custa ~157 ms por ação no DSQL)."""
 
     def com_as_regras(conn) -> T:
-        so = tocados(conn) if tocados else None
-        antes = _todas(conn, so)
+        apenas = tocados(conn) if tocados else None
+        antes = _todas(conn, apenas)
         resultado = trabalho(conn)
-        _conferir_faturas(conn, antes, corrigida, so)
+        _conferir_faturas(conn, antes, corrigida, apenas)
         return resultado
 
     return com_as_regras

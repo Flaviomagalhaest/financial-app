@@ -1310,3 +1310,35 @@ def test_lote_confere_so_a_fatura_do_titular_que_a_acao_toca(
 
     assert resposta.json()["resultados"][0]["resultado"] == "aceita"
     assert set(lidos) == {UUID(outro)}
+
+
+def _lote(casal: Casal, acao: dict) -> dict:
+    resposta = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json={"acoes": [acao]})
+    return resposta.json()["resultados"][0]
+
+
+def test_lote_recusa_editar_trocar_de_conta_e_excluir_compra_da_fatura_paga(
+    casal: Casal, abril_paga
+):
+    compra = abril_paga.compra
+    outro = novo_cartao(casal, "Inter")["id"]
+    nova = comprar(casal, outro, "2026-05-12")
+    para_a_paga = {"versao": nova["versao"], "conta_id": abril_paga.cartao}
+
+    resultados = [
+        _lote(
+            casal,
+            {
+                "acao": "editar",
+                "id": compra["id"],
+                "alteracao": {"versao": compra["versao"], "valor_centavos": 1},
+            },
+        ),
+        _lote(
+            casal,
+            {"acao": "editar", "id": nova["id"], "alteracao": para_a_paga | {"data": "2026-04-15"}},
+        ),
+        _lote(casal, {"acao": "excluir", "id": compra["id"], "versao": compra["versao"]}),
+    ]
+
+    assert [(r["resultado"], r["motivo"]) for r in resultados] == [("recusada", RECUSA)] * 3
