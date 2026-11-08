@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 
-from app import lancamentos, recorrencias
+from app import cartoes, lancamentos, recorrencias
 from tests.conftest import Casal
 from tests.test_cartoes import comprar, lancamento, novo_cartao
 from tests.test_contas import nova_conta
@@ -1270,3 +1270,43 @@ def test_conferir_sem_gravar_nao_usa_savepoint_nem_deixa_fatura_nascida(
         # Compra num mês sem fatura: confere e a fatura simulada não fica gravada.
         cartoes.conferir_sem_gravar(conn, [{(titular, date(2026, 9, 1)): 5000}])
         assert conn.execute("SELECT count(*) FROM faturas").fetchone()[0] == antes
+
+
+def test_lote_que_toca_a_fatura_paga_e_recusado_e_a_seguinte_entra(casal: Casal, abril_paga):
+    acoes = [
+        {"acao": "criar", "lancamento": lancamento(abril_paga.cartao, [casal.categoria()], data=d)}
+        for d in ("2026-04-20", "2026-05-20")
+    ]
+
+    resposta = casal.pedir("flavio", "POST", "/api/lancamentos/lote", json={"acoes": acoes})
+
+    resultados = resposta.json()["resultados"]
+    assert [(r["resultado"], r["motivo"]) for r in resultados] == [
+        ("recusada", RECUSA),
+        ("aceita", None),
+    ]
+
+
+def test_lote_confere_so_a_fatura_do_titular_que_a_acao_toca(
+    casal: Casal, abril_paga, monkeypatch: pytest.MonkeyPatch
+):
+    outro = novo_cartao(casal, "Inter")["id"]
+    lidos: list[UUID] = []
+    de_verdade = cartoes.faturas_do_titular
+
+    def espiar(conn, titular_id, *args, **kwargs):
+        lidos.append(titular_id)
+        return de_verdade(conn, titular_id, *args, **kwargs)
+
+    monkeypatch.setattr(cartoes, "faturas_do_titular", espiar)
+    nova = lancamento(outro, [casal.categoria()], data="2026-05-12")
+
+    resposta = casal.pedir(
+        "flavio",
+        "POST",
+        "/api/lancamentos/lote",
+        json={"acoes": [{"acao": "criar", "lancamento": nova}]},
+    )
+
+    assert resposta.json()["resultados"][0]["resultado"] == "aceita"
+    assert set(lidos) == {UUID(outro)}

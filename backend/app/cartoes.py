@@ -301,9 +301,13 @@ def faturas_do_titular(
     return resultado
 
 
-def _todas(conn) -> dict[tuple[UUID, date], Fatura]:
+def _todas(conn, so: set[UUID] | None = None) -> dict[tuple[UUID, date], Fatura]:
+    """As faturas de todos os titulares, ou só dos de `so`."""
     return {
-        k: f for t in titulares(conn) for k, f in _por_chave(faturas_do_titular(conn, t)).items()
+        k: f
+        for t in titulares(conn)
+        if so is None or t in so
+        for k, f in _por_chave(faturas_do_titular(conn, t)).items()
     }
 
 
@@ -373,10 +377,11 @@ def _conferir_faturas(
     conn,
     antes: dict[tuple[UUID, date], Fatura],
     corrigida: tuple[UUID, date] | None,
+    so: set[UUID] | None = None,
 ) -> None:
-    depois_de_tudo = _todas(conn)
+    depois_de_tudo = _todas(conn, so)
     if _garantir_a_seguinte(conn, depois_de_tudo):
-        depois_de_tudo = _todas(conn)
+        depois_de_tudo = _todas(conn, so)
     _conferir_o_que_mudou(conn, antes, depois_de_tudo, corrigida)
 
 
@@ -405,18 +410,23 @@ def _conferir_o_que_mudou(
 
 
 def protegida[T](
-    trabalho: Callable[..., T], corrigida: tuple[UUID, date] | None = None
+    trabalho: Callable[..., T],
+    corrigida: tuple[UUID, date] | None = None,
+    tocados: Callable[..., set[UUID]] | None = None,
 ) -> Callable[..., T]:
     """`trabalho(conn)` com as regras da fatura paga (ADR 0021) conferidas no resultado: a paga
     não recebe mais pagamento, compra, troca de fatura, estorno nem acerto de datas, e nenhum
     pagamento passa do valor da fatura (saldo anterior mais o total). Só a `corrigida` (titular e
     mês, na correção de fatura) muda sendo paga, e ela continua paga. A fatura paga que é a
-    última e passa saldo anterior adiante ganha a seguinte."""
+    última e passa saldo anterior adiante ganha a seguinte. Com `tocados(conn)` (os titulares que
+    a gravação pode mudar, lidos antes dela), confere só as faturas desses titulares (ticket 205:
+    no lote, ler as de todos custa ~157 ms por ação no DSQL)."""
 
     def com_as_regras(conn) -> T:
-        antes = _todas(conn)
+        so = tocados(conn) if tocados else None
+        antes = _todas(conn, so)
         resultado = trabalho(conn)
-        _conferir_faturas(conn, antes, corrigida)
+        _conferir_faturas(conn, antes, corrigida, so)
         return resultado
 
     return com_as_regras

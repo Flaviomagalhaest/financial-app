@@ -11,7 +11,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app import cartoes, parcelamentos, recorrencias
+from app import cartoes, faturas, parcelamentos, recorrencias
 from app.banco import em_transacao
 from app.lancamentos import (
     AlteracaoDeLancamento,
@@ -176,30 +176,53 @@ def _aplicar(acao: Acao, usuario: str, request: Request) -> Resultado:
         return Resultado(resultado="recusada", motivo="erro no servidor")
 
 
+def _titulares_tocados(conn, id: UUID | None, *contas: UUID | None) -> set[UUID]:
+    """Os titulares de fatura que a ação do lançamento pode mudar: o do cartão onde o lançamento
+    está agora (`id`, se já existe) e o dos cartões que a ação põe nele (`contas`)."""
+    if id is not None:
+        linha = conn.execute("SELECT conta_id FROM lancamentos WHERE id = %s", (id,)).fetchone()
+        contas = (*contas, *(linha or ()))
+    cartoes_ = (faturas.ler_cartao(conn, c) for c in contas if c is not None)
+    return {c.titular.id for c in cartoes_ if c}
+
+
 def _executar(url: str | None, acao: Acao, usuario: str) -> Resultado:
     """A ação aceita; a do lançamento numa transação, a do parcelamento e a da recorrência em
     várias."""
     match acao:
         case AcaoCriar(lancamento=novo):
             criado = em_transacao(
-                url, cartoes.protegida(lambda conn: criar(conn, novo, usuario)[0])
+                url,
+                cartoes.protegida(
+                    lambda conn: criar(conn, novo, usuario)[0],
+                    tocados=lambda conn: _titulares_tocados(conn, None, novo.conta_id),
+                ),
             )
             return Resultado(resultado="aceita", lancamento=criado)
         case AcaoEditar(id=id, alteracao=alteracao):
             editado = em_transacao(
-                url, cartoes.protegida(lambda conn: editar(conn, id, alteracao, usuario))
+                url,
+                cartoes.protegida(
+                    lambda conn: editar(conn, id, alteracao, usuario),
+                    tocados=lambda conn: _titulares_tocados(conn, id, alteracao.conta_id),
+                ),
             )
             return Resultado(resultado="aceita", lancamento=editado)
         case AcaoConfirmar(id=id, confirmacao=confirmacao):
             confirmado = em_transacao(
-                url, cartoes.protegida(lambda conn: confirmar(conn, id, confirmacao, usuario))
+                url,
+                cartoes.protegida(
+                    lambda conn: confirmar(conn, id, confirmacao, usuario),
+                    tocados=lambda conn: _titulares_tocados(conn, id, confirmacao.conta_id),
+                ),
             )
             return Resultado(resultado="aceita", lancamento=confirmado)
         case AcaoExcluir(id=id, versao=versao, acao_em=acao_em):
             em_transacao(
                 url,
                 cartoes.protegida(
-                    lambda conn: excluir(conn, id, versao, usuario, acao_em, da_pessoa=True)
+                    lambda conn: excluir(conn, id, versao, usuario, acao_em, da_pessoa=True),
+                    tocados=lambda conn: _titulares_tocados(conn, id),
                 ),
             )
             return Resultado(resultado="aceita")
