@@ -1,7 +1,7 @@
 # Lote de ações confere só os titulares tocados pela gravação
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `implement`, `tdd`; apoio: `run`
 Modelo recomendado: Sonnet
@@ -35,3 +35,7 @@ Fora do escopo desta entrega (seguem conferindo todos os titulares, no lote): `a
 **Meta não atingida**: o lote de 50 passou de 17456 ms (ticket 130) para 16140 ms, quase igual; o custo da proteção por ação (~199 ms) não caiu. O filtro por titular tocado não bastou: a leitura das faturas do titular continua cara (há o `antes` e o `depois`, e `faturas_do_titular` corre desde a fatura mais antiga porque o saldo anterior vem da anterior paga). A correção do longo (antes não medida) custa só 139 ms.
 
 Próximo passo (decisão do dono): o ticket previa "conferir só as faturas fechadas", mas quase todas as 190 faturas são passadas e pagas, então isso pouparia pouco. A saída mais promissora é ler só as faturas dos meses que a ação toca, ou só o resumo (situação, datas, compras e pago) delas, sem refazer a conta desde 2019. Vale um ticket novo se o dono quiser seguir.
+
+## Decisão do dono (08/11)
+
+Aceita os ~16 s do lote de 50 (16140 ms): a meta de "bem abaixo dos 17,5 s" não foi atingida, e o dono decidiu não buscar mais. Nenhum ticket novo: ler só os meses tocados fica como ideia, sem dono, se o lote voltar a pesar.
