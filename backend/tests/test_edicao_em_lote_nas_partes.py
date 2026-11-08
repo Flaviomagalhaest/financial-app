@@ -3,7 +3,7 @@ busca com filtro de categoria, tag ou pessoa, só nas partes que ela achou."""
 
 import pytest
 
-from app import lancamentos
+from app import edicao_em_lote, lancamentos
 from tests.conftest import Casal
 from tests.test_alcance_da_mudanca_na_parcela import editar_so_nela
 from tests.test_edicao_em_lote import aplicada, aplicar, desfazer, marcados, previa, todos
@@ -171,7 +171,7 @@ def test_no_parcelamento_com_partes_muda_as_partes_dele_e_de_cada_parcela(casal:
     vista = previa(casal, marcados(primeira), **mudanca)
     lote = aplicada(casal, marcados(primeira), **mudanca)
 
-    assert (vista["compras"], vista["mudam"], vista["partes_que_mudam"]) == (1, 3, 6)
+    assert (vista["compras"], vista["mudam"], vista["partes_que_mudam"]) == (1, 3, 2)
     assert [p["tags"] for p in regra(casal, criado["id"])["partes"]] == [["loja"], ["loja"]]
     agora = parcelas(casal, criado["id"])
     assert [[p["tags"] for p in l["partes"]] for l in agora] == [[["loja"], ["loja"]]] * 3
@@ -201,6 +201,115 @@ def test_na_busca_com_filtro_o_parcelamento_muda_so_as_partes_achadas(casal: Cas
     assert [
         [set(p["categoria_ids"]) for p in l["partes"]] for l in parcelas(casal, criado["id"])
     ] == [[{roupa}, {casa, obra}]] * 3
+
+
+def test_previa_do_parcelamento_conta_as_partes_da_compra_e_deixa_de_fora_a_parcela_nao_achada(
+    casal: Casal, categorias
+):
+    roupa, eletronico, casa = categorias
+    criado = parcelado(casal, casal.conta(), [parte([roupa], 20000), parte([casa], 10000)]).json()
+    [_, segunda, _] = parcelas(casal, criado["id"])
+    editar_so_nela(casal, segunda, partes=[parte([eletronico], 6000), parte([eletronico], 4000)])
+
+    vista = previa(
+        casal,
+        {"busca": {"categoria_ids": [casa]}},
+        tags={"acao": "acrescentar", "tags": ["loja"]},
+    )
+
+    assert (vista["mudam"], vista["partes_que_mudam"], vista["ja_estao_como_pedido"]) == (2, 1, 0)
+
+
+def _compras_com_tres_partes(casal: Casal, quantas: int) -> list[dict]:
+    conta, roupa = casal.conta(), casal.categoria("Roupa")
+    return [
+        compra_com_partes(
+            casal,
+            conta,
+            [parte([roupa], 300), parte([roupa], 300), parte([roupa], 300)],
+            data=f"2026-10-0{d}",
+        ).json()
+        for d in range(1, quantas + 1)
+    ]
+
+
+def test_a_compra_com_muitas_partes_se_desfaz_em_blocos_que_cabem_numa_transacao(
+    casal: Casal, monkeypatch: pytest.MonkeyPatch
+):
+    compras = _compras_com_tres_partes(casal, 3)
+    lote = aplicada(casal, marcados(*compras), tags={"acao": "acrescentar", "tags": ["obra"]})
+    # Cada compra pesa quatro (ela e as três partes): dois pesos de quatro enchem o bloco de oito.
+    monkeypatch.setattr(edicao_em_lote, "POR_TRANSACAO", 8)
+    por_bloco: list[int] = []
+    desfeitas = [0]
+    original_bloco = edicao_em_lote._desfazer_bloco
+    original_lancamento = edicao_em_lote._desfazer_lancamento
+
+    def contar_lancamento(*args, **campos):
+        desfeitas[0] += 1
+        return original_lancamento(*args, **campos)
+
+    def contar_bloco(*args, **campos):
+        desfeitas[0] = 0
+        try:
+            return original_bloco(*args, **campos)
+        finally:
+            por_bloco.append(desfeitas[0])
+
+    monkeypatch.setattr(edicao_em_lote, "_desfazer_lancamento", contar_lancamento)
+    monkeypatch.setattr(edicao_em_lote, "_desfazer_bloco", contar_bloco)
+
+    desfazer(casal, lote)
+
+    assert por_bloco == [2, 1]
+    assert [[p["tags"] for p in todos(casal)[c["id"]]["partes"]] for c in compras] == [[[]] * 3] * 3
+
+
+def test_o_bloco_da_aplicacao_conta_as_partes_do_parcelamento_que_mudam_com_a_primeira_parcela(
+    casal: Casal, categorias, monkeypatch: pytest.MonkeyPatch
+):
+    roupa, _, casa = categorias
+    criado = parcelado(casal, casal.conta(), [parte([roupa], 20000), parte([casa], 10000)]).json()
+    [primeira, *_] = parcelas(casal, criado["id"])
+    # A 1ª pesa cinco (ela, as duas partes e as duas do parcelamento) e as outras, três: cabem
+    # duas por bloco de nove, não as três que cabiam sem contar as partes do parcelamento.
+    monkeypatch.setattr(edicao_em_lote, "POR_TRANSACAO", 9)
+    por_bloco: list[int] = []
+    original = edicao_em_lote._aplicar_bloco
+
+    def contar(conn, lote_id, ids, *args):
+        por_bloco.append(len(ids))
+        return original(conn, lote_id, ids, *args)
+
+    monkeypatch.setattr(edicao_em_lote, "_aplicar_bloco", contar)
+
+    aplicada(casal, marcados(primeira), tags={"acao": "acrescentar", "tags": ["loja"]})
+
+    assert por_bloco == [2, 1]
+
+
+def test_na_busca_com_filtro_as_partes_so_esta_de_uma_parcela_contam_como_achadas(
+    casal: Casal, categorias
+):
+    roupa, eletronico, casa = categorias
+    criado = parcelado(casal, casal.conta(), [parte([roupa], 20000), parte([casa], 10000)]).json()
+    [_, segunda, _] = parcelas(casal, criado["id"])
+    # Só a 2ª tem partes próprias com eletrônico: é a única que a busca acha.
+    so_nela = [parte([eletronico], 6000), parte([eletronico], 4000)]
+    editar_so_nela(casal, segunda, partes=so_nela)
+    mudanca = {"tags": {"acao": "acrescentar", "tags": ["loja"]}}
+
+    vista = previa(casal, {"busca": {"categoria_ids": [eletronico]}}, **mudanca)
+    aplicada(casal, {"busca": {"categoria_ids": [eletronico]}}, **mudanca)
+
+    assert (vista["mudam"], vista["partes_que_mudam"]) == (1, 2)
+    assert [p["tags"] for p in regra(casal, criado["id"])["partes"]] == [["loja"], ["loja"]]
+    agora = parcelas(casal, criado["id"])
+    assert [[p["tags"] for p in l["partes"]] for l in agora] == [
+        [[], []],
+        [["loja"], ["loja"]],
+        [[], []],
+    ]
 
 
 def test_na_ocorrencia_da_recorrencia_muda_as_partes_como_so_este(

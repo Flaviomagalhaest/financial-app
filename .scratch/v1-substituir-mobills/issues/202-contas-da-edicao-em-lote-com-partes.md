@@ -1,7 +1,7 @@
 # Contas da edição em lote com partes
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 201
 Skills: `implement`, `tdd`
 Modelo recomendado: Sonnet
@@ -20,8 +20,8 @@ Quatro contas da edição em lote erram na compra com partes, sem mudar o compor
 
 ## Checklist
 
-- [ ] Teste de API: a compra com muitas partes se desfaz em blocos que cabem numa transação
-- [ ] Teste de API: o bloco da aplicação conta as partes do parcelamento que mudam com a primeira parcela
-- [ ] Teste de API: na busca com filtro, as partes "só esta" de uma parcela contam como achadas
-- [ ] Teste de API: a prévia do parcelamento com partes conta as partes da compra, e a parcela sem partes achadas fica fora de "já estão como pedido"
-- [ ] Implementar no servidor
+- [x] Teste de API: a compra com muitas partes se desfaz em blocos que cabem numa transação
+- [x] Teste de API: o bloco da aplicação conta as partes do parcelamento que mudam com a primeira parcela
+- [x] Teste de API: na busca com filtro, as partes "só esta" de uma parcela contam como achadas
+- [x] Teste de API: a prévia do parcelamento com partes conta as partes da compra, e a parcela sem partes achadas fica fora de "já estão como pedido"
+- [x] Implementar no servidor
