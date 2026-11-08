@@ -367,6 +367,10 @@ _Avoid_: parcelamento incompleto
 Cartão arquivado na planilha de revisão cuja `Última fatura` o dono marcou: as faturas que o Mobills exportou depois dela (previsões presas ao cartão cancelado) ficam fora da importação.
 _Avoid_: corte
 
+**Transação ignorada no Mobills**:
+Lançamento que o Mobills deixa fora das contas dele, mas que o export traz como `Paga`, sem marca. São só duas, e a lista fica no importador (`IGNORADAS`, ticket 215): cada uma tira uma linha do geral antes do cruzamento, e por isso não entra em lançamentos, Conferência, Faturas nem parcelas.
+_Avoid_: excluída, descartada (o descarte é outra regra do importador)
+
 ### Telas
 
 **Faixa**:

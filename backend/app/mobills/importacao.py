@@ -24,6 +24,14 @@ from app.recorrencias import mais_meses
 FONTE = "mobills"
 FORMATO_DO_MES = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 TIPOS_DE_CONTA = ("corrente", "poupanca", "carteira")
+# As transações que o dono ignorou no Mobills (ticket 215): o Mobills as deixa fora das contas, mas
+# o export as traz como pagas, sem marca. São só estas, então a lista fica aqui e não na planilha.
+# Cada uma é (data, descrição, conta, valor em centavos) e tira uma linha do geral. O valor vai sem o
+# sinal porque a lista copia a tela do Mobills, que mostra o valor sem ele.
+IGNORADAS = (
+    (date(2024, 7, 8), "Sem parar", "Carteira", 23047),
+    (date(2022, 11, 28), "Passagem Ester", "Carteira", 5000),
+)
 
 
 @dataclass(frozen=True)
@@ -77,12 +85,14 @@ class Importacao:
     descartados: list[Lancamento] = field(default_factory=list)
     # O que impede gravar: a planilha precisa de mais uma edição do dono.
     impedimentos: list[str] = field(default_factory=list)
+    # O que a saída mostra sem impedir gravar.
+    avisos: list[str] = field(default_factory=list)
 
 
 def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     """Lê os exports e a planilha de revisão da rodada anterior (se houver), cruza e reescreve a
     planilha com as decisões do dono mantidas."""
-    linhas_do_geral = ler_geral(geral)
+    linhas_do_geral, avisos = _sem_as_ignoradas(ler_geral(geral))
     decisoes = planilha.ler_decisoes(revisao)
     impedimentos: list[str] = []
     corte = _corte_dos_arquivados(decisoes, impedimentos)
@@ -96,7 +106,9 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     nomes = {c.pasta: c.nome for c in cartoes}
     mantidos = _grupos_mantidos(decisoes, impedimentos)
     cruzamento = cruzar(linhas_do_geral, linhas_de_fatura, decisoes.provaveis, mantidos)
-    importacao = Importacao(conta, cartoes, cruzamento=cruzamento, impedimentos=impedimentos)
+    importacao = Importacao(
+        conta, cartoes, cruzamento=cruzamento, impedimentos=impedimentos, avisos=avisos
+    )
     importacao.meses_das_faturas = {nomes[pasta]: meses for pasta, meses in pastas.items()}
     importacao.lancamentos, importacao.ajustes = conferencia.separar_ajustes(
         _lancamentos(cruzamento, nomes)
@@ -190,6 +202,32 @@ def _conta(
     if tipo not in TIPOS_DE_CONTA:
         impedimentos.append(f"Conta: tipo {tipo!r} não é {', '.join(TIPOS_DE_CONTA)}")
     return Conta(nome=nome, tipo=tipo)
+
+
+def _sem_as_ignoradas(linhas: list[LinhaDoGeral]) -> tuple[list[LinhaDoGeral], list[str]]:
+    """O geral sem as `IGNORADAS`, antes do cruzamento: elas não entram em nada. A que o export
+    não traz (um export parcial) só vira aviso."""
+    posicoes_fora = set()
+    avisos = []
+    for dia, descricao, conta, valor in IGNORADAS:
+        posicao = next(
+            (
+                x.posicao
+                for x in linhas
+                if x.posicao not in posicoes_fora
+                and (x.data, x.descricao.strip(), x.conta, abs(x.valor_centavos))
+                == (dia, descricao, conta, valor)
+            ),
+            None,
+        )
+        if posicao is None:
+            avisos.append(
+                f"ignorada não achada no geral: {descricao!r} de {planilha.data_br(dia)}"
+                f" na {conta} ({planilha.reais_br(valor)})"
+            )
+        else:
+            posicoes_fora.add(posicao)
+    return [x for x in linhas if x.posicao not in posicoes_fora], avisos
 
 
 def _grupos_mantidos(decisoes: planilha.Decisoes, impedimentos: list[str]) -> set[tuple]:

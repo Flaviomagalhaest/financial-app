@@ -1036,3 +1036,49 @@ def test_decisao_digitada_errado_nas_abas_de_revisao_impede_gravar(pastas):
         ]
         == "parcelado"
     )
+
+
+def test_transacao_ignorada_no_mobills_fica_de_fora_e_a_conferencia_do_mes_fecha(pastas):
+    # As duas transações que o dono ignorou no Mobills (ticket 215); o export as traz como pagas.
+    geral, faturas, revisao = pastas
+    escrever_geral(
+        geral,
+        "geral.xlsx",
+        [
+            linha("05/11/2022", "Salário", 1000.00, "Salário"),
+            linha("28/11/2022", "Passagem Ester ", -50.00, "Ester"),
+            linha("28/11/2022", "Passagem Ester", -50.00, "Ester"),
+            linha("08/07/2024", "Sem parar", -230.47, "Mãe estorno"),
+            linha("08/07/2024", "Sem parar", -40.00, "Carro"),
+        ],
+    )
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert sorted((x.descricao.strip(), x.valor_centavos) for x in importacao.lancamentos) == [
+        ("Passagem Ester", 5000),
+        ("Salário", 100000),
+        ("Sem parar", 4000),
+    ]
+    assert importacao.avisos == []
+    editar_aba(revisao, "Conferência", "Mês", "2022-11", "Mobills", 950.00)
+    importar(geral, faturas, revisao)
+    novembro = next(x for x in ler_aba(revisao, "Conferência") if x["Mês"] == "2022-11")
+    assert (novembro["Resultado"], novembro["Diferença"]) == (950.00, 0)
+    assert not novembro["Por quê"]
+
+
+def test_transacao_ignorada_que_o_export_nao_traz_so_vira_aviso(pastas):
+    geral, faturas, revisao = pastas
+    escrever_geral(geral, "geral.xlsx", [linha("28/11/2022", "Passagem Ester", -60.00, "Ester")])
+    faturas.mkdir()
+
+    importacao = importar(geral, faturas, revisao)
+
+    assert len(importacao.lancamentos) == 1
+    assert importacao.impedimentos == []
+    assert importacao.avisos == [
+        "ignorada não achada no geral: 'Sem parar' de 08/07/2024 na Carteira (230,47)",
+        "ignorada não achada no geral: 'Passagem Ester' de 28/11/2022 na Carteira (50,00)",
+    ]
