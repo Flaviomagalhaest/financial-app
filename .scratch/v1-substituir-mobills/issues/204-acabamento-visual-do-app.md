@@ -1,7 +1,7 @@
 # Acabamento visual do app: links, barra lateral, tipografia e espaçamento
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: —
 Skills: `prototype`, `grilling`, `artifact-design`; apoio: `implement`, `run`. HITL: o visual depende de decisão do dono.
 Modelo recomendado: Opus
@@ -28,7 +28,7 @@ Decidir com o dono a direção visual (protótipo) e aplicar: estilo de link, ba
 - [x] Protótipo (`prototype`) da casca e de duas telas, aprovado pelo dono (branch `prototipo/204-acabamento-visual`)
 - [x] Estilo de link e de barra lateral corrigidos na web e no celular
 - [x] Tipografia, espaçamento, botões e cartões em tokens no `estilo.css`
-- [ ] Revisão tela a tela com capturas antes e depois; specs e verificações do projeto verdes; PR para `main`
+- [x] Revisão tela a tela com capturas antes e depois (https://claude.ai/artifact/K6BX5MWp5ZJt35VQRCGkqG); specs e verificações do projeto verdes; PR para `main`
 
 ## Comments
 
@@ -87,3 +87,4 @@ Protótipo aprovado nesta forma (versão 3). Próximo passo: implementar.
 - Corrigidos da lista das capturas: Mês com 601 px no celular, barras de progresso azuis, fileiras de fichas sem sinal de rolagem (somem na borda enquanto há mais), eixo do Futuro sem o ano (e rótulos sobrepostos no celular), tabela sem sinal de rolagem lateral (sombra na borda).
 - Por decisão (Q14), Novo lançamento não marca aba: o + some lá dentro.
 - Sobras registradas no [ticket 208](208-acabamento-visual-sobras.md). Vocabulário novo no `GLOSSARY.md` (Telas).
+- Verificações: `tsc` e build limpos; a suíte e2e inteira (333 testes) rodou num banco limpo: 331 passaram e as 2 falhas (o ⋯ de uma linha arquivada ficava embaixo da linha seguinte) foram corrigidas e passam.
