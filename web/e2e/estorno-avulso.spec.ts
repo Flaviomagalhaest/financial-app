@@ -15,9 +15,11 @@ function dia(deslocamento: number): string {
 /** `2026-11-01` vira `11/2026`. */
 const mesDaFatura = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
-/** O valor de uma linha do resumo da fatura (`dt` e `dd` lado a lado). */
+/** O valor de uma linha do resumo da fatura (`dt` e `dd` lado a lado); o Total é o valor da faixa. */
 const resumo = (page: Page, nome: string) =>
-  page.getByLabel("Resumo da fatura").locator("dt", { hasText: new RegExp(`^${nome}$`) }).locator("xpath=following-sibling::dd[1]");
+  nome === "Total"
+    ? page.locator(".valor-da-faixa")
+    : page.getByLabel("Resumo da fatura").locator("dt", { hasText: new RegExp(`^${nome}$`) }).locator("xpath=following-sibling::dd[1]");
 
 /** Entra e prepara pela API um cartão, uma categoria e uma compra de R$ 100,00 hoje. */
 async function prepararFatura(page: Page) {

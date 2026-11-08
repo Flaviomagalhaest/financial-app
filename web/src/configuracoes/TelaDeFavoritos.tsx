@@ -2,6 +2,7 @@ import { useState } from "react";
 import { removerFavorito, reordenarFavoritos, useCadastro, useConexao, useFavoritos } from "../dados";
 import { nomePorId, tituloDoFavorito } from "../lancamentos/apresentacao";
 import { formatarCentavos } from "../lancamentos/dinheiro";
+import { MenuDeAcoes } from "../casca/MenuDeAcoes";
 import { SugeridosDeFavorito } from "../lancamentos/SugeridosDeFavorito";
 
 /** Reordenar e remover favoritos: mudança de cadastro, só com internet (ADR 0011). */
@@ -47,17 +48,17 @@ export function TelaDeFavoritos() {
               <p className="vazio">
                 {f.partes.length ? `${f.partes.length} partes: ${f.partes.map((p) => `${p.descricao || "Parte"} (${p.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")})`).join(", ")}` : f.categoria_ids.map((c) => nomePorId(categorias, c)).join(", ")} · {nomePorId(contasECartoes, f.conta_id)}
               </p>
-              <div className="acoes">
+              <MenuDeAcoes rotulo={`Mais ações ${titulo}`}>
                 <button type="button" className="secundario" disabled={!online || i === 0} aria-label={`Subir ${titulo}`} onClick={() => mover(i, -1)}>
-                  ↑
+                  Subir
                 </button>
                 <button type="button" className="secundario" disabled={!online || i === favoritos.length - 1} aria-label={`Descer ${titulo}`} onClick={() => mover(i, 1)}>
-                  ↓
+                  Descer
                 </button>
-                <button type="button" className="secundario" disabled={!online} aria-label={`Remover ${titulo}`} onClick={() => void mudar(removerFavorito(f.id))}>
+                <button type="button" className="secundario perigo" disabled={!online} aria-label={`Remover ${titulo}`} onClick={() => void mudar(removerFavorito(f.id))}>
                   Remover
                 </button>
-              </div>
+              </MenuDeAcoes>
             </li>
           );
         })}

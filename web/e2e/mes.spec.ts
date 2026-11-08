@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
+import { pelaLinha } from "./conta";
 
 test.use({ timezoneId: "America/Sao_Paulo" });
 
@@ -146,14 +147,12 @@ test("o casal cria um item avulso, muda o valor e exclui, sem passar pelo modelo
   const linha = itens.getByRole("row").filter({ hasText: `Casa ${s}` });
   await expect(linha).toContainText("R$ 300,00");
 
-  await linha.getByLabel(`Mais ações Casa ${s}`).click();
-  await linha.getByRole("button", { name: `Mudar valor de Casa ${s}` }).click();
+  await pelaLinha(linha, `Casa ${s}`, `Mudar valor de Casa ${s}`);
   await itens.getByLabel(`Novo valor de Casa ${s}`).fill("450,50");
   await itens.getByRole("button", { name: "Salvar valor" }).click();
   await expect(linha).toContainText("R$ 450,50");
 
-  await linha.getByLabel(`Mais ações Casa ${s}`).click();
-  await linha.getByRole("button", { name: `Excluir Casa ${s}` }).click();
+  await pelaLinha(linha, `Casa ${s}`, `Excluir Casa ${s}`);
   await expect(itens.getByRole("row").filter({ hasText: `Casa ${s}` })).toHaveCount(0);
   await expect(itens).toContainText("Nenhum item planejado neste mês.");
 });

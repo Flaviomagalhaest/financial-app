@@ -1,7 +1,7 @@
 # Acabamento visual, sobras da primeira rodada
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 204
 Skills: `implement`, `run`; apoio: `artifact-design` se precisar mostrar opção ao dono
 Modelo recomendado: Sonnet
@@ -19,8 +19,17 @@ Origem: revisão (code-review, eixos Standards e Spec) do [ticket 204](204-acaba
 
 ## Checklist
 
-- [ ] Favoritos no padrão de linha do app
-- [ ] Resumo da fatura sem repetir a faixa
-- [ ] `border-radius` só por token; `.tabela` numa definição
-- [ ] Ajudante dos testes para o ⋯
-- [ ] Capturas antes e depois; specs e verificações verdes; PR para `main`
+- [x] Favoritos no padrão de linha do app
+- [x] Resumo da fatura sem repetir a faixa
+- [x] `border-radius` só por token; `.tabela` numa definição
+- [x] Ajudante dos testes para o ⋯
+- [x] Specs e verificações verdes; PR para `main`
+- [ ] Capturas antes e depois: não tiradas nesta sessão (sem navegador autenticado para o app); o dono confere no preview do PR
+
+## Resolução
+
+- Favoritos: ↑/↓/Remover viraram Subir/Descer/Remover dentro do ⋯ (`MenuDeAcoes`), desligados sem internet.
+- Fatura: Situação e Total saíram do resumo (a faixa já mostra); o resumo fica em "Ver o detalhe da fatura", recolhido.
+- CSS: todos os `border-radius` por token (`--raio-1` a `--raio-10`, mais os três antigos); `.tabela` numa definição só.
+- Testes: `pelaLinha(linha, titulo, nome, papel?)` em `web/e2e/conta.ts` substitui 46 pares de linhas; 23 ocorrências de `Mais ações` ficaram porque a ação não segue o par direto.
+- Q14 (aba do Novo lançamento) segue como decisão do dono: nada a fazer até estranharem.

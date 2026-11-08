@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiDaPagina } from "./api";
 import { entrar } from "./entrar";
 import { digitar } from "./lancar";
-import { peloMenuDaConta } from "./conta";
+import { pelaLinha, peloMenuDaConta } from "./conta";
 
 // O dia do casal é o de São Paulo, como na API.
 test.use({ timezoneId: "America/Sao_Paulo" });
@@ -144,17 +144,19 @@ test("os mais repetidos viram sugeridos; promover ou dispensar, e reordenar e re
   const ordem = () => lista.evaluateAll((itens) => itens.map((i) => i.querySelector("strong")?.textContent));
   const antes = await ordem();
   expect(antes.slice(-2)).toEqual([`Mercado ${s}`, `Padaria ${s}`]);
-  await page.getByRole("button", { name: `Subir Padaria ${s}` }).click();
+  await pelaLinha(page, `Padaria ${s}`, `Subir Padaria ${s}`);
   await expect.poll(async () => (await ordem()).slice(-2)).toEqual([`Padaria ${s}`, `Mercado ${s}`]);
 
   // Sem internet, o cadastro dos favoritos fica desligado.
   await context.setOffline(true);
+  await page.getByLabel(`Mais ações Mercado ${s}`).click();
   await expect(page.getByRole("button", { name: `Remover Mercado ${s}` })).toBeDisabled();
   await expect(page.getByRole("button", { name: `Subir Mercado ${s}` })).toBeDisabled();
+  await page.keyboard.press("Escape");
   await expect(page.getByText("Reordenar e remover precisam de internet.")).toBeVisible();
   await context.setOffline(false);
 
-  await page.getByRole("button", { name: `Remover Padaria ${s}` }).click();
+  await pelaLinha(page, `Padaria ${s}`, `Remover Padaria ${s}`);
   await expect(lista.filter({ hasText: `Padaria ${s}` })).toHaveCount(0);
   await expect(lista.filter({ hasText: `Mercado ${s}` })).toBeVisible();
 });
