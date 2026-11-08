@@ -1,7 +1,7 @@
 # Acabamento visual, sobras da primeira rodada
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 204
 Skills: `implement`, `run`; apoio: `artifact-design` se precisar mostrar opção ao dono
 Modelo recomendado: Sonnet
