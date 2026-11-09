@@ -1,7 +1,7 @@
 # Importador do Mobills: conferir o total de cada fatura pelo PDF do banco
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `grilling` (HITL: o dono diz como a coluna do PDF entra na aba `Faturas` e o que fazer com cartão sem PDF), `prototype` para ler os PDFs de um banco; depois `implement`, `tdd`
 Modelo recomendado: Opus
@@ -22,7 +22,38 @@ Fatos levantados no ticket 216:
 
 ## Checklist
 
-- [ ] Decisões do dono: onde o total do PDF entra (coluna na aba `Faturas`?), como o importador acha os PDFs (texto já extraído?) e o que fazer com cartão sem PDF
-- [ ] Correspondência entre o rótulo do Mobills e o vencimento do PDF, por cartão
-- [ ] Teste com um PDF fictício (texto) por layout de banco
-- [ ] Rodar nos PDFs reais e gravar as faturas que não fecham
+- [x] Decisões do dono: onde o total do PDF entra (coluna na aba `Faturas`?), como o importador acha os PDFs (texto já extraído?) e o que fazer com cartão sem PDF
+- [x] Correspondência entre o rótulo do Mobills e o vencimento do PDF, por cartão
+- [x] Teste com um PDF fictício (texto) por layout de banco
+- [x] Rodar nos PDFs reais e gravar as faturas que não fecham
+
+## Answer
+
+**Decisões do dono (2026-11-08):**
+
+- O total do PDF **preenche a coluna `Mobills`** da aba `Faturas` quando ela está em branco; sem colunas novas. O valor que o dono digitar vale mais que o do PDF.
+- O importador lê **os `.txt` já extraídos**, pela opção `--faturas-pdf <pasta>`; não abre PDF nem usa senha.
+- As subpastas dos textos têm **o nome do cartão no Mobills** (`Credicard Black`, `Personnalite Black Pontos`, `The One`, `VISA Infinite`). As pastas de `_txt` foram renomeadas assim; as dos PDFs ficaram como estavam.
+- Fatura sem PDF fica com a coluna em branco, sem aviso.
+
+**Correspondência**: nos quatro cartões o rótulo `AAAAMM` do Mobills é **o mês anterior ao do vencimento** do PDF. Dos 64 PDFs, 62 têm a fatura exportada pelo Mobills (o The One e o VISA de 2026-10 não têm); por esse mês, 56 delas fecham ao centavo, contra 0 a 3 por cartão pelo próprio mês do vencimento. O Personnalite também segue essa regra (vence dia 1, e o PDF de 06/2025 é o `2025-05`), diferente do que o ticket supunha.
+
+**Extração**: o texto tem de sair com `pdftotext -raw -enc UTF-8`. No `-layout` o valor de outra coluna cai na linha do total (o VISA de 06/2026 saía `0,00` em vez de `129,55`). Os `.txt` de `_txt` foram refeitos em `-raw`. Texto sem vencimento ou sem `Total desta fatura`, dois textos para o mesmo mês e subpasta sem cartão com esse nome viram aviso. O total do PDF fica gravado na coluna e volta como digitado na rodada seguinte: quando ele difere do texto atual (texto refeito ou valor digitado pelo dono), sai um aviso, e para usar o do PDF basta apagar a célula.
+
+```
+uv run python -m app.mobills <geral> <faturas> <revisao.xlsx> --faturas-pdf "C:\Users\flavi\OneDrive\Documents\F\Faturas cartão\_txt"
+```
+
+**Rodada nos dados reais**: 56 das 62 faturas exportadas com PDF fecham ao centavo. A aba também mostra o The One 2026-10, que só existe por causa dos parcelamentos. As que não fecham (importador − PDF):
+
+| Cartão | Mês | Diferença |
+|---|---|---|
+| Personnalite | 2023-09 | 0,04 |
+| Personnalite | 2023-10 | 51,74 |
+| Personnalite | 2023-11 | 196,30 |
+| Personnalite | 2024-12 | −0,01 |
+| Personnalite | 2025-01 | −0,01 |
+| Personnalite | 2025-09 | −0,14 |
+| The One | 2026-10 | −19.636,04 (o Mobills não exportou esta fatura) |
+
+O que o dono precisa fazer com elas está no [ticket 222](222-importador-do-mobills-o-que-a-conferencia-pelos-pdfs-deixou-para-o-dono.md).

@@ -26,6 +26,8 @@ class Mes:
     sem_par: list[int] = field(default_factory=list)
     provaveis_abertos: list[int] = field(default_factory=list)
     descartados: list[int] = field(default_factory=list)
+    # As linhas que o Mobills duplicou e o importador deixou de fora (tickets 216 e 217).
+    descartadas_do_mobills: list[int] = field(default_factory=list)
 
     @property
     def resultado(self) -> int:
@@ -38,6 +40,8 @@ class Fatura:
     mes: str
     compras: int = 0
     ajuste: int = 0
+    # O custo das linhas duplicadas pelo Mobills que ficaram de fora, que o total dele pode ter.
+    descartadas: list[int] = field(default_factory=list)
 
     @property
     def total(self) -> int:
@@ -68,6 +72,9 @@ def meses(lancamentos, ajustes, descartados, cruzamento, primeiro: str, ultimo: 
     for provavel in cruzamento.provaveis:
         if provavel.decisao is None and (linha := por_mes.get(provavel.fatura.mes)):
             linha.provaveis_abertos.append(-provavel.fatura.valor_centavos)
+    for _, mes_da_linha, custo in cruzamento.descartadas():
+        if linha := por_mes.get(mes_da_linha):
+            linha.descartadas_do_mobills.append(custo)
     # O pendente avulso descartado, que o total do Mobills pode ter.
     for lancamento in descartados:
         if linha := por_mes.get(lancamento.mes):
@@ -75,7 +82,12 @@ def meses(lancamentos, ajustes, descartados, cruzamento, primeiro: str, ultimo: 
     return [por_mes[m] for m in sorted(por_mes)]
 
 
-def faturas(lancamentos, ajustes, meses_das_pastas: dict[str, list[str]]) -> list[Fatura]:
+def faturas(
+    lancamentos,
+    ajustes,
+    meses_das_pastas: dict[str, list[str]],
+    descartadas: list[tuple[str, str, int]] | None = None,
+) -> list[Fatura]:
     """Cada fatura exportada, mesmo vazia, e as que um parcelamento sem cartão criou."""
     por_fatura: dict[tuple[str, str], Fatura] = {}
     for cartao, lista in meses_das_pastas.items():
@@ -89,6 +101,9 @@ def faturas(lancamentos, ajustes, meses_das_pastas: dict[str, list[str]]) -> lis
         if ajuste.cartao:
             chave = (ajuste.cartao, ajuste.mes)
             por_fatura.setdefault(chave, Fatura(*chave)).ajuste += ajuste.valor_centavos
+    for cartao, mes, custo in descartadas or []:
+        if (fatura := por_fatura.get((cartao, mes))) is not None:
+            fatura.descartadas.append(custo)
     return [por_fatura[c] for c in sorted(por_fatura)]
 
 

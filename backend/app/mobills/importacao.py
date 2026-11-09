@@ -11,6 +11,7 @@ from app.mobills import conferencia, de_para, parcelas
 from app.mobills import revisao as planilha
 from app.mobills.conferencia import AjusteDeFatura
 from app.mobills.cruzamento import Cruzamento, cruzar
+from app.mobills.faturas_pdf import ler_totais
 from app.mobills.leitura import (
     LinhaDeFatura,
     LinhaDoGeral,
@@ -89,9 +90,12 @@ class Importacao:
     avisos: list[str] = field(default_factory=list)
 
 
-def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
+def importar(
+    geral: Path, faturas: Path, revisao: Path, faturas_pdf: Path | None = None
+) -> Importacao:
     """Lê os exports e a planilha de revisão da rodada anterior (se houver), cruza e reescreve a
-    planilha com as decisões do dono mantidas."""
+    planilha com as decisões do dono mantidas. Com `faturas_pdf`, o total do PDF do banco preenche
+    a coluna `Mobills` da aba `Faturas` que o dono deixou em branco (ticket 220)."""
     linhas_do_geral, avisos = _sem_as_ignoradas(ler_geral(geral))
     decisoes = planilha.ler_decisoes(revisao)
     impedimentos: list[str] = []
@@ -105,7 +109,10 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
     cartoes = _cartoes(decisoes, pastas, impedimentos)
     nomes = {c.pasta: c.nome for c in cartoes}
     mantidos = _grupos_mantidos(decisoes, impedimentos)
-    cruzamento = cruzar(linhas_do_geral, linhas_de_fatura, decisoes.provaveis, mantidos)
+    _conferir_repetidas(decisoes, impedimentos)
+    cruzamento = cruzar(
+        linhas_do_geral, linhas_de_fatura, decisoes.provaveis, mantidos, decisoes.repetidas
+    )
     importacao = Importacao(
         conta, cartoes, cruzamento=cruzamento, impedimentos=impedimentos, avisos=avisos
     )
@@ -154,6 +161,7 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
         importacao.lancamentos,
         importacao.ajustes,
         {nomes[pasta]: lista for pasta, lista in pastas.items()},
+        [(nomes[pasta], mes, custo) for pasta, mes, custo in cruzamento.descartadas() if pasta],
     )
     planilha.escrever_planilha(
         revisao,
@@ -162,6 +170,7 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
             "Cartões": planilha.aba_cartoes(cartoes, pastas),
             "De-para": planilha.aba_de_para(contagem, regras),
             "Pares prováveis": planilha.aba_pares_provaveis(cruzamento),
+            "Faturas repetidas": planilha.aba_faturas_repetidas(cruzamento),
             "Grupos ambíguos": planilha.aba_grupos_ambiguos(cruzamento, decisoes.grupos),
             "Categoria diferente": planilha.aba_categoria_diferente(cruzamento),
             "Parcelas quebradas": planilha.aba_parcelas_quebradas(
@@ -172,10 +181,40 @@ def importar(geral: Path, faturas: Path, revisao: Path) -> Importacao:
             ),
             "Ajustes sem cartão": planilha.aba_ajustes_sem_cartao(ajustes_sem_cartao),
             "Conferência": planilha.aba_conferencia(linhas_dos_meses, decisoes.mobills_por_mes),
-            "Faturas": planilha.aba_faturas(linhas_das_faturas, decisoes.mobills_por_fatura),
+            "Faturas": planilha.aba_faturas(
+                linhas_das_faturas, _total_das_faturas(faturas_pdf, nomes, decisoes, avisos)
+            ),
         },
     )
     return importacao
+
+
+def _total_das_faturas(
+    faturas_pdf: Path | None, nomes: dict[str, str], decisoes: planilha.Decisoes, avisos: list[str]
+) -> dict[tuple[str, str], int]:
+    """O total de cada fatura para comparar: o que o dono digitou e, onde ele deixou em branco, o
+    do PDF do banco."""
+    if faturas_pdf is None:
+        return decisoes.mobills_por_fatura
+    totais, avisos_do_pdf = ler_totais(faturas_pdf)
+    avisos.extend(avisos_do_pdf)
+    sem_cartao = sorted({pasta for pasta, _ in totais if pasta not in nomes})
+    avisos.extend(
+        f"faturas em texto de {pasta}: nenhum cartão com esse nome" for pasta in sem_cartao
+    )
+    do_pdf = {
+        (nomes[pasta], mes): total for (pasta, mes), total in totais.items() if pasta in nomes
+    }
+    # O total do PDF fica gravado na coluna e volta como digitado: o que difere do texto de agora
+    # (texto refeito, ou valor que o dono digitou) é avisado.
+    for (cartao, mes), total in sorted(do_pdf.items()):
+        na_planilha = decisoes.mobills_por_fatura.get((cartao, mes))
+        if na_planilha is not None and na_planilha != total:
+            avisos.append(
+                f"Faturas: {cartao} {mes} tem {planilha.reais_br(na_planilha)} na coluna Mobills"
+                f" e o PDF diz {planilha.reais_br(total)}; apague a célula para usar o do PDF"
+            )
+    return {**do_pdf, **decisoes.mobills_por_fatura}
 
 
 def _lancamentos(cruzamento: Cruzamento, nomes: dict[str, str]) -> list[Lancamento]:
@@ -242,6 +281,15 @@ def _grupos_mantidos(decisoes: planilha.Decisoes, impedimentos: list[str]) -> se
                 " fora de descartar ou manter"
             )
     return mantidos
+
+
+def _conferir_repetidas(decisoes: planilha.Decisoes, impedimentos: list[str]) -> None:
+    for (pasta, mes, _, descricao, _), decisao in decisoes.repetidas.items():
+        if decisao.casefold() not in planilha.DECISOES_DO_GRUPO:
+            impedimentos.append(
+                f"Faturas repetidas: {descricao!r} de {pasta} em {mes} tem a decisão"
+                f" {decisao!r}, fora de descartar ou manter"
+            )
 
 
 def _corte_dos_arquivados(decisoes: planilha.Decisoes, impedimentos: list[str]) -> dict[str, str]:

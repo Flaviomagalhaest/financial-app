@@ -33,6 +33,16 @@ class LinhaDoGrupo:
     resultado: str  # 'par', 'descartada' (a duplicada do Mobills, que não entra) ou 'sem par'
 
 
+@dataclass(frozen=True)
+class Repetida:
+    """Linha de fatura sem par que repete o cartão, a data e o valor de uma linha já casada (o
+    Mobills duplicou a compra na fatura, ticket 217). Entra como compra até o dono decidir."""
+
+    fatura: LinhaDeFatura
+    casada: Par
+    decisao: str | None  # do dono na planilha: 'descartar', 'manter' ou ainda aberto
+
+
 @dataclass
 class Cruzamento:
     pares: list[Par] = field(default_factory=list)
@@ -45,6 +55,27 @@ class Cruzamento:
     # na ordem, mas outra ordem daria outro resultado. Quando a diferença é a situação, a fatura
     # casa primeiro com a paga e a pendente que sobra é a duplicada do Mobills (ticket 216).
     ambiguos: list[list[LinhaDoGrupo]] = field(default_factory=list)
+    # Todas as linhas de fatura sem par que repetem uma casada; as que o dono mandou descartar
+    # não estão em `fatura_sem_par`.
+    repetidas: list[Repetida] = field(default_factory=list)
+
+    def descartadas(self) -> list[tuple[str | None, str, int]]:
+        """O que o importador deixou de fora e o Mobills pode contar: a pasta (sem ela, quando só
+        o geral tinha a linha), o mês e o custo, pelos grupos ambíguos e pelas repetidas."""
+        saida = []
+        for grupo in self.ambiguos:
+            for x in grupo:
+                if x.resultado == "descartada":
+                    if x.fatura:
+                        saida.append((x.fatura.pasta, x.fatura.mes, x.fatura.valor_centavos))
+                    elif x.geral:
+                        saida.append((None, x.geral.mes, -x.geral.valor_centavos))
+        saida += [
+            (r.fatura.pasta, r.fatura.mes, r.fatura.valor_centavos)
+            for r in self.repetidas
+            if _descartar(r.decisao)
+        ]
+        return saida
 
 
 def chave_do_provavel(fatura: LinhaDeFatura, geral: LinhaDoGeral) -> tuple:
@@ -60,6 +91,15 @@ def chave_do_provavel(fatura: LinhaDeFatura, geral: LinhaDoGeral) -> tuple:
     )
 
 
+def chave_da_repetida(fatura: LinhaDeFatura) -> tuple:
+    """O que identifica a linha repetida de uma rodada para a outra."""
+    return (fatura.pasta, fatura.mes, fatura.data, fatura.descricao, fatura.valor_centavos)
+
+
+def _descartar(decisao: str | None) -> bool:
+    return (decisao or "").casefold() == "descartar"
+
+
 def chave_do_grupo(geral: LinhaDoGeral) -> tuple:
     """Mês, descrição e valor (como a fatura, compra positiva): o que a aba mostra do grupo."""
     return (geral.mes, geral.descricao, -geral.valor_centavos)
@@ -70,6 +110,7 @@ def cruzar(
     faturas: list[LinhaDeFatura],
     decisoes_dos_provaveis: dict[tuple, str] | None = None,
     grupos_mantidos: set[tuple] | None = None,
+    decisoes_das_repetidas: dict[tuple, str] | None = None,
 ) -> Cruzamento:
     resultado = Cruzamento()
     # A ordem em que as linhas de um grupo casam: pela data da compra, de qualquer cartão.
@@ -116,6 +157,17 @@ def cruzar(
     }
     resultado.fatura_sem_par = [x for x in sobra_da_fatura if id(x) not in fora]
     resultado.geral_sem_par = [x for x in sobra_do_geral if id(x) not in fora]
+
+    casadas: dict[tuple, Par] = {}
+    for par in resultado.pares:
+        casadas.setdefault((par.fatura.pasta, par.fatura.data, par.fatura.valor_centavos), par)
+    for fatura in resultado.fatura_sem_par:
+        casada = casadas.get((fatura.pasta, fatura.data, fatura.valor_centavos))
+        if casada is not None:
+            decisao = (decisoes_das_repetidas or {}).get(chave_da_repetida(fatura))
+            resultado.repetidas.append(Repetida(fatura, casada, decisao))
+    descartadas = {id(r.fatura) for r in resultado.repetidas if _descartar(r.decisao)}
+    resultado.fatura_sem_par = [x for x in resultado.fatura_sem_par if id(x) not in descartadas]
     return resultado
 
 

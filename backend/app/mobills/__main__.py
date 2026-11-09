@@ -1,13 +1,15 @@
 """Importação do Mobills pela linha de comando, rodada pelo dono sobre os exports (ADR 0007).
 
     uv run python -m app.mobills <pasta do geral> <pasta das faturas> <planilha de revisão>
-        [--backup <arquivo.zip>]
+        [--backup <arquivo.zip>] [--faturas-pdf <pasta dos textos>]
 
 A pasta do geral tem os XLSX de "todas as transações"; a das faturas, uma subpasta por cartão com
 os arquivos `<cartão>_-_<AAAAMM>.xlsx`. A planilha de revisão é lida, se existir, e reescrita com
 as decisões mantidas. Sem impedimentos, `--backup` grava o zip que a restauração grava num banco
-vazio (`scripts/restaurar-backup.sh`, ADR 0012). Guarde tudo fora do repositório (`data/` está no
-`.gitignore`).
+vazio (`scripts/restaurar-backup.sh`, ADR 0012). `--faturas-pdf` lê o texto das faturas em PDF do
+banco (`pdftotext`, um `.txt` por fatura numa subpasta com o nome do cartão no Mobills) e preenche
+com o total a coluna `Mobills` da aba `Faturas` que estiver em branco (ticket 220). Guarde tudo
+fora do repositório (`data/` está no `.gitignore`).
 """
 
 import argparse
@@ -26,13 +28,16 @@ def main(argumentos: list[str] | None = None) -> int:
     leitor.add_argument(
         "--backup", type=Path, help="o zip do backup, gravado só quando nada impede gravar"
     )
+    leitor.add_argument(
+        "--faturas-pdf", type=Path, help="pasta com o texto das faturas em PDF, por cartão"
+    )
     opcoes = leitor.parse_args(argumentos)
-    for pasta in (opcoes.geral, opcoes.faturas):
-        if not pasta.is_dir():
+    for pasta in (opcoes.geral, opcoes.faturas, opcoes.faturas_pdf):
+        if pasta is not None and not pasta.is_dir():
             leitor.error(f"{pasta} não é uma pasta")
 
     try:
-        importacao = importar(opcoes.geral, opcoes.faturas, opcoes.revisao)
+        importacao = importar(opcoes.geral, opcoes.faturas, opcoes.revisao, opcoes.faturas_pdf)
     except ArquivoInvalido as erro:
         print(f"arquivo inválido: {erro}", file=sys.stderr)
         return 1

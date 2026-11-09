@@ -40,6 +40,7 @@ COLUNA_DO_TIPO = "Tipo (corrente, poupanca ou carteira)"
 COLUNA_DO_ARQUIVADO = "Arquivado (sim ou não)"
 DECISOES_DO_PROVAVEL = {"juntar", "separar"}
 COLUNA_DA_DECISAO_DO_GRUPO = "Decisão (descartar ou manter)"
+COLUNA_DA_DECISAO_DA_REPETIDA = "Decisão (descartar ou manter)"
 COLUNA_DA_DECISAO_DA_QUEBRA = "Decisão (avulsas, parcelamento ou descartar duplicada)"
 DECISOES_DA_QUEBRA = {"avulsas", "parcelamento", "descartar duplicada"}
 DECISOES_DO_GRUPO = {"descartar", "manter"}
@@ -53,6 +54,9 @@ class Decisoes:
     # Por `chave_do_grupo`: 'manter' desfaz o descarte da pendente duplicada. As decisões vêm
     # como o dono digitou; a que não é uma das válidas vira impedimento e fica na planilha.
     grupos: dict[tuple, str] = field(default_factory=dict)
+    # Por `chave_da_repetida`: 'descartar' tira a linha de fatura que o Mobills duplicou (ticket
+    # 217); em branco ou 'manter' deixa entrar como compra. Vem como o dono digitou.
+    repetidas: dict[tuple, str] = field(default_factory=dict)
     # Por `chave_do_parcelamento`, o que fazer com a sequência quebrada.
     quebras: dict[tuple, str] = field(default_factory=dict)
     conta: tuple[str, str] | None = None  # nome e tipo
@@ -133,6 +137,16 @@ def ler_decisoes(caminho: Path) -> Decisoes:
             # Uma linha com 'manter' vale para o grupo inteiro.
             if texto(decisoes.grupos.get(chave)).casefold() != "manter":
                 decisoes.grupos[chave] = decisao
+    for linha in _linhas(livro, "Faturas repetidas"):
+        if decisao := texto(linha.get(COLUNA_DA_DECISAO_DA_REPETIDA)):
+            chave = (
+                texto(linha.get(COLUNA_DA_PASTA)),
+                texto(linha.get("Mês")),
+                data(linha.get("Data da compra")),
+                texto(linha.get("Descrição")),
+                valor(linha, "Valor"),
+            )
+            decisoes.repetidas[chave] = decisao
     for linha in _linhas(livro, "Pares prováveis"):
         decisao = texto(linha.get(COLUNA_DA_DECISAO)).casefold()
         if decisao in DECISOES_DO_PROVAVEL:
@@ -299,6 +313,37 @@ def aba_grupos_ambiguos(
     return cabecalho, linhas
 
 
+def aba_faturas_repetidas(cruzamento: Cruzamento) -> tuple[list[str], list[list]]:
+    """As linhas de fatura sem par que repetem o cartão, a data e o valor de uma casada. Podem ser
+    duas compras iguais de verdade: só `descartar` as tira."""
+    cabecalho = [
+        COLUNA_DA_PASTA,
+        "Mês",
+        "Data da compra",
+        "Descrição",
+        "Categoria",
+        "Valor",
+        "Descrição da linha casada",
+        "Categoria da linha casada",
+        COLUNA_DA_DECISAO_DA_REPETIDA,
+    ]
+    linhas = [
+        [
+            r.fatura.pasta,
+            r.fatura.mes,
+            data_br(r.fatura.data),
+            r.fatura.descricao,
+            r.fatura.categoria,
+            reais(r.fatura.valor_centavos),
+            r.casada.fatura.descricao,
+            r.casada.geral.categoria,
+            r.decisao,
+        ]
+        for r in cruzamento.repetidas
+    ]
+    return cabecalho, linhas
+
+
 def chave_do_parcelamento(parcelamento: Parcelamento) -> tuple:
     """Descrição, valor da primeira parcela, número dela e primeiro mês: o que a aba mostra."""
     primeira = parcelamento.primeira
@@ -433,6 +478,13 @@ def aba_conferencia(meses: list[Mes], mobills: dict[str, int]) -> tuple[list[str
                 mes.descartados,
                 ("pendente avulso descartado", "pendentes avulsos descartados"),
             ),
+            (
+                mes.descartadas_do_mobills,
+                (
+                    "linha duplicada pelo Mobills descartada",
+                    "linhas duplicadas pelo Mobills descartadas",
+                ),
+            ),
         ):
             if efeitos:
                 nome = o_que[0] if len(efeitos) == 1 else o_que[1]
@@ -456,7 +508,16 @@ def aba_faturas(
     faturas: list[Fatura], mobills: dict[tuple[str, str], int]
 ) -> tuple[list[str], list[list]]:
     """O total de cada fatura, para comparar com a tela de faturas do Mobills."""
-    cabecalho = ["Cartão", "Mês", "Compras", "Ajuste de fatura", "Total", "Mobills", "Diferença"]
+    cabecalho = [
+        "Cartão",
+        "Mês",
+        "Compras",
+        "Ajuste de fatura",
+        "Total",
+        "Mobills",
+        "Diferença",
+        "Por quê",
+    ]
     linhas = []
     for fatura in faturas:
         do_mobills = mobills.get((fatura.cartao, fatura.mes))
@@ -469,9 +530,21 @@ def aba_faturas(
                 reais(fatura.total),
                 None if do_mobills is None else reais(do_mobills),
                 _diferenca(fatura.total, do_mobills),
+                _motivo_da_fatura(fatura),
             ]
         )
     return cabecalho, linhas
+
+
+def _motivo_da_fatura(fatura: Fatura) -> str | None:
+    if not fatura.descartadas:
+        return None
+    nome = (
+        "linha duplicada pelo Mobills descartada"
+        if len(fatura.descartadas) == 1
+        else "linhas duplicadas pelo Mobills descartadas"
+    )
+    return f"{len(fatura.descartadas)} {nome} ({reais_br(sum(fatura.descartadas))})"
 
 
 def escrever_planilha(caminho: Path, abas: dict[str, tuple[list[str], list[list]]]) -> None:
