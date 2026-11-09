@@ -43,5 +43,7 @@ Hipótese testada e **falsificada**: um reenvio entre `perder = false` e o cliqu
 
 Sem laço vermelho não há correção honesta. Próximo passo, que precisa do dono: baixar o trace do artefato `testes-com-navegador` (id 13592578663, run 42417245960) e ver o que mudou no DOM no instante do clique; só com isso dá para formular outra hipótese.
 
+Voltou no CI do PR #572 (2026-11-09, job `verificar`, run 42536784292, 1ª execução), que só mudou o backend do importador do Mobills: mesmo `recorrencia-mudar.spec.ts:245`, mesmo clique em "Excluir" da região "Recorrências não enviadas", botão "detached from the DOM" a cada tentativa até os 90 s. 340 dos 341 testes passaram. Trace e vídeo no artefato `testes-com-navegador` (id 13639619855) dessa execução, uma segunda fonte para o primeiro item abaixo.
+
 - [ ] Dono: anexar/ler o trace do artefato e dizer o que a região fazia no instante do clique
 - [ ] Reproduzir com esse dado, corrigir sem desligar o teste, verificações e PR
