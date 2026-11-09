@@ -1,7 +1,7 @@
 """O resultado da importação: o que seria gravado, cada compra de cartão uma vez só."""
 
 import re
-from collections import Counter
+from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
@@ -133,18 +133,19 @@ def importar(
     meses_do_geral = [x.mes for x in linhas_do_geral]
     ultimo_mes = max(meses_do_geral, default="")
     primeiro_mes = min(meses_do_geral, default="")
-    importacao.parcelamentos = parcelas.reagrupar(importacao.lancamentos, primeiro_mes, ultimo_mes)
-    _decidir_as_quebradas(importacao, decisoes, primeiro_mes, ultimo_mes)
-    escolhidos = _cartao_dos_parcelamentos(importacao, decisoes)
-    _parcelas_futuras_no_cartao(importacao, pastas)
-    _gerar_parcelas_que_faltam(importacao, ultimo_mes)
-
     # O mês do export é o último mês com lançamento já pago no Mobills (na importação final, o da
-    # virada): a Conferência vai até ele, e os pendentes avulsos até ele são descartados.
+    # virada): a Conferência vai até ele, os pendentes avulsos até ele são descartados e as
+    # parcelas geradas até ele entram realizadas.
     ultimo_realizado = max(
         (x.mes for x in linhas_do_geral if _situacao(x.situacao) == "realizado"),
         default=ultimo_mes,
     )
+    _reagrupar(importacao, primeiro_mes, ultimo_mes)
+    _decidir_as_quebradas(importacao, decisoes, primeiro_mes, ultimo_mes)
+    escolhidos = _cartao_dos_parcelamentos(importacao, decisoes)
+    _parcelas_futuras_no_cartao(importacao, pastas)
+    _gerar_parcelas_que_faltam(importacao, ultimo_mes, ultimo_realizado)
+
     _descartar_pendentes_avulsos(importacao, ultimo_realizado)
     ajustes_sem_cartao = _cartao_dos_ajustes(importacao, decisoes)
 
@@ -403,20 +404,33 @@ def _decidir_as_quebradas(
         key=lambda p: len(p.lancamentos),
     )
     if duplicadas:
-        contagem = Counter(_chave_da_parcela(x) for x in importacao.lancamentos if x.parcela)
+        no_mes = defaultdict(list)
+        for lancamento in importacao.lancamentos:
+            if lancamento.parcela:
+                no_mes[_chave_da_parcela(lancamento)].append(lancamento)
         descartadas = set()
         for parcelamento in duplicadas:
             for parcela in parcelamento.lancamentos:
-                if contagem[_chave_da_parcela(parcela)] > 1:
-                    contagem[_chave_da_parcela(parcela)] -= 1
+                # Só a de mesmo valor é a duplicada; a de outro valor é outra compra (ticket 219).
+                if any(
+                    outra is not parcela
+                    and id(outra) not in descartadas
+                    and parcelas.mesmo_valor(outra, parcela)
+                    for outra in no_mes[_chave_da_parcela(parcela)]
+                ):
                     descartadas.add(id(parcela))
         importacao.lancamentos = [x for x in importacao.lancamentos if id(x) not in descartadas]
-        importacao.parcelamentos = parcelas.reagrupar(
-            importacao.lancamentos, primeiro_mes, ultimo_mes
-        )
+        _reagrupar(importacao, primeiro_mes, ultimo_mes)
     for parcelamento in importacao.parcelamentos:
         if parcelamento.quebra and decisao(parcelamento) == "parcelamento":
             parcelamento.aceito = True
+
+
+def _reagrupar(importacao: Importacao, primeiro_mes: str, ultimo_mes: str) -> None:
+    """Reagrupa as parcelas, com a parcela deduzida no lugar da linha sem `(n/total)`."""
+    importacao.parcelamentos, importacao.lancamentos = parcelas.reagrupar(
+        importacao.lancamentos, primeiro_mes, ultimo_mes
+    )
 
 
 def _chave_da_parcela(lancamento: Lancamento) -> tuple:
@@ -497,13 +511,15 @@ def _parcelas_futuras_no_cartao(importacao: Importacao, pastas: dict[str, list[s
     importacao.lancamentos = [trocados.get(id(x), x) for x in importacao.lancamentos]
 
 
-def _gerar_parcelas_que_faltam(importacao: Importacao, ultimo_mes: str) -> None:
-    """Gera como previstas as parcelas depois da última que o export trouxe, quando a sequência
-    chega ao último mês dele (a que acaba antes está quebrada e vai para a revisão). O valor é o
-    da última que veio: o centavo que o app põe na 1ª parcela não aparece se o export só trouxe
-    a 1ª. Como no app:
-    no cartão, todas têm a data da compra e a parcela n cai n - 1 faturas depois; no boleto, a
-    parcela n vence n - 1 meses depois da 1ª."""
+def _gerar_parcelas_que_faltam(
+    importacao: Importacao, ultimo_mes: str, ultimo_realizado: str
+) -> None:
+    """Gera as parcelas depois da última que o export trouxe, quando a sequência chega ao último
+    mês dele ou o dono a aceitou na revisão: realizadas até o último mês pago (o banco cobrou,
+    ticket 219) e previstas depois. O valor é o da última que veio: o centavo que o app põe na 1ª
+    parcela não aparece se o export só trouxe a 1ª. Como no app: no cartão, todas têm a data da
+    compra e a parcela n cai n - 1 faturas depois; no boleto, a parcela n vence n - 1 meses depois
+    da 1ª."""
     # As que já vieram em outro pedaço da mesma compra (o dono aceitou os dois) não se repetem.
     vieram = {
         (p.primeira.tipo, p.descricao.casefold(), p.total, x.parcela[0])
@@ -523,13 +539,14 @@ def _gerar_parcelas_que_faltam(importacao: Importacao, ultimo_mes: str) -> None:
             if (ultima.tipo, parcelamento.descricao.casefold(), parcelamento.total, n) in vieram:
                 continue
             data = ultima.data if ultima.cartao else mais_meses(data_da_1a, n - 1)
+            mes_da_parcela = mes if ultima.cartao else f"{data:%Y-%m}"
             geradas.append(
                 replace(
                     ultima,
-                    situacao="previsto",
+                    situacao="realizado" if mes_da_parcela <= ultimo_realizado else "previsto",
                     parcela=(n, parcelamento.total),
                     data=data,
-                    mes=mes if ultima.cartao else f"{data:%Y-%m}",
+                    mes=mes_da_parcela,
                 )
             )
         parcelamento.lancamentos = parcelamento.lancamentos + geradas

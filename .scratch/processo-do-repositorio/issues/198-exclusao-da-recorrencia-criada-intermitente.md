@@ -47,3 +47,7 @@ Voltou no CI do PR #572 (2026-11-09, job `verificar`, run 42536784292, 1ª execu
 
 - [ ] Dono: anexar/ler o trace do artefato e dizer o que a região fazia no instante do clique
 - [ ] Reproduzir com esse dado, corrigir sem desligar o teste, verificações e PR
+
+## Nova ocorrência (ticket 219)
+
+CI do PR #575 (job `verificar`, run 42535221217, 2026-11-08), depois do merge da `main` na branch. O PR só mudou o importador do Mobills (`backend/app/mobills/`), e o backend passou. Mesmo sintoma: `web/e2e/recorrencia-mudar.spec.ts:245` estourou os 90 s no clique em `Excluir` da região "Recorrências não enviadas" (`recorrencia-mudar.spec.ts:267`), com o botão "visible, enabled and stable" e "detached from the DOM" a cada tentativa. O trace e o vídeo estão no artefato `testes-com-navegador` dessa execução (id 13639547826), que também serve para o passo do dono acima. Na mesma branch, a execução anterior (antes do merge) passou.
