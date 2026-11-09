@@ -1,7 +1,7 @@
 # Importador do Mobills: premissas que o export real não confirmou
 
 Type: task
-Status: ready-for-human
+Status: resolved
 Blocked by: —
 Skills: `run` (o dono confere no app e na planilha; HITL: só ele tem o Mobills)
 Modelo recomendado: Sonnet
