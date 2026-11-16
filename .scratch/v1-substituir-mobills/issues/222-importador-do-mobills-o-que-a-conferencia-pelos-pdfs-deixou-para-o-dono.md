@@ -27,3 +27,11 @@ Rodar o importador com os textos das faturas (o `## Answer` do ticket 220 tem o 
 - [ ] Faturas 2026-10 do The One e do VISA exportadas de novo
 - [ ] `Cartão (escolha)` do Apple Watch preenchido
 - [ ] Lava louça, Mercadolivre e Mochilas confirmados
+
+## Levantamento do agente (2026-11-15)
+
+Importador rodado nos exports reais com `--faturas-pdf`: 6.412 lançamentos, 4.627 de 4.741 linhas casadas (97,6%). Diferenças da aba `Faturas` (importador − PDF): Personnalite 2023-09 0,04; 2023-10 51,74; 2023-11 196,30; 2024-12 −0,01; 2025-01 −0,01; 2025-09 −0,14; The One 2026-10 sem fatura no export.
+
+- **Personnalite 2023-10** (PDF de 11/2023): `Amaciante` R$ 32,99 (24/10/2023) não aparece no PDF, e `Padaria` e `Pão` (22/10, R$ 18,75 cada) aparecem uma vez só no PDF. Hipótese: Amaciante + uma das duas de R$ 18,75 = 51,74. Confirmar no Mobills.
+- **Personnalite 2023-11** (PDF de 12/2023): todos os valores existem no PDF, então não há lançamento ausente. Única soma de 1 a 3 lançamentos que dá 196,30: `Mercado/Alimentação` R$ 46,68 (19/11) + `Coisas de cozinha` R$ 149,62 (25/10); este último não está no PDF de 11/2023. Hipótese fraca, confirmar no Mobills.
+- **Parcelamentos sem cartão** (aba, 47 linhas): `Apple Watch` 190,43 1/21 2025-06; `Mercadolivre` 14,63 1 a 3 de 3 (2026-10 a 2026-12); `Reembolso celular manu` 283,00 (1–3 e 5–6 de 6). Lava louça e Mochilas já não aparecem nessa aba na rodada atual: conferir no Mobills.
