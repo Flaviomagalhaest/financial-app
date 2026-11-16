@@ -1,7 +1,7 @@
 # Importador do Mobills: o que a conferência pelos PDFs deixou para o dono
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `run` (HITL: só o dono tem o Mobills e sabe o que aconteceu nas faturas)
 Modelo recomendado: Sonnet
@@ -22,8 +22,16 @@ Rodar o importador com os textos das faturas (o `## Answer` do ticket 220 tem o 
 
 ## Checklist
 
-- [ ] Personnalite 2023-10 e 2023-11 explicadas
+- [x] Personnalite 2023-10 e 2023-11 explicadas (dono, 15/11: PDF vale; `descartar` em Faturas repetidas para Amaciante 32,99, Pão 18,75, Mercado 46,68 e Coisas de cozinha 149,62; as duas faturas fecham ao centavo)
 - [ ] Centavos aceitos ou ajustados
-- [ ] Faturas 2026-10 do The One e do VISA exportadas de novo
-- [ ] `Cartão (escolha)` do Apple Watch preenchido
-- [ ] Lava louça, Mercadolivre e Mochilas confirmados
+- [ ] Faturas 2026-10 do The One (feita, 15/11) e do VISA exportadas de novo (VISA falta)
+- [x] Apple Watch, Mercadolivre e Reembolso celular manu: ficam em branco (dono, 15/11). A parcela 1 do Apple Watch (R$ 190,60) já está na fatura 2025-06 do Personnalite; o R$ 190,43 do geral é o mesmo lançamento, e escolher o cartão contaria duas vezes. Parcelas 2 a 21 no The One (upgrade do Personnalite)
+- [x] Lava louça e Mochilas já não aparecem em Parcelamentos sem cartão; Mercadolivre fica em branco
+
+## Levantamento do agente (2026-11-15)
+
+Importador rodado nos exports reais com `--faturas-pdf`: 6.412 lançamentos, 4.627 de 4.741 linhas casadas (97,6%). Diferenças da aba `Faturas` (importador − PDF): Personnalite 2023-09 0,04; 2023-10 51,74; 2023-11 196,30; 2024-12 −0,01; 2025-01 −0,01; 2025-09 −0,14; The One 2026-10 sem fatura no export.
+
+- **Personnalite 2023-10** (PDF de 11/2023): `Amaciante` R$ 32,99 (24/10/2023) não aparece no PDF, e `Padaria` e `Pão` (22/10, R$ 18,75 cada) aparecem uma vez só no PDF. Hipótese: Amaciante + uma das duas de R$ 18,75 = 51,74. Confirmar no Mobills.
+- **Personnalite 2023-11** (PDF de 12/2023): todos os valores existem no PDF, então não há lançamento ausente. Única soma de 1 a 3 lançamentos que dá 196,30: `Mercado/Alimentação` R$ 46,68 (19/11) + `Coisas de cozinha` R$ 149,62 (25/10); este último não está no PDF de 11/2023. Hipótese fraca, confirmar no Mobills.
+- **Parcelamentos sem cartão** (aba, 47 linhas): `Apple Watch` 190,43 1/21 2025-06; `Mercadolivre` 14,63 1 a 3 de 3 (2026-10 a 2026-12); `Reembolso celular manu` 283,00 (1–3 e 5–6 de 6). Lava louça e Mochilas já não aparecem nessa aba na rodada atual: conferir no Mobills.
