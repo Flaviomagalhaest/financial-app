@@ -1,7 +1,7 @@
 # Importador do Mobills: o que a conferência pelos PDFs deixou para o dono
 
 Type: task
-Status: ready-for-human
+Status: claimed
 Blocked by: —
 Skills: `run` (HITL: só o dono tem o Mobills e sabe o que aconteceu nas faturas)
 Modelo recomendado: Sonnet
