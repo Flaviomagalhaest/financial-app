@@ -24,9 +24,9 @@ Rodar o importador com os textos das faturas (o `## Answer` do ticket 220 tem o 
 
 - [x] Personnalite 2023-10 e 2023-11 explicadas (dono, 15/11: PDF vale; `descartar` em Faturas repetidas para Amaciante 32,99, Pão 18,75, Mercado 46,68 e Coisas de cozinha 149,62; as duas faturas fecham ao centavo)
 - [ ] Centavos aceitos ou ajustados
-- [ ] Faturas 2026-10 do The One e do VISA exportadas de novo
-- [ ] `Cartão (escolha)` do Apple Watch preenchido
-- [ ] Lava louça, Mercadolivre e Mochilas confirmados
+- [ ] Faturas 2026-10 do The One (feita, 15/11) e do VISA exportadas de novo (VISA falta)
+- [x] Apple Watch, Mercadolivre e Reembolso celular manu: ficam em branco (dono, 15/11). A parcela 1 do Apple Watch (R$ 190,60) já está na fatura 2025-06 do Personnalite; o R$ 190,43 do geral é o mesmo lançamento, e escolher o cartão contaria duas vezes. Parcelas 2 a 21 no The One (upgrade do Personnalite)
+- [x] Lava louça e Mochilas já não aparecem em Parcelamentos sem cartão; Mercadolivre fica em branco
 
 ## Levantamento do agente (2026-11-15)
 
